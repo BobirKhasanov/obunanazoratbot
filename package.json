@@ -1,0 +1,19 @@
+{
+  "name": "obunanazoratbot",
+  "version": "1.0.0",
+  "description": "Telegram bot + mini app for tracking expenses, subscriptions, calendar and reminders",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node test/smoke.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "grammy": "^1.30.0"
+  }
+}
