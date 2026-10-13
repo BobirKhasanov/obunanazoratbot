@@ -189,6 +189,31 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.deepStrictEqual([lose.w, lose.l], [0, 1]);
     });
 
+    await step('live rankings: all categories load and finished bullet games are ranked separately', async () => {
+      for (const category of ['bullet', 'blitz', 'rapid', 'classic']) {
+        const response = await ok('A', 'GET', `/rankings?category=${category}`);
+        assert.strictEqual(response.category, category);
+        assert.ok(Array.isArray(response.rankings));
+      }
+
+      const challenge = (await ok('A', 'POST', '/games', {
+        opponentId: USERS.B.id, timeControl: 'bullet',
+      })).game;
+      assert.strictEqual(challenge.timeControl, 'bullet');
+      const joined = (await ok('B', 'POST', `/games/${challenge.id}/join`)).game;
+      assert.strictEqual(joined.status, 'active');
+      await ok('A', 'POST', `/games/${challenge.id}/resign`);
+
+      const leaderboard = (await ok('A', 'GET', '/rankings?category=bullet')).rankings;
+      const alice = leaderboard.find((p) => p.id === USERS.A.id);
+      const bob = leaderboard.find((p) => p.id === USERS.B.id);
+      assert.ok(alice && bob, 'both players should appear after a completed bullet game');
+      assert.strictEqual(alice.games, 1);
+      assert.strictEqual(bob.games, 1);
+      assert.strictEqual(alice.points + bob.points, 2, 'one win awards two points total');
+      assert.ok(leaderboard.every((p, i) => p.rank === i + 1), 'ranks should be sequential');
+    });
+
     // ---------------------------------------------------------------- promotion, draw, resign
     await step('promotion and en passant are handled by the server rules', async () => {
       const g = (await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game;
