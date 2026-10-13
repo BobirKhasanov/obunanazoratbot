@@ -206,7 +206,7 @@ function gameFor(row, uid, full = true) {
   const you = row.white_id === uid ? 'w' : row.black_id === uid ? 'b' : null;
   const opponentId = [row.creator_id, row.invited_id, row.white_id, row.black_id].find((x) => x && x !== uid) || null;
   const g = {
-    id: row.id, status: row.status, mode: row.mode, you, creator: row.creator_id, invitedId: row.invited_id,
+    id: row.id, status: row.status, mode: row.mode, timeControl: row.time_control || 'classic', you, creator: row.creator_id, invitedId: row.invited_id,
     white: person(row.white_id), black: person(row.black_id), opponent: person(opponentId),
     ply: moves.length, turn: turnOf(moves), result: row.result, reason: row.reason,
     drawBy: row.draw_by, updatedAt: row.updated_at,
@@ -261,28 +261,31 @@ function startGame(row, joinerId) {
 // Online match-making: pair with someone who is waiting right now, otherwise wait
 api.post('/games/quick', wrap((req, res) => {
   const uid = req.user.id;
-  const waiting = db.prepare("SELECT * FROM games WHERE status = 'open' AND mode = 'online' AND creator_id != ? ORDER BY created_at LIMIT 20").all(uid)
+  const timeControl = ['bullet', 'blitz', 'rapid', 'classic'].includes(req.body && req.body.timeControl) ? req.body.timeControl : 'classic';
+  const waiting = db.prepare("SELECT * FROM games WHERE status = 'open' AND mode = 'online' AND time_control = ? AND creator_id != ? ORDER BY created_at LIMIT 20").all(timeControl, uid)
     .find((g) => realtime.isOnline(g.creator_id));
   if (waiting) return res.json({ game: gameFor(startGame(waiting, uid), uid) });
 
-  const mine = db.prepare("SELECT * FROM games WHERE status = 'open' AND mode = 'online' AND creator_id = ? LIMIT 1").get(uid);
+  const mine = db.prepare("SELECT * FROM games WHERE status = 'open' AND mode = 'online' AND time_control = ? AND creator_id = ? LIMIT 1").get(timeControl, uid);
   if (mine) return res.json({ game: gameFor(mine, uid) });
 
   ensureRoom(uid);
   const id = gameId();
-  db.prepare("INSERT INTO games (id, creator_id, status, mode) VALUES (?, ?, 'open', 'online')").run(id, uid);
+  db.prepare("INSERT INTO games (id, creator_id, status, mode, time_control) VALUES (?, ?, 'open', 'online', ?)").run(id, uid, timeControl);
   res.status(201).json({ game: gameFor(getGame.get(id), uid) });
 }));
 
 // Create a game: with opponentId = direct challenge, without = open game anyone with the link can join
 api.post('/games', wrap((req, res) => {
   const uid = req.user.id;
+  const requestedControl = req.body && req.body.timeControl;
+  const timeControl = ['bullet', 'blitz', 'rapid', 'classic'].includes(requestedControl) ? requestedControl : 'classic';
   const opp = req.body && req.body.opponentId != null ? intParam(req.body.opponentId) : null;
   ensureRoom(uid);
 
   if (!opp) {
     const id = gameId();
-    db.prepare("INSERT INTO games (id, creator_id, status, mode) VALUES (?, ?, 'open', 'friend')").run(id, uid);
+    db.prepare("INSERT INTO games (id, creator_id, status, mode, time_control) VALUES (?, ?, 'open', 'friend', ?)").run(id, uid, timeControl);
     return res.status(201).json({ game: gameFor(getGame.get(id), uid) });
   }
 
@@ -298,8 +301,8 @@ api.post('/games', wrap((req, res) => {
   if (existing) db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ?").run(existing.id);
 
   const id = gameId();
-  db.prepare("INSERT INTO games (id, creator_id, invited_id, status, mode) VALUES (?, ?, ?, 'invited', ?)")
-    .run(id, uid, opp, friend ? 'friend' : 'online');
+  db.prepare("INSERT INTO games (id, creator_id, invited_id, status, mode, time_control) VALUES (?, ?, ?, 'invited', ?, ?)")
+    .run(id, uid, opp, friend ? 'friend' : 'online', timeControl);
   const row = getGame.get(id);
   realtime.send(opp, { t: 'invite', game: gameFor(row, opp), ttl: INVITE_TTL_MS }); // in-app only, no Telegram message
   res.status(201).json({ game: gameFor(row, uid) });
@@ -451,6 +454,26 @@ api.post('/results', wrap((req, res) => {
     db.prepare('INSERT INTO results (user_id, level, outcome) VALUES (?, ?, ?)').run(req.user.id, level, outcome);
   }
   res.json({ stats: statsFor(req.user.id) });
+}));
+
+// ---------- live competitive rankings ----------
+api.get('/rankings', wrap((req, res) => {
+  const category = ['bullet', 'blitz', 'rapid', 'classic'].includes(req.query.category) ? req.query.category : 'bullet';
+  const rows = db.prepare(`
+    SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') name,
+      COUNT(*) games,
+      SUM(CASE WHEN (g.white_id = u.id AND g.result = '1-0') OR (g.black_id = u.id AND g.result = '0-1') THEN 1 ELSE 0 END) wins,
+      SUM(CASE WHEN g.result = '1/2-1/2' THEN 1 ELSE 0 END) draws,
+      SUM(CASE WHEN (g.white_id = u.id AND g.result = '0-1') OR (g.black_id = u.id AND g.result = '1-0') THEN 1 ELSE 0 END) losses
+    FROM games g JOIN users u ON u.id = g.white_id OR u.id = g.black_id
+    WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online', 'friend')
+      AND COALESCE(g.time_control, 'classic') = ? AND u.blocked = 0
+      AND (g.white_id = u.id OR g.black_id = u.id)
+    GROUP BY u.id
+    ORDER BY (wins * 2 + draws) DESC, wins DESC, games DESC, name COLLATE NOCASE ASC
+    LIMIT 100
+  `).all(category).map((r, i) => ({ rank: i + 1, ...r, points: r.wins * 2 + r.draws }));
+  res.json({ category, rankings: rows, updatedAt: new Date().toISOString() });
 }));
 
 // ---------- lobby: who is online and what games do I have ----------
