@@ -296,7 +296,7 @@ export function openGame(opts, onClose) {
       setTimeout(() => showResult(outcome, g.reason), 500);
       return;
     }
-    if (g.status === 'cancelled' && was !== 'cancelled') { toast(t('opponent_left'), true); closeGame(); return; }
+    if (g.status === 'cancelled' && was !== 'cancelled') { toast(was === 'invited' ? t('challenge_expired') : t('opponent_left'), true); closeGame(); return; }
     if (g.status === 'active' && was !== 'active') { toast(t('you_are', { c: g.you === 'w' ? t('white') : t('black') })); haptic('success'); }
     S.over = g.status === 'finished';
     render(grew);

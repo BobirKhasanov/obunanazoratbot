@@ -30,6 +30,8 @@ if (!BOT_TOKEN) {
 const THEMES = ['dark', 'light'];
 const REACTIONS = ['👍', '😀', '😮', '😢', '🔥', '👏', '🤔', '😎', '🎉', '🙈'];
 const MAX_OPEN_GAMES = 10;
+// A direct challenge is only shown inside the app and expires after this long (no chat message is sent)
+const INVITE_TTL_MS = Number(process.env.INVITE_TTL_MS || 10_000);
 const SQUARE = /^[a-h][1-8]$/;
 
 const app = express();
@@ -213,6 +215,8 @@ function gameFor(row, uid, full = true) {
   return g;
 }
 
+const inviteExpired = (row) => row.status === 'invited'
+  && Date.now() - Date.parse(`${row.updated_at.replace(' ', 'T')}Z`) > INVITE_TTL_MS;
 const participants = (row) => [...new Set([row.creator_id, row.invited_id, row.white_id, row.black_id].filter(Boolean))];
 const isParticipant = (row, uid) => participants(row).includes(uid);
 
@@ -284,20 +288,20 @@ api.post('/games', wrap((req, res) => {
 
   const other = getUser.get(opp);
   if (opp === uid || !other || other.blocked) throw new HttpError(404, 'Player not found', 'user_unavailable');
+  if (!realtime.isOnline(opp)) throw new HttpError(409, 'Player is offline', 'user_offline');
   const friend = areFriends(uid, opp);
   if (!friend && !other.discoverable) throw new HttpError(404, 'Player not found', 'user_unavailable');
 
   // Asking twice must not spam the other player: return the invitation that is already waiting
   const existing = db.prepare("SELECT * FROM games WHERE status = 'invited' AND creator_id = ? AND invited_id = ?").get(uid, opp);
-  if (existing) return res.json({ game: gameFor(existing, uid) });
+  if (existing && !inviteExpired(existing)) return res.json({ game: gameFor(existing, uid) });
+  if (existing) db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ?").run(existing.id);
 
   const id = gameId();
   db.prepare("INSERT INTO games (id, creator_id, invited_id, status, mode) VALUES (?, ?, ?, 'invited', ?)")
     .run(id, uid, opp, friend ? 'friend' : 'online');
   const row = getGame.get(id);
-  const me = person(uid).name;
-  realtime.send(opp, { t: 'invite', game: gameFor(row, opp) });
-  notify.toUser(opp, (T) => T.challenge(me), { gameId: id, effect: 'fire' });
+  realtime.send(opp, { t: 'invite', game: gameFor(row, opp), ttl: INVITE_TTL_MS }); // in-app only, no Telegram message
   res.status(201).json({ game: gameFor(row, uid) });
 }));
 
@@ -319,6 +323,7 @@ api.post('/games/:id/join', wrap((req, res) => {
   if (!row) throw new HttpError(404, 'Game not found', 'notfound');
   if (isParticipant(row, uid) && row.status !== 'open' && row.status !== 'invited') return res.json({ game: gameFor(row, uid) });
   if (row.creator_id === uid) return res.json({ game: gameFor(row, uid) }); // opening your own link
+  if (inviteExpired(row)) { db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ?").run(row.id); throw bad('This game is no longer available', 'game_unavailable'); }
   const allowed = row.status === 'open' || (row.status === 'invited' && row.invited_id === uid);
   if (!allowed) throw bad('This game is no longer available', 'game_unavailable');
   ensureRoom(uid);
@@ -480,7 +485,7 @@ api.get('/lobby', wrap((req, res) => {
     online,
     games: {
       active: mine.filter((g) => g.status === 'active').map((g) => gameFor(g, uid, false)),
-      invites: mine.filter((g) => g.status === 'invited' && g.invited_id === uid).map((g) => gameFor(g, uid, false)),
+      invites: mine.filter((g) => g.status === 'invited' && g.invited_id === uid && !inviteExpired(g)).map((g) => gameFor(g, uid, false)),
       waiting: mine.filter((g) => ['open', 'invited'].includes(g.status) && g.creator_id === uid).map((g) => gameFor(g, uid, false)),
       recent: recent.map((g) => gameFor(g, uid, false)),
     },
@@ -738,5 +743,14 @@ if (process.env.DISABLE_BOT !== '1') {
   }).catch((e) => console.error('[bot] failed to start:', e.message));
 }
 startScheduler((id) => pushGame(getGame.get(id)));
+
+// Expire unanswered challenges and tell the player who sent them
+setInterval(() => {
+  for (const g of db.prepare("SELECT * FROM games WHERE status = 'invited'").all()) {
+    if (!inviteExpired(g)) continue;
+    db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ?").run(g.id);
+    pushGame(getGame.get(g.id));
+  }
+}, 2000).unref();
 
 process.on('SIGTERM', () => { bot.stop().catch(() => {}); server.close(); process.exit(0); });

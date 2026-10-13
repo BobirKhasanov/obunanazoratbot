@@ -100,12 +100,37 @@ function aiSheet() {
   });
 }
 
+const playerRow = (u, close) => h('div.row', h('div.avwrap', avatar(u.name, u.id), h('i.dot.on')),
+  h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.inGame ? t('in_game') : t('online'))),
+  h('button.mini.ok', { disabled: u.inGame, onclick: () => { close(); challenge(u.id); } }, t('challenge')));
+
+/** "Play online": choose any online player to challenge, or get a random opponent */
+function onlineSheet() {
+  let alive = true; let timer;
+  sheet((close) => {
+    const list = h('div.list');
+    const load = async () => {
+      try {
+        const l = await api('GET', '/lobby');
+        if (!alive) return;
+        list.replaceChildren(...(l.online.length ? l.online.map((u) => playerRow(u, close)) : [empty(t('nobody'), '🛰️')]));
+      } catch (e) { /* keep the old list */ }
+    };
+    load(); timer = setInterval(load, 4000);
+    return [
+      h('h2', t('pick_player')),
+      h('button.btn.sm.ghost.rand', { onclick: () => { close(); startQuick(); } }, icon('globe', 18), t('random_opp')),
+      h('div.sheet-list', list),
+    ];
+  }, { onClose: () => { alive = false; clearInterval(timer); } });
+}
+
 function newGameSheet() {
   sheet((close) => [
     h('h2', t('new_game')),
     h('div.stack',
       tile(t('vs_computer'), t('vs_computer_sub'), 'cpu', () => { close(); setTimeout(aiSheet, 200); }, true),
-      tile(t('play_online'), t('quick_sub'), 'globe', () => { close(); startQuick(); }),
+      tile(t('play_online'), t('quick_sub'), 'globe', () => { close(); setTimeout(onlineSheet, 200); }),
       tile(t('with_friend'), t('friend_sub'), 'friends', () => { close(); startFriendGame(); })),
   ]);
 }
@@ -138,7 +163,7 @@ refreshers.play = async function renderPlay() {
       h('button.mini', { onclick: async () => { try { await api('POST', `/games/${g.id}/decline`); } catch (e) { fail(e); } refresh(); } }, icon('x', 18)))))] : null,
     h('div.stack.modes',
       tile(t('vs_computer'), t('vs_computer_sub'), 'cpu', aiSheet, true),
-      h('div.grid2', tile(t('play_online'), t('quick_sub'), 'globe', startQuick), tile(t('with_friend'), t('friend_sub'), 'friends', startFriendGame))),
+      h('div.grid2', tile(t('play_online'), t('quick_sub'), 'globe', onlineSheet), tile(t('with_friend'), t('friend_sub'), 'friends', startFriendGame))),
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
       saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('cpu', 22)), h('div.grow', h('div.t', `${t('computer')} · ${t('lvl' + saved.level)}`), h('div.s', t('resume'))), icon('arrow', 18)) : null,
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
@@ -170,7 +195,7 @@ refreshers.friends = async function renderFriends() {
     h('div.h2', t('your_friends')),
     list.length ? h('div.list', list.map((f) => h('div.row', h('div.avwrap', avatar(f.name, f.id), f.online ? h('i.dot.on') : null),
       h('div.grow', h('div.t', f.name), h('div.s', f.inGame ? t('in_game') : f.online ? t('online') : t('offline'))),
-      h('button.mini.ok', { disabled: f.inGame || f.invited, onclick: () => challenge(f.id) }, f.invited ? icon('check', 18) : t('challenge')),
+      h('button.mini.ok', { disabled: !f.online || f.inGame || f.invited, onclick: () => challenge(f.id) }, f.invited ? icon('check', 18) : t('challenge')),
       h('button.mini', { 'aria-label': t('remove_friend'), onclick: async () => { if (await confirmSheet(`${t('remove_friend')}: ${f.name}?`, t('remove_friend'), true)) { try { await api('DELETE', `/friends/${f.id}`); } catch (e) { fail(e); } refresh(); } } }, icon('x', 18))))) : empty(t('no_friends'), '👋'));
 };
 
@@ -192,6 +217,23 @@ refreshers.profile = async function renderProfile() {
     me.isAdmin ? h('button.btn.ghost', { onclick: () => openAdmin(rebuildAll) }, icon('shield', 20), t('admin_panel')) : null,
     !me.isAdmin ? h('button.btn.danger', { onclick: async () => { if (await confirmSheet(t('delete_confirm'), t('delete_data'), true)) { try { await api('DELETE', '/me'); tg.close(); } catch (e) { fail(e); } } } }, icon('trash', 18), t('delete_data')) : null);
 };
+
+// Incoming challenge: a popup inside the app for 10 seconds (no chat message is sent)
+let popTimer = null;
+function showInvite(g, ttl) {
+  const old = $('.invite-pop'); if (old) old.remove(); clearTimeout(popTimer);
+  const o = g.opponent || {};
+  const done = () => { pop.classList.remove('show'); setTimeout(() => pop.remove(), 400); clearTimeout(popTimer); };
+  const bar = h('i.pbar-fill'); bar.style.animationDuration = `${ttl}ms`;
+  const pop = h('div.invite-pop', avatar(o.name || '?', o.id || 0),
+    h('div.grow', h('b', t('challenge_from', { name: o.name || '' }))),
+    h('button.mini.ok', { 'aria-label': t('accept'), onclick: async () => { done(); try { const r = await api('POST', `/games/${g.id}/join`); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 20)),
+    h('button.mini', { 'aria-label': t('decline'), onclick: async () => { done(); try { await api('POST', `/games/${g.id}/decline`); } catch { /* expired */ } refresh(); } }, icon('x', 20)),
+    h('div.pbar-track', bar));
+  document.body.append(pop); haptic('success');
+  requestAnimationFrame(() => requestAnimationFrame(() => pop.classList.add('show')));
+  popTimer = setTimeout(done, ttl);
+}
 
 // ---------- pager + nav ----------
 let go = () => {};
@@ -277,7 +319,7 @@ async function boot() {
   $('#fab').addEventListener('click', () => { haptic('light'); newGameSheet(); });
   connectWs((up) => { if (up) refresh(); });
   onWs((m) => {
-    if (m.t === 'invite') { toast(t('challenge') + ': ' + (m.game.opponent || {}).name); haptic('success'); go(0, true); refresh('play'); }
+    if (m.t === 'invite') { showInvite(m.game, m.ttl || 10000); refresh('play'); }
     else if (m.t === 'friend') { haptic('success'); refresh(); }
     else if (m.t === 'game' && m.game.id !== openGameId()) refresh();
   });

@@ -91,7 +91,7 @@ async function playMoves(game, players, moves, startPly = 0) {
     cwd: path.join(__dirname, '..'),
     env: {
       ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', PORT: String(PORT), DB_PATH: dbFile, ADMIN_IDS: String(ADMIN_ID),
-      TG_API_ROOT: tg.url, WEBAPP_URL: 'https://chess.example.test', PRESENCE_REST_MS: '300', SCHEDULER_MS: '300', NODE_NO_WARNINGS: '1',
+      TG_API_ROOT: tg.url, WEBAPP_URL: 'https://chess.example.test', PRESENCE_REST_MS: '300', INVITE_TTL_MS: '60000', SCHEDULER_MS: '300', NODE_NO_WARNINGS: '1',
     },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
@@ -139,7 +139,7 @@ async function playMoves(game, players, moves, startPly = 0) {
 
     // ---------------------------------------------------------------- challenge + a full game
     let gid, fm;
-    await step('challenge: invitation, Telegram message with Open-game button, no duplicates', async () => {
+    await step('challenge: in-app invitation only (no chat message), no duplicates', async () => {
       const wsB = await connect('B'); sockets.push(wsB);
       const c = await ok('A', 'POST', '/games', { opponentId: USERS.B.id });
       gid = c.game.id;
@@ -147,10 +147,8 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual((await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game.id, gid, 'same invitation, not a new one');
       const push = await wsB.waitFor((m) => m.t === 'invite');
       assert.strictEqual(push.game.id, gid);
-      const msg = tg.to(USERS.B.id).find((m) => /Alice/.test(m.body.text));
-      assert.ok(msg, 'challenge message sent');
-      assert.ok(msg.body.reply_markup.inline_keyboard[0][0].web_app.url.includes(`game=${gid}`), 'button opens that exact game');
-      assert.ok(msg.body.message_effect_id, 'sent with a message effect');
+      await sleep(200);
+      assert.ok(!tg.to(USERS.B.id).some((m) => /Alice/.test(m.body.text)), 'challenges are in-app only: no Telegram message');
       const lobby = await ok('B', 'GET', '/lobby');
       assert.strictEqual(lobby.games.invites.length, 1);
       await err('C', 'POST', `/games/${gid}/join`, null, 400, 'game_unavailable'); // not invited
@@ -452,12 +450,27 @@ async function playMoves(game, players, moves, startPly = 0) {
 
     // ---------------------------------------------------------------- account deletion + static files
     await step('deleting an account closes its games and removes its data', async () => {
+      await ok('D', 'GET', '/me'); // Dan must look online to be challenged
       const g = (await ok('E', 'POST', '/games', { opponentId: USERS.D.id })).game;
       await ok('D', 'POST', `/games/${g.id}/join`);
       await ok('E', 'DELETE', '/me');
       const after = (await ok('D', 'GET', `/games/${g.id}`)).game;
       assert.deepStrictEqual([after.status, after.reason], ['finished', 'resign']);
       assert.ok(!(await ok('D', 'GET', '/friends')).friends.some((f) => f.id === USERS.E.id));
+    });
+
+    await step('challenges: offline players cannot be challenged; unanswered ones expire and cannot be accepted', async () => {
+      await sleep(450);
+      await err('A', 'POST', '/games', { opponentId: USERS.D.id }, 409, 'user_offline');
+      const g = (await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game;
+      const raw = new DatabaseSync(dbFile);
+      raw.prepare("UPDATE games SET updated_at = datetime('now', '-120 seconds') WHERE id = ?").run(g.id);
+      raw.close();
+      assert.ok(!(await ok('B', 'GET', '/lobby')).games.invites.some((x) => x.id === g.id), 'expired invite is hidden');
+      await err('B', 'POST', `/games/${g.id}/join`, null, 400, 'game_unavailable');
+      assert.strictEqual((await ok('A', 'GET', `/games/${g.id}`)).game.status, 'cancelled');
+      const h = (await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game;
+      assert.notStrictEqual(h.id, g.id, 'a fresh challenge can be sent afterwards');
     });
 
     await step('static files: app, chess.js for the worker, engine, correct module types, CSP', async () => {

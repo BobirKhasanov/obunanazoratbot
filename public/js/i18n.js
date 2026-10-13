@@ -241,6 +241,11 @@ const uzc = {
   e_admin_delete: 'Админ бу ерда ҳисобини ўчира олмайди', status_done: 'тайёр', status_sending: 'юборилмоқда', status_interrupted: 'тўхтатилди',
 };
 
+Object.assign(en, { challenge_from: '{name} challenges you', pick_player: 'Choose a player', random_opp: 'Random opponent', e_user_offline: 'This player just went offline', sec_left: '{n}s', challenge_expired: 'No answer, the challenge expired' });
+Object.assign(ru, { challenge_from: '{name} вызывает вас на партию', pick_player: 'Выберите игрока', random_opp: 'Случайный соперник', e_user_offline: 'Игрок только что вышел из сети', sec_left: '{n}с', challenge_expired: 'Нет ответа, вызов истёк' });
+Object.assign(uz, { challenge_from: "{name} sizni o'yinga chorlamoqda", pick_player: "O'yinchini tanlang", random_opp: 'Tasodifiy raqib', e_user_offline: "O'yinchi hozirgina oflayn bo'ldi", sec_left: '{n}s', challenge_expired: 'Javob yo\'q, taklif muddati tugadi' });
+Object.assign(uzc, { challenge_from: '{name} сизни ўйинга чорламоқда', pick_player: 'Ўйинчини танланг', random_opp: 'Тасодифий рақиб', e_user_offline: 'Ўйинчи ҳозиргина офлайн бўлди', sec_left: '{n}с', challenge_expired: 'Жавоб йўқ, таклиф муддати тугади' });
+
 const DICT = { en, ru, uz, uzc };
 let current = 'en';
 

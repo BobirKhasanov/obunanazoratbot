@@ -426,3 +426,19 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .search { margin: 4px 0 12px; }
 .float-emoji, .rain { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
 .seg button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* online picker + in-app challenge popup */
+.sheet-list { max-height: 52dvh; overflow-y: auto; margin-top: 12px; scrollbar-width: none; }
+.rand { width: 100%; }
+.invite-pop {
+  position: fixed; left: 12px; right: 12px; top: calc(var(--safe-t) + 10px); z-index: 95; display: flex; align-items: center; gap: 10px;
+  padding: 12px 12px 16px; border-radius: 22px; background: var(--card); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45), 0 0 0 2px var(--blue);
+  transform: translateY(-140%); transition: transform 0.5s var(--ease); overflow: hidden;
+}
+.invite-pop.show { transform: none; }
+.invite-pop .grow { min-width: 0; font-size: 15px; }
+.invite-pop .mini { padding: 10px 14px; }
+.pbar-track { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--card-2); }
+.pbar-fill { display: block; height: 100%; background: var(--blue); transform-origin: left; animation: drain linear forwards; }
+@keyframes drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.btn.sm.rand { flex: none; width: 100%; }
