@@ -101,6 +101,7 @@ addColumn('users', 'notify_enabled', 'INTEGER NOT NULL DEFAULT 1');
 addColumn('users', 'discoverable', 'INTEGER NOT NULL DEFAULT 1');
 addColumn('users', 'bot_blocked', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('broadcasts', 'media_id', 'TEXT');
+addColumn('games', 'time_control', "TEXT NOT NULL DEFAULT 'classic'");
 
 // A restart mid-broadcast leaves a row stuck on "sending"
 db.prepare("UPDATE broadcasts SET status = 'interrupted' WHERE status = 'sending'").run();
