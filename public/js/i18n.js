@@ -246,6 +246,12 @@ Object.assign(ru, { challenge_from: '{name} вызывает вас на пар�
 Object.assign(uz, { challenge_from: "{name} sizni o'yinga chorlamoqda", pick_player: "O'yinchini tanlang", random_opp: 'Tasodifiy raqib', e_user_offline: "O'yinchi hozirgina oflayn bo'ldi", sec_left: '{n}s', challenge_expired: 'Javob yo\'q, taklif muddati tugadi' });
 Object.assign(uzc, { challenge_from: '{name} сизни ўйинга чорламоқда', pick_player: 'Ўйинчини танланг', random_opp: 'Тасодифий рақиб', e_user_offline: 'Ўйинчи ҳозиргина офлайн бўлди', sec_left: '{n}с', challenge_expired: 'Жавоб йўқ, таклиф муддати тугади' });
 
+
+Object.assign(en, { nav_rankings: 'Ranking', rankings_title: 'Live rankings', rankings_live: 'Live leaderboard', rankings_points_hint: 'Standings update automatically', rankings_empty: 'No ranked games yet. Finish a game to appear here.', rankings_scoring: 'Points: 2 for a win, 1 for a draw. Only finished player-vs-player games count.', rank_record: '{w}W · {d}D · {l}L', points: 'points', you: 'you' });
+Object.assign(ru, { nav_rankings: 'Рейтинг', rankings_title: 'Рейтинг в реальном времени', rankings_live: 'Таблица обновляется онлайн', rankings_points_hint: 'Рейтинг обновляется автоматически', rankings_empty: 'Пока нет рейтинговых партий. Завершите партию, чтобы появиться здесь.', rankings_scoring: 'Очки: 2 за победу, 1 за ничью. Учитываются только завершённые игры между игроками.', rank_record: '{w}П · {d}Н · {l}П', points: 'очков', you: 'вы' });
+Object.assign(uz, { nav_rankings: 'Reyting', rankings_title: 'Jonli reyting', rankings_live: 'Reyting yangilanib turadi', rankings_points_hint: 'Jadval avtomatik yangilanadi', rankings_empty: 'Hozircha reytingli o‘yinlar yo‘q. Ro‘yxatga kirish uchun o‘yinni yakunlang.', rankings_scoring: 'Ochko: g‘alaba uchun 2, durang uchun 1. Faqat yakunlangan ikki o‘yinchi partiyalari hisoblanadi.', rank_record: '{w}G · {d}D · {l}M', points: 'ochko', you: 'siz' });
+Object.assign(uzc, { nav_rankings: 'Рейтинг', rankings_title: 'Жонли рейтинг', rankings_live: 'Рейтинг автоматик янгиланади', rankings_points_hint: 'Жадвал автоматик янгиланади', rankings_empty: 'Ҳозирча рейтингли ўйинлар йўқ. Рўйхатга кириш учун ўйинни якунланг.', rankings_scoring: 'Очко: ғалаба учун 2, дуранг учун 1. Фақат якунланган икки ўйинчи партиялари ҳисобланади.', rank_record: '{w}Ғ · {d}Д · {l}М', points: 'очко', you: 'сиз' });
+
 const DICT = { en, ru, uz, uzc };
 let current = 'en';
 
