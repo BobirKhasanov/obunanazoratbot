@@ -473,6 +473,22 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.notStrictEqual(h.id, g.id, 'a fresh challenge can be sent afterwards');
     });
 
+    await step('one request to several players: the first to accept plays, the others are released', async () => {
+      await ok('D', 'GET', '/me'); await ok('B', 'GET', '/me');
+      const g = (await ok('A', 'POST', '/games', { opponentIds: [USERS.B.id, USERS.D.id] })).game;
+      assert.strictEqual(g.status, 'invited');
+      assert.strictEqual(g.invitees.length, 2);
+      assert.strictEqual((await ok('A', 'POST', '/games', { opponentIds: [USERS.D.id, USERS.B.id] })).game.id, g.id, 'same request is not duplicated');
+      for (const who of ['B', 'D']) assert.ok((await ok(who, 'GET', '/lobby')).games.invites.some((x) => x.id === g.id), `${who} sees it`);
+      await ok('B', 'POST', `/games/${g.id}/decline`);
+      assert.strictEqual((await ok('A', 'GET', `/games/${g.id}`)).game.status, 'invited', 'still waiting for the others');
+      await err('B', 'POST', `/games/${g.id}/join`, null, 400, 'game_unavailable');
+      const started = (await ok('D', 'POST', `/games/${g.id}/join`)).game;
+      assert.strictEqual(started.status, 'active');
+      assert.strictEqual((await ok('A', 'GET', `/games/${g.id}`)).game.opponent.id, USERS.D.id);
+      await ok('A', 'POST', `/games/${g.id}/resign`);
+    });
+
     await step('static files: app, chess.js for the worker, engine, correct module types, CSP', async () => {
       const root = await fetch(`${BASE}/`);
       assert.strictEqual(root.status, 200);
