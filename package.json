@@ -7,13 +7,16 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node test/smoke.js"
+    "test": "node test/smoke.js && node test/bot-test.js",
+    "test:engine": "node test/ai-test.mjs"
   },
   "engines": {
     "node": ">=22.13"
   },
   "dependencies": {
+    "chess.js": "1.4.0",
     "express": "^4.21.2",
-    "grammy": "^1.30.0"
+    "grammy": "^1.30.0",
+    "ws": "^8.22.0"
   }
 }

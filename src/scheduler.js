@@ -1,82 +1,77 @@
+// Background jobs. Both run on a timer inside the server process (single instance).
+//  1. "Your move" reminders: a player who has not answered for a while gets a Telegram message
+//     with an Open button (once per move).
+//  2. Housekeeping: stale invitations are cancelled, abandoned games are closed, old media is deleted.
+const fs = require('fs');
 const db = require('./db');
-const D = require('./dates');
+const notify = require('./notify');
+const realtime = require('./realtime');
+const { turnOf } = require('./game');
 
-const CURRENCY_SYMBOLS = { EUR: '€', USD: '$', GBP: '£', RUB: '₽', UZS: "so'm" };
-const money = (amount, cur) => {
-  const n = Number(amount).toLocaleString('en-US', { maximumFractionDigits: 2 });
-  const s = CURRENCY_SYMBOLS[cur] || cur;
-  return s.length === 1 && cur !== 'UZS' ? `${s}${n}` : `${n} ${s}`;
-};
+const REMIND_AFTER_HOURS = Number(process.env.REMIND_AFTER_HOURS || 6); // env overrides are for tests
+const ABANDON_AFTER_DAYS = 7;
 
-/** Move subscriptions whose date has passed to their next upcoming charge. */
-function rollAllSubscriptions() {
-  const now = D.today();
-  const stale = db.prepare('SELECT id, period, next_date FROM subscriptions WHERE active = 1 AND next_date < ?').all(now);
-  const upd = db.prepare('UPDATE subscriptions SET next_date = ? WHERE id = ?');
-  for (const s of stale) upd.run(D.rollForward(s.next_date, s.period, D.parse(s.next_date).d, now), s.id);
-}
+const nameOf = db.prepare('SELECT first_name FROM users WHERE id = ?');
+const name = (id) => (nameOf.get(id) || {}).first_name || 'Player';
 
-function dueText(name, amount, cur, days, date) {
-  const when = days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days (${date})`;
-  return `${name} renews ${when}: ${money(amount, cur)}`;
-}
-
-/**
- * Sends one reminder per subscription per billing cycle, once the user's
- * "remind me N days before" window is reached.
- */
-async function sendReminders(bot) {
-  rollAllSubscriptions();
-  const now = D.today();
+async function remindMoves() {
   const rows = db.prepare(`
-    SELECT s.id, s.user_id, s.name, s.amount, s.next_date, s.last_notified, u.currency, u.notify_days
-    FROM subscriptions s JOIN users u ON u.id = s.user_id
-    WHERE s.active = 1 AND u.notify_enabled = 1 AND u.blocked = 0
-  `).all();
+    SELECT * FROM games
+    WHERE status = 'active' AND last_move_at < datetime('now', ?)
+  `).all(`-${REMIND_AFTER_HOURS} hours`);
 
-  const mark = db.prepare('UPDATE subscriptions SET last_notified = ? WHERE id = ?');
-  const note = db.prepare('INSERT INTO notifications (user_id, type, text) VALUES (?, ?, ?)');
-  const botBlocked = db.prepare('UPDATE users SET bot_blocked = 1 WHERE id = ?');
-  const canDm = db.prepare('SELECT bot_blocked FROM users WHERE id = ?');
-
-  for (const s of rows) {
-    const days = D.diffDays(now, s.next_date);
-    if (days < 0 || days > s.notify_days || s.last_notified === s.next_date) continue;
-
-    const text = dueText(s.name, s.amount, s.currency, days, s.next_date);
-    note.run(s.user_id, 'renewal', text);
-    mark.run(s.next_date, s.id);
-
-    if (bot && !canDm.get(s.user_id).bot_blocked) {
-      try {
-        await bot.api.sendMessage(s.user_id, `Reminder\n${text}`);
-      } catch (e) {
-        if (e.error_code === 403) botBlocked.run(s.user_id);
-        else console.error('[reminder] send failed:', e.message);
-      }
-      await new Promise((r) => setTimeout(r, 50)); // stay far below Telegram's rate limit
-    }
+  for (const g of rows) {
+    const ply = JSON.parse(g.moves).length;
+    if (g.reminded_ply === ply) continue; // already reminded for this move
+    const waiting = turnOf(JSON.parse(g.moves)) === 'w' ? g.white_id : g.black_id;
+    const other = waiting === g.white_id ? g.black_id : g.white_id;
+    db.prepare('UPDATE games SET reminded_ply = ? WHERE id = ?').run(ply, g.id);
+    if (realtime.isOnline(waiting)) continue; // they are in the app right now
+    await notify.toUser(waiting, (T) => T.reminder(name(other)), { gameId: g.id });
+    await new Promise((r) => setTimeout(r, 50)); // far below Telegram's rate limit
   }
 }
 
-function startScheduler(bot) {
-  const reminderHour = Number(process.env.REMINDER_HOUR ?? 9);
-  let lastRunDay = null;
+function housekeeping(onGameChanged) {
+  // Invitations nobody answered within a day
+  const stale = db.prepare(`
+    SELECT id FROM games WHERE status IN ('open', 'invited') AND updated_at < datetime('now', '-1 day')
+  `).all();
+  for (const g of stale) db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ?").run(g.id);
 
+  // Games where nobody moved for a week: the player who was waiting wins
+  const dead = db.prepare(`
+    SELECT * FROM games WHERE status = 'active' AND last_move_at < datetime('now', ?)
+  `).all(`-${ABANDON_AFTER_DAYS} days`);
+  for (const g of dead) {
+    const turn = turnOf(JSON.parse(g.moves));
+    const result = turn === 'w' ? '0-1' : '1-0';
+    db.prepare("UPDATE games SET status = 'finished', result = ?, reason = 'abandoned', updated_at = datetime('now') WHERE id = ?")
+      .run(result, g.id);
+    if (onGameChanged) onGameChanged(g.id);
+  }
+
+  // Uploaded post media is only needed for a few days
+  const oldMedia = db.prepare("SELECT id, path FROM media WHERE created_at < datetime('now', '-7 days')").all();
+  for (const m of oldMedia) {
+    fs.rm(m.path, { force: true }, () => {});
+    db.prepare('DELETE FROM media WHERE id = ?').run(m.id);
+  }
+}
+
+function startScheduler(onGameChanged) {
   const tick = async () => {
     try {
-      const day = D.today();
-      if (lastRunDay !== day && D.hourNow() >= reminderHour) {
-        lastRunDay = day;
-        await sendReminders(bot);
-      }
+      housekeeping(onGameChanged);
+      await remindMoves();
     } catch (e) {
       console.error('[scheduler] error:', e);
     }
   };
-
+  const timer = setInterval(tick, Number(process.env.SCHEDULER_MS || 10 * 60 * 1000));
+  timer.unref();
   tick();
-  return setInterval(tick, 5 * 60 * 1000);
+  return timer;
 }
 
-module.exports = { startScheduler, sendReminders, rollAllSubscriptions };
+module.exports = { startScheduler, remindMoves, housekeeping };

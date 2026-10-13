@@ -1,16 +1,18 @@
-# obunanazoratbot
+# Chess for Telegram
 
-Telegram bot + Mini App to track **expenses**, **subscriptions**, a **calendar** of both, and **renewal reminders**. Minimal dark UI with swipeable pages, a floating nav and a built-in **admin panel**.
+A minimalist chess **Mini App** and bot. Play the computer (4 levels), a random online player, or a friend you invited from Telegram.
 
-- **Bot:** grammY (long polling). `/start` opens the app, `/admin` gives admins a quick summary.
-- **Mini App:** vanilla JS, no build step. Swipe left/right between Home, Expenses, Subs, Calendar, Profile.
-- **API:** Express + SQLite (Node's built-in `node:sqlite`, no native modules). Every request is verified against Telegram's signed `initData`.
-- **Reminders:** a daily job sends a Telegram message N days before each renewal (N is set per user with the slider in Profile).
-- **Admin panel:** Profile → *Admin panel*, visible only to IDs in `ADMIN_IDS` (stats, sign-ups chart, user search, block/unblock, broadcast). Non-admins get a 404 from every admin endpoint.
+- **Bot** (grammY, long polling): `/start` first asks for a language (O'zbekcha, Ўзбекча, Русский, English), then sends a welcome with an **Open** button. `/lang`, `/play`, `/help`, `/admin`.
+- **Mini App** (vanilla ES modules, no build step): swipe between Play, Live, Friends and Profile. Dark/light theme, four languages, emoji reactions, confetti.
+- **Computer:** negamax engine running in a Web Worker (`public/js/ai*.mjs`).
+- **Online games:** server-authoritative (chess.js validates every move), pushed to both players over WebSocket.
+- **Friends:** *Friends → Share invite* opens Telegram's share sheet with a `t.me/<bot>?start=i<id>` link. A friend who opens it becomes your friend and can be challenged. Open games use `?start=g<id>` links.
+- **Notifications:** Telegram messages (challenge, your move, draw offer, reminders) each with an **Open** button; skipped when the player is online in the app.
+- **Admin panel** (Profile → Admin panel, only for `ADMIN_IDS`): live users, KPIs, sign-ups, user block/unblock, and a **post composer** (text, photo/video/GIF, up to 6 buttons with custom text and colours, language filter, test send).
 
 ## Run locally
 
-Requires Node.js 22.13+.
+Node.js 22.13+.
 
 ```bash
 npm install
@@ -18,22 +20,20 @@ cp .env.example .env     # fill in BOT_TOKEN and WEBAPP_URL
 export $(grep -v '^#' .env | xargs) && npm start
 ```
 
-Telegram only opens Mini Apps over **HTTPS**. For local testing, expose the port with a tunnel (e.g. `cloudflared tunnel --url http://localhost:3000`) and put that URL in `WEBAPP_URL`.
+Mini Apps need HTTPS: tunnel the port (e.g. `cloudflared tunnel --url http://localhost:3000`) and use that URL as `WEBAPP_URL`.
 
-## Deploy
-
-Any host that runs a Node process or a Docker container works (Railway, Render, Fly.io, a VPS).
-
-1. Set the environment variables from `.env.example` (`BOT_TOKEN`, `WEBAPP_URL`, `ADMIN_IDS`).
-2. **Mount a persistent volume at `/app/data`**, otherwise the SQLite database is wiped on each deploy.
-3. Run a **single instance** (long polling and the SQLite file don't support multiple replicas).
+## Tests
 
 ```bash
-docker build -t obunanazoratbot .
-docker run -d -p 3000:3000 -v obuna-data:/app/data --env-file .env obunanazoratbot
+npm test            # backend (fake Telegram) + bot conversation tests
+npm run test:engine # chess engine strength/sanity
 ```
 
-On start the bot registers the menu button, so users can open the app from the chat's *Open* button.
+## Deploy (Render, Docker)
+
+1. Environment: `BOT_TOKEN`, `WEBAPP_URL` (your https URL), `ADMIN_IDS`.
+2. Attach a **persistent disk at `/app/data`** (SQLite + uploaded post media).
+3. One instance only (long polling + SQLite). Health check: `/healthz`.
 
 ## Configuration
 
@@ -41,21 +41,9 @@ On start the bot registers the menu button, so users can open the app from the c
 |---|---|
 | `BOT_TOKEN` | Token from @BotFather (required) |
 | `WEBAPP_URL` | Public HTTPS URL of this server |
-| `ADMIN_IDS` | Comma-separated Telegram IDs allowed into the admin panel |
-| `DB_PATH` | SQLite file path (default `./data/app.db`) |
-| `REMINDER_HOUR` | Local hour when daily reminders go out (default `9`) |
-| `TZ` | Time zone for "today" and reminders (default `Europe/Riga`) |
+| `ADMIN_IDS` | Comma-separated admin Telegram IDs |
+| `BOT_USERNAME` | Optional, otherwise fetched with `getMe` |
+| `DB_PATH` | SQLite file (default `./data/app.db`) |
+| `REMIND_AFTER_HOURS` | Idle time before a "your move" reminder (default 6) |
 
-## Tests
-
-```bash
-npm test
-```
-
-Boots the server with a throwaway database and checks auth (forged/stale/tampered `initData`), validation, per-user data isolation, subscription date rolling, admin gating and blocking.
-
-## Security notes
-
-- **Never commit the bot token.** It lives only in the environment. If a token was ever pasted in a chat or committed, revoke it in @BotFather (`/revoke`) and use the new one.
-- Admin rights come only from `ADMIN_IDS` and are checked on the server for every admin request.
-- All user-provided text is rendered with `textContent`, and a strict Content-Security-Policy is set.
+Revoke any token that was ever pasted into a chat or committed (BotFather → `/revoke`).

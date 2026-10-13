@@ -1,0 +1,289 @@
+// Main app: boot, swipe pager, pages, deep links.
+import { h, $, $$, icon, haptic, toast, sheet, seg, toggle, api, fail, setInitData, connectWs, onWs, tg, avatar, shareUrl, confirmSheet, sleep } from './ui.js';
+import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
+import { openGame, savedAiGame, openGameId } from './game.js';
+import { openAdmin } from './admin.js';
+
+const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
+const TABS = ['play', 'live', 'friends', 'profile'];
+const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+const gameMeta = () => ({ me: { id: state.me.id, name: state.me.firstName }, botUsername: state.meta.botUsername, reactions: state.meta.REACTIONS });
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const bg = theme === 'light' ? '#f3f5f9' : '#111827';
+  try { tg.setHeaderColor(bg); tg.setBackgroundColor(bg); tg.setBottomBarColor && tg.setBottomBarColor(bg); } catch { /* old client */ }
+  const m = $('meta[name=color-scheme]'); if (m) m.content = theme;
+}
+
+const page = (name) => $(`.page[data-page="${name}"]`);
+function mount(name, ...nodes) {
+  const p = page(name);
+  const top = p.scrollTop;
+  p.replaceChildren(...nodes.flat(Infinity).filter(Boolean));
+  p.scrollTop = top;
+  p.classList.add('seen');
+}
+const empty = (text, ic) => h('div.empty', ic ? h('div.empty-ic', ic) : null, text);
+const rowBtn = (...kids) => h('button.row', ...kids);
+
+const stat = (n, label, color) => h('div.stat', h('b' + (color ? '.' + color : ''), String(n)), h('small', label));
+const sumStats = (s) => ({ w: s.online.w + s.ai.w, d: s.online.d + s.ai.d, l: s.online.l + s.ai.l });
+
+// ---------- data ----------
+async function loadLobby() { const l = await api('GET', '/lobby'); state.lobby = l; state.stats = l.stats; return l; }
+async function loadFriends() { state.friends = (await api('GET', '/friends')).friends; return state.friends; }
+const refreshers = {};
+let busyRefresh = false, again = null;
+async function refresh(which = state.tab) {
+  if (busyRefresh) { again = which; return; } // run once more when the current load finishes
+  busyRefresh = true;
+  try { await refreshers[which](); } catch (e) { if (e.code !== 'net') fail(e); } finally {
+    busyRefresh = false;
+    if (again) { const w = again; again = null; refresh(state.tab === w ? w : state.tab); }
+  }
+}
+
+// ---------- actions ----------
+const openOnline = (g) => openGame({ kind: 'online', game: g, meta: gameMeta() }, () => refresh());
+async function startQuick() {
+  try { const r = await api('POST', '/games/quick'); openOnline(r.game); } catch (e) { fail(e); }
+}
+async function startFriendGame() {
+  try { const r = await api('POST', '/games'); openOnline(r.game); } catch (e) { fail(e); }
+}
+async function challenge(id) {
+  try {
+    const r = await api('POST', '/games', { opponentId: id });
+    toast(t('challenge_sent')); haptic('success');
+    openOnline(r.game);
+  } catch (e) { fail(e); }
+}
+async function openById(id) {
+  try {
+    const r = await api('GET', `/games/${id}`);
+    if (r.game.joinable) return joinGame(id);
+    if (r.game.status === 'invited' && r.game.invitedId === state.me.id) { go(0, true); return refresh('play'); }
+    if (r.game.status === 'cancelled') return toast(t('join_failed'), true);
+    openOnline(r.game);
+  } catch (e) { fail(e); }
+}
+async function joinGame(id) {
+  try { const r = await api('POST', `/games/${id}/join`); openOnline(r.game); } catch (e) { toast(t('join_failed'), true); }
+}
+function startAi(level, colour) {
+  const col = colour === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : colour;
+  const S = openGame({ kind: 'ai', level, colour: col, meta: gameMeta() }, () => refresh());
+  S.onStats = (s) => { state.stats = s; };
+}
+function resumeAi() {
+  const s = savedAiGame(); if (!s) return;
+  const S = openGame({ kind: 'ai', level: s.level, colour: s.colour, resume: s, meta: gameMeta() }, () => refresh());
+  S.onStats = (st) => { state.stats = st; };
+}
+
+function aiSheet() {
+  let level = 2, colour = 'w';
+  sheet((close) => {
+    const levels = h('div.levels');
+    const draw = () => levels.replaceChildren(...[1, 2, 3, 4].map((n) => h('button.lvl' + (n === level ? '.on' : ''), { onclick: () => { level = n; haptic('select'); draw(); } },
+      h('div.lvl-bars', ...[1, 2, 3, 4].map((i) => h('i' + (i <= n ? '.f' : '')))),
+      h('div', h('b', t('lvl' + n)), h('small', t('lvl' + n + '_d'))))));
+    draw();
+    return [
+      h('h2', t('vs_computer')),
+      h('div.label', t('level')), levels,
+      h('div.label', t('play_as')),
+      seg([['w', '♔ ' + t('white')], ['r', '🎲 ' + t('random')], ['b', '♚ ' + t('black')]], colour, (v) => { colour = v; }),
+      h('button.btn', { onclick: () => { close(); setTimeout(() => startAi(level, colour), 120); } }, t('start')),
+    ];
+  });
+}
+
+function newGameSheet() {
+  sheet((close) => [
+    h('h2', t('new_game')),
+    h('div.stack',
+      tile(t('vs_computer'), t('vs_computer_sub'), 'cpu', () => { close(); setTimeout(aiSheet, 200); }, true),
+      tile(t('play_online'), t('quick_sub'), 'globe', () => { close(); startQuick(); }),
+      tile(t('with_friend'), t('friend_sub'), 'friends', () => { close(); startFriendGame(); })),
+  ]);
+}
+const tile = (title, sub, ic, fn, hero) => h('button.tile' + (hero ? '.hero' : ''), { onclick: () => { haptic('light'); fn(); } },
+  h('b', title), h('small', sub), icon(ic, 26));
+
+// ---------- pages ----------
+const gameRow = (g, kind) => {
+  const o = g.opponent || {};
+  const mine = g.you && g.turn === g.you;
+  return rowBtn({ onclick: () => openOnline(g) }, avatar(o.name || '?', o.id || 0),
+    h('div.grow', h('div.t', o.name || '…'), h('div.s', kind === 'recent' ? resultText(g) : g.status === 'active' ? (mine ? t('your_turn') : t('their_turn')) : t('waiting_opp'))),
+    kind === 'active' && mine ? h('span.pill', '●') : icon('arrow', 18));
+};
+const resultText = (g) => {
+  if (g.status !== 'finished') return '';
+  const r = g.result === '1/2-1/2' ? t('draw_title') : (g.result === '1-0') === (g.you === 'w') ? t('you_won') : t('you_lost');
+  return r;
+};
+
+refreshers.play = async function renderPlay() {
+  const l = await loadLobby();
+  const saved = savedAiGame();
+  const s = sumStats(l.stats);
+  const nodes = [
+    h('div.top', h('h1', `♟ ${t('app')}`), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
+    l.games.invites.length ? [h('div.h2', t('invites')), h('div.list', l.games.invites.map((g) => h('div.row.invite',
+      avatar(g.opponent.name, g.opponent.id), h('div.grow', h('div.t', g.opponent.name), h('div.s', t('challenge'))),
+      h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', `/games/${g.id}/join`); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
+      h('button.mini', { onclick: async () => { try { await api('POST', `/games/${g.id}/decline`); } catch (e) { fail(e); } refresh(); } }, icon('x', 18)))))] : null,
+    h('div.stack.modes',
+      tile(t('vs_computer'), t('vs_computer_sub'), 'cpu', aiSheet, true),
+      h('div.grid2', tile(t('play_online'), t('quick_sub'), 'globe', startQuick), tile(t('with_friend'), t('friend_sub'), 'friends', startFriendGame))),
+    saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
+      saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('cpu', 22)), h('div.grow', h('div.t', `${t('computer')} · ${t('lvl' + saved.level)}`), h('div.s', t('resume'))), icon('arrow', 18)) : null,
+      l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
+    h('div.h2', t('stats')),
+    h('div.card.stats', stat(s.w, t('wins'), 'g'), stat(s.d, t('draws')), stat(s.l, t('losses'), 'r')),
+    h('div.h2', t('recent')),
+    l.games.recent.length ? h('div.list', l.games.recent.map((g) => gameRow(g, 'recent'))) : empty(t('no_games'), '♞'),
+  ];
+  mount('play', nodes);
+};
+
+refreshers.live = async function renderLive() {
+  const l = await loadLobby();
+  mount('live',
+    h('div.top', h('h1', t('live_title')), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
+    h('button.tile.hero', { onclick: startQuick }, h('b', t('find_opponent')), h('small', t('quick_sub')), icon('globe', 26)),
+    h('div.h2', t('online')),
+    l.online.length ? h('div.list', l.online.map((u) => h('div.row', avatar(u.name, u.id), h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.inGame ? t('in_game') : t('online'))),
+      h('button.mini.ok', { disabled: u.inGame, onclick: () => challenge(u.id) }, t('challenge'))))) : empty(t('nobody'), '🛰️'));
+};
+
+refreshers.friends = async function renderFriends() {
+  const list = await loadFriends();
+  const link = `https://t.me/${state.meta.botUsername}?start=i${state.me.id}`;
+  mount('friends',
+    h('div.top', h('h1', t('friends_title'))),
+    h('div.card.invite-card', h('div.emoji-big', '🤝'), h('b', t('invite_friends')), h('p.muted', t('invite_sub')),
+      h('button.btn', { onclick: () => state.meta.botUsername ? shareUrl(link, t('share_text')) : toast(t('e_server'), true) }, icon('share', 20), t('invite_btn'))),
+    h('div.h2', t('your_friends')),
+    list.length ? h('div.list', list.map((f) => h('div.row', h('div.avwrap', avatar(f.name, f.id), f.online ? h('i.dot.on') : null),
+      h('div.grow', h('div.t', f.name), h('div.s', f.inGame ? t('in_game') : f.online ? t('online') : t('offline'))),
+      h('button.mini.ok', { disabled: f.inGame || f.invited, onclick: () => challenge(f.id) }, f.invited ? icon('check', 18) : t('challenge')),
+      h('button.mini', { 'aria-label': t('remove_friend'), onclick: async () => { if (await confirmSheet(`${t('remove_friend')}: ${f.name}?`, t('remove_friend'), true)) { try { await api('DELETE', `/friends/${f.id}`); } catch (e) { fail(e); } refresh(); } } }, icon('x', 18))))) : empty(t('no_friends'), '👋'));
+};
+
+refreshers.profile = async function renderProfile() {
+  const me = state.me; const st = state.stats || (await api('GET', '/me')).stats; state.stats = st;
+  const s = sumStats(st);
+  const save = async (patch) => { try { state.me = (await api('PATCH', '/me', patch)).user; } catch (e) { fail(e); } };
+  const langChips = h('div.chips', LANGS.map((l) => h('button.chip' + (getLang() === l ? '.on' : ''), { onclick: async () => { await save({ lang: l }); setLang(l); rebuildAll(); } }, LANG_NAMES[l])));
+  mount('profile',
+    h('div.top', h('h1', t('profile_title'))),
+    h('div.me', h('div.big', avatar(me.firstName, me.id, 'xl')), h('div', h('h2', me.firstName), me.username ? h('div.muted', '@' + me.username) : null)),
+    h('div.card.stats', stat(s.w, t('wins'), 'g'), stat(s.d, t('draws')), stat(s.l, t('losses'), 'r')),
+    h('div.h2', t('language')), langChips,
+    h('div.h2', t('theme')),
+    seg([['dark', '🌙 ' + t('dark')], ['light', '☀️ ' + t('light')]], me.theme, async (v) => { applyTheme(v); await save({ theme: v }); }),
+    h('div.card.settings',
+      h('div.setting', h('div', h('b', t('notifications')), h('small', t('notifications_sub'))), toggle(me.notifyEnabled, (v) => save({ notifyEnabled: v }))),
+      h('div.setting', h('div', h('b', t('discoverable')), h('small', t('discoverable_sub'))), toggle(me.discoverable, (v) => save({ discoverable: v })))),
+    me.isAdmin ? h('button.btn.ghost', { onclick: () => openAdmin(rebuildAll) }, icon('shield', 20), t('admin_panel')) : null,
+    !me.isAdmin ? h('button.btn.danger', { onclick: async () => { if (await confirmSheet(t('delete_confirm'), t('delete_data'), true)) { try { await api('DELETE', '/me'); tg.close(); } catch (e) { fail(e); } } } }, icon('trash', 18), t('delete_data')) : null);
+};
+
+// ---------- pager + nav ----------
+let go = () => {};
+function initPager() {
+  const pager = $('#pager'), track = $('#track'), ind = $('#nav-ind'), nav = $('#nav');
+  ind.style.width = `calc((100% - 12px) / ${TABS.length})`;
+  const btns = TABS.map((k, i) => {
+    const b = h('button.nav-btn', { 'aria-label': t('nav_' + k), onclick: () => { haptic('select'); go(i, true); } }, icon(k, 22), h('span', t('nav_' + k)));
+    nav.append(b); return b;
+  });
+  let W = pager.clientWidth;
+  const setX = (px) => { track.style.transform = `translate3d(${px}px,0,0)`; };
+  go = (i, animate) => {
+    const prev = state.index;
+    state.index = clamp(i, 0, TABS.length - 1); state.tab = TABS[state.index];
+    track.classList.toggle('settle', !!animate); ind.classList.remove('drag');
+    setX(-state.index * W);
+    ind.style.transform = `translateX(${state.index * 100}%)`;
+    btns.forEach((b, j) => b.classList.toggle('active', j === state.index));
+    if (state.index !== prev) refresh();
+  };
+  addEventListener('resize', () => { W = pager.clientWidth; go(state.index, false); });
+  let drag = null;
+  pager.addEventListener('pointerdown', (e) => { if (e.target.closest('[data-noswipe], input, textarea, select')) return; drag = { x: e.clientX, y: e.clientY, t: performance.now(), mode: null, dx: 0, id: e.pointerId }; });
+  pager.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.mode) {
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.3) { drag.mode = 'h'; try { pager.setPointerCapture(drag.id); } catch { /* ignore */ } track.classList.remove('settle'); ind.classList.add('drag'); }
+      else if (Math.abs(dy) > 8) { drag = null; return; } else return;
+    }
+    drag.dx = dx;
+    const atEdge = (state.index === 0 && dx > 0) || (state.index === TABS.length - 1 && dx < 0);
+    const eff = atEdge ? dx * 0.28 : dx; // rubber band at the ends
+    setX(-state.index * W + eff);
+    ind.style.transform = `translateX(${(state.index - eff / W) * 100}%)`;
+  });
+  const finish = () => {
+    if (!drag) return; const d = drag; drag = null; if (d.mode !== 'h') return;
+    const v = d.dx / Math.max(1, performance.now() - d.t);
+    let next = state.index;
+    if (Math.abs(d.dx) > W * 0.2 || Math.abs(v) > 0.45) next = state.index + (d.dx < 0 ? 1 : -1);
+    if (next !== state.index) haptic('select');
+    go(next, true);
+  };
+  pager.addEventListener('pointerup', finish); pager.addEventListener('pointercancel', finish);
+  go(0, false);
+}
+
+function rebuildNav() {
+  $('#nav').querySelectorAll('.nav-btn').forEach((b, i) => { b.querySelector('span:last-child').textContent = t('nav_' + TABS[i]); b.setAttribute('aria-label', t('nav_' + TABS[i])); });
+}
+function rebuildAll() { rebuildNav(); $$('.page').forEach((p) => p.classList.remove('seen')); refresh(); }
+
+// ---------- deep links ----------
+async function handleDeepLink() {
+  const q = new URLSearchParams(location.search);
+  const p = q.get('p') || (tg.initDataUnsafe && tg.initDataUnsafe.start_param) || '';
+  const gid = q.get('game');
+  history.replaceState(null, '', location.pathname);
+  if (/^i\d{1,15}$/.test(p)) {
+    try {
+      const r = await api('POST', '/friends/join', { userId: Number(p.slice(1)) });
+      toast(t('friend_added', { name: r.friend.name }));
+      go(2, true);
+    } catch (e) { fail(e); }
+  } else if (/^g[\w-]{4,20}$/.test(p)) await joinGame(p.slice(1));
+  else if (gid && /^[\w-]{4,20}$/.test(gid)) await openById(gid);
+}
+
+// ---------- boot ----------
+async function boot() {
+  if (!tg || !tg.initData) { $('#gate').hidden = false; return; }
+  setInitData(tg.initData);
+  tg.ready(); tg.expand();
+  try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch { /* old client */ }
+  let me;
+  try { me = await api('GET', '/me'); } catch (e) { $('#gate').hidden = false; $('#gate h1').textContent = (await import('./i18n.js')).errText(e); return; }
+  state.me = me.user; state.stats = me.stats; state.meta = me.meta;
+  setLang(me.user.lang); applyTheme(me.user.theme);
+  $('#gate').hidden = true; $('#app').hidden = false;
+  initPager();
+  $('#fab').addEventListener('click', () => { haptic('light'); newGameSheet(); });
+  connectWs((up) => { if (up) refresh(); });
+  onWs((m) => {
+    if (m.t === 'invite') { toast(t('challenge') + ': ' + (m.game.opponent || {}).name); haptic('success'); go(0, true); refresh('play'); }
+    else if (m.t === 'friend') { haptic('success'); refresh(); }
+    else if (m.t === 'game' && m.game.id !== openGameId()) refresh();
+  });
+  setInterval(() => { if (!document.hidden && !openGameId() && (state.tab === 'live' || state.tab === 'play')) refresh(); }, 8000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  await refresh();
+  await handleDeepLink();
+}
+boot();

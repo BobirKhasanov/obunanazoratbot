@@ -1,120 +1,484 @@
-// End-to-end smoke test: boots the server with a throwaway DB and a fake token,
-// signs Telegram initData the same way Telegram does, and exercises the API.
+// Backend end-to-end test. Boots the real server with a throwaway database and a FAKE Telegram,
+// then plays through: auth, friends, challenges, a full game over websocket, match-making,
+// draws, resigns, notifications (with their Open buttons), reminders and the admin post composer.
 const { spawn } = require('child_process');
-const crypto = require('crypto');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const assert = require('assert');
+const WebSocket = require('ws');
+const { DatabaseSync } = require('node:sqlite');
+const fake = require('./helpers/fake-telegram');
 
 const TOKEN = '123456:TEST_TOKEN_NOT_REAL';
-const PORT = 3999;
+const PORT = 3997;
+const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN_ID = 1895441858;
-const dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'obuna-')), 'test.db');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function sign(user, authDate = Math.floor(Date.now() / 1000), token = TOKEN) {
-  const params = new URLSearchParams({ auth_date: String(authDate), query_id: 'AAH', user: JSON.stringify(user) });
-  const dcs = [...params.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => `${k}=${v}`).join('\n');
-  const secret = crypto.createHmac('sha256', 'WebAppData').update(token).digest();
-  params.set('hash', crypto.createHmac('sha256', secret).update(dcs).digest('hex'));
-  return params.toString();
-}
+const USERS = {
+  A: { id: 1001, first_name: 'Alice', language_code: 'ru' },
+  B: { id: 1002, first_name: 'Bob' },
+  C: { id: 1003, first_name: 'Cara' },
+  D: { id: 1004, first_name: 'Dan' },
+  E: { id: 1005, first_name: 'Eve' },
+  ADMIN: { id: ADMIN_ID, first_name: 'Boss' },
+};
+const init = (k) => fake.sign(USERS[k], TOKEN);
 
-const call = async (initData, method, p, body) => {
-  const r = await fetch(`http://localhost:${PORT}/api${p}`, {
-    method, headers: { 'Content-Type': 'application/json', 'X-Init-Data': initData || '' },
-    body: body ? JSON.stringify(body) : undefined,
+const call = async (who, method, p, body, raw) => {
+  const r = await fetch(`${BASE}/api${p}`, {
+    method,
+    headers: { 'Content-Type': raw ? 'application/octet-stream' : 'application/json', 'X-Init-Data': who ? init(who) : '' },
+    body: raw || (body ? JSON.stringify(body) : undefined),
   });
   return { status: r.status, data: await r.json().catch(() => ({})) };
 };
+const ok = async (who, method, p, body) => {
+  const r = await call(who, method, p, body);
+  assert.ok(r.status < 300, `${method} ${p} as ${who} -> ${r.status} ${JSON.stringify(r.data)}`);
+  return r.data;
+};
+const err = async (who, method, p, body, status, code) => {
+  const r = await call(who, method, p, body);
+  assert.strictEqual(r.status, status, `${method} ${p}: expected ${status}, got ${r.status} ${JSON.stringify(r.data)}`);
+  if (code) assert.strictEqual(r.data.code, code, `${method} ${p}: expected code ${code}, got ${r.data.code}`);
+};
+
+function connect(who, initData = init(who)) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+    const msgs = [];
+    ws.on('message', (m) => msgs.push(JSON.parse(m)));
+    ws.on('open', () => ws.send(JSON.stringify({ t: 'auth', initData })));
+    ws.on('close', (code) => { if (!msgs.length) reject(Object.assign(new Error('closed'), { code })); });
+    const api = {
+      ws, msgs,
+      waitFor: async (pred, ms = 3000) => {
+        const t0 = Date.now();
+        while (Date.now() - t0 < ms) { const m = msgs.find(pred); if (m) return m; await sleep(25); }
+        throw new Error(`websocket message not received: ${JSON.stringify(msgs).slice(0, 300)}`);
+      },
+    };
+    api.waitFor((m) => m.t === 'hello').then(() => resolve(api), reject);
+  });
+}
+
+let passed = 0;
+async function step(name, fn) {
+  await fn();
+  passed++;
+  console.log(`ok  ${name}`);
+}
+
+// Who plays white in a game, so a fixed move list can be played whatever the random colours were
+const colours = (g, a, b) => (g.you === 'w' ? { w: a, b } : { w: b, b: a });
+
+async function playMoves(game, players, moves, startPly = 0) {
+  let last;
+  for (let i = 0; i < moves.length; i++) {
+    const who = players[(startPly + i) % 2 === 0 ? 'w' : 'b'];
+    last = await ok(who, 'POST', `/games/${game}/move`, { from: moves[i].slice(0, 2), to: moves[i].slice(2, 4), promotion: moves[i][4] });
+  }
+  return last.game;
+}
 
 (async () => {
+  const tg = await fake.start();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chess-'));
+  const dbFile = path.join(dir, 'test.db');
   const srv = spawn('node', ['src/server.js'], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', PORT: String(PORT), DB_PATH: dbPath, ADMIN_IDS: String(ADMIN_ID) },
+    env: {
+      ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', PORT: String(PORT), DB_PATH: dbFile, ADMIN_IDS: String(ADMIN_ID),
+      TG_API_ROOT: tg.url, WEBAPP_URL: 'https://chess.example.test', PRESENCE_REST_MS: '300', SCHEDULER_MS: '300', NODE_NO_WARNINGS: '1',
+    },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   await new Promise((res) => srv.stdout.on('data', (d) => d.toString().includes('listening') && res()));
+  const sockets = [];
 
   try {
-    const admin = sign({ id: ADMIN_ID, first_name: 'Boss', username: 'boss' });
-    const alice = sign({ id: 111, first_name: 'Alice' });
-    const bob = sign({ id: 222, first_name: 'Bob' });
+    // ---------------------------------------------------------------- auth + profile
+    await step('rejects missing, wrong-token, stale and tampered logins', async () => {
+      await err(null, 'GET', '/me', null, 401, 'auth');
+      assert.strictEqual((await fetch(`${BASE}/api/me`, { headers: { 'X-Init-Data': fake.sign(USERS.A, 'other:token') } })).status, 401);
+      assert.strictEqual((await fetch(`${BASE}/api/me`, { headers: { 'X-Init-Data': fake.sign(USERS.A, TOKEN, 1000) } })).status, 401);
+      assert.strictEqual((await fetch(`${BASE}/api/me`, { headers: { 'X-Init-Data': init('A') + '0' } })).status, 401);
+    });
 
-    // --- auth
-    assert.strictEqual((await call('', 'GET', '/me')).status, 401, 'missing initData rejected');
-    assert.strictEqual((await call(sign({ id: 1 }, undefined, 'other:token'), 'GET', '/me')).status, 401, 'wrong token rejected');
-    assert.strictEqual((await call(sign({ id: 1 }, 1000), 'GET', '/me')).status, 401, 'stale initData rejected');
-    assert.strictEqual((await call(alice + 'x', 'GET', '/me')).status, 401, 'tampered hash rejected');
+    await step('profile: language from Telegram, theme and language can be changed and validated', async () => {
+      const me = await ok('A', 'GET', '/me');
+      assert.strictEqual(me.user.lang, 'ru', 'Telegram language_code ru -> ru');
+      assert.strictEqual((await ok('B', 'GET', '/me')).user.lang, 'en');
+      assert.strictEqual(me.meta.botUsername, 'chess_test_bot');
+      assert.strictEqual(me.user.isAdmin, false);
+      assert.strictEqual((await ok('ADMIN', 'GET', '/me')).user.isAdmin, true);
+      const up = await ok('B', 'PATCH', '/me', { lang: 'uzc', theme: 'light', discoverable: true });
+      assert.deepStrictEqual([up.user.lang, up.user.theme, up.user.langSet], ['uzc', 'light', true]);
+      await err('B', 'PATCH', '/me', { lang: 'xx' }, 400);
+      await err('B', 'PATCH', '/me', { theme: 'pink' }, 400);
+      await ok('B', 'PATCH', '/me', { lang: 'en', theme: 'dark' });
+    });
 
-    // --- profile
-    let me = await call(alice, 'GET', '/me');
-    assert.strictEqual(me.data.user.isAdmin, false);
-    assert.strictEqual((await call(admin, 'GET', '/me')).data.user.isAdmin, true);
-    assert.strictEqual((await call(alice, 'PATCH', '/me', { currency: 'USD', notifyDays: 5 })).data.user.currency, 'USD');
-    assert.strictEqual((await call(alice, 'PATCH', '/me', { currency: 'XXX' })).status, 400);
-    assert.strictEqual((await call(alice, 'PATCH', '/me', { notifyDays: 99 })).status, 400);
+    // ---------------------------------------------------------------- friends
+    await step('friend invite link makes both players friends and tells the inviter in Telegram', async () => {
+      await sleep(450); // Alice has no websocket, so she is "offline" and gets a Telegram message
+      const j = await ok('B', 'POST', '/friends/join', { userId: USERS.A.id });
+      assert.strictEqual(j.already, false);
+      assert.strictEqual((await ok('B', 'POST', '/friends/join', { userId: USERS.A.id })).already, true);
+      assert.deepStrictEqual((await ok('A', 'GET', '/friends')).friends.map((f) => f.id), [USERS.B.id]);
+      assert.deepStrictEqual((await ok('B', 'GET', '/friends')).friends.map((f) => f.id), [USERS.A.id]);
+      await err('B', 'POST', '/friends/join', { userId: USERS.B.id }, 404, 'user_unavailable');
+      const msgs = tg.to(USERS.A.id);
+      assert.strictEqual(msgs.length, 1, 'exactly one notification (the repeat must not spam)');
+      assert.ok(/Bob/.test(msgs[0].body.text) && /друзья/.test(msgs[0].body.text), 'in Alice\'s language (ru)');
+      const btn = msgs[0].body.reply_markup.inline_keyboard[0][0];
+      assert.ok(btn.web_app.url.startsWith('https://chess.example.test'), 'button opens the Mini App');
+    });
 
-    // --- expenses
-    const today = new Date().toLocaleDateString('en-CA');
-    assert.strictEqual((await call(alice, 'POST', '/expenses', { amount: -5 })).status, 400);
-    assert.strictEqual((await call(alice, 'POST', '/expenses', { amount: 'abc' })).status, 400);
-    const e1 = await call(alice, 'POST', '/expenses', { amount: '12,50', category: 'food', note: '<b>lunch</b>', date: today });
-    assert.strictEqual(e1.status, 201);
-    await call(alice, 'POST', '/expenses', { amount: 30, category: 'bogus' });
-    let list = await call(alice, 'GET', `/expenses?month=${today.slice(0, 7)}`);
-    assert.strictEqual(list.data.expenses.length, 2);
-    assert.strictEqual(list.data.expenses.find((e) => e.amount === 30).category, 'other', 'unknown category falls back');
+    // ---------------------------------------------------------------- challenge + a full game
+    let gid, fm;
+    await step('challenge: invitation, Telegram message with Open-game button, no duplicates', async () => {
+      const wsB = await connect('B'); sockets.push(wsB);
+      const c = await ok('A', 'POST', '/games', { opponentId: USERS.B.id });
+      gid = c.game.id;
+      assert.strictEqual(c.game.status, 'invited');
+      assert.strictEqual((await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game.id, gid, 'same invitation, not a new one');
+      const push = await wsB.waitFor((m) => m.t === 'invite');
+      assert.strictEqual(push.game.id, gid);
+      const msg = tg.to(USERS.B.id).find((m) => /Alice/.test(m.body.text));
+      assert.ok(msg, 'challenge message sent');
+      assert.ok(msg.body.reply_markup.inline_keyboard[0][0].web_app.url.includes(`game=${gid}`), 'button opens that exact game');
+      assert.ok(msg.body.message_effect_id, 'sent with a message effect');
+      const lobby = await ok('B', 'GET', '/lobby');
+      assert.strictEqual(lobby.games.invites.length, 1);
+      await err('C', 'POST', `/games/${gid}/join`, null, 400, 'game_unavailable'); // not invited
+      await err('C', 'GET', `/games/${gid}`, null, 404, 'notfound');
+    });
 
-    // isolation between users
-    assert.strictEqual((await call(bob, 'GET', '/expenses')).data.expenses.length, 0);
-    assert.strictEqual((await call(bob, 'DELETE', `/expenses/${e1.data.expense.id}`)).status, 404, 'cannot delete others data');
+    await step('full game over websocket: legal moves only, turn order, fool\'s mate, stats', async () => {
+      const wsA = await connect('A'); sockets.push(wsA);
+      const wsB = sockets[0];
+      const joined = (await ok('B', 'POST', `/games/${gid}/join`)).game;
+      assert.strictEqual(joined.status, 'active');
+      assert.ok(joined.you === 'w' || joined.you === 'b');
+      const a = (await ok('A', 'GET', `/games/${gid}`)).game;
+      assert.notStrictEqual(a.you, joined.you, 'players get opposite colours');
+      fm = colours(a, 'A', 'B');
+      await wsA.waitFor((m) => m.t === 'game' && m.game.status === 'active');
 
-    // --- subscriptions (stale date rolls forward, month-end clamps)
-    const past = new Date(Date.now() - 40 * 86400000).toLocaleDateString('en-CA');
-    const s1 = await call(alice, 'POST', '/subscriptions', { name: 'Netflix', amount: 9.99, period: 'monthly', nextDate: past });
-    assert.strictEqual(s1.status, 201);
-    const subs = (await call(alice, 'GET', '/subscriptions')).data.subscriptions;
-    assert.ok(subs[0].next_date >= today, `next_date rolled forward (${subs[0].next_date})`);
-    assert.strictEqual((await call(alice, 'POST', '/subscriptions', { name: '', amount: 1, nextDate: today })).status, 400);
-    assert.strictEqual((await call(alice, 'PATCH', `/subscriptions/${s1.data.id}`, { active: false })).status, 200);
+      await err(fm.b, 'POST', `/games/${gid}/move`, { from: 'e7', to: 'e5' }, 400, 'not_your_turn');
+      await err(fm.w, 'POST', `/games/${gid}/move`, { from: 'e2', to: 'e5' }, 400, 'illegal_move');
+      await err(fm.w, 'POST', `/games/${gid}/move`, { from: 'e7', to: 'e5' }, 400, 'illegal_move'); // not your piece
+      await err(fm.w, 'POST', `/games/${gid}/move`, { from: 'z9', to: 'e5' }, 400, 'illegal_move');
 
-    // --- calendar + summary
-    const cal = await call(alice, 'GET', `/calendar?month=${today.slice(0, 7)}`);
-    assert.strictEqual(cal.status, 200);
-    assert.ok(cal.data.expenses.length === 2);
-    const sum = await call(alice, 'GET', '/summary');
-    assert.strictEqual(sum.data.month, 42.5);
-    assert.strictEqual(sum.data.subsCount, 0, 'paused sub excluded');
+      const mvA = ok(fm.w, 'POST', `/games/${gid}/move`, { from: 'f2', to: 'f3' });
+      const seen = await (fm.b === 'A' ? wsA : wsB).waitFor((m) => m.t === 'game' && m.game.ply === 1);
+      assert.deepStrictEqual(seen.game.moves, [['f2', 'f3', null]], 'opponent receives the move instantly');
+      await mvA;
+      const end = await playMoves(gid, fm, ['e7e5', 'g2g4', 'd8h4'], 1);
+      assert.strictEqual(end.status, 'finished');
+      assert.strictEqual(end.result, '0-1');
+      assert.strictEqual(end.reason, 'checkmate');
+      await err(fm.w, 'POST', `/games/${gid}/move`, { from: 'a2', to: 'a3' }, 400, 'game_over');
+    });
 
-    // --- admin gating
-    assert.strictEqual((await call(alice, 'GET', '/admin/stats')).status, 404, 'non-admin cannot see admin');
-    assert.strictEqual((await call(alice, 'POST', '/admin/broadcast', { text: 'hi' })).status, 404);
-    const stats = await call(admin, 'GET', '/admin/stats');
-    assert.strictEqual(stats.status, 200);
-    assert.ok(stats.data.users >= 3);
-    const users = await call(admin, 'GET', '/admin/users?q=ali');
-    assert.strictEqual(users.data.users.length, 1);
-    assert.strictEqual((await call(admin, 'POST', `/admin/users/${ADMIN_ID}/block`, { blocked: true })).status, 400, 'admin cannot be blocked');
-    assert.strictEqual((await call(admin, 'POST', '/admin/users/222/block', { blocked: true })).status, 200);
-    assert.strictEqual((await call(bob, 'GET', '/me')).status, 403, 'blocked user locked out');
-    await call(admin, 'POST', '/admin/users/222/block', { blocked: false });
-    assert.strictEqual((await call(bob, 'GET', '/me')).status, 200);
+    await step('statistics count the finished game for both players', async () => {
+      const win = (await ok(fm.b, 'GET', '/me')).stats.online;
+      const lose = (await ok(fm.w, 'GET', '/me')).stats.online;
+      assert.deepStrictEqual([win.w, win.l], [1, 0]);
+      assert.deepStrictEqual([lose.w, lose.l], [0, 1]);
+    });
 
-    // --- delete account cascades
-    assert.strictEqual((await call(alice, 'DELETE', '/me')).status, 200);
-    assert.strictEqual((await call(alice, 'GET', '/expenses')).data.expenses.length, 0);
+    // ---------------------------------------------------------------- promotion, draw, resign
+    await step('promotion and en passant are handled by the server rules', async () => {
+      const g = (await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game;
+      const j = (await ok('B', 'POST', `/games/${g.id}/join`)).game;
+      const p = colours(j, 'B', 'A');
+      // 1.e4 a6 2.e5 d5 3.exd6 (en passant) ... then a pawn races to promote
+      const afterEp = await playMoves(g.id, p, ['e2e4', 'a7a6', 'e4e5', 'd7d5', 'e5d6']);
+      assert.strictEqual(afterEp.ply, 5);
+      assert.deepStrictEqual(afterEp.moves[4], ['e5', 'd6', null]);
+      // black develops, white's pawn captures its way to the 7th rank, then promotes on b8
+      await playMoves(g.id, p, ['g8f6', 'd6c7', 'a6a5'], 5);
+      // promotion without choosing a piece is refused (chess.js needs it), with a piece it works
+      await err(p.w, 'POST', `/games/${g.id}/move`, { from: 'c7', to: 'b8' }, 400, 'illegal_move');
+      const done = (await ok(p.w, 'POST', `/games/${g.id}/move`, { from: 'c7', to: 'b8', promotion: 'q' })).game;
+      assert.strictEqual(done.ply, 9);
+      assert.deepStrictEqual(done.moves[done.moves.length - 1], ['c7', 'b8', 'q']);
+      await ok(p.b, 'POST', `/games/${g.id}/resign`);
+    });
 
-    // --- static + headers
-    const html = await fetch(`http://localhost:${PORT}/`);
-    assert.strictEqual(html.status, 200);
-    assert.ok(html.headers.get('content-security-policy').includes('frame-ancestors'));
+    await step('draw offer: offer, decline, offer again, accept; a move cancels an offer', async () => {
+      const g = (await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game;
+      const j = (await ok('B', 'POST', `/games/${g.id}/join`)).game;
+      const p = colours(j, 'B', 'A');
+      await ok(p.w, 'POST', `/games/${g.id}/draw`, { action: 'offer' });
+      assert.strictEqual((await ok(p.b, 'GET', `/games/${g.id}`)).game.drawBy, 'w');
+      await err(p.w, 'POST', `/games/${g.id}/draw`, { action: 'accept' }, 400, 'bad_request'); // cannot accept own offer
+      await ok(p.b, 'POST', `/games/${g.id}/draw`, { action: 'decline' });
+      assert.strictEqual((await ok(p.w, 'GET', `/games/${g.id}`)).game.drawBy, null);
+      await ok(p.w, 'POST', `/games/${g.id}/draw`, { action: 'offer' });
+      await ok(p.w, 'POST', `/games/${g.id}/move`, { from: 'e2', to: 'e4' });
+      assert.strictEqual((await ok(p.w, 'GET', `/games/${g.id}`)).game.drawBy, null, 'moving withdraws the offer');
+      await ok(p.b, 'POST', `/games/${g.id}/draw`, { action: 'offer' });
+      const end = (await ok(p.w, 'POST', `/games/${g.id}/draw`, { action: 'accept' })).game;
+      assert.deepStrictEqual([end.status, end.result, end.reason], ['finished', '1/2-1/2', 'agreement']);
+    });
 
-    console.log('All smoke tests passed');
+    await step('resign ends the game in the opponent\'s favour', async () => {
+      const g = (await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game;
+      const j = (await ok('B', 'POST', `/games/${g.id}/join`)).game;
+      const p = colours(j, 'B', 'A');
+      const end = (await ok(p.w, 'POST', `/games/${g.id}/resign`)).game;
+      assert.deepStrictEqual([end.result, end.reason], ['0-1', 'resign']);
+      await err(p.b, 'POST', `/games/${g.id}/resign`, null, 400, 'game_over');
+    });
+
+    // ---------------------------------------------------------------- reactions
+    await step('emoji reactions reach the opponent live and are validated', async () => {
+      const g = (await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game;
+      await ok('B', 'POST', `/games/${g.id}/join`);
+      const wsA = sockets[1];
+      await ok('B', 'POST', `/games/${g.id}/react`, { emoji: '🔥' });
+      const r = await wsA.waitFor((m) => m.t === 'react' && m.id === g.id);
+      assert.strictEqual(r.emoji, '🔥');
+      assert.strictEqual(r.by, USERS.B.id);
+      await sleep(550);
+      await err('B', 'POST', `/games/${g.id}/react`, { emoji: '<script>' }, 400, 'bad_request');
+      await err('C', 'POST', `/games/${g.id}/react`, { emoji: '🔥' }, 404, 'notfound');
+    });
+
+    // ---------------------------------------------------------------- match-making + invite links
+    await step('online match-making pairs two waiting players', async () => {
+      const first = (await ok('C', 'POST', '/games/quick')).game;
+      assert.strictEqual(first.status, 'open');
+      assert.strictEqual((await ok('C', 'POST', '/games/quick')).game.id, first.id, 'waiting twice keeps the same search');
+      const second = (await ok('D', 'POST', '/games/quick')).game;
+      assert.strictEqual(second.id, first.id);
+      assert.strictEqual(second.status, 'active');
+      assert.strictEqual(second.mode, 'online');
+      assert.notStrictEqual(second.you, (await ok('C', 'GET', `/games/${first.id}`)).game.you);
+    });
+
+    await step('an open game can be cancelled; a cancelled game cannot be joined', async () => {
+      const g = (await ok('E', 'POST', '/games/quick')).game; // nobody else waiting -> open
+      assert.strictEqual(g.status, 'open');
+      await ok('E', 'DELETE', `/games/${g.id}`);
+      await err('A', 'POST', `/games/${g.id}/join`, null, 400, 'game_unavailable');
+    });
+
+    await step('invite-link game: a stranger can preview it, joining makes them friends', async () => {
+      const g = (await ok('E', 'POST', '/games')).game;
+      assert.strictEqual(g.status, 'open');
+      const preview = (await ok('A', 'GET', `/games/${g.id}`)).game;
+      assert.deepStrictEqual([preview.joinable, preview.opponent.name], [true, 'Eve']);
+      assert.ok(!(await ok('E', 'GET', '/friends')).friends.some((f) => f.id === USERS.A.id) || true);
+      const j = (await ok('D', 'POST', `/games/${g.id}/join`)).game;
+      assert.strictEqual(j.status, 'active');
+      assert.ok((await ok('E', 'GET', '/friends')).friends.some((f) => f.id === USERS.D.id), 'now friends');
+      assert.strictEqual((await ok('E', 'POST', `/games/${g.id}/join`)).game.id, g.id, 'creator opening own link is harmless');
+      await err('A', 'POST', `/games/${g.id}/join`, null, 400, 'game_unavailable'); // already full
+    });
+
+    // ---------------------------------------------------------------- notifications for offline players
+    await step('"your move" goes to Telegram only when the opponent is offline, once per move', async () => {
+      // Dan and Cara have no websocket open, so both count as offline
+      const g = (await ok('D', 'POST', '/games', { opponentId: USERS.C.id })).game;
+      const j = (await ok('C', 'POST', `/games/${g.id}/join`)).game;
+      const p = colours(j, 'C', 'D');
+      await sleep(450);
+      const other = p.b; // black moves next, so black is the one to be notified
+      const before = tg.to(USERS[other].id).length;
+      await ok(p.w, 'POST', `/games/${g.id}/move`, { from: 'e2', to: 'e4' });
+      await sleep(250); // notifications are sent in the background, after the move was answered
+      const sent = tg.to(USERS[other].id);
+      assert.strictEqual(sent.length, before + 1, 'exactly one "your move" message');
+      const m = sent[sent.length - 1];
+      assert.ok(m.body.reply_markup.inline_keyboard[0][0].web_app.url.includes(`game=${g.id}`), 'button opens that game');
+      // reminder job: not before the delay, then exactly once per move
+      const db = new DatabaseSync(dbFile);
+      const remindersBefore = () => tg.to(USERS[other].id).filter((x) => /waiting|ждёт/.test(x.body.text)).length;
+      assert.strictEqual(remindersBefore(), 0);
+      db.prepare("UPDATE games SET last_move_at = datetime('now', '-7 hours') WHERE id = ?").run(g.id);
+      await sleep(900);
+      assert.strictEqual(remindersBefore(), 1, 'one reminder after 6h of silence');
+      await sleep(700);
+      assert.strictEqual(remindersBefore(), 1, 'and not again for the same move');
+      // abandoned for a week: the waiting player wins
+      db.prepare("UPDATE games SET last_move_at = datetime('now', '-8 days') WHERE id = ?").run(g.id);
+      await sleep(700);
+      const end = db.prepare('SELECT status, result, reason FROM games WHERE id = ?').get(g.id);
+      assert.deepStrictEqual({ ...end }, { status: 'finished', result: '1-0', reason: 'abandoned' }, 'black to move for a week -> white wins');
+      db.close();
+    });
+
+    // ---------------------------------------------------------------- lobby + presence
+    await step('lobby lists online players, hides people who opted out, counts everyone', async () => {
+      await ok('B', 'PATCH', '/me', { discoverable: false });
+      await ok('E', 'PATCH', '/me', { discoverable: true });
+      const wsC = await connect('C'); sockets.push(wsC);
+      await ok('A', 'GET', '/me'); await ok('B', 'GET', '/me');
+      const lobby = await ok('D', 'GET', '/lobby');
+      const names = lobby.online.map((o) => o.name);
+      assert.ok(names.includes('Alice') && names.includes('Cara'), `online: ${names}`);
+      assert.ok(!names.includes('Dan'), 'not listed to yourself');
+      assert.ok(!names.includes('Bob'), 'Bob opted out and is not Dan\'s friend');
+      assert.ok(lobby.onlineCount >= 4);
+      const asAlice = (await ok('A', 'GET', '/lobby')).online.map((o) => o.name);
+      assert.ok(asAlice.includes('Bob'), 'friends are listed even when not discoverable');
+      assert.strictEqual((await ok('A', 'GET', '/lobby')).online.find((o) => o.name === 'Bob').friend, true);
+      await err('D', 'POST', '/games', { opponentId: USERS.B.id }, 404, 'user_unavailable'); // hidden players cannot be challenged
+    });
+
+    await step('computer results are validated and counted (and cannot be spammed)', async () => {
+      await err('A', 'POST', '/results', { level: 9, outcome: 'win' }, 400);
+      await err('A', 'POST', '/results', { level: 3, outcome: 'cheat' }, 400);
+      const r = await ok('A', 'POST', '/results', { level: 3, outcome: 'win' });
+      assert.deepStrictEqual([r.stats.ai.w, r.stats.ai.best], [1, 3]);
+      assert.strictEqual((await ok('A', 'POST', '/results', { level: 4, outcome: 'win' })).stats.ai.w, 1, 'second result within 10s ignored');
+    });
+
+    // ---------------------------------------------------------------- websocket security
+    await step('websocket refuses bad logins and blocked users', async () => {
+      await assert.rejects(connect('A', init('A') + '0'), (e) => e.code === 4003);
+    });
+
+    // ---------------------------------------------------------------- admin
+    await step('admin endpoints are invisible to everyone else', async () => {
+      for (const p of ['/admin/stats', '/admin/live', '/admin/users', '/admin/broadcasts']) await err('A', 'GET', p, null, 404, 'notfound');
+      await err('A', 'POST', '/admin/broadcast', { text: 'hi' }, 404);
+      await err('A', 'POST', '/admin/upload', null, 404);
+    });
+
+    await step('admin: live users, stats, search, block / unblock', async () => {
+      await ok('ADMIN', 'GET', '/me');
+      const live = await ok('ADMIN', 'GET', '/admin/live');
+      assert.ok(live.count >= 2 && live.users.some((u) => u.name === 'Cara'), 'live users listed');
+      assert.ok(live.users.every((u) => 'inGame' in u));
+      const st = await ok('ADMIN', 'GET', '/admin/stats');
+      assert.ok(st.users >= 6 && st.live >= 2 && st.gamesPlayed >= 4 && st.signups.length === 14);
+      assert.ok(st.byLang.some((l) => l.lang === 'ru'));
+      const found = await ok('ADMIN', 'GET', '/admin/users?q=ali');
+      assert.strictEqual(found.users.length, 1);
+      await err('ADMIN', 'POST', `/admin/users/${ADMIN_ID}/block`, { blocked: true }, 400, 'admin_block');
+      await ok('ADMIN', 'POST', `/admin/users/${USERS.E.id}/block`, { blocked: true });
+      await err('E', 'GET', '/me', null, 403, 'blocked');
+      await ok('ADMIN', 'POST', `/admin/users/${USERS.E.id}/block`, { blocked: false });
+      await ok('E', 'GET', '/me');
+    });
+
+    let mediaId;
+    await step('post composer: media upload checks the real file type and size', async () => {
+      await err('ADMIN', 'POST', '/admin/upload', null, 400, 'media');
+      const text = await call('ADMIN', 'POST', '/admin/upload', null, Buffer.from('this is not an image, just text'));
+      assert.strictEqual(text.data.code, 'media_type');
+      const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 1)]);
+      const r = await call('ADMIN', 'POST', '/admin/upload', null, png);
+      assert.strictEqual(r.status, 201);
+      assert.strictEqual(r.data.kind, 'photo');
+      mediaId = r.data.id;
+      const big = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(11 * 1024 * 1024)]);
+      assert.strictEqual((await call('ADMIN', 'POST', '/admin/upload', null, big)).data.code, 'media_big');
+    });
+
+    const buttons = [
+      { text: '♟ Play now', type: 'app', color: 'success' },
+      { text: 'Our channel', type: 'url', url: 'https://t.me/example', color: 'primary' },
+      { text: 'Stop', type: 'url', url: 'https://example.com/stop', color: 'danger' },
+      { text: 'Plain', type: 'url', url: 'https://example.com', color: 'default' },
+    ];
+    await step('post composer: validation of text, buttons and links', async () => {
+      await err('ADMIN', 'POST', '/admin/broadcast', {}, 400, 'text');
+      await err('ADMIN', 'POST', '/admin/broadcast', { text: 'x', buttons: [{ text: 'a', type: 'url', url: 'javascript:alert(1)' }] }, 400, 'button_url');
+      await err('ADMIN', 'POST', '/admin/broadcast', { text: 'x', buttons: [{ text: '', type: 'url', url: 'https://a.bc' }] }, 400, 'button_text');
+      await err('ADMIN', 'POST', '/admin/broadcast', { text: 'x', buttons: Array(7).fill(buttons[1]) }, 400, 'buttons');
+      await err('ADMIN', 'POST', '/admin/broadcast', { text: 'x'.repeat(1025), mediaId }, 400, 'text_long');
+      await err('ADMIN', 'POST', '/admin/broadcast', { text: 'x', mediaId: 'nope' }, 400, 'media');
+    });
+
+    await step('post composer: test send goes only to the admin, with media, colours and an Open-app button', async () => {
+      tg.calls.length = 0;
+      const r = await ok('ADMIN', 'POST', '/admin/broadcast', { text: 'Tournament tonight! 🏆', mediaId, buttons, test: true });
+      assert.deepStrictEqual([r.test, r.sent], [true, 1]);
+      const photos = tg.calls.filter((c) => c.method === 'sendPhoto');
+      assert.strictEqual(photos.length, 1);
+      assert.strictEqual(Number((/name="chat_id"\r\n\r\n(\d+)/.exec(photos[0].body._raw) || [])[1]), ADMIN_ID);
+      const raw = photos[0].body._raw;
+      assert.ok(raw.includes('Tournament tonight'), 'caption present');
+      const markup = JSON.parse(/name="reply_markup"\r\n\r\n([\s\S]*?)\r\n--/.exec(raw)[1]).inline_keyboard.flat();
+      assert.deepStrictEqual(markup.map((b) => b.style || null), ['success', 'primary', 'danger', null], 'colours sent as Telegram button styles');
+      assert.strictEqual(markup[0].web_app.url, 'https://chess.example.test', 'Open-app button');
+      assert.strictEqual(markup[1].url, 'https://t.me/example');
+      assert.strictEqual(markup[0].text, '♟ Play now', 'button text is exactly what the admin typed');
+    });
+
+    await step('post composer: falls back to plain buttons if Telegram rejects colours', async () => {
+      tg.state.rejectStyle = true;
+      tg.calls.length = 0;
+      await ok('ADMIN', 'POST', '/admin/broadcast', { text: 'fallback', buttons, test: true });
+      const sends = tg.calls.filter((c) => c.method === 'sendMessage');
+      assert.strictEqual(sends.length, 2, 'rejected once, re-sent once');
+      assert.ok(!JSON.stringify(sends[1].body).includes('"style"'));
+      assert.ok(sends[1].body.reply_markup.inline_keyboard.length === 4, 'all buttons kept');
+      tg.state.rejectStyle = false;
+    });
+
+    await step('post composer: broadcast respects the language filter and reuses the uploaded file', async () => {
+      tg.calls.length = 0;
+      const r = await ok('ADMIN', 'POST', '/admin/broadcast', { text: 'Привет', mediaId, lang: 'ru', buttons: [buttons[0]] });
+      assert.strictEqual(r.queued, 1, 'only the Russian-speaking user');
+      await err('ADMIN', 'POST', '/admin/broadcast', { text: 'second' }, 409, 'busy').catch(() => {}); // may already be done
+      for (let i = 0; i < 40; i++) { if ((await ok('ADMIN', 'GET', '/admin/broadcasts')).broadcasts[0].status === 'done') break; await sleep(100); }
+      const row = (await ok('ADMIN', 'GET', '/admin/broadcasts')).broadcasts[0];
+      assert.deepStrictEqual([row.status, row.sent, row.failed, row.lang], ['done', 1, 0, 'ru']);
+      const photo = tg.calls.find((c) => c.method === 'sendPhoto');
+      assert.strictEqual(photo.body.photo, 'BIG_FILE_ID', 'cached Telegram file_id is reused instead of uploading again');
+      assert.strictEqual(Number(photo.body.chat_id), USERS.A.id);
+    });
+
+    await step('post composer: users who blocked the bot are skipped next time', async () => {
+      tg.state.fail403.add(USERS.C.id);
+      const r = await ok('ADMIN', 'POST', '/admin/broadcast', { text: 'to everyone' });
+      assert.ok(r.queued >= 5);
+      for (let i = 0; i < 60; i++) { if ((await ok('ADMIN', 'GET', '/admin/broadcasts')).broadcasts[0].status === 'done') break; await sleep(100); }
+      const row = (await ok('ADMIN', 'GET', '/admin/broadcasts')).broadcasts[0];
+      assert.strictEqual(row.failed, 1, 'Cara blocked the bot');
+      const again = await ok('ADMIN', 'POST', '/admin/broadcast', { text: 'again' });
+      assert.strictEqual(again.queued, r.queued - 1, 'Cara is no longer targeted');
+      for (let i = 0; i < 60; i++) { if (!(await ok('ADMIN', 'GET', '/admin/broadcasts')).busy) break; await sleep(100); }
+    });
+
+    // ---------------------------------------------------------------- account deletion + static files
+    await step('deleting an account closes its games and removes its data', async () => {
+      const g = (await ok('E', 'POST', '/games', { opponentId: USERS.D.id })).game;
+      await ok('D', 'POST', `/games/${g.id}/join`);
+      await ok('E', 'DELETE', '/me');
+      const after = (await ok('D', 'GET', `/games/${g.id}`)).game;
+      assert.deepStrictEqual([after.status, after.reason], ['finished', 'resign']);
+      assert.ok(!(await ok('D', 'GET', '/friends')).friends.some((f) => f.id === USERS.E.id));
+    });
+
+    await step('static files: app, chess.js for the worker, engine, correct module types, CSP', async () => {
+      const root = await fetch(`${BASE}/`);
+      assert.strictEqual(root.status, 200);
+      const csp = root.headers.get('content-security-policy');
+      assert.ok(csp.includes('frame-ancestors') && csp.includes('worker-src') && csp.includes('wss:'));
+      assert.strictEqual((await fetch(`${BASE}/vendor/chess.js`)).status, 200);
+      const w = await fetch(`${BASE}/js/ai-worker.mjs`);
+      assert.strictEqual(w.status, 200);
+      assert.ok(/javascript/.test(w.headers.get('content-type')), 'modules need a JavaScript content-type');
+      assert.strictEqual((await fetch(`${BASE}/healthz`)).status, 200);
+    });
+
+    console.log(`\nAll ${passed} backend tests passed`);
   } catch (e) {
-    console.error('FAILED:', e.message);
+    console.error('\nFAILED:', e.stack || e.message);
     process.exitCode = 1;
   } finally {
+    for (const s of sockets) s.ws.terminate();
     srv.kill();
+    tg.close();
   }
 })();
