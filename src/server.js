@@ -30,8 +30,9 @@ if (!BOT_TOKEN) {
 const THEMES = ['dark', 'light'];
 const REACTIONS = ['👍', '😀', '😮', '😢', '🔥', '👏', '🤔', '😎', '🎉', '🙈'];
 const MAX_OPEN_GAMES = 10;
-// A direct challenge is only shown inside the app and expires after this long (no chat message is sent)
-const INVITE_TTL_MS = Number(process.env.INVITE_TTL_MS || 10_000);
+// A challenge is only shown inside the app (no chat message). It stays valid this long; the popup itself shows for 10 s
+const POPUP_MS = 10_000;
+const INVITE_TTL_MS = Number(process.env.INVITE_TTL_MS || 30_000);
 const SQUARE = /^[a-h][1-8]$/;
 
 const app = express();
@@ -191,6 +192,7 @@ api.delete('/me', wrap((req, res) => {
     pushGame(getGame.get(g.id));
   }
   db.prepare("UPDATE games SET status = 'cancelled' WHERE status IN ('open', 'invited') AND (creator_id = ? OR invited_id = ?)").run(uid, uid);
+  db.prepare('DELETE FROM game_invites WHERE user_id = ?').run(uid);
   db.prepare('DELETE FROM users WHERE id = ?').run(uid); // friends and results cascade
   res.json({ ok: true });
 }));
@@ -211,13 +213,22 @@ function gameFor(row, uid, full = true) {
     ply: moves.length, turn: turnOf(moves), result: row.result, reason: row.reason,
     drawBy: row.draw_by, updatedAt: row.updated_at,
   };
+  if (row.status === 'invited' && row.creator_id === uid) g.invitees = invitesOf(row.id).map(person);
   if (full) g.moves = moves;
   return g;
 }
 
 const inviteExpired = (row) => row.status === 'invited'
   && Date.now() - Date.parse(`${row.updated_at.replace(' ', 'T')}Z`) > INVITE_TTL_MS;
-const participants = (row) => [...new Set([row.creator_id, row.invited_id, row.white_id, row.black_id].filter(Boolean))];
+const invitesOf = (id) => db.prepare('SELECT user_id FROM game_invites WHERE game_id = ?').all(id).map((r) => r.user_id);
+const isInvitee = (row, uid) => row.status === 'invited' && invitesOf(row.id).includes(uid);
+const participants = (row) => [...new Set([row.creator_id, row.white_id, row.black_id,
+  ...(row.status === 'invited' ? invitesOf(row.id) : [row.invited_id])].filter(Boolean))];
+/** Tell everyone who was asked that the request is gone (accepted by someone else, cancelled or expired) */
+function dropInvites(row, exceptId) {
+  for (const id of invitesOf(row.id)) if (id !== exceptId) realtime.send(id, { t: 'invite_gone', id: row.id });
+  db.prepare('DELETE FROM game_invites WHERE game_id = ?').run(row.id);
+}
 const isParticipant = (row, uid) => participants(row).includes(uid);
 
 /** Push the current state of a game to everyone in it (over their websocket). */
@@ -249,6 +260,7 @@ function startGame(row, joinerId) {
     updated_at = datetime('now'), last_move_at = datetime('now') WHERE id = ?`)
     .run(creatorWhite ? row.creator_id : joinerId, creatorWhite ? joinerId : row.creator_id, joinerId, row.id);
   if (row.mode === 'friend') befriend(row.creator_id, joinerId); // playing through an invite makes you friends
+  dropInvites(row, joinerId); // the others are told that someone was faster
   const next = getGame.get(row.id);
   pushGame(next);
   if (!realtime.isOnline(row.creator_id)) {
@@ -275,36 +287,47 @@ api.post('/games/quick', wrap((req, res) => {
   res.status(201).json({ game: gameFor(getGame.get(id), uid) });
 }));
 
-// Create a game: with opponentId = direct challenge, without = open game anyone with the link can join
+// Create a game: with opponentIds = challenge sent to several online players (first to accept plays),
+// without = open game anyone with the link can join
 api.post('/games', wrap((req, res) => {
   const uid = req.user.id;
-  const requestedControl = req.body && req.body.timeControl;
-  const timeControl = ['bullet', 'blitz', 'rapid', 'classic'].includes(requestedControl) ? requestedControl : 'classic';
-  const opp = req.body && req.body.opponentId != null ? intParam(req.body.opponentId) : null;
+  const b = req.body || {};
+  const timeControl = ['bullet', 'blitz', 'rapid', 'classic'].includes(b.timeControl) ? b.timeControl : 'classic';
+  const wanted = [...new Set((Array.isArray(b.opponentIds) ? b.opponentIds : b.opponentId != null ? [b.opponentId] : []).map(intParam))].slice(0, 10);
   ensureRoom(uid);
 
-  if (!opp) {
+  if (!wanted.length) {
     const id = gameId();
     db.prepare("INSERT INTO games (id, creator_id, status, mode, time_control) VALUES (?, ?, 'open', 'friend', ?)").run(id, uid, timeControl);
     return res.status(201).json({ game: gameFor(getGame.get(id), uid) });
   }
 
-  const other = getUser.get(opp);
-  if (opp === uid || !other || other.blocked) throw new HttpError(404, 'Player not found', 'user_unavailable');
-  if (!realtime.isOnline(opp)) throw new HttpError(409, 'Player is offline', 'user_offline');
-  const friend = areFriends(uid, opp);
-  if (!friend && !other.discoverable) throw new HttpError(404, 'Player not found', 'user_unavailable');
+  let failure = null; const targets = [];
+  for (const opp of wanted) {
+    const other = getUser.get(opp);
+    if (opp === uid || !other || other.blocked) { failure = failure || new HttpError(404, 'Player not found', 'user_unavailable'); continue; }
+    if (!realtime.isOnline(opp)) { failure = new HttpError(409, 'Player is offline', 'user_offline'); continue; }
+    if (!areFriends(uid, opp) && !other.discoverable) { failure = failure || new HttpError(404, 'Player not found', 'user_unavailable'); continue; }
+    targets.push(opp);
+  }
+  if (!targets.length) throw failure;
 
-  // Asking twice must not spam the other player: return the invitation that is already waiting
-  const existing = db.prepare("SELECT * FROM games WHERE status = 'invited' AND creator_id = ? AND invited_id = ?").get(uid, opp);
-  if (existing && !inviteExpired(existing)) return res.json({ game: gameFor(existing, uid) });
-  if (existing) db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ?").run(existing.id);
+  // Sending the same request twice must not spam anyone: return the one that is already waiting
+  const existing = db.prepare("SELECT * FROM games WHERE status = 'invited' AND creator_id = ?").get(uid);
+  if (existing) {
+    const same = !inviteExpired(existing) && invitesOf(existing.id).sort().join() === [...targets].sort().join();
+    if (same) return res.json({ game: gameFor(existing, uid) });
+    dropInvites(existing);
+    db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ?").run(existing.id);
+  }
 
   const id = gameId();
+  const friend = targets.length === 1 && areFriends(uid, targets[0]);
   db.prepare("INSERT INTO games (id, creator_id, invited_id, status, mode, time_control) VALUES (?, ?, ?, 'invited', ?, ?)")
-    .run(id, uid, opp, friend ? 'friend' : 'online', timeControl);
+    .run(id, uid, targets[0], friend ? 'friend' : 'online', timeControl);
+  for (const t of targets) db.prepare('INSERT INTO game_invites (game_id, user_id) VALUES (?, ?)').run(id, t);
   const row = getGame.get(id);
-  realtime.send(opp, { t: 'invite', game: gameFor(row, opp), ttl: INVITE_TTL_MS }); // in-app only, no Telegram message
+  for (const t of targets) realtime.send(t, { t: 'invite', game: gameFor(row, t), ttl: POPUP_MS }); // in-app only
   res.status(201).json({ game: gameFor(row, uid) });
 }));
 
@@ -326,8 +349,8 @@ api.post('/games/:id/join', wrap((req, res) => {
   if (!row) throw new HttpError(404, 'Game not found', 'notfound');
   if (isParticipant(row, uid) && row.status !== 'open' && row.status !== 'invited') return res.json({ game: gameFor(row, uid) });
   if (row.creator_id === uid) return res.json({ game: gameFor(row, uid) }); // opening your own link
-  if (inviteExpired(row)) { db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ?").run(row.id); throw bad('This game is no longer available', 'game_unavailable'); }
-  const allowed = row.status === 'open' || (row.status === 'invited' && row.invited_id === uid);
+  if (inviteExpired(row)) { dropInvites(row); db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ?").run(row.id); pushGame(getGame.get(row.id)); throw bad('This game is no longer available', 'game_unavailable'); }
+  const allowed = row.status === 'open' || isInvitee(row, uid);
   if (!allowed) throw bad('This game is no longer available', 'game_unavailable');
   ensureRoom(uid);
   res.json({ game: gameFor(startGame(row, uid), uid) });
@@ -335,9 +358,12 @@ api.post('/games/:id/join', wrap((req, res) => {
 
 api.post('/games/:id/decline', wrap((req, res) => {
   const row = loadGame(req.params.id, req.user.id);
-  if (row.status !== 'invited' || row.invited_id !== req.user.id) throw bad('Nothing to decline', 'game_unavailable');
-  db.prepare("UPDATE games SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?").run(row.id);
-  pushGame(getGame.get(row.id));
+  if (!isInvitee(row, req.user.id)) throw bad('Nothing to decline', 'game_unavailable');
+  db.prepare('DELETE FROM game_invites WHERE game_id = ? AND user_id = ?').run(row.id, req.user.id);
+  if (!invitesOf(row.id).length) { // everybody said no
+    db.prepare("UPDATE games SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?").run(row.id);
+    pushGame(getGame.get(row.id));
+  }
   res.json({ ok: true });
 }));
 
@@ -345,6 +371,7 @@ api.post('/games/:id/decline', wrap((req, res) => {
 api.delete('/games/:id', wrap((req, res) => {
   const row = loadGame(req.params.id, req.user.id);
   if (row.creator_id !== req.user.id || !['open', 'invited'].includes(row.status)) throw bad('Cannot cancel', 'game_unavailable');
+  dropInvites(row);
   db.prepare("UPDATE games SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?").run(row.id);
   pushGame(getGame.get(row.id));
   res.json({ ok: true });
@@ -484,7 +511,8 @@ api.get('/lobby', wrap((req, res) => {
 
   const mine = db.prepare(`
     SELECT * FROM games WHERE status IN ('open', 'invited', 'active')
-      AND (creator_id = :u OR white_id = :u OR black_id = :u OR invited_id = :u) ORDER BY updated_at DESC LIMIT 30
+      AND (creator_id = :u OR white_id = :u OR black_id = :u OR invited_id = :u
+        OR id IN (SELECT game_id FROM game_invites WHERE user_id = :u)) ORDER BY updated_at DESC LIMIT 30
   `).all({ u: uid });
   const busy = new Set(db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all().flatMap((g) => [g.white_id, g.black_id]));
 
@@ -508,7 +536,7 @@ api.get('/lobby', wrap((req, res) => {
     online,
     games: {
       active: mine.filter((g) => g.status === 'active').map((g) => gameFor(g, uid, false)),
-      invites: mine.filter((g) => g.status === 'invited' && g.invited_id === uid && !inviteExpired(g)).map((g) => gameFor(g, uid, false)),
+      invites: mine.filter((g) => g.status === 'invited' && g.creator_id !== uid && !inviteExpired(g)).map((g) => gameFor(g, uid, false)),
       waiting: mine.filter((g) => ['open', 'invited'].includes(g.status) && g.creator_id === uid).map((g) => gameFor(g, uid, false)),
       recent: recent.map((g) => gameFor(g, uid, false)),
     },
@@ -523,7 +551,7 @@ api.get('/friends', wrap((req, res) => {
     SELECT u.id, u.first_name FROM friends f JOIN users u ON u.id = f.friend_id WHERE f.user_id = ? ORDER BY u.first_name
   `).all(uid);
   const busy = new Set(db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all().flatMap((g) => [g.white_id, g.black_id]));
-  const pending = new Set(db.prepare("SELECT invited_id FROM games WHERE status = 'invited' AND creator_id = ?").all(uid).map((r) => r.invited_id));
+  const pending = new Set(db.prepare("SELECT i.user_id FROM game_invites i JOIN games g ON g.id = i.game_id WHERE g.status = 'invited' AND g.creator_id = ?").all(uid).map((r) => r.user_id));
   res.json({
     friends: rows.map((r) => ({
       id: r.id, name: r.first_name || 'Player', online: realtime.isOnline(r.id), inGame: busy.has(r.id), invited: pending.has(r.id),
@@ -771,6 +799,7 @@ startScheduler((id) => pushGame(getGame.get(id)));
 setInterval(() => {
   for (const g of db.prepare("SELECT * FROM games WHERE status = 'invited'").all()) {
     if (!inviteExpired(g)) continue;
+    dropInvites(g);
     db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ?").run(g.id);
     pushGame(getGame.get(g.id));
   }

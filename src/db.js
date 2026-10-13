@@ -51,6 +51,13 @@ CREATE TABLE IF NOT EXISTS games (
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_move_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Everyone who was asked to play a challenge game (the first to accept starts it)
+CREATE TABLE IF NOT EXISTS game_invites (
+  game_id TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  PRIMARY KEY (game_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_game_invites_user ON game_invites(user_id);
 CREATE INDEX IF NOT EXISTS idx_games_white ON games(white_id);
 CREATE INDEX IF NOT EXISTS idx_games_black ON games(black_id);
 CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
