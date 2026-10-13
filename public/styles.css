@@ -447,3 +447,17 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .time-option:active { transform: scale(.97); }
 .online-heading { display: flex; align-items: center; justify-content: space-between; }
 .count-pill { background: var(--card); color: var(--muted); padding: 3px 9px; border-radius: 20px; font-size: 12px; }
+
+/* Live rankings */
+.rank-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 5px; background: var(--nav-bg); border: 1px solid var(--line); border-radius: 20px; }
+.rank-tab { min-width: 0; padding: 11px 3px; border-radius: 15px; color: var(--muted); font-size: 13px; font-weight: 750; }
+.rank-tab.on { color: var(--text); background: var(--blue); box-shadow: 0 5px 15px rgba(84,164,247,.2); }
+.rank-summary { margin-top: 16px; }
+.rank-summary-title { font-size: 18px; font-weight: 800; }
+.rank-row { gap: 12px; }
+.rank-place { width: 34px; flex: none; text-align: center; font-size: 16px; font-weight: 800; color: var(--muted); }
+.rank-place.podium-1, .rank-place.podium-2, .rank-place.podium-3 { font-size: 24px; }
+.rank-points { min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
+.rank-points b { display: block; font-size: 20px; font-weight: 850; }
+.rank-points small { display: block; color: var(--muted); font-size: 11px; }
+.rank-footnote { margin: 16px 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
