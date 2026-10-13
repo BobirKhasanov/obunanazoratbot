@@ -5,6 +5,7 @@ import { openGame, savedAiGame, openGameId } from './game.js';
 import { openAdmin } from './admin.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
+let selectedTime = 'any';
 const TABS = ['play', 'live', 'friends', 'profile'];
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const gameMeta = () => ({ me: { id: state.me.id, name: state.me.firstName }, botUsername: state.meta.botUsername, reactions: state.meta.REACTIONS });
@@ -155,17 +156,36 @@ refreshers.play = async function renderPlay() {
   const l = await loadLobby();
   const saved = savedAiGame();
   const s = sumStats(l.stats);
+  const controls = [
+    ['any', 'Istalgan', 'Tezroq topiladi'],
+    ['1+0', '1+0', 'Bullet'],
+    ['3+2', '3+2', 'Blitz'],
+    ['5+0', '5+0', 'Blitz'],
+    ['10+0', '10+0', 'Rapid'],
+    ['15+10', '15+10', 'Rapid'],
+  ];
+  const modes = h('div.time-grid', controls.map(([id, label, sub]) =>
+    h('button.time-option' + (selectedTime === id ? '.selected' : ''), {
+      onclick: () => { selectedTime = id; haptic('select'); refresh('play'); }
+    }, h('b', label), h('small', sub))
+  ));
+  const onlinePlayers = l.online.filter((u) => !u.inGame);
   const nodes = [
-    h('div.top', h('h1', `♟ ${t('app')}`), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
+    h('div.top', h('h1', '♟ ' + t('app')), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
+    h('div.h2', 'Shaxmat · Online'),
+    h('div.time-heading', 'O‘yin vaqtini tanlang'),
+    modes,
+    h('button.tile.hero', { onclick: onlineSheet }, h('b', 'Raqib tanlash'), h('small', 'Jonli o‘yinchi bilan o‘ynang'), icon('globe', 26)),
+    h('div.h2.online-heading', 'Online o‘yinchilar', h('span.count-pill', String(onlinePlayers.length))),
+    onlinePlayers.length ? h('div.list', onlinePlayers.map((u) => h('div.row', h('div.avwrap', avatar(u.name, u.id), h('i.dot.on')),
+      h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.inGame ? t('in_game') : t('online'))),
+      h('button.mini.ok', { disabled: u.inGame, onclick: () => challenge(u.id) }, 'O‘ynash · ' + selectedTime)))) : empty(t('nobody'), '🛰️'),
     l.games.invites.length ? [h('div.h2', t('invites')), h('div.list', l.games.invites.map((g) => h('div.row.invite',
       avatar(g.opponent.name, g.opponent.id), h('div.grow', h('div.t', g.opponent.name), h('div.s', t('challenge'))),
-      h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', `/games/${g.id}/join`); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
-      h('button.mini', { onclick: async () => { try { await api('POST', `/games/${g.id}/decline`); } catch (e) { fail(e); } refresh(); } }, icon('x', 18)))))] : null,
-    h('div.stack.modes',
-      tile(t('vs_computer'), t('vs_computer_sub'), 'cpu', aiSheet, true),
-      h('div.grid2', tile(t('play_online'), t('quick_sub'), 'globe', onlineSheet), tile(t('with_friend'), t('friend_sub'), 'friends', startFriendGame))),
+      h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
+      h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } refresh(); } }, icon('x', 18)))))] : null,
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
-      saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('cpu', 22)), h('div.grow', h('div.t', `${t('computer')} · ${t('lvl' + saved.level)}`), h('div.s', t('resume'))), icon('arrow', 18)) : null,
+      saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('cpu', 22)), h('div.grow', h('div.t', t('computer') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
     h('div.h2', t('stats')),
     h('div.card.stats', stat(s.w, t('wins'), 'g'), stat(s.d, t('draws')), stat(s.l, t('losses'), 'r')),
@@ -174,7 +194,6 @@ refreshers.play = async function renderPlay() {
   ];
   mount('play', nodes);
 };
-
 refreshers.live = async function renderLive() {
   const l = await loadLobby();
   mount('live',
@@ -316,7 +335,6 @@ async function boot() {
   setLang(me.user.lang); applyTheme(me.user.theme);
   $('#gate').hidden = true; $('#app').hidden = false;
   initPager();
-  $('#fab').addEventListener('click', () => { haptic('light'); newGameSheet(); });
   connectWs((up) => { if (up) refresh(); });
   onWs((m) => {
     if (m.t === 'invite') { showInvite(m.game, m.ttl || 10000); refresh('play'); }
