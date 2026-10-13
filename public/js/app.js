@@ -6,7 +6,7 @@ import { openAdmin } from './admin.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
 let selectedTime = 'any';
-const TABS = ['play', 'live', 'friends', 'profile'];
+const TABS = ['play', 'live', 'rankings', 'friends', 'profile'];
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const gameMeta = () => ({ me: { id: state.me.id, name: state.me.firstName }, botUsername: state.meta.botUsername, reactions: state.meta.REACTIONS });
 
@@ -47,15 +47,18 @@ async function refresh(which = state.tab) {
 
 // ---------- actions ----------
 const openOnline = (g) => openGame({ kind: 'online', game: g, meta: gameMeta() }, () => refresh());
+const rankingCategory = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapid', classic: 'Classic' };
+const selectedControlCategory = () => selectedTime === 'any' ? 'classic' : selectedTime === '1+0' ? 'bullet' : ['3+2', '5+0'].includes(selectedTime) ? 'blitz' : 'rapid';
+let selectedRanking = 'bullet';
 async function startQuick() {
-  try { const r = await api('POST', '/games/quick'); openOnline(r.game); } catch (e) { fail(e); }
+  try { const r = await api('POST', '/games/quick', { timeControl: selectedControlCategory() }); openOnline(r.game); } catch (e) { fail(e); }
 }
 async function startFriendGame() {
   try { const r = await api('POST', '/games'); openOnline(r.game); } catch (e) { fail(e); }
 }
 async function challenge(id) {
   try {
-    const r = await api('POST', '/games', { opponentId: id });
+    const r = await api('POST', '/games', { opponentId: id, timeControl: selectedControlCategory() });
     toast(t('challenge_sent')); haptic('success');
     openOnline(r.game);
   } catch (e) { fail(e); }
@@ -205,6 +208,28 @@ refreshers.live = async function renderLive() {
       h('button.mini.ok', { disabled: u.inGame, onclick: () => challenge(u.id) }, t('challenge'))))) : empty(t('nobody'), '🛰️'));
 };
 
+refreshers.rankings = async function renderRankings() {
+  const categories = ['bullet', 'blitz', 'rapid', 'classic'];
+  let data;
+  try { data = await api('GET', '/rankings?category=' + selectedRanking); }
+  catch (e) { fail(e); return; }
+  const tabs = h('div.rank-tabs', categories.map((category) => h('button.rank-tab' + (category === selectedRanking ? '.on' : ''), {
+    onclick: () => { selectedRanking = category; haptic('select'); refresh('rankings'); }
+  }, rankingCategory[category])));
+  const rows = data.rankings || [];
+  mount('rankings',
+    h('div.top', h('h1', '♜ ' + t('rankings_title')), h('div.livepill', h('i.dot'), t('rankings_live'))),
+    tabs,
+    h('div.card.rank-summary', h('div.rank-summary-title', rankingCategory[selectedRanking] + ' · ' + t('rankings_title')), h('div.muted', t('rankings_points_hint'))),
+    rows.length ? h('div.list.rank-list', rows.map((p) => h('div.row.rank-row',
+      h('div.rank-place' + (p.rank <= 3 ? '.podium-' + p.rank : ''), p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : String(p.rank)),
+      h('div.grow', h('div.t', p.name, p.id === state.me.id ? h('span.star', ' · ' + t('you')) : null),
+        h('div.s', t('rank_record', { w: p.wins, d: p.draws, l: p.losses }))),
+      h('div.rank-points', h('b', String(p.points)), h('small', t('points')))))) : empty(t('rankings_empty'), '♟'),
+    h('div.rank-footnote', t('rankings_scoring'))
+  );
+};
+
 refreshers.friends = async function renderFriends() {
   const list = await loadFriends();
   const link = `https://t.me/${state.meta.botUsername}?start=i${state.me.id}`;
@@ -342,7 +367,7 @@ async function boot() {
     else if (m.t === 'friend') { haptic('success'); refresh(); }
     else if (m.t === 'game' && m.game.id !== openGameId()) refresh();
   });
-  setInterval(() => { if (!document.hidden && !openGameId() && (state.tab === 'live' || state.tab === 'play')) refresh(); }, 8000);
+  setInterval(() => { if (!document.hidden && !openGameId() && ['live', 'play', 'rankings'].includes(state.tab)) refresh(); }, 8000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   await refresh();
   await handleDeepLink();
