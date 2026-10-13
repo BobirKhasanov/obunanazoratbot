@@ -165,7 +165,7 @@ button.row:active { transform: scale(0.98); }
   border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 #nav-ind {
-  position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / 4); border-radius: 26px;
+  position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / 5); border-radius: 26px;
   background: var(--card-2); will-change: transform; transition: transform 0.46s var(--ease);
 }
 #nav-ind.drag { transition: none; }
