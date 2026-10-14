@@ -189,7 +189,11 @@ async function playMoves(game, players, moves, startPly = 0) {
       const seen = await (fm.b === 'A' ? wsA : wsB).waitFor((m) => m.t === 'game' && m.game.ply === 1);
       assert.deepStrictEqual(seen.game.moves, [['f2', 'f3', null]], 'opponent receives the move instantly');
       await mvA;
-      const end = await playMoves(gid, fm, ['e7e5', 'g2g4', 'd8h4'], 1);
+      // Regression: jsonb moves must compare as jsonb, not ::text (PG text has spaces → false "not your turn")
+      const blackReply = await ok(fm.b, 'POST', `/games/${gid}/move`, { from: 'e7', to: 'e5' });
+      assert.strictEqual(blackReply.game.ply, 2);
+      assert.strictEqual(blackReply.game.turn, 'w');
+      const end = await playMoves(gid, fm, ['g2g4', 'd8h4'], 2);
       assert.strictEqual(end.status, 'finished');
       assert.strictEqual(end.result, '0-1');
       assert.strictEqual(end.reason, 'checkmate');

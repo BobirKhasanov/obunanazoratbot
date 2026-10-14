@@ -227,10 +227,12 @@ function clockPayload(row, now = Date.now()) {
   };
 }
 
+const sameId = (a, b) => a != null && b != null && Number(a) === Number(b);
+
 async function gameFor(row, uid, full = true) {
   const moves = parseMoves(row.moves);
-  const you = row.white_id === uid ? 'w' : row.black_id === uid ? 'b' : null;
-  const opponentId = [row.creator_id, row.invited_id, row.white_id, row.black_id].find((x) => x && x !== uid) || null;
+  const you = sameId(row.white_id, uid) ? 'w' : sameId(row.black_id, uid) ? 'b' : null;
+  const opponentId = [row.creator_id, row.invited_id, row.white_id, row.black_id].find((x) => x && !sameId(x, uid)) || null;
   const tc = normalizeTimeControl(row.time_control);
   const g = {
     id: row.id, status: row.status, mode: row.mode, timeControl: tc, timeCategory: categoryOf(tc),
@@ -453,7 +455,22 @@ async function activeGame(id, uid) {
   let row = await loadGame(id, uid);
   if (row.status === 'active') row = await claimFlagIfNeeded(row);
   if (row.status !== 'active') throw bad('The game is over', 'game_over');
-  return { row, colour: row.white_id === uid ? 'w' : 'b' };
+  const colour = sameId(row.white_id, uid) ? 'w' : sameId(row.black_id, uid) ? 'b' : null;
+  if (!colour) throw new HttpError(404, 'Game not found', 'notfound');
+  return { row, colour };
+}
+
+/** Persist a move. Compare moves as jsonb (NOT ::text) — PG text form has spaces and breaks turn checks. */
+async function saveMove(row, nextMovesJson, clocks) {
+  if (clocks) {
+    return db.prepare(`UPDATE games SET moves = ?::jsonb, draw_by = NULL, white_ms = ?, black_ms = ?, turn_started_at = now(),
+        updated_at = now(), last_move_at = now()
+      WHERE id = ? AND status = 'active' AND moves = ?::jsonb`)
+      .run(nextMovesJson, clocks.whiteMs, clocks.blackMs, row.id, movesJson(row.moves));
+  }
+  return db.prepare(`UPDATE games SET moves = ?::jsonb, draw_by = NULL, updated_at = now(), last_move_at = now()
+    WHERE id = ? AND status = 'active' AND moves = ?::jsonb`)
+    .run(nextMovesJson, row.id, movesJson(row.moves));
 }
 
 api.post('/games/:id/move', wrap(async (req, res) => {
@@ -473,13 +490,7 @@ api.post('/games/:id/move', wrap(async (req, res) => {
 
   const r = applyMove(moves, from, to, promotion);
   const ply = r.moves.length;
-  const upd = clocks
-    ? await db.prepare(`UPDATE games SET moves = ?, draw_by = NULL, white_ms = ?, black_ms = ?, turn_started_at = now(),
-        updated_at = now(), last_move_at = now()
-      WHERE id = ? AND status = 'active' AND moves::text = ?`)
-      .run(movesJson(r.moves), clocks.whiteMs, clocks.blackMs, row.id, movesJson(row.moves))
-    : await db.prepare(`UPDATE games SET moves = ?, draw_by = NULL, updated_at = now(), last_move_at = now()
-      WHERE id = ? AND status = 'active' AND moves::text = ?`).run(movesJson(r.moves), row.id, movesJson(row.moves));
+  const upd = await saveMove(row, movesJson(r.moves), clocks);
   if (!upd.changes) throw bad('Not your turn', 'not_your_turn'); // another move got in first
 
   let next;
