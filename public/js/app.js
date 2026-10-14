@@ -551,7 +551,16 @@ function initPager() {
 function rebuildNav() {
   $('#nav').querySelectorAll('.nav-btn').forEach((b, i) => { b.querySelector('span:last-child').textContent = t('nav_' + TABS[i]); b.setAttribute('aria-label', t('nav_' + TABS[i])); });
 }
-function rebuildAll() { if (pz && pz.board) pz.board.destroy(); pz = null; rebuildNav(); $$('.page').forEach((p) => p.classList.remove('seen')); refresh(); }
+async function rebuildAll() {
+  try {
+    const me = await api('GET', '/me');
+    state.me = me.user; state.stats = me.stats; state.meta = me.meta;
+  } catch { /* keep cached */ }
+  if (pz && pz.board) pz.board.destroy(); pz = null;
+  rebuildNav();
+  $$('.page').forEach((p) => p.classList.remove('seen'));
+  refresh();
+}
 
 // ---------- deep links ----------
 async function handleDeepLink() {

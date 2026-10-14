@@ -375,83 +375,94 @@ export function renderProfilePage(ctx) {
 
   const pzDone = solvedCount();
 
+  const bannerUrl = (state.meta && state.meta.profileBannerUrl) || '/img/profile-banner.png';
+
   return [
-    h('div.prof-head',
-      h('div.prof-me',
+    h('div.prof-cover',
+      h('div.prof-banner', {
+        style: { backgroundImage: `url("${bannerUrl}")` },
+      },
+        h('button.prof-edit', {
+          type: 'button',
+          onclick: () => { haptic('select'); openAvatar(); },
+        }, icon('pencil', 16), t('profile_edit'))),
+      h('div.prof-band',
         h('button.prof-av', {
           type: 'button',
           title: t('avatar_title'),
           onclick: () => { haptic('select'); openAvatar(); },
-        }, avBlock(me.firstName, me.id, { premium: !!me.premium, size: 'xl', avatarKey: me.avatarKey })),
+        }, avBlock(me.firstName, me.id, { premium: !!me.premium, size: 'xl', round: true, avatarKey: me.avatarKey })),
         h('div.prof-meta',
-          h('h2', h('span.name', me.firstName), me.premium ? premIc() : null),
-          me.username ? h('div.muted', '@' + me.username) : h('div.muted', t('profile_title')),
-          me.elo != null ? h('div.s', t('elo') + ' ' + me.elo) : null),
-        h('button.prof-gem', {
+          h('h2', h('span.name', me.firstName || 'Player'), me.premium ? premIc() : null),
+          me.username ? h('div.prof-user', me.username) : h('div.prof-user', t('profile_title'))),
+        h('button.prof-star', {
           type: 'button',
+          title: t('diamonds'),
           onclick: () => { haptic('select'); openDiamonds(); },
-        }, '💎 ', h('b', String(me.diamonds || 0))))),
+        }, h('span.prof-star-ic', '★'), h('b', String(me.diamonds || 0))))),
 
-    sec(t('sec_rating')),
-    h('div.rating-row',
-      h('button.card.rating-tile', { type: 'button', onclick: () => { haptic('select'); openStats(); } },
-        h('span.rating-ic', '♟'),
-        h('div', h('small.muted', t('stats')), h('b.rating-n', `${s.w}/${s.d}/${s.l}`)),
-        h('div.s', t('wins') + ' · ' + t('draws') + ' · ' + t('losses'))),
-      h('button.card.rating-tile', { type: 'button', onclick: () => { haptic('select'); goTab('puzzles'); } },
-        h('span.rating-ic', '🧩'),
-        h('div', h('small.muted', t('nav_puzzles')), h('b.rating-n', String(pzDone))),
-        h('div.s', t('puzzle_solved_count', { a: pzDone, b: PUZZLES.length })))),
+    h('div.prof-body',
+      sec(t('sec_rating')),
+      h('div.rating-row',
+        h('button.card.rating-tile', { type: 'button', onclick: () => { haptic('select'); openStats(); } },
+          h('span.rating-ic', '♟'),
+          h('div', h('small.muted', t('stats')), h('b.rating-n', `${s.w}/${s.d}/${s.l}`)),
+          h('div.s', t('wins') + ' · ' + t('draws') + ' · ' + t('losses'))),
+        h('button.card.rating-tile', { type: 'button', onclick: () => { haptic('select'); goTab('puzzles'); } },
+          h('span.rating-ic', '🧩'),
+          h('div', h('small.muted', t('nav_puzzles')), h('b.rating-n', String(pzDone))),
+          h('div.s', t('puzzle_solved_count', { a: pzDone, b: PUZZLES.length })))),
 
-    sec(t('sec_game')),
-    menuCard(
-      menuRow({ ic: 'chart', title: t('stats'), sub: `${s.w}W · ${s.d}D · ${s.l}L`, onClick: openStats }),
-      menuRow({ ic: 'rankings', title: t('nav_rankings'), onClick: () => goTab('rankings') }),
-      menuRow({ ic: 'profile', title: t('avatar_title'), sub: t('avatar_menu_sub'), onClick: openAvatar }),
-      menuRow({ ic: 'handshake', title: t('friends_title'), sub: friends.length ? String(friends.length) : t('no_friends').split('\n')[0], onClick: openFriends }),
-      menuRow({ ic: 'gem', title: t('diamonds'), sub: String(me.diamonds || 0) + ' 💎', onClick: openDiamonds }),
-      menuRow({
-        ic: 'crown',
-        title: t('premium'),
-        sub: me.premium
-          ? (me.premiumUntilTashkent ? t('premium_until', { d: me.premiumUntilTashkent.replace('T', ' ') }) : t('premium_have'))
-          : t('premium_plans'),
-        onClick: openPremium,
-      }),
-      me.isAdmin ? menuRow({ ic: 'shield', title: t('admin_panel'), onClick: () => openAdmin(rebuildAll) }) : null,
-    ),
-
-    sec(t('sec_settings')),
-    menuCard(
-      menuRow({ ic: 'globe', title: t('language'), sub: LANG_NAMES[getLang()], onClick: openLanguage }),
-      menuRow({ ic: 'gear', title: t('settings'), onClick: openSettings }),
-      menuRow({ ic: 'help', title: t('help'), onClick: openHelp }),
-      menuRow({ ic: 'docs', title: t('terms'), onClick: openTerms }),
-      menuRow({
-        tag: 'div',
-        ic: 'moon',
-        title: t('dark_mode'),
-        trailing: toggle(me.theme === 'dark', async (on) => {
-          const v = on ? 'dark' : 'light';
-          try {
-            applyThemeLocal(v);
-            state.me = await save({ theme: v });
-            refresh();
-          } catch (e) { fail(e); refresh(); }
+      sec(t('sec_game')),
+      menuCard(
+        menuRow({ ic: 'chart', title: t('stats'), sub: `${s.w}W · ${s.d}D · ${s.l}L`, onClick: openStats }),
+        menuRow({ ic: 'rankings', title: t('nav_rankings'), onClick: () => goTab('rankings') }),
+        menuRow({ ic: 'profile', title: t('avatar_title'), sub: t('avatar_menu_sub'), onClick: openAvatar }),
+        menuRow({ ic: 'handshake', title: t('friends_title'), sub: friends.length ? String(friends.length) : t('no_friends').split('\n')[0], onClick: openFriends }),
+        menuRow({ ic: 'gem', title: t('diamonds'), sub: String(me.diamonds || 0) + ' 💎', onClick: openDiamonds }),
+        menuRow({
+          ic: 'crown',
+          title: t('premium'),
+          sub: me.premium
+            ? (me.premiumUntilTashkent ? t('premium_until', { d: me.premiumUntilTashkent.replace('T', ' ') }) : t('premium_have'))
+            : t('premium_plans'),
+          onClick: openPremium,
         }),
-      }),
-    ),
+        me.isAdmin ? menuRow({ ic: 'shield', title: t('admin_panel'), onClick: () => openAdmin(rebuildAll) }) : null,
+      ),
 
-    h('button.btn.logout', {
-      type: 'button',
-      onclick: async () => {
-        if (me.isAdmin) { try { tg.close(); } catch { /* ignore */ } return; }
-        if (await confirmSheet(t('delete_confirm'), t('delete_data'), true)) {
-          try { await api('DELETE', '/me'); tg.close(); } catch (e) { fail(e); }
-        }
-      },
-    }, icon('logout', 20), me.isAdmin ? t('close_app') : t('delete_data')),
-    h('div.app-ver', t('app_version', { v: APP_VERSION })),
+      sec(t('sec_settings')),
+      menuCard(
+        menuRow({ ic: 'globe', title: t('language'), sub: LANG_NAMES[getLang()], onClick: openLanguage }),
+        menuRow({ ic: 'gear', title: t('settings'), onClick: openSettings }),
+        menuRow({ ic: 'help', title: t('help'), onClick: openHelp }),
+        menuRow({ ic: 'docs', title: t('terms'), onClick: openTerms }),
+        menuRow({
+          tag: 'div',
+          ic: 'moon',
+          title: t('dark_mode'),
+          trailing: toggle(me.theme === 'dark', async (on) => {
+            const v = on ? 'dark' : 'light';
+            try {
+              applyThemeLocal(v);
+              state.me = await save({ theme: v });
+              refresh();
+            } catch (e) { fail(e); refresh(); }
+          }),
+        }),
+      ),
+
+      h('button.btn.logout', {
+        type: 'button',
+        onclick: async () => {
+          if (me.isAdmin) { try { tg.close(); } catch { /* ignore */ } return; }
+          if (await confirmSheet(t('delete_confirm'), t('delete_data'), true)) {
+            try { await api('DELETE', '/me'); tg.close(); } catch (e) { fail(e); }
+          }
+        },
+      }, icon('logout', 20), me.isAdmin ? t('close_app') : t('delete_data')),
+      h('div.app-ver', t('app_version', { v: APP_VERSION })),
+    ),
   ];
 }
 

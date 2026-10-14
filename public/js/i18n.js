@@ -644,3 +644,44 @@ Object.assign(uzc, {
   ann_empty: 'Ҳали эълон йўқ.', ann_until: 'Гача', ann_delete_confirm: 'Бу эълон ўчирилсинми?',
   ann_deleted: 'Эълон ўчирилди', ann_saved: 'Эълон чиқарилди',
 });
+
+Object.assign(en, {
+  profile_edit: 'Edit',
+  admin_banner: 'Profile banner',
+  admin_banner_menu_sub: 'Header image on the profile page',
+  admin_banner_sub: 'Shown at the top of every player’s profile. JPG, PNG or GIF.',
+  admin_banner_upload: 'Upload image',
+  admin_banner_default: 'Use default',
+  admin_banner_saved: 'Profile banner updated',
+  admin_banner_reset: 'Default banner restored',
+});
+Object.assign(ru, {
+  profile_edit: 'Изменить',
+  admin_banner: 'Баннер профиля',
+  admin_banner_menu_sub: 'Картинка в шапке профиля',
+  admin_banner_sub: 'Показывается сверху у всех игроков. JPG, PNG или GIF.',
+  admin_banner_upload: 'Загрузить',
+  admin_banner_default: 'По умолчанию',
+  admin_banner_saved: 'Баннер профиля обновлён',
+  admin_banner_reset: 'Стандартный баннер восстановлен',
+});
+Object.assign(uz, {
+  profile_edit: 'Tahrirlash',
+  admin_banner: 'Profil banneri',
+  admin_banner_menu_sub: 'Profil tepasidagi rasm',
+  admin_banner_sub: 'Barcha o‘yinchilar profilining tepasida ko‘rinadi. JPG, PNG yoki GIF.',
+  admin_banner_upload: 'Rasm yuklash',
+  admin_banner_default: 'Standart',
+  admin_banner_saved: 'Profil banneri yangilandi',
+  admin_banner_reset: 'Standart banner qaytarildi',
+});
+Object.assign(uzc, {
+  profile_edit: 'Таҳрирлаш',
+  admin_banner: 'Профил баннери',
+  admin_banner_menu_sub: 'Профил тепасидаги расм',
+  admin_banner_sub: 'Барча ўйинчилар профилининг тепасида кўринади. JPG, PNG ёки GIF.',
+  admin_banner_upload: 'Расм юклаш',
+  admin_banner_default: 'Стандарт',
+  admin_banner_saved: 'Профил баннери янгиланди',
+  admin_banner_reset: 'Стандарт баннер қайтарилди',
+});

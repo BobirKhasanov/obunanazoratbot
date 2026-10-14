@@ -110,6 +110,38 @@ app.get('/api/medals/:id.svg', wrap(async (req, res) => {
   res.send(row.svg);
 }));
 
+const DEFAULT_PROFILE_BANNER = path.join(__dirname, '..', 'public', 'img', 'profile-banner.png');
+
+async function profileBannerMeta() {
+  const mediaId = String(await getSetting('profile_banner_media_id', '') || '').trim();
+  const custom = /^[0-9a-f-]{36}$/i.test(mediaId) ? mediaId : '';
+  return {
+    mediaId: custom || null,
+    url: custom
+      ? `/api/public/profile-banner?v=${encodeURIComponent(custom)}`
+      : '/img/profile-banner.png',
+  };
+}
+
+// Profile header banner (admin-replaceable). No auth so <img> / CSS can load it.
+app.get('/api/public/profile-banner', wrap(async (req, res) => {
+  const { mediaId } = await profileBannerMeta();
+  if (mediaId) {
+    const row = await db.prepare('SELECT * FROM media WHERE id = ?').get(mediaId);
+    const buf = row && await loadMediaBytes(row);
+    if (buf) {
+      res.set({
+        'Content-Type': row.mime || 'image/jpeg',
+        'Cache-Control': 'public, max-age=120, must-revalidate',
+        'Content-Length': buf.length,
+      });
+      return res.end(buf);
+    }
+  }
+  res.set('Cache-Control', 'public, max-age=3600');
+  return res.sendFile(DEFAULT_PROFILE_BANNER);
+}));
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const intParam = (v) => { const n = Number(v); if (!Number.isSafeInteger(n)) throw bad('Invalid id', 'bad_request'); return n; };
 const cleanText = (v, max, code, required = false) => {
@@ -525,6 +557,7 @@ const statsFor = async (uid) => ({
 // ---------- profile ----------
 api.get('/me', wrap(async (req, res) => {
   const shop = await getShopSettings();
+  const banner = await profileBannerMeta();
   res.json({
     user: publicUser(req.user, req.isAdmin),
     stats: await statsFor(req.user.id),
@@ -536,6 +569,8 @@ api.get('/me', wrap(async (req, res) => {
       diamondPacks: shop.diamondPacks,
       payUsername: shop.payUsername,
       botUsername: await getBotUsername(),
+      profileBannerUrl: banner.url,
+      profileBannerMediaId: banner.mediaId,
     },
   });
 }));
@@ -1691,6 +1726,25 @@ admin.post('/users/:id/diamonds', wrap(async (req, res) => {
     until: untilLabel,
   }), { force: true, effect: 'party' });
   res.json({ ok: true, user: next });
+}));
+
+admin.get('/profile-banner', wrap(async (req, res) => {
+  res.json(await profileBannerMeta());
+}));
+
+admin.patch('/profile-banner', wrap(async (req, res) => {
+  const raw = req.body && req.body.mediaId;
+  if (raw == null || raw === '' || raw === false) {
+    await setSetting('profile_banner_media_id', '');
+    return res.json(await profileBannerMeta());
+  }
+  const id = String(raw);
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw bad('Invalid media', 'media');
+  const row = await db.prepare('SELECT id, kind FROM media WHERE id = ?').get(id);
+  if (!row) throw bad('Media not found, upload it again', 'media');
+  if (row.kind === 'video') throw bad('Use JPG, PNG or GIF', 'media_type');
+  await setSetting('profile_banner_media_id', id);
+  res.json(await profileBannerMeta());
 }));
 
 admin.get('/shop', wrap(async (req, res) => {

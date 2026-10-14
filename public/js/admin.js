@@ -653,6 +653,65 @@ export function openAdmin(onClose) {
     ];
   });
 
+  // ----- profile banner -----
+  const bannerHost = h('div.admin-banner');
+  const bannerFile = h('input', {
+    type: 'file', accept: 'image/jpeg,image/png,image/gif', hidden: true,
+    onchange: async (e) => {
+      const f = e.target.files[0]; e.target.value = '';
+      if (!f) return;
+      toast(t('uploading'));
+      try {
+        const res = await fetch('/api/admin/upload', {
+          method: 'POST',
+          headers: { 'X-Init-Data': getInitData(), 'Content-Type': 'application/octet-stream' },
+          body: f,
+        });
+        const d = await res.json();
+        if (!res.ok) throw Object.assign(new Error(d.error), { code: d.code });
+        const saved = await api('PATCH', '/admin/profile-banner', { mediaId: d.id });
+        toast(t('admin_banner_saved')); haptic('success');
+        drawBanner(saved);
+      } catch (err) { fail(err); }
+    },
+  });
+
+  function drawBanner(info) {
+    const url = (info && info.url) || '/img/profile-banner.png';
+    const custom = !!(info && info.mediaId);
+    bannerHost.replaceChildren(
+      h('p.muted', t('admin_banner_sub')),
+      h('div.admin-banner-preview', { style: { backgroundImage: `url("${url}")` } }),
+      h('div.row', { style: { gap: '8px', marginTop: '12px' } },
+        h('button.btn.ghost.sm', { type: 'button', onclick: () => bannerFile.click() }, icon('image', 18), t('admin_banner_upload')),
+        custom ? h('button.btn.ghost.sm', {
+          type: 'button',
+          onclick: async () => {
+            try {
+              const saved = await api('PATCH', '/admin/profile-banner', { mediaId: null });
+              toast(t('admin_banner_reset')); haptic('success');
+              drawBanner(saved);
+            } catch (err) { fail(err); }
+          },
+        }, t('admin_banner_default')) : null),
+      bannerFile,
+    );
+  }
+
+  async function loadBanner() {
+    try {
+      drawBanner(await api('GET', '/admin/profile-banner'));
+    } catch (e) { fail(e); drawBanner({ url: '/img/profile-banner.png', mediaId: null }); }
+  }
+
+  const openBanner = () => openScreen((close) => {
+    loadBanner();
+    return [
+      ...subTop(t('admin_banner'), close),
+      bannerHost,
+    ];
+  });
+
   openScreen((close) => [
     h('button.back', { type: 'button', onclick: () => close() }, icon('back', 20), t('back')),
     h('div.top', h('h1', t('admin_title'))),
@@ -669,6 +728,7 @@ export function openAdmin(onClose) {
     sec(t('admin_sec_content')),
     menuCard(
       menuRow({ ic: 'send', title: t('composer'), sub: t('admin_sec_broadcast_sub'), onClick: openBroadcast }),
+      menuRow({ ic: 'image', title: t('admin_banner'), sub: t('admin_banner_menu_sub'), onClick: openBanner }),
       menuRow({ ic: 'gear', title: t('admin_style'), sub: t('admin_style_sub'), onClick: openStyle }),
       menuRow({ ic: 'rankings', title: t('admin_medals'), sub: t('admin_medals_sub'), onClick: openMedals }),
     ),
