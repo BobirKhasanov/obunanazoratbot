@@ -550,20 +550,26 @@ function initPager() {
     if (!drag) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     if (!drag.mode) {
-      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.3) { drag.mode = 'h'; try { pager.setPointerCapture(drag.id); } catch { /* ignore */ } track.classList.remove('settle'); ind.classList.add('drag'); }
-      else if (Math.abs(dy) > 8) { drag = null; return; } else return;
+      // Prefer vertical scroll; only take over once horizontal intent is clear
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.45) {
+        drag.mode = 'h';
+        try { pager.setPointerCapture(drag.id); } catch { /* ignore */ }
+        track.classList.remove('settle'); ind.classList.add('drag');
+      } else if (Math.abs(dy) > 8) { drag = null; return; } else return;
     }
     drag.dx = dx;
     const atEdge = (state.index === 0 && dx > 0) || (state.index === TABS.length - 1 && dx < 0);
-    const eff = atEdge ? dx * 0.28 : dx; // rubber band at the ends
+    const eff = atEdge ? dx * 0.22 : dx; // softer rubber band at the ends
     setX(-state.index * W + eff);
     ind.style.transform = `translateX(${(state.index - eff / W) * 100}%)`;
   });
   const finish = () => {
     if (!drag) return; const d = drag; drag = null; if (d.mode !== 'h') return;
-    const v = d.dx / Math.max(1, performance.now() - d.t);
+    const dt = Math.max(1, performance.now() - d.t);
+    const v = d.dx / dt;
     let next = state.index;
-    if (Math.abs(d.dx) > W * 0.2 || Math.abs(v) > 0.45) next = state.index + (d.dx < 0 ? 1 : -1);
+    // Lower distance threshold + velocity so light flicks still settle cleanly
+    if (Math.abs(d.dx) > W * 0.16 || Math.abs(v) > 0.35) next = state.index + (d.dx < 0 ? 1 : -1);
     if (next !== state.index) haptic('select');
     go(next, true);
   };

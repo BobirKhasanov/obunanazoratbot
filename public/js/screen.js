@@ -10,7 +10,7 @@ function hideShell() {
   el.classList.remove('show');
   el.setAttribute('aria-hidden', 'true');
   try { tg.BackButton.hide(); } catch { /* ignore */ }
-  setTimeout(() => { if (!el.classList.contains('show')) el.replaceChildren(); }, 720);
+  setTimeout(() => { if (!el.classList.contains('show')) el.replaceChildren(); }, 820);
 }
 
 function bindBack(close) {

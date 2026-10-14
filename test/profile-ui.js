@@ -90,11 +90,13 @@ const server = read('src/server.js');
 assert.ok(server.includes('/api/public/profile-banner') && server.includes('profile_banner_media_id'), 'public banner + setting');
 assert.ok(server.includes('username_readonly') && server.includes('last_name'), 'username locked + last_name field');
 assert.ok(fs.existsSync(path.join(root, 'public/img/profile-banner.png')), 'default banner asset');
-assert.ok(/\.screen[\s\S]{0,220}0\.68s/.test(css), 'smooth screen page transition');
-assert.ok(css.includes('#track.settle') && /#track\.settle[^}]*0\.62s/.test(css), 'smooth pager settle');
+assert.ok(/\.screen[\s\S]{0,280}0\.78s/.test(css), 'smooth screen page transition');
+assert.ok(css.includes('#track.settle') && /#track\.settle[^}]*0\.78s/.test(css), 'smooth pager settle');
 assert.ok(/#dock[\s\S]{0,200}flex-direction:\s*column/.test(css), 'dock stacks Play above nav');
 assert.ok(css.includes('#play-sticky') && css.includes('order: -1'), 'Play CTA ordered above nav in dock');
-assert.ok(/#nav-ind\s*\{[^}]*0\.62s/.test(css), 'nav indicator matches pager timing');
+assert.ok(/#play-sticky\.show[\s\S]{0,220}overflow:\s*visible/.test(css), 'Play CTA edges/shadow not clipped');
+assert.ok(/#nav-ind\s*\{[^}]*0\.78s/.test(css), 'nav indicator matches pager timing');
+assert.ok(css.includes('overscroll-behavior-y: contain'), 'pages contain overscroll for smoother feel');
 const html = read('public/index.html');
 assert.ok(html.includes('id="play-sticky"') && html.includes('id="dock"'), 'Play mount lives inside dock markup');
 
