@@ -42,6 +42,7 @@ function chipLabel(id) {
 export function createPlayFlow(deps) {
   let flowTime = '1+0';
   let flowColour = 'r'; // w | b | r
+  let matching = false;
 
   function syncFromHome() {
     const sel = deps.getSelectedTime();
@@ -52,6 +53,13 @@ export function createPlayFlow(deps) {
   function openHub() {
     syncFromHome();
     openScreen((close) => [
+      h('div.top',
+        h('button.round.back', {
+          type: 'button',
+          'aria-label': t('back'),
+          onclick: () => { haptic('light'); close(); },
+        }, icon('back', 22)),
+        h('h1', t('nav_game'))),
       h('div.pf-hub',
         h('div.pf-hero', '⚔️'),
         h('h1.pf-title', t('nav_game')),
@@ -62,7 +70,7 @@ export function createPlayFlow(deps) {
           }, h('span', timeLabel(flowTime)), icon('chevron', 18)),
           h('button.cta', {
             type: 'button',
-            onclick: () => { haptic('medium'); startMatch(close); },
+            onclick: () => { haptic('medium'); startMatch(); },
           }, t('play_btn')),
           h('button.pf-menu-row', {
             type: 'button',
@@ -116,7 +124,7 @@ export function createPlayFlow(deps) {
               }, t('variant_960')))),
           h('button.cta', {
             type: 'button',
-            onclick: () => { haptic('medium'); startMatch(close); },
+            onclick: () => { haptic('medium'); startMatch(); },
           }, t('play_btn')),
         );
       };
@@ -125,22 +133,20 @@ export function createPlayFlow(deps) {
     });
   }
 
-  async function startMatch(closeCurrent) {
+  async function startMatch() {
+    if (matching) return;
+    matching = true;
     const tc = normalizeTimeControl(flowTime);
     deps.setSelectedTime(flowTime);
     const preferredColor = flowColour === 'w' || flowColour === 'b' ? flowColour : null;
     try {
       const r = await api('POST', '/games/quick', { timeControl: tc, preferredColor });
       const game = r.game;
-      if (game.status === 'active') {
-        closeScreen(true);
-        deps.openOnline(game);
-        return;
-      }
-      // Dismiss setup/hub then show searching
       closeScreen(true);
-      openSearching(game);
+      if (game.status === 'active') deps.openOnline(game);
+      else openSearching(game);
     } catch (e) { fail(e); }
+    finally { matching = false; }
   }
 
   function openSearching(game) {
@@ -164,14 +170,25 @@ export function createPlayFlow(deps) {
 
     openScreen((close) => {
       const stats = h('div.pf-stats');
+      let entering = false;
+      const enterGame = async (g) => {
+        if (!alive || entering || !g || g.id !== game.id || g.status !== 'active') return;
+        entering = true;
+        stop();
+        cancelled = true;
+        let full = g;
+        try {
+          const r = await api('GET', `/games/${game.id}`);
+          if (r.game) full = r.game;
+        } catch { /* use snapshot */ }
+        close(true);
+        deps.openOnline(full);
+      };
+
       const matched = (g) => {
         if (!alive || !g || g.id !== game.id) return;
-        if (g.status === 'active') {
-          stop();
-          cancelled = true;
-          close(true);
-          deps.openOnline(g);
-        } else if (g.status === 'cancelled' || g.status === 'finished') {
+        if (g.status === 'active') enterGame(g);
+        else if (g.status === 'cancelled' || g.status === 'finished') {
           stop();
           cancelled = true;
           close(true);
@@ -186,14 +203,10 @@ export function createPlayFlow(deps) {
             h('div', '👥 ' + t('live_players', { n: l.onlineCount || 0 })),
             h('div', '🎮 ' + t('live_games_n', { n: (l.games?.active || []).length })),
           );
-          const mine = [...(l.games?.active || []), ...(l.games?.waiting || [])].find((g) => g.id === game.id);
-          if (mine) matched(mine);
-          else {
-            try {
-              const r = await api('GET', `/games/${game.id}`);
-              matched(r.game);
-            } catch { /* gone */ }
-          }
+          try {
+            const r = await api('GET', `/games/${game.id}`);
+            matched(r.game);
+          } catch { /* gone */ }
         } catch { /* ignore */ }
       };
       refreshStats();

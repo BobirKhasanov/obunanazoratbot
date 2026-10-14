@@ -853,6 +853,11 @@ button.rating-tile:active { transform: scale(0.98); }
 }
 #play-sticky.show { opacity: 1; visibility: visible; pointer-events: none; }
 #play-sticky .cta { pointer-events: auto; }
+/* Keep sticky Play under full-screen overlays so it cannot steal taps */
+#app:has(#screen.show) #play-sticky,
+#app:has(#game.show) #play-sticky {
+  opacity: 0; visibility: hidden; pointer-events: none;
+}
 .play-cta { margin: 0 0 12px; }
 .cta { width: 100%; height: 58px; border-radius: 20px; background: linear-gradient(180deg, #3a7be8, #2f68d3); color: #fff; font-size: 20px; font-weight: 800; box-shadow: 0 5px 0 #1d4698, 0 12px 26px rgba(0, 0, 0, 0.3); transition: transform 0.18s var(--ease), box-shadow 0.18s; }
 .cta:active { transform: translateY(4px); box-shadow: 0 1px 0 #1d4698; }
@@ -860,7 +865,7 @@ button.rating-tile:active { transform: scale(0.98); }
 /* ---------- play flow (hub → time → searching) ---------- */
 .pf-hub {
   display: flex; flex-direction: column; align-items: center; gap: 14px;
-  padding: 28px 8px 24px; min-height: min(70dvh, 560px); justify-content: center;
+  padding: 12px 8px 24px; min-height: min(64dvh, 520px); justify-content: center;
 }
 .pf-hero { font-size: 52px; line-height: 1; filter: drop-shadow(0 8px 16px rgba(0,0,0,.35)); }
 .pf-title { font-size: 28px; font-weight: 800; margin: 0 0 8px; letter-spacing: -0.02em; }

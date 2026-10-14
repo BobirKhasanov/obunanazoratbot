@@ -47,6 +47,14 @@ assert.ok(css.includes('prem-ring') && css.includes('prem-spin'), 'rotating prem
 assert.ok(css.includes('border-radius: 50%') && (css.includes('.avwrap.circ') || css.includes('.avwrap.round')), 'circular avatar + ring');
 assert.ok(css.includes('.avwrap.xl'), 'profile xl avatar wrap sized correctly');
 assert.ok(!css.includes('.mini.back svg { transform: rotate(180deg)'), 'live back no longer flipped chevron');
+assert.ok(css.includes('.round.back .ic svg'), 'back chevron optically centered');
+assert.ok(css.includes('#play-sticky'), 'sticky Play CTA above dock');
+assert.ok(css.includes('#app:has(#screen.show) #play-sticky'), 'sticky Play hidden under overlays');
+assert.ok(app.includes('createPlayFlow') && app.includes('setPlaySticky'), 'home wires play flow + sticky Play');
+assert.ok(!app.includes("t('home_rank')"), 'live ranking banner removed from home');
+const playflow = read('public/js/playflow.js');
+assert.ok(playflow.includes('openSearching') && playflow.includes('/games/quick'), 'play flow searching + quick match');
+assert.ok(playflow.includes('preferredColor') && playflow.includes('TIME_GROUPS'), 'time/color setup in play flow');
 const live = read('public/js/live.js');
 assert.ok(live.includes('backBtn') && !live.includes('syncTgBack'), 'single in-app back, no Telegram BackButton duplicate');
 assert.ok(live.includes("role: 'button'") && live.includes('live-game-card'), 'live game cards scroll-friendly');
