@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, api, fail, setInitData, connectWs, onWs, tg, avatar, avBlock, premIc, sleep } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, api, fail, setInitData, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep } from './ui.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -613,7 +613,11 @@ async function boot() {
     if (state.tab === 'live' && liveBlocksAutoRefresh()) return;
     if (['live', 'play', 'rankings', 'profile'].includes(state.tab)) refresh();
   }, 6_000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) sendBye();
+    else refresh();
+  });
+  window.addEventListener('pagehide', () => sendBye());
   // Premium crown taps → Premium shop (works from Online list, profile, sheets)
   document.addEventListener('open-premium', () => {
     $$('#sheet-root .backdrop').forEach((el) => el.click());

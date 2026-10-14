@@ -8,15 +8,19 @@ const { validateInitData } = require('./auth');
 
 const sockets = new Map();   // userId -> Set<ws>
 const lastRest = new Map();  // userId -> ms of the last HTTP request (fallback when WebSocket is unavailable)
-// Default 90s so multi-instance / CF→Render setups still see each other between lobby polls.
-const REST_ONLINE_MS = Number(process.env.PRESENCE_REST_MS || 90_000); // env override is for tests
+// Short window: home polls ~6s; closing the Mini App clears present_until immediately via /bye + WS leave.
+const REST_ONLINE_MS = Number(process.env.PRESENCE_REST_MS || 30_000); // env override is for tests
 
 const add = (id, ws) => { if (!sockets.has(id)) sockets.set(id, new Set()); sockets.get(id).add(ws); };
-function remove(id, ws) {
+function remove(id, ws, onLeave) {
   const set = sockets.get(id);
   if (!set) return;
   set.delete(ws);
-  if (!set.size) { sockets.delete(id); lastRest.delete(id); } // gone immediately, not after a timeout
+  if (!set.size) {
+    sockets.delete(id);
+    lastRest.delete(id); // gone immediately, not after a timeout
+    if (onLeave) onLeave(id);
+  }
 }
 
 /** Called for every authenticated HTTP request. */
@@ -69,7 +73,7 @@ function attach(server, botToken, hooks) {
 
     ws.on('close', () => {
       clearTimeout(authTimer);
-      if (userId) remove(userId, ws);
+      if (userId) remove(userId, ws, (id) => { try { hooks.leave && hooks.leave(id); } catch { /* ignore */ } });
     });
     ws.on('error', () => {});
   });

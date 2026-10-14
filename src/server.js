@@ -127,29 +127,38 @@ const upsertUser = db.prepare(`
     last_seen = now()
 `);
 const touchUser = db.prepare('UPDATE users SET last_seen = now() WHERE id = ?');
-const nameOf = db.prepare('SELECT first_name, username, last_seen FROM users WHERE id = ?');
+const touchPresent = db.prepare(`
+  UPDATE users SET last_seen = now(),
+    present_until = now() + (? * interval '1 millisecond')
+  WHERE id = ?
+`);
+const clearPresent = db.prepare('UPDATE users SET present_until = NULL WHERE id = ?');
+const nameOf = db.prepare('SELECT first_name, username, present_until FROM users WHERE id = ?');
 
-/** Shared presence: last_seen is written on every authenticated request (upsertUser). */
-function recentlySeen(lastSeen) {
-  if (!lastSeen) return false;
-  const t = lastSeen instanceof Date ? lastSeen.getTime() : new Date(lastSeen).getTime();
-  return Number.isFinite(t) && Date.now() - t < realtime.presenceMs;
+function stillPresent(presentUntil) {
+  if (!presentUntil) return false;
+  const t = presentUntil instanceof Date ? presentUntil.getTime() : new Date(presentUntil).getTime();
+  return Number.isFinite(t) && t > Date.now();
 }
 
-function isUserOnline(id, lastSeen) {
-  return realtime.isOnline(id) || recentlySeen(lastSeen);
+function isUserOnline(id, presentUntil) {
+  return realtime.isOnline(id) || stillPresent(presentUntil);
 }
 
 async function userIsOnline(id) {
   if (realtime.isOnline(id)) return true;
-  const u = await db.prepare('SELECT last_seen FROM users WHERE id = ?').get(id);
-  return recentlySeen(u && u.last_seen);
+  const u = await db.prepare('SELECT present_until FROM users WHERE id = ?').get(id);
+  return stillPresent(u && u.present_until);
+}
+
+async function refreshPresence(id) {
+  await touchPresent.run(realtime.presenceMs, id);
 }
 
 async function person(id) {
   if (!id) return null;
   const u = (await nameOf.get(id)) || {};
-  return { id, name: u.first_name || 'Player', username: u.username || '', online: isUserOnline(id, u.last_seen) };
+  return { id, name: u.first_name || 'Player', username: u.username || '', online: isUserOnline(id, u.present_until) };
 }
 
 /** Active Premium: unexpired premium_until, or legacy premium=1 with no expiry. */
@@ -479,6 +488,9 @@ async function auth(req, res, next) {
   user = await syncPremiumExpiry(user);
 
   realtime.markRest(user.id);
+  // /bye must not refresh presence (auth would race and put them back online)
+  const leaving = req.method === 'POST' && String(req.path || '').replace(/\/$/, '') === '/bye';
+  if (!leaving) await refreshPresence(user.id);
   req.user = user;
   req.isAdmin = isAdmin(user.id);
   next();
@@ -593,6 +605,12 @@ api.delete('/me', wrap(async (req, res) => {
 // Fallback heartbeat for clients without a working websocket (auth already marks the user online)
 api.post('/ping', wrap(async (req, res) => res.json({ ok: true })));
 
+// Mini App closed / backgrounded — drop from the live list immediately
+api.post('/bye', wrap(async (req, res) => {
+  await clearPresent.run(req.user.id);
+  res.json({ ok: true });
+}));
+
 // ---------- games ----------
 const getGame = db.prepare('SELECT * FROM games WHERE id = ?');
 
@@ -655,9 +673,9 @@ async function claimFlagIfNeeded(row) {
 
 const inviteExpired = (row) => row.status === 'invited' && Date.now() - new Date(row.updated_at).getTime() > INVITE_TTL_MS;
 const invitesOf = async (id) => (await db.prepare('SELECT user_id FROM game_invites WHERE game_id = ?').all(id)).map((r) => r.user_id);
-const isInvitee = async (row, uid) => row.status === 'invited' && (await invitesOf(row.id)).includes(uid);
+const isInvitee = async (row, uid) => ['invited', 'open'].includes(row.status) && (await invitesOf(row.id)).includes(uid);
 const participants = async (row) => [...new Set([row.creator_id, row.white_id, row.black_id,
-  ...(row.status === 'invited' ? await invitesOf(row.id) : [row.invited_id])].filter(Boolean))];
+  ...((row.status === 'invited' || row.status === 'open') ? await invitesOf(row.id) : [row.invited_id])].filter(Boolean))];
 /** Tell everyone who was asked that the request is gone (accepted by someone else, cancelled or expired) */
 async function dropInvites(row, exceptId) {
   for (const id of await invitesOf(row.id)) if (id !== exceptId) realtime.send(id, { t: 'invite_gone', id: row.id });
@@ -702,6 +720,11 @@ async function startGame(row, joinerId) {
   if (!r.changes) throw bad('This game is no longer available', 'game_unavailable'); // somebody else was faster
   if (row.mode === 'friend') await befriend(row.creator_id, joinerId); // playing through an invite makes you friends
   await dropInvites(row, joinerId); // the others are told that someone was faster
+  // Joiner leaves their own matchmaking queue so they are not stuck searching
+  await db.prepare(`
+    UPDATE games SET status = 'cancelled', updated_at = now()
+    WHERE creator_id = ? AND status = 'open' AND mode = 'online' AND id != ?
+  `).run(joinerId, row.id);
   const next = await getGame.get(row.id);
   await pushGame(next);
   if (!realtime.isOnline(row.creator_id)) {
@@ -714,32 +737,97 @@ async function startGame(row, joinerId) {
 const parseTimeControl = (raw) => normalizeTimeControl(raw);
 const parsePreferredColor = (raw) => (raw === 'w' || raw === 'b' ? raw : null);
 
-// Online match-making: pair with someone who is waiting right now, otherwise wait
+/** Online players near my Elo who can be challenged (discoverable or friends). */
+async function nearbyOnlineOpponents(uid, eloCol, myElo, limit = 5, maxDelta = 400) {
+  const busy = new Set((await db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all())
+    .flatMap((g) => [g.white_id, g.black_id]));
+  const rows = await db.prepare(`
+    SELECT u.id, u.${eloCol} AS elo, u.discoverable
+    FROM users u
+    WHERE u.blocked = 0 AND u.id != ?
+      AND u.present_until > now()
+      AND ABS(u.${eloCol} - ?) <= ?
+      AND (
+        u.discoverable = 1
+        OR EXISTS (SELECT 1 FROM friends f WHERE f.user_id = ? AND f.friend_id = u.id)
+      )
+    ORDER BY ABS(u.${eloCol} - ?) ASC, RANDOM()
+    LIMIT 40
+  `).all(uid, myElo, maxDelta, uid, myElo);
+  return rows.filter((r) => !busy.has(r.id)).slice(0, limit);
+}
+
+/** Ping nearby online browsers with an in-app challenge (open games stay joinable by other searchers). */
+async function nudgeNearbyForQuick(row, uid, eloCol, myElo) {
+  const targets = await nearbyOnlineOpponents(uid, eloCol, myElo, 3, 400);
+  if (!targets.length) return;
+  const payloadBase = await getGame.get(row.id);
+  for (const t of targets) {
+    try {
+      await db.prepare('INSERT INTO game_invites (game_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING').run(row.id, t.id);
+      realtime.send(t.id, { t: 'invite', game: await gameFor(payloadBase, t.id), ttl: POPUP_MS });
+    } catch { /* ignore per-target */ }
+  }
+  await db.prepare('UPDATE games SET updated_at = now() WHERE id = ?').run(row.id);
+}
+
+// Online match-making: pair with a waiting searcher (closest Elo), else wait + challenge nearby online players
 api.post('/games/quick', wrap(async (req, res) => {
   const uid = req.user.id;
   const body = req.body || {};
   const timeControl = parseTimeControl(body.timeControl);
   const preferredColor = parsePreferredColor(body.preferredColor);
-  const candidates = await db.prepare("SELECT * FROM games WHERE status = 'open' AND mode = 'online' AND time_control = ? AND creator_id != ? ORDER BY created_at LIMIT 20").all(timeControl, uid);
-  let waiting = null;
-  for (const g of candidates) {
-    if (await userIsOnline(g.creator_id)) { waiting = g; break; }
-  }
-  if (waiting) return res.json({ game: await gameFor(await startGame(waiting, uid), uid) });
+  const eloCol = eloColumn(categoryOf(timeControl));
+  if (!ELO_COLS.has(eloCol)) throw bad('Bad time control', 'bad_request');
+  const myElo = Number(req.user[eloCol] || req.user.elo || DEFAULT_ELO);
 
-  const mine = await db.prepare("SELECT * FROM games WHERE status = 'open' AND mode = 'online' AND time_control = ? AND creator_id = ? LIMIT 1").get(timeControl, uid);
+  // 1) Join another searcher on the same time control, preferring closest Elo
+  const candidates = await db.prepare(`
+    SELECT g.*
+    FROM games g
+    JOIN users u ON u.id = g.creator_id
+    WHERE g.status = 'open' AND g.mode = 'online' AND g.time_control = ?
+      AND g.creator_id != ?
+      AND u.blocked = 0
+      AND (u.present_until > now() OR EXISTS (
+        SELECT 1 FROM games g2 WHERE g2.creator_id = u.id AND g2.status = 'open' AND g2.mode = 'online'
+      ))
+    ORDER BY ABS(u.${eloCol} - ?) ASC, g.created_at ASC
+    LIMIT 20
+  `).all(timeControl, uid, myElo);
+  for (const g of candidates) {
+    try {
+      return res.json({ game: await gameFor(await startGame(g, uid), uid) });
+    } catch (e) {
+      if (e && e.code === 'game_unavailable') continue;
+      throw e;
+    }
+  }
+
+  // 2) Keep or open my search slot
+  let mine = await db.prepare("SELECT * FROM games WHERE status = 'open' AND mode = 'online' AND time_control = ? AND creator_id = ? LIMIT 1").get(timeControl, uid);
+  let created = false;
   if (mine) {
     if (preferredColor && mine.preferred_color !== preferredColor) {
       await db.prepare('UPDATE games SET preferred_color = ?, updated_at = now() WHERE id = ?').run(preferredColor, mine.id);
       mine.preferred_color = preferredColor;
     }
-    return res.json({ game: await gameFor(mine, uid) });
+  } else {
+    await ensureRoom(uid);
+    const id = gameId();
+    await db.prepare("INSERT INTO games (id, creator_id, status, mode, time_control, preferred_color) VALUES (?, ?, 'open', 'online', ?, ?)").run(id, uid, timeControl, preferredColor);
+    mine = await getGame.get(id);
+    created = true;
   }
 
-  await ensureRoom(uid);
-  const id = gameId();
-  await db.prepare("INSERT INTO games (id, creator_id, status, mode, time_control, preferred_color) VALUES (?, ?, 'open', 'online', ?, ?)").run(id, uid, timeControl, preferredColor);
-  res.status(201).json({ game: await gameFor(await getGame.get(id), uid) });
+  // 3) Challenge random nearby-Elo players who are in the app (even if not searching)
+  const lastNudge = mine.updated_at ? new Date(mine.updated_at).getTime() : 0;
+  if (created || Date.now() - lastNudge > 4_000) {
+    await nudgeNearbyForQuick(mine, uid, eloCol, myElo);
+    mine = await getGame.get(mine.id);
+  }
+
+  res.status(created ? 201 : 200).json({ game: await gameFor(mine, uid) });
 }));
 
 // Create a game: with opponentIds = challenge sent to several online players (first to accept plays),
@@ -815,7 +903,8 @@ api.post('/games/:id/decline', wrap(async (req, res) => {
   const row = await loadGame(req.params.id, req.user.id);
   if (!await isInvitee(row, req.user.id)) throw bad('Nothing to decline', 'game_unavailable');
   await db.prepare('DELETE FROM game_invites WHERE game_id = ? AND user_id = ?').run(row.id, req.user.id);
-  if (!(await invitesOf(row.id)).length) { // everybody said no
+  // Explicit challenges end when everyone declines; open matchmaking keeps searching.
+  if (row.status === 'invited' && !(await invitesOf(row.id)).length) {
     await db.prepare("UPDATE games SET status = 'cancelled', updated_at = now() WHERE id = ?").run(row.id);
     await pushGame(await getGame.get(row.id));
   }
@@ -1110,16 +1199,15 @@ api.get('/lobby', wrap(async (req, res) => {
   ).all(uid);
   const inviteGameByUser = new Map(pendingInvites.map((r) => [r.user_id, r.game_id]));
 
-  // Presence via Postgres last_seen (shared across Render instances). Memory sockets are a bonus.
-  const presenceMs = realtime.presenceMs;
+  // Shared presence: present_until is refreshed on every API call and cleared on Mini App close / WS leave.
   const rows = await db.prepare(`
     SELECT id, first_name, discoverable, premium, premium_until
     FROM users
     WHERE blocked = 0 AND id != ?
-      AND last_seen > now() - (? * interval '1 millisecond')
-    ORDER BY last_seen DESC
+      AND present_until > now()
+    ORDER BY present_until DESC
     LIMIT 40
-  `).all(uid, presenceMs);
+  `).all(uid);
   const online = rows
     .map((r) => ({
       id: r.id, name: r.first_name || 'Player', inGame: busy.has(r.id), friend: friendIds.has(r.id),
@@ -1130,17 +1218,19 @@ api.get('/lobby', wrap(async (req, res) => {
 
   const countRow = await db.prepare(`
     SELECT COUNT(*)::int AS n FROM users
-    WHERE blocked = 0 AND last_seen > now() - (? * interval '1 millisecond')
-  `).get(presenceMs);
+    WHERE blocked = 0 AND present_until > now()
+  `).get();
   const onlineCount = Math.max(countRow?.n || 0, realtime.onlineIds().length);
 
   const recent = await db.prepare(`
     SELECT * FROM games WHERE status = 'finished' AND (white_id = :u OR black_id = :u) ORDER BY updated_at DESC LIMIT 8
   `).all({ u: uid });
 
+  const liveGamesRow = await db.prepare("SELECT COUNT(*)::int AS n FROM games WHERE status = 'active'").get();
   res.json({
     onlineCount,
     online,
+    liveGames: liveGamesRow?.n || 0,
     games: {
       active: await many(mine.filter((g) => g.status === 'active')),
       invites: await many(mine.filter((g) => g.status === 'invited' && g.creator_id !== uid && !inviteExpired(g))),
@@ -1241,7 +1331,7 @@ api.get('/lichess/rounds/:id/pgn', wrap(async (req, res) => {
 api.get('/friends', wrap(async (req, res) => {
   const uid = req.user.id;
   const rows = await db.prepare(`
-    SELECT u.id, u.first_name, u.premium, u.premium_until, u.last_seen FROM friends f JOIN users u ON u.id = f.friend_id WHERE f.user_id = ? ORDER BY u.first_name
+    SELECT u.id, u.first_name, u.premium, u.premium_until, u.present_until FROM friends f JOIN users u ON u.id = f.friend_id WHERE f.user_id = ? ORDER BY u.first_name
   `).all(uid);
   const busy = new Set((await db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all()).flatMap((g) => [g.white_id, g.black_id]));
   const pending = await db.prepare(
@@ -1250,7 +1340,7 @@ api.get('/friends', wrap(async (req, res) => {
   const inviteGameByUser = new Map(pending.map((r) => [r.user_id, r.game_id]));
   res.json({
     friends: rows.map((r) => ({
-      id: r.id, name: r.first_name || 'Player', online: isUserOnline(r.id, r.last_seen), inGame: busy.has(r.id),
+      id: r.id, name: r.first_name || 'Player', online: isUserOnline(r.id, r.present_until), inGame: busy.has(r.id),
       premium: isPremiumActive(r),
       invited: inviteGameByUser.has(r.id), inviteGameId: inviteGameByUser.get(r.id) || null,
     })).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name)),
@@ -1485,9 +1575,8 @@ admin.get('/stats', wrap(async (req, res) => {
   res.json({
     users: await one('SELECT COUNT(*) n FROM users'),
     live: (await db.prepare(`
-      SELECT COUNT(*)::int AS n FROM users
-      WHERE blocked = 0 AND last_seen > now() - (? * interval '1 millisecond')
-    `).get(realtime.presenceMs))?.n || realtime.onlineIds().length,
+      SELECT COUNT(*)::int AS n FROM users WHERE blocked = 0 AND present_until > now()
+    `).get())?.n || realtime.onlineIds().length,
     newToday: await one("SELECT COUNT(*) n FROM users WHERE created_at::date = current_date"),
     active7d: await one("SELECT COUNT(*) n FROM users WHERE last_seen >= now() - interval '7 days'"),
     blocked: await one('SELECT COUNT(*) n FROM users WHERE blocked = 1'),
@@ -1503,9 +1592,9 @@ admin.get('/stats', wrap(async (req, res) => {
 admin.get('/live', wrap(async (req, res) => {
   const rows = await db.prepare(`
     SELECT id, first_name, username, lang FROM users
-    WHERE blocked = 0 AND last_seen > now() - (? * interval '1 millisecond')
-    ORDER BY last_seen DESC LIMIT 500
-  `).all(realtime.presenceMs);
+    WHERE blocked = 0 AND present_until > now()
+    ORDER BY present_until DESC LIMIT 500
+  `).all();
   if (!rows.length) return res.json({ count: 0, users: [] });
   const busy = new Set((await db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all()).flatMap((g) => [g.white_id, g.black_id]));
   res.json({
@@ -1520,7 +1609,7 @@ admin.get('/users', wrap(async (req, res) => {
   const like = `%${q.replace(/[%_]/g, '')}%`;
   const rows = await db.prepare(`
     SELECT u.id, u.first_name, u.username, u.lang, u.blocked, u.bot_blocked, u.created_at, u.last_seen,
-      u.diamonds, u.premium, u.premium_until,
+      u.present_until, u.diamonds, u.premium, u.premium_until,
       (SELECT COUNT(*) FROM games g WHERE g.status = 'finished' AND (g.white_id = u.id OR g.black_id = u.id)) games
     FROM users u
     WHERE ? = '' OR u.first_name ILIKE ? OR u.username ILIKE ? OR CAST(u.id AS TEXT) LIKE ?
@@ -1532,7 +1621,7 @@ admin.get('/users', wrap(async (req, res) => {
       diamonds: Number(u.diamonds || 0),
       premium: isPremiumActive(u),
       premiumUntilTashkent: u.premium_until ? formatTashkent(u.premium_until) : null,
-      online: isUserOnline(u.id, u.last_seen),
+      online: isUserOnline(u.id, u.present_until),
       isAdmin: isAdmin(u.id),
     })),
   });
@@ -1923,7 +2012,11 @@ app.use((err, req, res, next) => {
 });
 
 // ---------- boot ----------
-realtime.attach(server, BOT_TOKEN, { getUser: (id) => getUser.get(id), touch: (id) => touchUser.run(id) });
+realtime.attach(server, BOT_TOKEN, {
+  getUser: (id) => getUser.get(id),
+  touch: (id) => refreshPresence(id),
+  leave: (id) => clearPresent.run(id).catch(() => {}),
+});
 
 async function boot() {
   await db.ready; // tables exist before anybody connects

@@ -188,6 +188,17 @@ export async function api(method, url, body) {
 }
 export const fail = (e) => toast(errText(e), true);
 
+/** Drop from the live online list (Mini App closed / backgrounded). */
+export function sendBye() {
+  try {
+    fetch('/api/bye', {
+      method: 'POST',
+      headers: { 'X-Init-Data': initData },
+      keepalive: true,
+    }).catch(() => {});
+  } catch { /* ignore */ }
+}
+
 // ---------- websocket (auto reconnect) ----------
 const listeners = new Set();
 let ws, wsTimer, wsOpen = false, retry = 0;
@@ -207,6 +218,7 @@ export function connectWs(onState) {
   ws.onclose = () => {
     const was = wsOpen; wsOpen = false;
     if (was && onState) onState(false);
+    if (document.hidden) return; // closed Mini App — do not keep reconnecting as "online"
     retry = Math.min(retry + 1, 6);
     wsTimer = setTimeout(() => connectWs(onState), 600 * 2 ** retry);
   };

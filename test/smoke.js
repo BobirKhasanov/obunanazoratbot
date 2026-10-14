@@ -91,7 +91,7 @@ async function playMoves(game, players, moves, startPly = 0) {
     cwd: path.join(__dirname, '..'),
     env: {
       ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', PORT: String(PORT), DATABASE_URL: pg.url, ADMIN_IDS: String(ADMIN_ID),
-      TG_API_ROOT: tg.url, WEBAPP_URL: 'https://chess.example.test', PRESENCE_REST_MS: '300', INVITE_TTL_MS: '60000', SCHEDULER_MS: '300', NODE_NO_WARNINGS: '1',
+      TG_API_ROOT: tg.url, WEBAPP_URL: 'https://chess.example.test', PRESENCE_REST_MS: '5000', INVITE_TTL_MS: '60000', SCHEDULER_MS: '300', NODE_NO_WARNINGS: '1',
     },
     stdio: ['ignore', 'pipe', 'inherit'],
   });

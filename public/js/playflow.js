@@ -149,7 +149,8 @@ export function createPlayFlow(deps) {
     finally { matching = false; }
   }
 
-  function openSearching(game) {
+  function openSearching(initialGame) {
+    let game = initialGame;
     let alive = true;
     let unsub = () => {};
     let poll = null;
@@ -172,13 +173,16 @@ export function createPlayFlow(deps) {
       const stats = h('div.pf-stats');
       let entering = false;
       const enterGame = async (g) => {
-        if (!alive || entering || !g || g.id !== game.id || g.status !== 'active') return;
+        if (!alive || entering || !g || g.status !== 'active') return;
         entering = true;
         stop();
         cancelled = true;
+        if (g.id !== game.id) {
+          try { await api('DELETE', `/games/${game.id}`); } catch { /* ignore */ }
+        }
         let full = g;
         try {
-          const r = await api('GET', `/games/${game.id}`);
+          const r = await api('GET', `/games/${g.id}`);
           if (r.game) full = r.game;
         } catch { /* use snapshot */ }
         close(true);
@@ -186,9 +190,9 @@ export function createPlayFlow(deps) {
       };
 
       const matched = (g) => {
-        if (!alive || !g || g.id !== game.id) return;
+        if (!alive || !g) return;
         if (g.status === 'active') enterGame(g);
-        else if (g.status === 'cancelled' || g.status === 'finished') {
+        else if (g.id === game.id && (g.status === 'cancelled' || g.status === 'finished')) {
           stop();
           cancelled = true;
           close(true);
@@ -197,16 +201,28 @@ export function createPlayFlow(deps) {
 
       const refreshStats = async () => {
         try {
+          // Re-run quick match: join another searcher or nudge nearby-Elo players
+          try {
+            const q = await api('POST', '/games/quick', {
+              timeControl: game.timeControl || flowTime,
+              preferredColor: flowColour === 'w' || flowColour === 'b' ? flowColour : null,
+            });
+            if (!alive) return;
+            if (q.game) {
+              if (q.game.id !== game.id) game = q.game;
+              matched(q.game);
+              if (!alive) return;
+            }
+          } catch { /* keep waiting */ }
+
           const l = await api('GET', '/lobby');
           if (!alive) return;
+          const active = (l.games?.active || [])[0];
+          if (active) { matched(active); return; }
           stats.replaceChildren(
             h('div', '👥 ' + t('live_players', { n: l.onlineCount || 0 })),
-            h('div', '🎮 ' + t('live_games_n', { n: (l.games?.active || []).length })),
+            h('div', '🎮 ' + t('live_games_n', { n: Number(l.liveGames || 0) })),
           );
-          try {
-            const r = await api('GET', `/games/${game.id}`);
-            matched(r.game);
-          } catch { /* gone */ }
         } catch { /* ignore */ }
       };
       refreshStats();
