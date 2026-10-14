@@ -140,11 +140,12 @@ async function playMoves(game, players, moves, startPly = 0) {
 
     // ---------------------------------------------------------------- challenge + a full game
     let gid, fm;
-    await step('diamonds: +20 once per invited friend; Premium costs 200 and cannot be bought twice', async () => {
+    await step('diamonds: +20 to inviter and +10 to new friend once; Premium costs 200 and cannot be bought twice', async () => {
       assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 20, 'inviter got 20 diamonds for the friend who joined');
+      assert.strictEqual((await ok('B', 'GET', '/me')).user.diamonds, 10, 'new friend got 10 diamonds via referral');
       await ok('B', 'POST', '/friends/join', { userId: USERS.A.id }); // opening the link again must not pay again
       assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 20);
-      assert.strictEqual((await ok('B', 'GET', '/me')).user.diamonds, 0, 'the invited person gets nothing');
+      assert.strictEqual((await ok('B', 'GET', '/me')).user.diamonds, 10);
       await err('A', 'POST', '/premium/buy', null, 400, 'no_diamonds');
       await pg.q('UPDATE users SET diamonds = 200 WHERE id = $1', USERS.A.id);
       const r = await ok('A', 'POST', '/premium/buy');

@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS broadcasts (
 -- The API is served only by this server (service connection); nobody should reach the tables through Supabase's public REST API
 ALTER TABLE users ADD COLUMN IF NOT EXISTS diamonds BIGINT NOT NULL DEFAULT 0;   -- in-app currency
 ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER NOT NULL DEFAULT 0;   -- 1 once bought with diamonds
--- one reward per invited person, ever (the primary key makes repeated joins and farming impossible)
+-- one reward payout per invited person, ever (inviter + invitee; PK blocks farming)
 CREATE TABLE IF NOT EXISTS referrals (
   invitee_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   inviter_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -242,14 +242,16 @@ refreshers.rankings = async function renderRankings() {
 
 /** Diamonds: balance, progress to Premium and the buy button */
 function gemsCard() {
-  const me = state.me, price = state.meta.PREMIUM_PRICE || 200, reward = state.meta.REFERRAL_REWARD || 20;
+  const me = state.me, price = state.meta.PREMIUM_PRICE || 200;
+  const inviterReward = state.meta.REFERRAL_REWARD || 20;
+  const inviteeReward = state.meta.REFERRAL_INVITEE_REWARD || 10;
   const have = me.diamonds || 0, pct = Math.min(100, Math.round((have / price) * 100));
   const buy = async () => {
     try { state.me = (await api('POST', '/premium/buy')).user; toast(t('premium_bought')); haptic('success'); rain && rain(); refresh(); } catch (e) { fail(e); refresh(); }
   };
   return h('div.card.gems',
     h('div.gems-top', h('div.gems-num', '💎 ', h('b', String(have))), me.premium ? h('span.prem-badge', '★ ' + t('premium')) : null),
-    h('small.muted', t('gems_sub', { n: reward })),
+    h('small.muted', t('gems_sub', { n: inviterReward, m: inviteeReward })),
     me.premium ? h('div.gems-ok', t('premium_have'))
       : [h('div.gems-bar', h('i', { style: { width: pct + '%' } })),
         h('small.muted', have >= price ? '' : t('premium_need', { n: price - have })),
@@ -431,7 +433,11 @@ async function handleDeepLink() {
   if (/^i\d{1,15}$/.test(p)) {
     try {
       const r = await api('POST', '/friends/join', { userId: Number(p.slice(1)) });
-      toast(t('friend_added', { name: r.friend.name }));
+      if (r.user) state.me = r.user;
+      if (r.inviteeReward) {
+        toast(t('invitee_reward', { n: r.inviteeReward, name: r.friend.name }));
+        haptic('success');
+      } else toast(t('friend_added', { name: r.friend.name }));
       go(TABS.indexOf('profile'), true);
     } catch (e) { fail(e); }
   } else if (/^g[\w-]{4,20}$/.test(p)) await joinGame(p.slice(1));

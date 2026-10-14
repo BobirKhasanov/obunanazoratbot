@@ -20,7 +20,7 @@ const en = {
   cancel: 'Cancel', challenge: 'Challenge', in_game: 'In game', challenge_sent: 'Challenge sent',
   nobody: 'Nobody else is online right now.\nInvite a friend or play the computer.',
   friends_title: 'Friends', invite_friends: 'Invite friends',
-  invite_sub: 'Send the bot to a friend in Telegram. When they join, you become friends.',
+  invite_sub: 'Send your invite link. A new friend who joins gets 10 💎 and you get 20 💎.',
   invite_btn: 'Share invite', share_text: 'Join me for a game of chess in Telegram! ♟',
   your_friends: 'Your friends', no_friends: 'No friends yet.\nShare your invite to get started.',
   remove_friend: 'Remove friend', friend_added: '{name} is now your friend', offline: 'offline', online: 'online',
@@ -81,7 +81,7 @@ const ru = {
   cancel: 'Отмена', challenge: 'Вызвать', in_game: 'В игре', challenge_sent: 'Вызов отправлен',
   nobody: 'Сейчас больше никого нет онлайн.\nПригласите друга или сыграйте с компьютером.',
   friends_title: 'Друзья', invite_friends: 'Пригласить друзей',
-  invite_sub: 'Отправьте бота другу в Telegram. Когда он присоединится, вы станете друзьями.',
+  invite_sub: 'Отправьте ссылку-приглашение. Новый друг получит 10 💎, а вы — 20 💎.',
   invite_btn: 'Отправить приглашение', share_text: 'Сыграем в шахматы в Telegram! ♟',
   your_friends: 'Ваши друзья', no_friends: 'Пока нет друзей.\nОтправьте приглашение, чтобы начать.',
   remove_friend: 'Удалить из друзей', friend_added: '{name} теперь ваш друг', offline: 'не в сети', online: 'в сети',
@@ -140,7 +140,7 @@ const uz = {
   cancel: 'Bekor qilish', challenge: 'Taklif qilish', in_game: "O'yinda", challenge_sent: 'Taklif yuborildi',
   nobody: "Hozir boshqa onlayn o'yinchi yo'q.\nDo'stingizni taklif qiling yoki kompyuterga qarshi o'ynang.",
   friends_title: "Do'stlar", invite_friends: "Do'stlarni taklif qilish",
-  invite_sub: "Botni Telegramda do'stingizga yuboring. U qo'shilgach, siz do'st bo'lasiz.",
+  invite_sub: "Taklif havolasini yuboring. Yangi do'stingiz 10 💎, siz esa 20 💎 olasiz.",
   invite_btn: 'Taklif yuborish', share_text: "Telegramda men bilan shaxmat o'ynang! ♟",
   your_friends: "Sizning do'stlaringiz", no_friends: "Hozircha do'st yo'q.\nBoshlash uchun taklifni yuboring.",
   remove_friend: "Do'stlikdan chiqarish", friend_added: "{name} endi sizning do'stingiz", offline: 'oflayn', online: 'onlayn',
@@ -199,7 +199,7 @@ const uzc = {
   cancel: 'Бекор қилиш', challenge: 'Таклиф қилиш', in_game: 'Ўйинда', challenge_sent: 'Таклиф юборилди',
   nobody: 'Ҳозир бошқа онлайн ўйинчи йўқ.\nДўстингизни таклиф қилинг ёки компьютерга қарши ўйнанг.',
   friends_title: 'Дўстлар', invite_friends: 'Дўстларни таклиф қилиш',
-  invite_sub: 'Ботни Телеграмда дўстингизга юборинг. У қўшилгач, сиз дўст бўласиз.',
+  invite_sub: 'Таклиф ҳаволасини юборинг. Янги дўстингиз 10 💎, сиз эса 20 💎 оласиз.',
   invite_btn: 'Таклиф юбориш', share_text: 'Телеграмда мен билан шахмат ўйнанг! ♟',
   your_friends: 'Сизнинг дўстларингиз', no_friends: 'Ҳозирча дўст йўқ.\nБошлаш учун таклифни юборинг.',
   remove_friend: 'Дўстликдан чиқариш', friend_added: '{name} энди сизнинг дўстингиз', offline: 'офлайн', online: 'онлайн',
@@ -297,7 +297,7 @@ Object.assign(ru, { play_btn: 'Играть', any_time: 'Любое', any_time_s
 Object.assign(uz, { play_btn: 'O‘ynash', any_time: 'Istalgan', any_time_sub: 'Tezroq topiladi', choose_time: 'O‘yin vaqtini tanlang', home_puzzle: 'Kun boshqotirmasi', home_rank: 'Jonli reyting', home_rank_sub: 'Jadvalda kim yetakchi', play_card_online: 'Online o‘ynash', play_card_friend: 'Do‘st bilan o‘ynash', play_card_ai: 'Kompyuter bilan o‘ynash', online_players: 'Online o‘yinchilar' });
 Object.assign(uzc, { play_btn: 'Ўйнаш', any_time: 'Исталган', any_time_sub: 'Тезроқ топилади', choose_time: 'Ўйин вақтини танланг', home_puzzle: 'Кун бошқотирмаси', home_rank: 'Жонли рейтинг', home_rank_sub: 'Жадвалда ким етакчи', play_card_online: 'Онлайн ўйнаш', play_card_friend: 'Дўст билан ўйнаш', play_card_ai: 'Компьютер билан ўйнаш', online_players: 'Онлайн ўйинчилар' });
 
-Object.assign(en, { diamonds: 'Diamonds', gems_title: 'Your diamonds', gems_sub: '{n} diamonds for each friend who joins with your invite', premium: 'Premium', premium_buy: 'Get Premium · {n} 💎', premium_have: 'Premium active', premium_need: '{n} more diamonds to unlock Premium', premium_bought: 'Premium unlocked! 🎉', friend_reward: '+{n} 💎 for inviting a friend', e_no_diamonds: 'Not enough diamonds', e_premium_owned: 'You already have Premium' });
-Object.assign(ru, { diamonds: 'Алмазы', gems_title: 'Ваши алмазы', gems_sub: '{n} алмазов за каждого друга, пришедшего по вашему приглашению', premium: 'Премиум', premium_buy: 'Получить Премиум · {n} 💎', premium_have: 'Премиум активен', premium_need: 'Ещё {n} алмазов до Премиума', premium_bought: 'Премиум открыт! 🎉', friend_reward: '+{n} 💎 за приглашённого друга', e_no_diamonds: 'Недостаточно алмазов', e_premium_owned: 'Премиум уже есть' });
-Object.assign(uz, { diamonds: 'Olmoslar', gems_title: 'Sizning olmoslaringiz', gems_sub: 'Taklifingiz orqali qo‘shilgan har bir do‘st uchun {n} ta olmos', premium: 'Premium', premium_buy: 'Premium olish · {n} 💎', premium_have: 'Premium faol', premium_need: 'Premium uchun yana {n} ta olmos kerak', premium_bought: 'Premium ochildi! 🎉', friend_reward: 'Do‘st taklif qilgani uchun +{n} 💎', e_no_diamonds: 'Olmos yetarli emas', e_premium_owned: 'Sizda Premium bor' });
-Object.assign(uzc, { diamonds: 'Олмослар', gems_title: 'Сизнинг олмосларингиз', gems_sub: 'Таклифингиз орқали қўшилган ҳар бир дўст учун {n} та олмос', premium: 'Премиум', premium_buy: 'Премиум олиш · {n} 💎', premium_have: 'Премиум фаол', premium_need: 'Премиум учун яна {n} та олмос керак', premium_bought: 'Премиум очилди! 🎉', friend_reward: 'Дўст таклиф қилгани учун +{n} 💎', e_no_diamonds: 'Олмос етарли эмас', e_premium_owned: 'Сизда Премиум бор' });
+Object.assign(en, { diamonds: 'Diamonds', gems_title: 'Your diamonds', gems_sub: 'Invite a new friend: you get {n} 💎, they get {m} 💎', premium: 'Premium', premium_buy: 'Get Premium · {n} 💎', premium_have: 'Premium active', premium_need: '{n} more diamonds to unlock Premium', premium_bought: 'Premium unlocked! 🎉', friend_reward: '+{n} 💎 for inviting a friend', invitee_reward: '+{n} 💎 welcome! You and {name} are now friends', e_no_diamonds: 'Not enough diamonds', e_premium_owned: 'You already have Premium' });
+Object.assign(ru, { diamonds: 'Алмазы', gems_title: 'Ваши алмазы', gems_sub: 'Пригласите нового друга: вам {n} 💎, ему {m} 💎', premium: 'Премиум', premium_buy: 'Получить Премиум · {n} 💎', premium_have: 'Премиум активен', premium_need: 'Ещё {n} алмазов до Премиума', premium_bought: 'Премиум открыт! 🎉', friend_reward: '+{n} 💎 за приглашённого друга', invitee_reward: '+{n} 💎 в подарок! Вы и {name} теперь друзья', e_no_diamonds: 'Недостаточно алмазов', e_premium_owned: 'Премиум уже есть' });
+Object.assign(uz, { diamonds: 'Olmoslar', gems_title: 'Sizning olmoslaringiz', gems_sub: 'Yangi do‘st taklif qiling: sizga {n} 💎, unga {m} 💎', premium: 'Premium', premium_buy: 'Premium olish · {n} 💎', premium_have: 'Premium faol', premium_need: 'Premium uchun yana {n} ta olmos kerak', premium_bought: 'Premium ochildi! 🎉', friend_reward: 'Do‘st taklif qilgani uchun +{n} 💎', invitee_reward: '+{n} 💎 sovg‘a! Siz va {name} endi do‘stsiz', e_no_diamonds: 'Olmos yetarli emas', e_premium_owned: 'Sizda Premium bor' });
+Object.assign(uzc, { diamonds: 'Олмослар', gems_title: 'Сизнинг олмосларингиз', gems_sub: 'Янги дўст таклиф қилинг: сизга {n} 💎, унга {m} 💎', premium: 'Премиум', premium_buy: 'Премиум олиш · {n} 💎', premium_have: 'Премиум фаол', premium_need: 'Премиум учун яна {n} та олмос керак', premium_bought: 'Премиум очилди! 🎉', friend_reward: 'Дўст таклиф қилгани учун +{n} 💎', invitee_reward: '+{n} 💎 совға! Сиз ва {name} энди дўстсиз', e_no_diamonds: 'Олмос етарли эмас', e_premium_owned: 'Сизда Премиум бор' });
