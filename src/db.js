@@ -16,6 +16,12 @@ if (!url) {
   console.error('DATABASE_URL is not set. Use the Supabase "Session pooler" connection string.');
   process.exit(1);
 }
+try { // never prints the password itself, only what is needed to spot a bad value
+  const u = new URL(url.trim());
+  const pw = decodeURIComponent(u.password);
+  console.log(`[db] connecting as "${decodeURIComponent(u.username)}" to ${u.hostname}:${u.port || 5432}${u.pathname}; password length ${pw.length}`
+    + `${/[\s\[\]]/.test(pw) ? ' (contains a space or bracket!)' : ''}${url !== url.trim() ? ' (URL has leading/trailing whitespace!)' : ''}`);
+} catch { console.error('[db] DATABASE_URL is not a valid URL (special characters in the password must be %-encoded)'); }
 const local = /@(localhost|127\.0\.0\.1)|host=\/|%2F/.test(url);
 const pool = new Pool({
   connectionString: url,
