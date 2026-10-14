@@ -25,6 +25,8 @@ if (!BOT_TOKEN) {
 }
 
 const THEMES = ['dark', 'light'];
+const PREMIUM_PRICE = Number(process.env.PREMIUM_PRICE || 200); // diamonds
+const REFERRAL_REWARD = Number(process.env.REFERRAL_REWARD || 20); // diamonds per invited friend
 const REACTIONS = ['👍', '😀', '😮', '😢', '🔥', '👏', '🤔', '😎', '🎉', '🙈'];
 const MAX_OPEN_GAMES = 10;
 // A challenge is only shown inside the app (no chat message). It stays valid this long; the popup itself shows for 10 s
@@ -92,6 +94,7 @@ async function person(id) {
 const publicUser = (u, admin) => ({
   id: u.id, firstName: u.first_name, username: u.username, lang: u.lang, theme: u.theme,
   langSet: !!u.lang_set, notifyEnabled: !!u.notify_enabled, discoverable: !!u.discoverable, isAdmin: admin,
+  diamonds: Number(u.diamonds || 0), premium: !!u.premium,
 });
 
 // ---------- bot ----------
@@ -163,7 +166,7 @@ api.get('/me', wrap(async (req, res) => {
   res.json({
     user: publicUser(req.user, req.isAdmin),
     stats: await statsFor(req.user.id),
-    meta: { LANGS, THEMES, COLORS, REACTIONS, botUsername: await getBotUsername() },
+    meta: { LANGS, THEMES, COLORS, REACTIONS, PREMIUM_PRICE, REFERRAL_REWARD, botUsername: await getBotUsername() },
   });
 }));
 
@@ -569,12 +572,28 @@ api.post('/friends/join', wrap(async (req, res) => {
   if (other === uid || !u || u.blocked) throw new HttpError(404, 'Player not found', 'user_unavailable');
   const already = await areFriends(uid, other);
   await befriend(uid, other);
+  let reward = 0;
   if (!already) {
+    // the person who invited gets diamonds, once per invited person
+    const paid = await db.prepare(`WITH r AS (INSERT INTO referrals (invitee_id, inviter_id) VALUES (?, ?) ON CONFLICT DO NOTHING RETURNING inviter_id)
+      UPDATE users SET diamonds = diamonds + ? WHERE id IN (SELECT inviter_id FROM r)`).run(uid, other, REFERRAL_REWARD);
+    if (paid.changes) reward = REFERRAL_REWARD;
     const me = (await person(uid)).name;
-    realtime.send(other, { t: 'friend', id: uid });
-    notify.toUser(other, (T) => T.friendJoined(me));
+    realtime.send(other, { t: 'friend', id: uid, reward });
+    notify.toUser(other, (T) => T.friendJoined(me) + (reward ? ` 💎 +${reward}` : ''));
   }
   res.json({ friend: await person(other), already });
+}));
+
+// Spend diamonds on Premium (all-or-nothing in one statement, so two taps cannot overspend)
+api.post('/premium/buy', wrap(async (req, res) => {
+  const r = await db.prepare('UPDATE users SET diamonds = diamonds - ?, premium = 1 WHERE id = ? AND premium = 0 AND diamonds >= ?')
+    .run(PREMIUM_PRICE, req.user.id, PREMIUM_PRICE);
+  if (!r.changes) {
+    const u = await getUser.get(req.user.id);
+    throw bad(u.premium ? 'You already have Premium' : 'Not enough diamonds', u.premium ? 'premium_owned' : 'no_diamonds');
+  }
+  res.json({ user: publicUser(await getUser.get(req.user.id), req.isAdmin) });
 }));
 
 api.delete('/friends/:id', wrap(async (req, res) => {

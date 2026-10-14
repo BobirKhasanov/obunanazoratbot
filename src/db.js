@@ -159,6 +159,15 @@ CREATE TABLE IF NOT EXISTS broadcasts (
 );
 
 -- The API is served only by this server (service connection); nobody should reach the tables through Supabase's public REST API
+ALTER TABLE users ADD COLUMN IF NOT EXISTS diamonds BIGINT NOT NULL DEFAULT 0;   -- in-app currency
+ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER NOT NULL DEFAULT 0;   -- 1 once bought with diamonds
+-- one reward per invited person, ever (the primary key makes repeated joins and farming impossible)
+CREATE TABLE IF NOT EXISTS referrals (
+  invitee_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  inviter_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE referrals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE friends ENABLE ROW LEVEL SECURITY;
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
@@ -170,12 +179,14 @@ ALTER TABLE broadcasts ENABLE ROW LEVEL SECURITY;
 
 /** Creates the tables on first start and marks interrupted broadcasts. Await this before serving. */
 db.ready = (async () => {
-  await pool.query('SELECT pg_advisory_lock(7301)'); // two instances starting together must not race on DDL
+  const c = await pool.connect(); // lock and unlock must happen on the same connection
   try {
-    await pool.query(SCHEMA);
-    await pool.query("UPDATE broadcasts SET status = 'interrupted' WHERE status = 'sending'");
+    await c.query('SELECT pg_advisory_lock(7301)'); // two instances starting together must not race on DDL
+    await c.query(SCHEMA);
+    await c.query("UPDATE broadcasts SET status = 'interrupted' WHERE status = 'sending'");
   } finally {
-    await pool.query('SELECT pg_advisory_unlock(7301)').catch(() => {});
+    await c.query('SELECT pg_advisory_unlock(7301)').catch(() => {});
+    c.release();
   }
 })();
 

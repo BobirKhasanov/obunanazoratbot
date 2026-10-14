@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, toggle, api, fail, setInitData, connectWs, onWs, tg, avatar, shareUrl, confirmSheet, sleep } from './ui.js';
+import { h, $, $$, icon, haptic, toast, rain, sheet, seg, toggle, api, fail, setInitData, connectWs, onWs, tg, avatar, shareUrl, confirmSheet, sleep } from './ui.js';
 import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { openAdmin } from './admin.js';
@@ -180,7 +180,7 @@ refreshers.play = async function renderPlay() {
     h('div.banner-text', h('b', title), h('small', sub)), h('span.banner-art', emoji));
   const card = (emoji, label, fn) => h('button.pcard', { onclick: () => { haptic('light'); fn(); } }, h('span.pcard-art', emoji), h('b', label));
   const nodes = [
-    h('div.top', h('h1', '♟ ' + t('app')), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
+    h('div.top', h('h1', '♟ ' + t('app')), h('div.pills', h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount })))),
     banner('violet', '🧩', t('home_puzzle'), t('puzzles_sub'), () => go(TABS.indexOf('puzzles'), true)),
     h('div.time-heading', t('choose_time')),
     modes,
@@ -239,6 +239,22 @@ refreshers.rankings = async function renderRankings() {
     h('div.rank-footnote', t('rankings_scoring'))
   );
 };
+
+/** Diamonds: balance, progress to Premium and the buy button */
+function gemsCard() {
+  const me = state.me, price = state.meta.PREMIUM_PRICE || 200, reward = state.meta.REFERRAL_REWARD || 20;
+  const have = me.diamonds || 0, pct = Math.min(100, Math.round((have / price) * 100));
+  const buy = async () => {
+    try { state.me = (await api('POST', '/premium/buy')).user; toast(t('premium_bought')); haptic('success'); rain && rain(); refresh(); } catch (e) { fail(e); refresh(); }
+  };
+  return h('div.card.gems',
+    h('div.gems-top', h('div.gems-num', '💎 ', h('b', String(have))), me.premium ? h('span.prem-badge', '★ ' + t('premium')) : null),
+    h('small.muted', t('gems_sub', { n: reward })),
+    me.premium ? h('div.gems-ok', t('premium_have'))
+      : [h('div.gems-bar', h('i', { style: { width: pct + '%' } })),
+        h('small.muted', have >= price ? '' : t('premium_need', { n: price - have })),
+        h('button.btn' + (have >= price ? '' : '.ghost'), { disabled: have < price, onclick: buy }, t('premium_buy', { n: price }))]);
+}
 
 /** Friends live inside the profile page now */
 function friendsSection(list) {
@@ -322,8 +338,9 @@ refreshers.profile = async function renderProfile() {
   const langChips = h('div.chips', LANGS.map((l) => h('button.chip' + (getLang() === l ? '.on' : ''), { onclick: async () => { await save({ lang: l }); setLang(l); rebuildAll(); } }, LANG_NAMES[l])));
   mount('profile',
     h('div.top', h('h1', t('profile_title'))),
-    h('div.me', h('div.big', avatar(me.firstName, me.id, 'xl')), h('div', h('h2', me.firstName), me.username ? h('div.muted', '@' + me.username) : null)),
+    h('div.me', h('div.big', avatar(me.firstName, me.id, 'xl')), h('div', h('h2', me.firstName, me.premium ? h('span.prem-badge', ' ★') : null), me.username ? h('div.muted', '@' + me.username) : null)),
     h('div.card.stats', stat(s.w, t('wins'), 'g'), stat(s.d, t('draws')), stat(s.l, t('losses'), 'r')),
+    gemsCard(),
     friendsSection(friends),
     h('div.h2', t('language')), langChips,
     h('div.h2', t('theme')),
@@ -436,7 +453,7 @@ async function boot() {
   connectWs((up) => { if (up) refresh(); });
   onWs((m) => {
     if (m.t === 'invite') { showInvite(m.game, m.ttl || 10000); refresh('play'); }
-    else if (m.t === 'friend') { haptic('success'); refresh(); }
+    else if (m.t === 'friend') { haptic('success'); if (m.reward) { state.me.diamonds = (state.me.diamonds || 0) + m.reward; toast(t('friend_reward', { n: m.reward })); } refresh(); }
     else if (m.t === 'game' && m.game.id !== openGameId()) refresh();
   });
   setInterval(() => { if (!document.hidden && !openGameId() && ['live', 'play', 'rankings', 'profile'].includes(state.tab)) refresh(); }, 8000);

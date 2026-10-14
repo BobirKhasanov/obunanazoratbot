@@ -140,6 +140,18 @@ async function playMoves(game, players, moves, startPly = 0) {
 
     // ---------------------------------------------------------------- challenge + a full game
     let gid, fm;
+    await step('diamonds: +20 once per invited friend; Premium costs 200 and cannot be bought twice', async () => {
+      assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 20, 'inviter got 20 diamonds for the friend who joined');
+      await ok('B', 'POST', '/friends/join', { userId: USERS.A.id }); // opening the link again must not pay again
+      assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 20);
+      assert.strictEqual((await ok('B', 'GET', '/me')).user.diamonds, 0, 'the invited person gets nothing');
+      await err('A', 'POST', '/premium/buy', null, 400, 'no_diamonds');
+      await pg.q('UPDATE users SET diamonds = 200 WHERE id = $1', USERS.A.id);
+      const r = await ok('A', 'POST', '/premium/buy');
+      assert.deepStrictEqual([r.user.premium, r.user.diamonds], [true, 0]);
+      await err('A', 'POST', '/premium/buy', null, 400, 'premium_owned');
+    });
+
     await step('challenge: in-app invitation only (no chat message), no duplicates', async () => {
       const wsB = await connect('B'); sockets.push(wsB);
       const c = await ok('A', 'POST', '/games', { opponentId: USERS.B.id });
