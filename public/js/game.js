@@ -10,7 +10,7 @@ const AI_KEY = 'chess-ai-game';
 const EMOTES = ['🤔', '😎', '😮', '👏', '🙈', '😀'];
 let ctx = null; // the open game, or null
 
-export const openGameId = () => (ctx && ctx.kind === 'online' ? ctx.id : null);
+export const openGameId = () => (ctx && (ctx.kind === 'online' || ctx.kind === 'spectate') ? ctx.id : null);
 export const savedAiGame = () => { try { const s = JSON.parse(localStorage.getItem(AI_KEY)); return s && Array.isArray(s.moves) ? s : null; } catch { return null; } };
 const saveAi = (s) => { try { s ? localStorage.setItem(AI_KEY, JSON.stringify(s)) : localStorage.removeItem(AI_KEY); } catch { /* storage blocked */ } };
 
@@ -89,6 +89,14 @@ export function openGame(opts, onClose) {
 
   function names() {
     if (S.kind === 'ai') return { me: { name: meName(), id: S.meta.me ? S.meta.me.id : 1 }, opp: { name: `${t('computer')} · ${t('lvl' + S.level)}`, id: 7 + S.level, ai: true } };
+    if (S.kind === 'spectate') {
+      const g = S.game || {};
+      const w = g.white || {}, b = g.black || {};
+      return {
+        me: { name: w.name || t('white'), id: w.id || 1, online: w.online },
+        opp: { name: b.name || t('black'), id: b.id || 2, online: b.online },
+      };
+    }
     const g = S.game; const o = g.opponent || {};
     const waitingFriend = g && g.mode === 'friend' && g.status === 'open' && !o.id;
     return {
@@ -122,7 +130,7 @@ export function openGame(opts, onClose) {
   }
 
   function syncClocks() {
-    if (!ctx || ctx !== S || S.kind !== 'online' || !S.game || !S.game.clock || S.over) return;
+    if (!ctx || ctx !== S || (S.kind !== 'online' && S.kind !== 'spectate') || !S.game || !S.game.clock || S.over) return;
     if (S.game.status !== 'active') return;
     const ori = orientation();
     const oppCol = S.colour === 'w' ? 'b' : 'w';
@@ -135,7 +143,7 @@ export function openGame(opts, onClose) {
     const botMs = remainingMs(S.game.clock, botSide, S.game.turn, S.game.status);
     top.el.classList.toggle('low', topMs != null && topMs <= 20_000);
     bot.el.classList.toggle('low', botMs != null && botMs <= 20_000);
-    if (!S.flagClaimed && (topMs === 0 || botMs === 0)) {
+    if (S.kind === 'online' && !S.flagClaimed && (topMs === 0 || botMs === 0)) {
       S.flagClaimed = true;
       api('POST', `/games/${S.id}/flag`).then((r) => applyServer(r.game, true)).catch(() => { S.flagClaimed = false; });
     }
@@ -144,7 +152,7 @@ export function openGame(opts, onClose) {
   function armClock() {
     clearInterval(S.clockTimer);
     S.clockTimer = null;
-    if (S.kind !== 'online' || !S.game || !S.game.clock || S.game.status !== 'active' || S.over) return;
+    if ((S.kind !== 'online' && S.kind !== 'spectate') || !S.game || !S.game.clock || S.game.status !== 'active' || S.over) return;
     S.clockTimer = setInterval(syncClocks, 200);
     syncClocks();
   }
@@ -154,7 +162,9 @@ export function openGame(opts, onClose) {
     const c = S.chess; const cap = captured(c);
     const ori = orientation();
     const lastMoves = c.history({ verbose: true }); const lm = lastMoves[lastMoves.length - 1];
-    const myTurn = S.kind === 'ai' ? (!S.over && !S.thinking && c.turn() === S.colour) : (S.game.status === 'active' && S.game.you && c.turn() === S.game.you);
+    const myTurn = S.kind === 'ai' ? (!S.over && !S.thinking && c.turn() === S.colour)
+      : S.kind === 'spectate' ? false
+      : (S.game.status === 'active' && S.game.you && c.turn() === S.game.you);
     const mine = !S.over && myTurn ? S.colour : null;
     board.set(c, { lastMove: lm ? { from: lm.from, to: lm.to } : null, orientation: ori, mine, animate });
     const oppCol = S.colour === 'w' ? 'b' : 'w';
@@ -166,10 +176,13 @@ export function openGame(opts, onClose) {
     top.av.classList.toggle('online', !!(topIsOpp && opp.online));
     bot.av.classList.toggle('online', !topIsOpp ? !!opp.online : false);
 
-    title.textContent = S.kind === 'ai' ? t('vs_computer') : (S.game.status === 'active' || S.game.status === 'finished' ? opp.name : t('new_game'));
+    if (S.kind === 'ai') title.textContent = t('vs_computer');
+    else if (S.kind === 'spectate') title.textContent = `${me.name} – ${opp.name}`;
+    else title.textContent = S.game.status === 'active' || S.game.status === 'finished' ? opp.name : t('new_game');
     // status line
     let st = '';
     if (S.over) st = '';
+    else if (S.kind === 'spectate') st = t('watching');
     else if (S.kind === 'online' && S.game.status !== 'active') st = '';
     else if (S.thinking) st = t('thinking');
     else if (myTurn) st = c.inCheck() ? t('check') : t('your_move');
@@ -243,6 +256,8 @@ export function openGame(opts, onClose) {
     } else if (S.kind === 'online' && live) {
       if (!drawOut) actions.append(act('handshake', t('offer_draw'), () => drawAction('offer')));
       actions.append(act('flag', t('resign'), resign), act('smile', '', toggleReact));
+    } else if (S.kind === 'spectate') {
+      // view-only: no actions
     } else if (S.over || (S.game && S.game.status === 'finished')) {
       actions.append(act('smile', '', toggleReact));
     }
@@ -264,7 +279,7 @@ export function openGame(opts, onClose) {
 
   // ----- moves -----
   async function humanMove(from, to, promotion) {
-    if (S.over) return;
+    if (S.over || S.kind === 'spectate') return;
     if (S.kind === 'ai') {
       try { S.chess.move({ from, to, promotion }); } catch { return render(); }
       S.moves.push([from, to, promotion]); afterMove(true);
@@ -341,6 +356,15 @@ export function openGame(opts, onClose) {
   }
 
   function showResult(outcome, reason) {
+    if (S.kind === 'spectate') {
+      haptic('light');
+      const res = (S.game && S.game.result) || '½-½';
+      sheet((close) => [
+        h('div.result', h('div.result-emoji', '♟'), h('h2', t('result_label', { r: res })), h('p.muted', t(reasonKey(reason)))),
+        h('button.btn.ghost', { onclick: () => { close(); closeGame(); } }, t('close')),
+      ]);
+      return;
+    }
     if (outcome === 'win') { rain(); haptic('success'); } else haptic(outcome === 'loss' ? 'error' : 'warning');
     const ttl = outcome === 'win' ? t('you_won') : outcome === 'loss' ? t('you_lost') : t('draw_title');
     const emo = outcome === 'win' ? '🏆' : outcome === 'loss' ? '🤝' : '🤝';
@@ -357,19 +381,23 @@ export function openGame(opts, onClose) {
     if (!ctx || ctx !== S || g.id !== S.id) return;
     const prev = S.game; S.game = g;
     const moves = g.moves || [];
-    S.colour = g.you || S.colour;
+    if (S.kind !== 'spectate') S.colour = g.you || S.colour;
     const grew = moves.length !== S.moves.length || force;
     S.moves = moves;
     if (grew) S.chess = build(moves);
     const was = prev && prev.status;
     if (g.status === 'finished' && was !== 'finished') {
       S.over = true; render(grew);
-      const outcome = g.result === '1/2-1/2' ? 'draw' : (g.result === '1-0') === (g.you === 'w') ? 'win' : 'loss';
+      const outcome = S.kind === 'spectate' ? 'draw'
+        : g.result === '1/2-1/2' ? 'draw' : (g.result === '1-0') === (g.you === 'w') ? 'win' : 'loss';
       setTimeout(() => showResult(outcome, g.reason), 500);
       return;
     }
-    if (g.status === 'cancelled' && was !== 'cancelled') { toast(was === 'invited' ? t('challenge_expired') : t('opponent_left'), true); closeGame(); return; }
-    if (g.status === 'active' && was !== 'active') {
+    if (g.status === 'cancelled' && was !== 'cancelled') {
+      if (S.kind === 'spectate') { toast(t('game_ended'), true); closeGame(); return; }
+      toast(was === 'invited' ? t('challenge_expired') : t('opponent_left'), true); closeGame(); return;
+    }
+    if (S.kind !== 'spectate' && g.status === 'active' && was !== 'active') {
       const tc = isTimed(g.timeControl) ? ` · ${g.timeControl}` : '';
       toast(t('you_are', { c: g.you === 'w' ? t('white') : t('black') }) + tc);
       haptic('success');
@@ -390,6 +418,13 @@ export function openGame(opts, onClose) {
     if (opts.resume) { S.moves = opts.resume.moves; S.chess = build(S.moves); }
     S.colour = opts.colour || 'w'; S.chess = build(S.moves); render(false);
     if (S.chess.turn() !== S.colour) aiTurn();
+  } else if (S.kind === 'spectate') {
+    S.moves = opts.game.moves || []; S.chess = build(S.moves); S.colour = 'w';
+    S.over = opts.game.status === 'finished'; render(false);
+    S.poll = setInterval(() => {
+      if (ctx !== S || S.over) return;
+      api('GET', `/live/games/${S.id}`).then((r) => applyServer(r.game)).catch(() => {});
+    }, 2000);
   } else { S.moves = opts.game.moves || []; S.chess = build(S.moves); S.colour = opts.game.you || 'w'; S.over = opts.game.status === 'finished'; render(false); }
 
   root.classList.add('show'); root.removeAttribute('aria-hidden');
@@ -401,6 +436,7 @@ function closeNow() {
   if (!ctx) return;
   if (ctx.unsub) ctx.unsub();
   clearInterval(ctx.clockTimer);
+  clearInterval(ctx.poll);
   ctx.token = null; clearTimeout(ctx.emoteT);
   const root = $('#game');
   root.classList.remove('show'); root.setAttribute('aria-hidden', 'true');

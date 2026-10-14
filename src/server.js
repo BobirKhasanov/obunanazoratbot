@@ -18,6 +18,7 @@ const {
   normalizeTimeControl, presetOf, categoryOf, isTimed,
   settleClocks, afterMoveClocks,
 } = require('./time');
+const lichess = require('./lichess');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
@@ -52,7 +53,8 @@ app.use((req, res, next) => {
     'Referrer-Policy': 'no-referrer',
     'Content-Security-Policy':
       "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; " +
-      "img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' ws: wss:; worker-src 'self'; " +
+      "img-src 'self' data: blob: https://image.lichess1.org https://lichess1.org; media-src 'self' blob:; " +
+      "connect-src 'self' ws: wss:; worker-src 'self'; " +
       'frame-ancestors https://web.telegram.org https://*.telegram.org',
   });
   next();
@@ -647,6 +649,82 @@ api.get('/lobby', wrap(async (req, res) => {
     },
     stats: await statsFor(uid),
   });
+}));
+
+// ---------- live spectate (bot 2-player games) + Lichess broadcasts ----------
+api.get('/live/games', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const rows = await db.prepare(`
+    SELECT * FROM games
+    WHERE status = 'active' AND white_id IS NOT NULL AND black_id IS NOT NULL
+    ORDER BY updated_at DESC LIMIT 40
+  `).all();
+  const games = await Promise.all(rows.map(async (row) => {
+    const g = await gameFor(row, uid, false);
+    g.spectating = !g.you;
+    return g;
+  }));
+  res.json({ games, updatedAt: new Date().toISOString() });
+}));
+
+api.get('/live/games/:id', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const row = await getGame.get(String(req.params.id));
+  if (!row || !row.white_id || !row.black_id) throw new HttpError(404, 'Game not found', 'notfound');
+  if (row.status !== 'active' && row.status !== 'finished') throw new HttpError(404, 'Game not found', 'notfound');
+  const g = await gameFor(row, uid, true);
+  g.spectating = !g.you;
+  res.json({ game: g });
+}));
+
+api.get('/lichess/broadcasts', wrap(async (req, res) => {
+  try {
+    const data = await lichess.topBroadcasts();
+    res.json({
+      active: data.active || [],
+      upcoming: data.upcoming || [],
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (e) {
+    throw new HttpError(e.status === 429 ? 429 : 502, 'Lichess is unavailable', e.status === 429 ? 'limit' : 'upstream');
+  }
+}));
+
+api.get('/lichess/broadcasts/:id', wrap(async (req, res) => {
+  try {
+    const data = await lichess.broadcastTour(req.params.id);
+    res.json({ ...data, updatedAt: new Date().toISOString() });
+  } catch (e) {
+    if (e.status === 400) throw bad('Invalid id', 'bad_request');
+    throw new HttpError(e.status === 404 ? 404 : 502, 'Broadcast not found', e.status === 404 ? 'notfound' : 'upstream');
+  }
+}));
+
+api.get('/lichess/rounds/:id', wrap(async (req, res) => {
+  try {
+    const data = await lichess.broadcastRound(req.params.id);
+    res.json({ ...data, updatedAt: new Date().toISOString() });
+  } catch (e) {
+    if (e.status === 400) throw bad('Invalid id', 'bad_request');
+    throw new HttpError(e.status === 404 ? 404 : 502, 'Round not found', e.status === 404 ? 'notfound' : 'upstream');
+  }
+}));
+
+api.get('/lichess/rounds/:id/pgn', wrap(async (req, res) => {
+  try {
+    const data = await lichess.broadcastRoundPgn(req.params.id);
+    const gameId = req.query.game ? String(req.query.game).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16) : '';
+    if (gameId) {
+      const one = (data.games || []).find((g) => g.id === gameId);
+      if (!one) throw new HttpError(404, 'Game not found', 'notfound');
+      return res.json({ roundId: data.roundId, game: one, updatedAt: new Date().toISOString() });
+    }
+    res.json({ roundId: data.roundId, games: data.games || [], updatedAt: new Date().toISOString() });
+  } catch (e) {
+    if (e.code === 'notfound') throw e;
+    if (e.status === 400) throw bad('Invalid id', 'bad_request');
+    throw new HttpError(e.status === 404 ? 404 : 502, 'PGN unavailable', e.status === 404 ? 'notfound' : 'upstream');
+  }
 }));
 
 // ---------- friends ----------

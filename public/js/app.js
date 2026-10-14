@@ -7,6 +7,7 @@ import { Chess } from '/vendor/chess.js';
 import { Board } from './board.js';
 import { PUZZLES, goodMoves, mateIn } from './puzzles.js';
 import { normalizeTimeControl } from './time.js';
+import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
 let selectedTime = 'any';
@@ -225,13 +226,12 @@ refreshers.play = async function renderPlay() {
   mount('play', nodes);
 };
 refreshers.live = async function renderLive() {
-  const l = await loadLobby();
-  mount('live',
-    h('div.top', h('h1', t('live_title')), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
-    h('button.tile.hero', { onclick: startQuick }, h('b', t('find_opponent')), h('small', t('quick_sub')), icon('globe', 26)),
-    h('div.h2', t('online')),
-    l.online.length ? h('div.list', l.online.map((u) => h('div.row', avatar(u.name, u.id), h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.inGame ? t('in_game') : u.invited ? t('challenge_sent') : t('online'))),
-      challengeAction(u)))) : empty(t('nobody'), '🛰️'));
+  await renderLivePage(
+    (nodes) => mount('live', nodes),
+    gameMeta(),
+    () => refresh('live'),
+    () => refresh('live'),
+  );
 };
 
 refreshers.rankings = async function renderRankings() {
@@ -500,7 +500,11 @@ async function boot() {
       else if (m.game.id !== openGameId()) refresh();
     } else if (m.t === 'invite_gone') { clearInvitePop(); refresh(); }
   });
-  setInterval(() => { if (!document.hidden && !openGameId() && ['live', 'play', 'rankings', 'profile'].includes(state.tab)) refresh(); }, 8000);
+  setInterval(() => {
+    if (document.hidden || openGameId()) return;
+    if (state.tab === 'live' && liveBlocksAutoRefresh()) return;
+    if (['live', 'play', 'rankings', 'profile'].includes(state.tab)) refresh();
+  }, 8000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   await refresh();
   await handleDeepLink();

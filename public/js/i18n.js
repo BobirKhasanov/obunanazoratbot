@@ -313,3 +313,44 @@ Object.assign(en, { diamonds: 'Diamonds', gems_title: 'Your diamonds', gems_sub:
 Object.assign(ru, { diamonds: 'Алмазы', gems_title: 'Ваши алмазы', gems_sub: 'Пригласите нового друга: вам {n} 💎, ему {m} 💎', premium: 'Премиум', premium_buy: 'Получить Премиум · {n} 💎', premium_have: 'Премиум активен', premium_need: 'Ещё {n} алмазов до Премиума', premium_bought: 'Премиум открыт! 🎉', friend_reward: '+{n} 💎 за приглашённого друга', invitee_reward: '+{n} 💎 в подарок! Вы и {name} теперь друзья', e_no_diamonds: 'Недостаточно алмазов', e_premium_owned: 'Премиум уже есть' });
 Object.assign(uz, { diamonds: 'Olmoslar', gems_title: 'Sizning olmoslaringiz', gems_sub: 'Yangi do‘st taklif qiling: sizga {n} 💎, unga {m} 💎', premium: 'Premium', premium_buy: 'Premium olish · {n} 💎', premium_have: 'Premium faol', premium_need: 'Premium uchun yana {n} ta olmos kerak', premium_bought: 'Premium ochildi! 🎉', friend_reward: 'Do‘st taklif qilgani uchun +{n} 💎', invitee_reward: '+{n} 💎 sovg‘a! Siz va {name} endi do‘stsiz', e_no_diamonds: 'Olmos yetarli emas', e_premium_owned: 'Sizda Premium bor' });
 Object.assign(uzc, { diamonds: 'Олмослар', gems_title: 'Сизнинг олмосларингиз', gems_sub: 'Янги дўст таклиф қилинг: сизга {n} 💎, унга {m} 💎', premium: 'Премиум', premium_buy: 'Премиум олиш · {n} 💎', premium_have: 'Премиум фаол', premium_need: 'Премиум учун яна {n} та олмос керак', premium_bought: 'Премиум очилди! 🎉', friend_reward: 'Дўст таклиф қилгани учун +{n} 💎', invitee_reward: '+{n} 💎 совға! Сиз ва {name} энди дўстсиз', e_no_diamonds: 'Олмос етарли эмас', e_premium_owned: 'Сизда Премиум бор' });
+
+Object.assign(en, {
+  live_tab_bot: 'Live games', live_tab_intl: 'World live tournaments', live_games_count: '{n} live',
+  live_no_bot_games: 'No live games in the bot right now.\nChallenge someone and come back!',
+  watching: 'Watching', watching_live: 'Live', ply_n: 'move {n}', game_ended: 'This game has ended',
+  result_label: 'Result: {r}', jonli: 'Live', starts_at: 'Starts: {t}', tournaments: 'Tournaments',
+  count_ta: '{n}', rounds: 'Rounds', finished: 'Finished', open_live_round: 'Open {n}', open_round: 'Open {n}',
+  filter_all: 'All ({n})', filter_uz: '🇺🇿 Uzbekistan ({n})', live_no_tours: 'No broadcasts right now.',
+  live_no_rounds: 'No rounds yet.', live_no_games: 'No games in this round.', live_no_uz: 'No Uzbekistan players in this round.',
+  live_load_fail: 'Could not load. Try again.', moves_n: '{n} moves',
+});
+Object.assign(ru, {
+  live_tab_bot: 'Живые партии', live_tab_intl: 'Мировые турниры', live_games_count: '{n} live',
+  live_no_bot_games: 'Сейчас в боте нет живых партий.\nВызовите кого-нибудь и вернитесь!',
+  watching: 'Просмотр', watching_live: 'Live', ply_n: 'ход {n}', game_ended: 'Партия завершена',
+  result_label: 'Результат: {r}', jonli: 'Live', starts_at: 'Старт: {t}', tournaments: 'Турниры',
+  count_ta: '{n}', rounds: 'Туры', finished: 'Завершён', open_live_round: 'Открыть {n}', open_round: 'Открыть {n}',
+  filter_all: 'Все ({n})', filter_uz: '🇺🇿 Узбекистан ({n})', live_no_tours: 'Сейчас нет трансляций.',
+  live_no_rounds: 'Туров пока нет.', live_no_games: 'В этом туре нет партий.', live_no_uz: 'В этом туре нет игроков из Узбекистана.',
+  live_load_fail: 'Не удалось загрузить. Попробуйте ещё раз.', moves_n: '{n} ходов',
+});
+Object.assign(uz, {
+  live_tab_bot: "Live o'yinlar", live_tab_intl: 'Halqaro Live turnirlar', live_games_count: '{n} ta jonli',
+  live_no_bot_games: "Hozir botda jonli o'yin yo'q.\nKimnidir chaqiring va qaytib keling!",
+  watching: 'Kuzatish', watching_live: 'Jonli', ply_n: '{n}-yurish', game_ended: "O'yin tugadi",
+  result_label: 'Natija: {r}', jonli: 'Jonli', starts_at: 'Boshlanadi: {t}', tournaments: 'TURNIRLAR',
+  count_ta: '{n} TA', rounds: 'Raundlar', finished: 'Tugagan', open_live_round: '{n} ni ochish', open_round: '{n} ni ochish',
+  filter_all: 'Hammasi ({n})', filter_uz: "🇺🇿 O'zbekiston ({n})", live_no_tours: "Hozircha turnirlar yo'q.",
+  live_no_rounds: "Raundlar yo'q.", live_no_games: "Bu raundda o'yin yo'q.", live_no_uz: "Bu raundda O'zbekiston o'yinchilari yo'q.",
+  live_load_fail: "Yuklanmadi. Qayta urinib ko'ring.", moves_n: '{n}-yurish',
+});
+Object.assign(uzc, {
+  live_tab_bot: 'Live ўйинлар', live_tab_intl: 'Халқаро Live турнирлар', live_games_count: '{n} та жонли',
+  live_no_bot_games: "Ҳозир ботда жонли ўйин йўқ.\nКимнидир чақиринг ва қайтиб келинг!",
+  watching: 'Кузатиш', watching_live: 'Жонли', ply_n: '{n}-юриш', game_ended: 'Ўйин тугади',
+  result_label: 'Натижа: {r}', jonli: 'Жонли', starts_at: 'Бошланади: {t}', tournaments: 'ТУРНИРЛАР',
+  count_ta: '{n} ТА', rounds: 'Раундлар', finished: 'Тугаган', open_live_round: '{n} ни очиш', open_round: '{n} ни очиш',
+  filter_all: 'Ҳаммаси ({n})', filter_uz: '🇺🇿 Ўзбекистон ({n})', live_no_tours: 'Ҳозирча турнирлар йўқ.',
+  live_no_rounds: 'Раундлар йўқ.', live_no_games: 'Бу раундда ўйин йўқ.', live_no_uz: 'Бу раундда Ўзбекистон ўйинчилари йўқ.',
+  live_load_fail: 'Юкланмади. Қайта уриниб кўринг.', moves_n: '{n}-юриш',
+});

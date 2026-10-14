@@ -470,6 +470,60 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .rank-points small { display: block; color: var(--muted); font-size: 11px; }
 .rank-footnote { margin: 16px 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 
+/* Online live tabs + Halqaro broadcasts (reuse rank-tab look) */
+.live-tabs { grid-template-columns: 1fr 1fr; margin-bottom: 4px; }
+.live-tabs .rank-tab { font-size: 12px; line-height: 1.25; padding: 12px 6px; }
+.live-thumb {
+  flex: none; width: 52px; height: 52px; border-radius: 12px; object-fit: cover; background: var(--card-2);
+}
+.live-thumb.ph { display: grid; place-items: center; font-size: 22px; }
+.live-tour { align-items: flex-start; }
+.live-tour .grow { display: grid; gap: 2px; }
+.live-badge {
+  display: inline-flex; align-items: center; gap: 6px; width: fit-content;
+  font-size: 12px; font-weight: 750; color: #ff6b6b; margin-bottom: 2px;
+}
+.live-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: #ff3b30; box-shadow: 0 0 0 3px rgba(255,59,48,.18); }
+.live-badge.soon {
+  color: #1c1c1e; background: #f5c542; border-radius: 99px; padding: 2px 8px; gap: 0;
+}
+.live-players { display: flex; align-items: center; gap: 4px; }
+.live-players svg { flex: none; opacity: .7; }
+.live-tour-head { margin: 12px 0 4px; display: grid; gap: 6px; }
+.live-filters {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 14px;
+  padding: 4px; background: var(--nav-bg); border: 1px solid var(--line); border-radius: 16px;
+}
+.live-filter {
+  padding: 10px 8px; border-radius: 12px; font-size: 13px; font-weight: 750; color: var(--muted);
+}
+.live-filter.on { background: rgba(255,255,255,.88); color: #111; }
+:root[data-theme="light"] .live-filter.on { background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.live-game-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.live-game-card {
+  display: grid; gap: 6px; text-align: left; padding: 8px; border-radius: var(--radius-sm);
+  background: var(--card); color: inherit;
+}
+.live-game-card:active { transform: scale(0.98); }
+.live-gc-player {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 4px; align-items: center;
+  font-size: 11px; min-width: 0;
+}
+.live-gc-player .fed { font-weight: 800; color: var(--muted); font-size: 10px; }
+.live-gc-player .name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-gc-player .clk { font-variant-numeric: tabular-nums; font-weight: 750; }
+.live-mini-board { width: 100%; aspect-ratio: 1; border-radius: 8px; overflow: hidden; }
+.live-mini-board .board { width: 100%; height: 100%; }
+.live-mini-board .coords { display: none; }
+.live-gc-status { text-align: center; font-size: 12px; font-weight: 750; color: var(--muted); }
+.live-gc-status.done { color: var(--amber, #f5c542); }
+.live-full-board { margin: 8px 0; }
+.live-move-nav { margin-top: 10px; flex-wrap: wrap; }
+.live-dot { position: absolute; right: -2px; bottom: -2px; }
+.h2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
 /* puzzles */
 .pz-sub { margin: -8px 2px 14px; }
 .pz-num { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; background: var(--card2, rgba(127,127,127,0.15)); flex: none; }
