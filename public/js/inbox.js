@@ -1,13 +1,16 @@
 // In-app messages (DM search + chat) and notifications (admin → users; feedback → admins).
-import { h, icon, haptic, toast, api, fail, avBlock, premIc } from './ui.js';
+import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData } from './ui.js';
 import { t } from './i18n.js';
 import { openScreen } from './screen.js';
 
-function subTop(title, close, leading) {
-  return [
-    h('button.back', { type: 'button', onclick: () => close() }, icon('back', 20), t('back')),
-    h('div.top.inbox-top', leading || null, h('h1', title)),
-  ];
+function inboxHead(title, close, emoji) {
+  return h('div.top.inbox-head',
+    h('button.round.back', {
+      type: 'button', 'aria-label': t('back'),
+      onclick: () => { haptic('light'); close(); },
+    }, icon('back', 22)),
+    h('h1', (emoji ? emoji + ' ' : '') + title),
+    h('span.inbox-head-spacer', { 'aria-hidden': 'true' }));
 }
 
 function fmtTime(iso) {
@@ -40,19 +43,43 @@ function badgeEl(n) {
   return h('span.hdr-badge', v > 99 ? '99+' : String(v));
 }
 
+function mediaIdOf(n) {
+  const id = n && n.meta && n.meta.mediaId;
+  return typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+}
+
+function notifMediaEl(n) {
+  const id = mediaIdOf(n);
+  if (!id) return null;
+  const wrap = h('div.notif-media');
+  fetch('/api/media/' + id, { headers: { 'X-Init-Data': getInitData() } })
+    .then((r) => (r.ok ? r.blob() : null))
+    .then((blob) => {
+      if (!blob || !wrap.isConnected) return;
+      const url = URL.createObjectURL(blob);
+      const img = h('img', { src: url, alt: '' });
+      img.onload = () => URL.revokeObjectURL(url);
+      wrap.replaceChildren(img);
+    })
+    .catch(() => {});
+  return wrap;
+}
+
 /** Squircle mail + bell for the home header (reference style). */
 export function headerInboxBtns() {
   const mail = h('button.hdr-ic', {
     type: 'button',
     'aria-label': t('messages'),
+    'data-noswipe': '',
     onclick: () => { haptic('light'); openMessages(); },
   }, icon('mail', 20), h('span.hdr-badge-slot'));
   const bell = h('button.hdr-ic', {
     type: 'button',
     'aria-label': t('xabarnoma'),
+    'data-noswipe': '',
     onclick: () => { haptic('light'); openNotifications(); },
   }, icon('bell', 20), h('span.hdr-badge-slot'));
-  const wrap = h('div.hdr-inbox', mail, bell);
+  const wrap = h('div.hdr-inbox', { 'data-noswipe': '' }, mail, bell);
   refreshInboxBadges(wrap);
   return wrap;
 }
@@ -91,6 +118,10 @@ export function openNotifications() {
             lastDay = dk;
             nodes.push(h('div.notif-day', dayLabel(dk)));
           }
+          const bodyPreview = String(n.body || '').trim();
+          const feedbackHint = n.kind === 'feedback' && n.meta?.username
+            ? '@' + n.meta.username
+            : (n.kind === 'feedback' && n.meta?.fromName ? n.meta.fromName : '');
           nodes.push(h('button.notif-row' + (n.read ? '' : '.unread'), {
             type: 'button',
             onclick: async () => {
@@ -99,30 +130,30 @@ export function openNotifications() {
               openNotifDetail(n, () => { load(); refreshInboxBadges(); });
             },
           },
-            h('div.notif-ic', icon('bell', 18)),
-            h('div.grow',
+            h('div.notif-ic' + (n.kind === 'feedback' ? '.feedback' : ''),
+              icon(n.kind === 'feedback' ? 'help' : 'bell', 18)),
+            h('div.notif-body',
               h('div.notif-head', h('b', n.title), h('span.notif-time', fmtTime(n.createdAt))),
-              n.body ? h('div.s', n.body) : null,
-              n.kind === 'feedback' && n.meta?.username ? h('div.s', '@' + n.meta.username) : null,
+              bodyPreview ? h('div.notif-snippet', bodyPreview) : null,
+              feedbackHint ? h('div.notif-snippet.meta', feedbackHint) : null,
+              notifMediaEl(n),
             )));
         }
-        list.replaceChildren(...nodes);
+        list.replaceChildren(...nodes.filter(Boolean));
         refreshInboxBadges();
       } catch (e) { fail(e); list.replaceChildren(h('div.empty', t('notif_empty'))); }
     };
     load();
-    return [
-      ...subTop(t('xabarnoma'), close, h('span.inbox-title-ic', icon('bell', 22))),
-      list,
-    ];
+    return [inboxHead(t('xabarnoma'), close, '🔔'), list];
   }, { onClose: () => refreshInboxBadges() });
 }
 
 function openNotifDetail(n, onBack) {
   openScreen((close) => {
+    const goBack = () => { close(); onBack && onBack(); };
     const replyBox = n.kind === 'feedback' && n.meta?.fromUserId ? (() => {
       const area = h('textarea.input', { rows: 3, maxlength: 1000, placeholder: t('notif_reply_ph') });
-      const send = h('button.btn', {
+      const send = h('button.cta', {
         type: 'button',
         onclick: async () => {
           const body = area.value.trim();
@@ -141,21 +172,24 @@ function openNotifDetail(n, onBack) {
       return h('div.notif-reply', h('p.muted', t('notif_reply_sub')), area, send);
     })() : null;
     return [
-      ...subTop(n.title || t('xabarnoma'), () => { close(); onBack && onBack(); }),
-      h('div.card',
+      inboxHead(n.title || t('xabarnoma'), goBack),
+      h('div.card.notif-detail',
         h('div.s', fmtTime(n.createdAt)),
-        h('p', { style: { marginTop: '10px', lineHeight: '1.45', whiteSpace: 'pre-wrap' } }, n.body || ''),
-        n.meta?.fromName ? h('div.muted', { style: { marginTop: '12px' } }, n.meta.fromName + (n.meta.username ? ` · @${n.meta.username}` : '')) : null,
+        h('p.notif-detail-body', n.body || ''),
+        n.meta?.fromName
+          ? h('div.muted', n.meta.fromName + (n.meta.username ? ` · @${n.meta.username}` : ''))
+          : null,
+        notifMediaEl(n),
       ),
       replyBox,
-    ];
+    ].filter(Boolean);
   });
 }
 
 export function openMessages() {
   openScreen((close) => {
     const threadsHost = h('div.msg-threads', h('div.skeleton'), h('div.skeleton'));
-    const searchInput = h('input.input', {
+    const searchInput = h('input.input.msg-search', {
       type: 'search',
       placeholder: t('msg_search_ph'),
       autocomplete: 'off',
@@ -195,7 +229,7 @@ export function openMessages() {
           const users = r.users || [];
           searchResults.replaceChildren(
             users.length
-              ? h('div.list', ...users.map((u) => h('button.row', {
+              ? h('div.list.msg-search-list', ...users.map((u) => h('button.row', {
                 type: 'button',
                 onclick: async () => {
                   try {
@@ -208,7 +242,7 @@ export function openMessages() {
                 h('div.grow', h('div.t', u.name, u.premium ? premIc() : null),
                   h('div.s', u.username ? '@' + u.username : t('msg_start'))),
                 icon('chevron', 18)))
-              : h('div.muted', { style: { padding: '8px 4px' } }, t('msg_no_users')),
+              : h('div.muted.msg-search-empty', t('msg_no_users')),
           );
         } catch (e) { fail(e); }
       }, 280);
@@ -216,8 +250,9 @@ export function openMessages() {
 
     loadThreads();
     return [
-      ...subTop(t('messages'), close, h('span.inbox-title-ic', icon('mail', 22))),
-      h('div.field', searchInput),
+      inboxHead(t('messages'), close, '✉️'),
+      h('p.muted.msg-sub', t('msg_sub')),
+      h('div.field.msg-search-field', searchInput),
       searchResults,
       h('div.h2', t('msg_chats')),
       threadsHost,
@@ -269,7 +304,7 @@ function openChat(threadId, peer) {
     load();
     const poll = setInterval(load, 4000);
     return [
-      ...subTop(peer?.name || t('messages'), () => { clearInterval(poll); close(); }),
+      inboxHead(peer?.name || t('messages'), () => { clearInterval(poll); close(); }),
       log,
       h('div.chat-compose', input, sendBtn),
     ];

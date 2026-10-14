@@ -1566,7 +1566,7 @@ api.post('/feedback', wrap(async (req, res) => {
   const fid = info.rows?.[0]?.id || info.id;
   const u = req.user;
   const uname = u.username ? `@${u.username}` : '—';
-  const title = `Feedback · ${displayName(u)}`;
+  const title = `Shikoyat / taklif · ${displayName(u)}`;
   const meta = JSON.stringify({
     feedbackId: fid,
     fromUserId: uid,
@@ -1598,12 +1598,16 @@ function mapNotif(r) {
   if (typeof meta === 'string') {
     try { meta = JSON.parse(meta); } catch { meta = null; }
   }
+  meta = meta && typeof meta === 'object' ? meta : null;
+  if (meta && meta.mediaId && !meta.mediaUrl) {
+    meta = { ...meta, mediaUrl: `/api/media/${meta.mediaId}` };
+  }
   return {
     id: r.id,
     kind: r.kind,
     title: r.title,
     body: r.body || '',
-    meta: meta || null,
+    meta,
     read: !!r.read_at,
     createdAt: r.created_at,
   };
@@ -2056,11 +2060,19 @@ admin.post('/users/:id/block', wrap(async (req, res) => {
   res.json({ ok: true, blocked: !!blocked });
 }));
 
-/** In-app notification: one user or everyone (except blocked). */
+/** In-app notification: one user or everyone (except blocked). Optional mediaId for image preview. */
 admin.post('/notifications', wrap(async (req, res) => {
   const title = cleanText(req.body && req.body.title, 80, 'title', true);
   const body = cleanText(req.body && req.body.body, 1000, 'text', true);
   const one = req.body && req.body.userId != null ? intParam(req.body.userId) : null;
+  let mediaId = null;
+  if (req.body && req.body.mediaId) {
+    mediaId = String(req.body.mediaId);
+    if (!/^[0-9a-f-]{36}$/i.test(mediaId)) throw bad('Invalid media', 'media');
+    const row = await db.prepare('SELECT id, kind FROM media WHERE id = ?').get(mediaId);
+    if (!row) throw bad('Media not found, upload it again', 'media');
+    if (row.kind === 'video') throw bad('Use JPG, PNG or GIF', 'media_type');
+  }
   let targets;
   if (one) {
     const u = await getUser.get(one);
@@ -2069,11 +2081,15 @@ admin.post('/notifications', wrap(async (req, res) => {
   } else {
     targets = (await db.prepare('SELECT id FROM users WHERE blocked = FALSE').all()).map((r) => r.id);
   }
+  const meta = JSON.stringify({
+    fromAdmin: req.user.id,
+    ...(mediaId ? { mediaId } : {}),
+  });
   let n = 0;
   for (const id of targets) {
     await db.prepare(`
       INSERT INTO notifications (user_id, kind, title, body, meta) VALUES (?, 'admin', ?, ?, ?::jsonb)
-    `).run(id, title, body, JSON.stringify({ fromAdmin: req.user.id }));
+    `).run(id, title, body, meta);
     n++;
   }
   res.status(201).json({ ok: true, sent: n });

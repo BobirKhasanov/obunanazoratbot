@@ -911,6 +911,45 @@ export function openAdmin(onClose) {
   const openInAppNotif = () => openScreen((close) => {
     const title = h('input.input', { placeholder: t('admin_notif_title_ph'), maxlength: 80 });
     const body = h('textarea.input', { rows: 4, placeholder: t('admin_notif_body_ph'), maxlength: 1000 });
+    let mediaId = null;
+    const mediaBox = h('div.admin-notif-media');
+    const file = h('input', {
+      type: 'file', accept: 'image/jpeg,image/png,image/gif', hidden: true,
+      onchange: async (e) => {
+        const f = e.target.files[0]; e.target.value = '';
+        if (!f) return;
+        toast(t('uploading'));
+        try {
+          const res = await fetch('/api/admin/upload', {
+            method: 'POST',
+            headers: { 'X-Init-Data': getInitData(), 'Content-Type': 'application/octet-stream' },
+            body: f,
+          });
+          const d = await res.json();
+          if (!res.ok) throw Object.assign(new Error(d.error), { code: d.code });
+          mediaId = d.id;
+          drawMedia();
+          haptic('success');
+        } catch (err) { fail(err); }
+      },
+    });
+    const drawMedia = () => {
+      mediaBox.replaceChildren(
+        mediaId
+          ? h('div.row',
+            h('div.grow', h('div.t', t('admin_notif_media_ok')), h('div.s', mediaId.slice(0, 8) + '…')),
+            h('button.mini', {
+              type: 'button',
+              onclick: () => { mediaId = null; drawMedia(); },
+            }, icon('x', 16), t('remove')))
+          : h('button.btn.ghost.sm', {
+            type: 'button',
+            onclick: () => file.click(),
+          }, icon('image', 18), t('admin_notif_media')),
+        file,
+      );
+    };
+    drawMedia();
     const send = h('button.btn', {
       type: 'button',
       onclick: async () => {
@@ -918,11 +957,14 @@ export function openAdmin(onClose) {
           const r = await api('POST', '/admin/notifications', {
             title: title.value.trim(),
             body: body.value.trim(),
+            mediaId: mediaId || undefined,
           });
           toast(t('admin_notif_sent', { n: r.sent || 0 }));
           haptic('success');
           title.value = '';
           body.value = '';
+          mediaId = null;
+          drawMedia();
         } catch (e) { fail(e); }
       },
     }, icon('bell', 18), t('admin_notif_send'));
@@ -931,6 +973,7 @@ export function openAdmin(onClose) {
       h('p.muted', t('admin_notif_sub')),
       h('div.field', h('label', t('admin_notif_title')), title),
       h('div.field', h('label', t('admin_notif_body')), body),
+      h('div.field', h('label', t('admin_notif_media')), mediaBox),
       send,
     ];
   });

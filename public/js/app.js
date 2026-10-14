@@ -6,7 +6,7 @@ import { t, setLang } from './i18n.js';
 let inboxMod = null;
 async function loadInbox() {
   if (inboxMod) return inboxMod;
-  try { inboxMod = await import('./inbox.js?v=20261015b'); } catch (e) { console.warn('[inbox]', e); inboxMod = null; }
+  try { inboxMod = await import('./inbox.js?v=20261015c'); } catch (e) { console.warn('[inbox]', e); inboxMod = null; }
   return inboxMod;
 }
 async function openInbox(kind) {

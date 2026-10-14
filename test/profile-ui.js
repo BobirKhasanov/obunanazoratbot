@@ -130,12 +130,15 @@ assert.ok(app.includes('showApp') && app.includes('showGate') && app.includes('#
 const inbox = read('public/js/inbox.js');
 assert.ok(inbox.includes('openNotifications') && inbox.includes('openMessages'), 'inbox screens');
 assert.ok(inbox.includes('/messages/search') && inbox.includes('/notifications'), 'inbox API wiring');
+assert.ok(inbox.includes('inbox-head') && inbox.includes('notif-snippet') && inbox.includes('notifMediaEl'), 'xabarnoma UI matches feed layout + media');
+assert.ok(inbox.includes('msg_sub') && inbox.includes('/messages/search'), 'messages page has search + chat');
 assert.ok(server.includes("CREATE TABLE IF NOT EXISTS notifications") || read('src/db.js').includes('CREATE TABLE IF NOT EXISTS notifications'), 'notifications table');
 assert.ok(read('src/db.js').includes('dm_threads') && read('src/db.js').includes('dm_messages'), 'DM tables');
 assert.ok(server.includes("admin.post('/notifications'") && server.includes("api.get('/notifications'"), 'notif APIs');
+assert.ok(server.includes('mediaId') && server.includes("'feedback'") && server.includes('Shikoyat / taklif'), 'admin notifs can attach media; feedback → admin inbox');
 assert.ok(server.includes("api.get('/messages/threads'") && server.includes("api.post('/messages/threads'"), 'messages APIs');
-assert.ok(admin.includes('admin_notif') && admin.includes('/admin/notifications'), 'admin in-app notif composer');
-assert.ok(css.includes('.hdr-ic') && css.includes('.hdr-badge'), 'header mail/bell style');
-assert.ok(i18n.includes('xabarnoma:') && i18n.includes('messages:') && i18n.includes('msg_search_ph:'), 'inbox i18n');
+assert.ok(admin.includes('admin_notif') && admin.includes('/admin/notifications') && admin.includes('admin_notif_media'), 'admin in-app notif composer with optional image');
+assert.ok(css.includes('.hdr-ic') && css.includes('.hdr-badge') && css.includes('.inbox-head') && css.includes('.notif-media'), 'header + xabarnoma styles');
+assert.ok(i18n.includes('xabarnoma:') && i18n.includes('messages:') && i18n.includes('msg_search_ph:') && i18n.includes('msg_sub:'), 'inbox i18n');
 
 console.log('ok  profile-ui (hub + smooth nav)');
