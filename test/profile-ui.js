@@ -74,6 +74,10 @@ assert.ok(app.includes('avBlock(p.name') || app.includes('avBlock(p.name,'), 'ra
 assert.ok(!/rankings_title[\s\S]{0,80}rankings_live/.test(app) && !app.includes("t('rankings_live')"), 'rankings live pill removed');
 assert.ok(app.includes('state.me.premium') || app.includes('p.premium'), 'rankings premium from API or self');
 assert.ok(read('public/js/userprofile.js').includes('filter(Boolean)'), 'user profile does not append null text nodes');
+assert.ok(profile.includes('.filter(Boolean)') && profile.includes('host.replaceChildren'), 'my info does not append null text nodes');
+assert.ok(read('public/js/userprofile.js').includes('uprof-statgrid.wdl'), 'profile W/D/L is a full 3-col row');
+assert.ok(css.includes('.uprof-statgrid.wdl'), 'W/D/L grid style');
+assert.ok(app.includes('openInbox') && app.includes("data-noswipe"), 'mail/bell open inbox and ignore pager swipe');
 assert.ok(read('src/server.js').includes('premium_flag') && read('src/server.js').includes('mapPremium'), 'rankings API maps premium');
 assert.ok(profile.includes("t('delete_account')") && profile.includes("DELETE', '/me'"), 'profile settings can delete account');
 assert.ok(read('src/server.js').includes("api.delete('/me'") && read('src/server.js').includes('DELETE FROM games WHERE'), 'account delete wipes user games + row');
@@ -116,6 +120,7 @@ assert.ok(css.includes('overscroll-behavior-y: contain'), 'pages contain overscr
 const html = read('public/index.html');
 assert.ok(html.includes('id="play-sticky"') && html.includes('id="dock"'), 'Play mount lives inside dock markup');
 assert.ok(html.includes('id="boot"'), 'boot splash in HTML');
+assert.ok(html.includes('var(--text') && html.includes('var(--bg'), 'boot splash uses theme vars (light text not stuck white)');
 assert.ok(css.includes('pill-thumb') && ui.includes('pillBar'), 'sliding pill bars for section selection');
 assert.ok((app.includes('headerInboxBtns') || app.includes('headerInboxBtnsSafe')) && app.includes('rank-board-bar'), 'home inbox + ranking bars');
 assert.ok(app.includes("online-heading") && app.includes("t('online_now'") && !/gempill[\s\S]{0,180}livepill/.test(app), 'online count sits by Online players, not in gem header');

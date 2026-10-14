@@ -6,27 +6,35 @@ import { t, setLang } from './i18n.js';
 let inboxMod = null;
 async function loadInbox() {
   if (inboxMod) return inboxMod;
-  try { inboxMod = await import('./inbox.js?v=20261015a'); } catch (e) { console.warn('[inbox]', e); inboxMod = null; }
+  try { inboxMod = await import('./inbox.js?v=20261015b'); } catch (e) { console.warn('[inbox]', e); inboxMod = null; }
   return inboxMod;
 }
+async function openInbox(kind) {
+  haptic('light');
+  const m = await loadInbox();
+    if (!m) { toast(t('msg_unavailable')); return; }
+  try {
+    if (kind === 'messages') m.openMessages();
+    else m.openNotifications();
+  } catch (e) { console.warn('[inbox]', e); fail(e); }
+}
 function headerInboxBtnsSafe() {
-  const open = async (fn) => {
-    haptic('light');
-    const m = await loadInbox();
-    if (!m) return;
-    try { fn(m); } catch (e) { console.warn('[inbox]', e); }
-  };
+  const stop = (e) => { e.stopPropagation(); };
   const mail = h('button.hdr-ic', {
     type: 'button',
     'aria-label': t('messages'),
-    onclick: () => open((m) => m.openMessages()),
+    'data-noswipe': '',
+    onpointerdown: stop,
+    onclick: (e) => { stop(e); openInbox('messages'); },
   }, icon('mail', 20), h('span.hdr-badge-slot'));
   const bell = h('button.hdr-ic', {
     type: 'button',
     'aria-label': t('xabarnoma'),
-    onclick: () => open((m) => m.openNotifications()),
+    'data-noswipe': '',
+    onpointerdown: stop,
+    onclick: (e) => { stop(e); openInbox('notifications'); },
   }, icon('bell', 20), h('span.hdr-badge-slot'));
-  const wrap = h('div.hdr-inbox', mail, bell);
+  const wrap = h('div.hdr-inbox', { 'data-noswipe': '' }, mail, bell);
   refreshInboxBadgesSafe(wrap);
   return wrap;
 }

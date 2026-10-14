@@ -870,10 +870,17 @@ button.grow.plain { flex: 1; display: block; }
 }
 
 /* ---------- my info (profile edit) ---------- */
-.myinfo-top { justify-content: center; position: relative; margin-bottom: 8px; }
-.myinfo-top .round.back { position: absolute; left: 0; top: 50%; transform: translateY(-50%); }
-.myinfo-top h1 { font-size: 18px; font-weight: 800; margin: 0; text-align: center; }
-.myinfo { display: flex; flex-direction: column; align-items: stretch; gap: 18px; padding-top: 8px; }
+.myinfo-top {
+  display: grid; grid-template-columns: 48px 1fr 48px; align-items: center;
+  justify-content: unset; gap: 8px; margin: 4px 0 16px; min-height: 48px;
+}
+.myinfo-top .round.back { position: static; transform: none; justify-self: start; }
+.myinfo-top h1 {
+  font-size: 17px; font-weight: 800; margin: 0; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25;
+}
+.myinfo-top-spacer { width: 48px; height: 48px; }
+.myinfo { display: flex; flex-direction: column; align-items: stretch; gap: 18px; padding-top: 4px; }
 .myinfo-av {
   align-self: center; background: none; border: 0; padding: 0; margin: 4px 0 8px;
 }
@@ -954,9 +961,12 @@ button.grow.plain { flex: 1; display: block; }
   background: rgba(15, 23, 42, 0.4); text-align: left; font-size: 14px; line-height: 1.4;
 }
 .uprof-quote { opacity: 0.5; font-size: 20px; line-height: 1; }
+.uprof-stats { display: grid; gap: 10px; }
 .uprof-statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.uprof-statgrid.wdl { grid-template-columns: 1fr 1fr 1fr; }
 .uprof-stat { padding: 14px; }
-.uprof-stat b { display: block; font-size: 22px; margin-top: 4px; }
+.uprof-stat b { display: block; font-size: 22px; margin-top: 4px; color: var(--text); }
+.uprof-place { padding: 14px 16px; }
 .uprof-actions { display: grid; gap: 10px; margin-top: 4px; }
 .prof-gem {
   flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 12px;
@@ -977,6 +987,7 @@ button.grow.plain { flex: 1; display: block; }
 .menu-row {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
   padding: 14px 16px; border-bottom: 1px dashed var(--line); background: transparent;
+  color: var(--text);
   transition: background 0.2s var(--ease), transform 0.2s var(--ease);
 }
 .menu-row:last-child { border-bottom: 0; }
@@ -988,7 +999,9 @@ button.grow.plain { flex: 1; display: block; }
 .menu-ic.danger { background: rgba(248, 113, 113, 0.14); color: var(--red); }
 .menu-row.danger .grow .t { color: var(--red); }
 .menu-row.danger .grow .s { color: var(--red); opacity: 0.75; }
-.menu-row .grow .t { font-weight: 700; font-size: 15px; }
+.menu-row .grow { color: var(--text); min-width: 0; flex: 1; }
+.menu-row .grow .t { font-weight: 700; font-size: 15px; color: var(--text); }
+.menu-row .grow .s { color: var(--muted); font-size: 13px; margin-top: 2px; }
 .menu-row .ic { color: var(--muted); flex: none; }
 .btn.logout {
   margin-top: 22px; background: var(--card); color: var(--text);
@@ -1402,6 +1415,7 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
   box-shadow: 0 4px 0 rgba(37, 99, 235, 0.45);
 }
 :root[data-theme="light"] .hdr-ic {
+  color: #475569;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 3px 0 rgba(15, 23, 42, 0.12);
 }
 :root[data-theme="light"] .rank-footnote,
@@ -1424,8 +1438,23 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 :root[data-theme="light"] .uprof-bio {
   background: rgba(15, 23, 42, 0.04); color: var(--text);
 }
+:root[data-theme="light"] .menu-row,
+:root[data-theme="light"] .menu-row .grow,
+:root[data-theme="light"] .menu-row .grow .t,
+:root[data-theme="light"] .rating-tile,
+:root[data-theme="light"] .rating-n,
+:root[data-theme="light"] .info-row b,
+:root[data-theme="light"] .card {
+  color: var(--text);
+}
+:root[data-theme="light"] .menu-row .grow .s,
+:root[data-theme="light"] .rating-tile .s { color: var(--muted); }
 :root[data-theme="light"] .menu-row:active { background: rgba(37, 99, 235, 0.08); }
 :root[data-theme="light"] .info-delete { color: #dc2626; }
+:root[data-theme="light"] .info-sec-h { color: #2563eb; }
+:root[data-theme="light"] .myinfo-top h1 { color: var(--text); }
+:root[data-theme="light"] .uprof-name,
+:root[data-theme="light"] .uprof-stat b { color: var(--text); }
 :root[data-theme="light"] .gempill,
 :root[data-theme="light"] .count-pill {
   color: var(--text);

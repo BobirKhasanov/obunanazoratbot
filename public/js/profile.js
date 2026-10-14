@@ -366,7 +366,7 @@ export function renderProfilePage(ctx) {
     const host = h('div.myinfo');
     const draw = () => {
       const u = state.me;
-      host.replaceChildren(
+      const nodes = [
         h('button.myinfo-av', {
           type: 'button',
           onclick: () => { haptic('select'); openAvatar(); },
@@ -438,7 +438,8 @@ export function renderProfilePage(ctx) {
             },
           }, t('delete_account'))
           : null,
-      );
+      ].filter(Boolean);
+      host.replaceChildren(...nodes);
     };
     draw();
     return [
@@ -447,7 +448,8 @@ export function renderProfilePage(ctx) {
           type: 'button', 'aria-label': t('back'),
           onclick: () => { haptic('light'); close(); },
         }, icon('back', 22)),
-        h('h1', t('my_info'))),
+        h('h1', t('my_info')),
+        h('span.myinfo-top-spacer', { 'aria-hidden': 'true' })),
       host,
     ];
   });

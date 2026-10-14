@@ -78,11 +78,12 @@ export function openUserProfile(userId, opts = {}) {
           h('div.h2', t('stats')),
           h('div.uprof-statgrid',
             h('div.card.uprof-stat', h('small.muted', t('vs_online')), h('b', `${online.w}/${online.d}/${online.l}`)),
-            h('div.card.uprof-stat', h('small.muted', t('vs_pc')), h('b', `${ai.w}/${ai.d}/${ai.l}`)),
+            h('div.card.uprof-stat', h('small.muted', t('vs_pc')), h('b', `${ai.w}/${ai.d}/${ai.l}`))),
+          h('div.uprof-statgrid.wdl',
             h('div.card.uprof-stat', h('small.muted', t('wins')), h('b', String(total.w))),
             h('div.card.uprof-stat', h('small.muted', t('draws')), h('b', String(total.d))),
             h('div.card.uprof-stat', h('small.muted', t('losses')), h('b', String(total.l)))),
-          placeBits.length ? h('div.card', h('div.s', placeBits.join(' · '))) : null),
+          placeBits.length ? h('div.card.uprof-place', h('div.s', placeBits.join(' · '))) : null),
 
         !u.you
           ? h('div.uprof-actions', ...[

@@ -6,10 +6,11 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#111827">
   <title>Chess</title>
-  <link rel="stylesheet" href="/styles.css?v=20261015a">
+  <link rel="stylesheet" href="/styles.css?v=20261015b">
   <style>
     /* Inline boot splash — always visible until JS reveals gate/app (never a blank black WebView) */
-    html, body { margin: 0; min-height: 100%; min-height: 100dvh; background: #111827; color: #fff; }
+    /* Use theme vars so light mode is not stuck with white text after boot */
+    html, body { margin: 0; min-height: 100%; min-height: 100dvh; background: var(--bg, #111827); color: var(--text, #fff); }
     #boot {
       position: fixed; inset: 0; z-index: 1000;
       display: grid; place-items: center; gap: 14px;
@@ -58,7 +59,7 @@
     <div id="sheet-root"></div>
     <div id="toast" role="status"></div>
   </main>
-  <script type="module" src="/js/app.js?v=20261015a"></script>
+  <script type="module" src="/js/app.js?v=20261015b"></script>
   <script>
     // If the module fails to load, leave a visible error instead of an empty black screen
     window.addEventListener('error', function (ev) {
