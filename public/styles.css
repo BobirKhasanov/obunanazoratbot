@@ -341,8 +341,13 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .reactbar { display: flex; gap: 4px; justify-content: space-between; padding: 6px; border-radius: 18px; background: var(--card); animation: rise 0.3s var(--ease); }
 .reactbar button { font-size: 24px; width: 34px; height: 38px; transition: transform 0.2s var(--ease); }
 .reactbar button:active { transform: scale(1.4); }
-.banner { padding: 12px 14px; border-radius: 18px; background: var(--card); display: grid; gap: 6px; animation: rise 0.3s var(--ease); }
-.banner small { color: var(--muted); }
+/* In-game wait / draw banner (do not reuse for home promo tiles) */
+#game .gbanner { padding: 12px 14px; border-radius: 18px; background: var(--card); display: grid; gap: 8px; animation: rise 0.3s var(--ease); color: var(--text); overflow: visible; min-height: 0; box-shadow: none; margin: 0; }
+#game .gbanner.wait { border: 1px solid var(--line, rgba(255,255,255,0.08)); }
+#game .gbanner b { font-size: 16px; font-weight: 800; color: var(--text); }
+#game .gbanner small { color: var(--muted); font-size: 13px; opacity: 1; line-height: 1.35; }
+#game .gbanner .row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+#game .gbanner .btn.sm { flex: 1 1 auto; min-width: 0; }
 .row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .btn.sm { width: auto; flex: 1; margin-top: 0; padding: 11px 14px; font-size: 14px; border-radius: 14px; display: inline-flex; gap: 6px; align-items: center; justify-content: center; color: #fff; }
 .btn.ghost, .btn.danger { color: var(--text); }
@@ -487,15 +492,15 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 #dock { z-index: 20; }
 
 /* ---------- home ---------- */
-.banner-text { display: flex; flex-direction: column; gap: 4px; }
-.banner { position: relative; width: 100%; min-height: 84px; border-radius: 22px; padding: 14px 110px 14px 20px; text-align: left; color: #fff; overflow: hidden;
+.home-banner-text { display: flex; flex-direction: column; gap: 4px; }
+.home-banner { position: relative; width: 100%; min-height: 84px; border-radius: 22px; padding: 14px 110px 14px 20px; text-align: left; color: #fff; overflow: hidden;
   display: flex; flex-direction: column; justify-content: center; gap: 4px; margin: 2px 0 12px; box-shadow: 0 5px 0 rgba(0, 0, 0, 0.32); transition: transform 0.2s var(--ease), box-shadow 0.2s; }
-.banner:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.32); }
-.banner b { font-size: 21px; font-weight: 800; }
-.banner small { font-size: 14px; opacity: 0.85; }
-.banner-art { position: absolute; right: 18px; top: 50%; transform: translateY(-50%) rotate(8deg); font-size: 50px; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.3)); }
-.banner.violet { background: linear-gradient(135deg, #3b1d6e, #1d1450); }
-.banner.azure { background: linear-gradient(135deg, #4f7cf2, #8f7cf0); }
+.home-banner:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.32); }
+.home-banner b { font-size: 21px; font-weight: 800; }
+.home-banner small { font-size: 14px; opacity: 0.85; }
+.home-banner-art { position: absolute; right: 18px; top: 50%; transform: translateY(-50%) rotate(8deg); font-size: 50px; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.3)); }
+.home-banner.violet { background: linear-gradient(135deg, #3b1d6e, #1d1450); }
+.home-banner.azure { background: linear-gradient(135deg, #4f7cf2, #8f7cf0); }
 .time-grid { gap: 10px; margin: 8px 0 14px; }
 .time-option { box-shadow: 0 5px 0 rgba(0, 0, 0, 0.38); border-color: rgba(255, 255, 255, 0.05); min-height: 72px; transition: transform 0.18s var(--ease), box-shadow 0.18s, background 0.2s; }
 .time-option:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.38); }

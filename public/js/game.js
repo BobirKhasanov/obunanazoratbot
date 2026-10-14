@@ -70,7 +70,7 @@ export function openGame(opts, onClose) {
   const status = h('div.status');
   const moveStrip = h('div.moves');
   const boardHost = h('div.board-host');
-  const banner = h('div.banner'); banner.hidden = true;
+  const banner = h('div.gbanner'); banner.hidden = true;
   const back = h('button.round', { 'aria-label': t('back'), onclick: () => closeGame() }, icon('back', 22));
   const title = h('div.gtitle');
   const act = (ic, label, fn) => h('button.act', { onclick: fn, 'aria-label': label }, icon(ic, 22), h('span', label));
@@ -88,7 +88,11 @@ export function openGame(opts, onClose) {
   function names() {
     if (S.kind === 'ai') return { me: { name: meName(), id: S.meta.me ? S.meta.me.id : 1 }, opp: { name: `${t('computer')} · ${t('lvl' + S.level)}`, id: 7 + S.level, ai: true } };
     const g = S.game; const o = g.opponent || {};
-    return { me: { name: meName(), id: S.meta.me ? S.meta.me.id : 1 }, opp: { name: o.name || '…', id: o.id || 0, online: o.online } };
+    const waitingFriend = g && g.mode === 'friend' && g.status === 'open' && !o.id;
+    return {
+      me: { name: meName(), id: S.meta.me ? S.meta.me.id : 1 },
+      opp: { name: o.name || (waitingFriend ? t('friend_slot') : '…'), id: o.id || 0, online: o.online },
+    };
   }
 
   function fillBar(b, p, colour, cap, ai) {
@@ -138,13 +142,21 @@ export function openGame(opts, onClose) {
     if (S.kind === 'online' && g) {
       if (g.status === 'open' || g.status === 'invited') {
         banner.hidden = false; banner.classList.add('wait');
-        const link = `https://t.me/${S.meta.botUsername}?start=g${g.id}`;
+        const link = S.meta.botUsername ? `https://t.me/${S.meta.botUsername}?start=g${g.id}` : '';
+        const shareFriend = async () => {
+          if (!link) return toast(t('e_server'), true);
+          shareUrl(link, t('share_text'));
+        };
+        const copyFriend = async () => {
+          if (!link) return toast(t('e_server'), true);
+          if (await copyText(link)) toast(t('link_copied'));
+        };
         banner.append(
           h('b', g.status === 'invited' ? t('wait_invite', { name: (g.opponent || {}).name || '' }) : (g.mode === 'online' ? t('searching') : t('wait_friend'))),
-          h('small', g.status === 'invited' ? t('wait_invite_sub') : (g.mode === 'online' ? '' : t('wait_friend_sub'))),
+          h('small', g.status === 'invited' ? t('wait_invite_sub') : (g.mode === 'online' ? t('searching_sub') : t('wait_friend_sub'))),
           h('div.row2',
-            g.mode === 'friend' && g.status === 'open' && S.meta.botUsername ? h('button.btn.sm', { onclick: () => shareUrl(link, t('share_text')) }, icon('share', 18), t('share_link')) : null,
-            g.mode === 'friend' && g.status === 'open' && S.meta.botUsername ? h('button.btn.sm.ghost', { onclick: async () => { if (await copyText(link)) toast(t('link_copied')); } }, icon('link', 18), t('copy_link')) : null,
+            g.mode === 'friend' && g.status === 'open' ? h('button.btn.sm', { onclick: shareFriend }, icon('share', 18), t('share_link')) : null,
+            g.mode === 'friend' && g.status === 'open' ? h('button.btn.sm.ghost', { onclick: copyFriend }, icon('link', 18), t('copy_link')) : null,
             h('button.btn.sm.ghost', { onclick: async () => { try { await api('DELETE', `/games/${g.id}`); } catch (e) { return fail(e); } closeGame(); } }, t('cancel'))),
         );
       } else if (g.status === 'active' && g.drawBy && g.drawBy !== g.you) {
