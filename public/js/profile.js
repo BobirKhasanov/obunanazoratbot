@@ -561,7 +561,7 @@ export function renderProfilePage(ctx) {
             haptic('select');
             openUserProfile(me.id, { refreshHome: refresh });
           },
-        }, avBlock(shownName, me.id, { premium: !!me.premium, size: 'xl', round: true, avatarKey: me.avatarKey })),
+        }, avBlock(shownName, me.id, { premium: !!me.premium, size: 'xl', round: true, sparkles: !!me.premium, avatarKey: me.avatarKey })),
         h('div.prof-meta',
           h('h2', h('span.name', shownName), me.premium ? premIc() : null),
           me.username ? h('div.prof-user', me.username) : h('div.prof-user', t('profile_title'))),

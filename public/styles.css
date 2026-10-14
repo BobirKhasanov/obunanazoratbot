@@ -642,10 +642,18 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .page[data-page="rankings"] .livepill { flex: none; max-width: 42%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rank-summary { margin-top: 14px; padding-bottom: 4px; }
 .rank-summary-title { font-size: 18px; font-weight: 800; }
-.rank-list { margin-top: 10px; }
-.rank-row { gap: 12px; }
+.rank-list { margin-top: 10px; overflow: visible; }
+.rank-row {
+  gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  background: none; border: 0; color: inherit; font: inherit;
+  padding: 10px 4px; border-radius: 14px;
+}
+.rank-row:active { background: rgba(255, 255, 255, 0.04); }
+.rank-summary { overflow: visible; }
 .rank-place { width: 34px; flex: none; text-align: center; font-size: 16px; font-weight: 800; color: var(--muted); }
 .rank-place.podium-1, .rank-place.podium-2, .rank-place.podium-3 { font-size: 24px; }
+.rank-row .avwrap { flex: none; }
+.rank-row .t { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .rank-points { min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
 .rank-points b { display: block; font-size: 20px; font-weight: 850; }
 .rank-points small { display: block; color: var(--muted); font-size: 11px; }
@@ -817,7 +825,8 @@ button.grow.plain { flex: 1; display: block; }
 }
 .prof-band .avwrap.prem.xl .avatar.xl {
   width: 72px; height: 72px;
-  box-shadow: 0 0 0 2.5px #f5c542, 0 0 12px rgba(245, 158, 11, 0.35);
+  /* One gold ring only — the spinning .prem-ring; keep a soft bg seam so it sits on the banner */
+  box-shadow: 0 0 0 3px var(--bg);
 }
 .prof-meta { flex: 1; min-width: 0; padding-bottom: 2px; }
 .prof-meta h2 {
@@ -887,32 +896,13 @@ button.grow.plain { flex: 1; display: block; }
 }
 .info-delete:active { opacity: 0.75; }
 
-/* Premium avatar glow + orbiting sparkles (profile views) */
+/* Premium avatar glow (profile views) — stars live on .prem-spark inside avBlock */
 .prem-glow, .uprof-avwrap.prem-glow {
   position: relative; display: inline-grid; place-items: center;
   border-radius: 50%; overflow: visible;
-  filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.45));
-}
-.prem-glow::before, .uprof-avwrap.prem-glow::before,
-.prem-glow::after, .uprof-avwrap.prem-glow::after {
-  content: "✦"; position: absolute; z-index: 3; pointer-events: none;
-  color: #fde68a; font-size: 11px; line-height: 1;
-  text-shadow: 0 0 6px rgba(251, 191, 36, 0.9), 0 0 12px rgba(255, 255, 255, 0.5);
-  animation: prem-sparkle 2.2s ease-in-out infinite;
-}
-.prem-glow::before, .uprof-avwrap.prem-glow::before {
-  top: 2%; right: 8%; animation-delay: 0s;
-}
-.prem-glow::after, .uprof-avwrap.prem-glow::after {
-  bottom: 6%; left: 4%; font-size: 9px; color: #fff7d6;
-  animation-delay: 1.1s;
+  filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.55));
 }
 .prem-glow .avwrap, .uprof-avwrap.prem-glow .avwrap { position: relative; z-index: 1; }
-@keyframes prem-sparkle {
-  0%, 100% { opacity: 0.35; transform: scale(0.7) translateY(0); }
-  40% { opacity: 1; transform: scale(1.15) translateY(-3px); }
-  70% { opacity: 0.7; transform: scale(0.95) translateY(1px); }
-}
 
 /* Public user profile */
 .uprof { display: grid; gap: 16px; padding-bottom: 24px; }
@@ -923,10 +913,10 @@ button.grow.plain { flex: 1; display: block; }
   background: radial-gradient(ellipse at 50% 0%, #4c1d95 0%, #1e1b4b 45%, var(--card) 100%);
 }
 .uprof-hero.prem { box-shadow: inset 0 0 40px rgba(167, 139, 250, 0.25); }
-.uprof-avwrap { overflow: visible; padding: 14px; }
+.uprof-avwrap { overflow: visible; padding: 22px; }
 .uprof-avwrap .avwrap.xl { width: 100px; height: 100px; }
 .uprof-avwrap .avwrap.xl .avatar.xl { width: 84px; height: 84px; }
-.uprof-avwrap .avwrap.prem.xl .avatar.xl { width: 82px; height: 82px; }
+.uprof-avwrap .avwrap.prem.xl .avatar.xl { width: 84px; height: 84px; }
 .uprof-like {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 14px; border-radius: 999px;
@@ -1308,7 +1298,7 @@ h2 .prem-ic { width: 32px; height: 32px; vertical-align: middle; }
 h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 .row .t .prem-ic { margin-left: 8px; flex: none; }
 
-/* Circular avatars + rotating gold Premium RING (border only — never a solid gold disc) */
+/* Circular avatars + ONE rotating gold Premium RING (rim only — never a solid gold disc) */
 @keyframes prem-spin { to { transform: rotate(360deg); } }
 .avwrap.circ,
 .avwrap.circ .avatar { border-radius: 50%; }
@@ -1330,7 +1320,8 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 .avwrap.prem .avatar {
   position: relative; z-index: 1;
   width: 40px; height: 40px; border-radius: 50%;
-  box-shadow: 0 0 0 2px rgba(245, 197, 66, 0.85);
+  /* No second gold ring — spinning .prem-ring is the only border */
+  box-shadow: none;
 }
 .avwrap.prem.xl {
   width: 88px; height: 88px; border-radius: 50%;
@@ -1342,24 +1333,38 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 }
 .avwrap.prem.xl .avatar.xl {
   width: 74px; height: 74px; border-radius: 50%;
-  box-shadow: 0 0 0 2.5px rgba(245, 197, 66, 0.9);
+  box-shadow: none;
 }
 .avwrap.prem .dot.on { z-index: 2; }
 .avwrap.circ .dot.on { right: 1px; bottom: 1px; }
+
+/* Telegram Stars–like twinkles orbiting the premium ring */
 .avwrap .prem-spark {
   position: absolute; z-index: 3; pointer-events: none;
-  color: #fde68a; font-size: 10px; line-height: 1;
-  text-shadow: 0 0 8px rgba(251, 191, 36, 0.95);
-  animation: prem-orbit 3.2s ease-in-out infinite;
-  animation-delay: calc(var(--i, 0) * 0.55s);
+  color: #fff4c2; font-size: 11px; line-height: 1;
+  text-shadow:
+    0 0 4px rgba(255, 255, 255, 0.95),
+    0 0 10px rgba(251, 191, 36, 1),
+    0 0 18px rgba(245, 158, 11, 0.85);
   top: 50%; left: 50%;
-  --ang: calc(var(--i, 0) * 90deg);
-  transform: rotate(var(--ang)) translateY(calc(-50% - 48px)) rotate(calc(-1 * var(--ang)));
+  --n: 8;
+  --ang: calc(var(--i, 0) * (360deg / var(--n)));
+  --orbit: 26px;
+  transform: translate(-50%, -50%) rotate(var(--ang)) translateY(calc(-1 * var(--orbit))) rotate(calc(-1 * var(--ang)));
+  animation: tg-star-twinkle 1.8s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * 0.22s);
 }
-.avwrap.xl .prem-spark { font-size: 12px; transform: rotate(var(--ang)) translateY(calc(-50% - 56px)) rotate(calc(-1 * var(--ang))); }
-@keyframes prem-orbit {
-  0%, 100% { opacity: 0.25; filter: blur(0.2px); }
-  50% { opacity: 1; filter: blur(0); }
+.avwrap.xl .prem-spark {
+  font-size: 13px;
+  --orbit: 52px;
+  animation-duration: 2.1s;
+}
+@keyframes tg-star-twinkle {
+  0%, 100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--ang)) translateY(calc(-1 * var(--orbit))) rotate(calc(-1 * var(--ang))) scale(0.35); }
+  12% { opacity: 1; transform: translate(-50%, -50%) rotate(var(--ang)) translateY(calc(-1 * var(--orbit) - 2px)) rotate(calc(-1 * var(--ang))) scale(1.25); }
+  35% { opacity: 0.95; transform: translate(-50%, -50%) rotate(var(--ang)) translateY(calc(-1 * var(--orbit))) rotate(calc(-1 * var(--ang))) scale(1); }
+  55% { opacity: 0.55; transform: translate(-50%, -50%) rotate(var(--ang)) translateY(calc(-1 * var(--orbit) + 1px)) rotate(calc(-1 * var(--ang))) scale(0.75); }
+  75% { opacity: 0.15; transform: translate(-50%, -50%) rotate(var(--ang)) translateY(calc(-1 * var(--orbit))) rotate(calc(-1 * var(--ang))) scale(0.45); }
 }
 .row, .list { overflow: visible; }
 .prof-me .avwrap.xl { flex: none; }

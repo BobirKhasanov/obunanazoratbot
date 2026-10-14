@@ -49,11 +49,18 @@ export function openUserProfile(userId, opts = {}) {
         },
       }, '❤ ', h('b', String(data.likes || 0)));
 
-      host.replaceChildren(
+      const bioText = String(u.bio || '').trim() || (u.username ? '@' + u.username : '');
+      const placeBits = [u.country, u.region].map((x) => String(x || '').trim()).filter(Boolean);
+
+      host.replaceChildren(...[
         h('div.uprof-hero' + (u.premium ? '.prem' : ''),
           h('div.uprof-avwrap' + (u.premium ? '.prem-glow' : ''),
             avBlock(u.displayName, u.id, {
-              premium: !!u.premium, size: 'xl', round: true, avatarKey: u.avatarKey,
+              premium: !!u.premium,
+              size: 'xl',
+              round: true,
+              sparkles: !!u.premium,
+              avatarKey: u.avatarKey,
             })),
           likeBtn,
           h('h2.uprof-name', u.displayName || 'Player', u.premium ? premIc(20) : null),
@@ -61,10 +68,10 @@ export function openUserProfile(userId, opts = {}) {
             h('span', h('span.uprof-star', '★'), ' ', t('elo') + ' : ', h('b', String(u.elo || 1200))),
             u.premium ? h('span.uprof-prem', '👑 ', t('premium_member')) : null),
           h('div.uprof-presence', h('span', '◷'), ' ', presenceLabel(!!u.online)),
-          (u.bio || u.username)
+          bioText
             ? h('div.uprof-bio',
               h('span.uprof-quote', '“'),
-              h('span', u.bio || (u.username ? '@' + u.username : '')))
+              h('span', bioText))
             : null),
 
         h('div.uprof-stats',
@@ -75,12 +82,10 @@ export function openUserProfile(userId, opts = {}) {
             h('div.card.uprof-stat', h('small.muted', t('wins')), h('b', String(total.w))),
             h('div.card.uprof-stat', h('small.muted', t('draws')), h('b', String(total.d))),
             h('div.card.uprof-stat', h('small.muted', t('losses')), h('b', String(total.l)))),
-          (u.country || u.region)
-            ? h('div.card', h('div.s', [u.country, u.region].filter(Boolean).join(' · ')))
-            : null),
+          placeBits.length ? h('div.card', h('div.s', placeBits.join(' · '))) : null),
 
         !u.you
-          ? h('div.uprof-actions',
+          ? h('div.uprof-actions', ...[
             opts.onChallenge
               ? h('button.cta', {
                 type: 'button',
@@ -108,9 +113,10 @@ export function openUserProfile(userId, opts = {}) {
                   else draw();
                 } catch (e) { fail(e); }
               },
-            }, data.blockedByMe ? t('unblock_user') : t('block_user')))
+            }, data.blockedByMe ? t('unblock_user') : t('block_user')),
+          ].filter(Boolean))
           : null,
-      );
+      ].filter(Boolean));
     };
 
     draw();

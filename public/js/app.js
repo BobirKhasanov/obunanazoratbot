@@ -409,18 +409,30 @@ function paintRankBody(host, data, isElo) {
   const unit = isElo ? t('elo') : t('points');
   const hint = isElo ? t('rankings_elo_hint') : t('rankings_monthly_hint', { month: data.monthLabel || '' });
   const foot = isElo ? t('rankings_elo_scoring') : t('rankings_scoring');
+  const openRankProfile = (id) => {
+    haptic('select');
+    openUserProfile(id, {
+      onChallenge: (u) => challenge(u.id),
+      refreshHome: () => refresh('rankings'),
+    });
+  };
   host.replaceChildren(
     h('div.card.rank-summary',
       h('div.rank-summary-title', rankingCategory[selectedRanking] + ' · ' + (isElo ? t('rank_board_elo') : t('rank_board_monthly'))),
       h('div.muted', hint),
-      rows.length ? h('div.list.rank-list', rows.map((p) => h('div.row.rank-row',
+      rows.length ? h('div.list.rank-list', rows.map((p) => h('button.row.rank-row', {
+        type: 'button',
+        onclick: () => openRankProfile(p.id),
+      },
         h('div.rank-place' + (p.rank <= 3 ? '.podium-' + p.rank : ''), p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : String(p.rank)),
-        h('div.grow', h('div.t', p.name, p.id === state.me.id ? h('span.star', ' · ' + t('you')) : null),
+        avBlock(p.name, p.id, { premium: !!p.premium, round: true, avatarKey: p.avatarKey }),
+        h('div.grow',
+          h('div.t', h('span.name', p.name), p.premium ? premIc() : null, p.id === state.me.id ? h('span.star', ' · ' + t('you')) : null),
           h('div.s', isElo
             ? t('rank_games', { n: p.games || 0 })
             : t('rank_record', { w: p.wins || 0, d: p.draws || 0, l: p.losses || 0 }))),
-        h('div.rank-points', h('b', String(isElo ? (p.elo ?? p.points) : p.points)), h('small', unit)))))
-        : h('div.empty.rank-empty', t('rankings_empty'))),
+        h('div.rank-points', h('b', String(isElo ? (p.elo ?? p.points) : p.points)), h('small', unit))))
+      ) : h('div.empty.rank-empty', t('rankings_empty'))),
     h('div.rank-footnote', foot),
   );
 }

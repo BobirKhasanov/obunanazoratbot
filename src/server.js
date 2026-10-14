@@ -207,6 +207,13 @@ function isPremiumActive(u) {
   return !!u.premium;
 }
 
+/** SQL: 1 when the joined users row currently has Premium. */
+const PREMIUM_SQL = `(CASE
+  WHEN u.premium_until IS NOT NULL AND u.premium_until > now() THEN 1
+  WHEN u.premium_until IS NULL AND COALESCE(u.premium, 0) = 1 THEN 1
+  ELSE 0
+END)`;
+
 const publicUser = (u, admin) => {
   const premium = isPremiumActive(u);
   const until = u.premium_until ? new Date(u.premium_until) : null;
@@ -1217,6 +1224,7 @@ api.get('/rankings', wrap(async (req, res) => {
     const params = category === 'all' ? [] : [category];
     rows = (await db.prepare(`
       SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, u.avatar_key,
+        ${PREMIUM_SQL} AS premium,
         u.${col} AS elo,
         COALESCE((
           SELECT COUNT(*) FROM games g
@@ -1235,11 +1243,12 @@ api.get('/rankings', wrap(async (req, res) => {
     `).all(...params, ...params)).map((r, i) => ({
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       elo: Number(r.elo), games: Number(r.games), points: Number(r.elo),
-      avatarKey: r.avatar_key || null,
+      avatarKey: r.avatar_key || null, premium: !!r.premium,
     }));
   } else if (category === 'all') {
     rows = (await db.prepare(`
       SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, u.avatar_key,
+        ${PREMIUM_SQL} AS premium,
         m.points, m.wins, m.draws, m.losses,
         (m.wins + m.draws + m.losses) AS games
       FROM monthly_scores m
@@ -1250,12 +1259,13 @@ api.get('/rankings', wrap(async (req, res) => {
     `).all(month)).map((r, i) => ({
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       points: Number(r.points), wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
-      games: Number(r.games), avatarKey: r.avatar_key || null,
+      games: Number(r.games), avatarKey: r.avatar_key || null, premium: !!r.premium,
     }));
   } else {
     rows = (await db.prepare(`
       SELECT * FROM (
         SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, u.avatar_key,
+          ${PREMIUM_SQL} AS premium,
           COUNT(*) AS games,
           SUM(CASE WHEN (g.white_id = u.id AND g.result = '1-0') OR (g.black_id = u.id AND g.result = '0-1') THEN 1 ELSE 0 END) AS wins,
           SUM(CASE WHEN g.result = '1/2-1/2' THEN 1 ELSE 0 END) AS draws,
@@ -1265,7 +1275,7 @@ api.get('/rankings', wrap(async (req, res) => {
           AND (timezone('Asia/Tashkent', g.updated_at))::text LIKE ?
           AND (${TC_CASE}) = ?
           AND u.blocked = 0
-        GROUP BY u.id, u.first_name, u.username, u.avatar_key
+        GROUP BY u.id, u.first_name, u.username, u.avatar_key, u.premium, u.premium_until
       ) r
       ORDER BY (wins * 2 + draws) DESC, wins DESC, games DESC, lower(name) ASC
       LIMIT 100
@@ -1273,7 +1283,7 @@ api.get('/rankings', wrap(async (req, res) => {
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
       games: Number(r.games), points: Number(r.wins) * 2 + Number(r.draws),
-      avatarKey: r.avatar_key || null,
+      avatarKey: r.avatar_key || null, premium: !!r.premium,
     }));
   }
 

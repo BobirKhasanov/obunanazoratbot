@@ -317,15 +317,17 @@ export function avBlock(name, id, opts = {}) {
     + (circ ? '.circ' : ''),
   );
   if (opts.premium) {
+    // Single spinning gold rim (no second solid border on the avatar itself)
     wrap.append(h('span.prem-ring', { 'aria-hidden': 'true' }));
-    // Extra orbiting sparkles on large profile avatars (CSS ::before/::after alone get clipped)
+    // Telegram Stars–style twinkles around large / profile avatars
     if (opts.sparkles || size === 'xl') {
-      wrap.append(
-        h('span.prem-spark', { 'aria-hidden': 'true', style: { '--i': '0' } }, '✦'),
-        h('span.prem-spark', { 'aria-hidden': 'true', style: { '--i': '1' } }, '✧'),
-        h('span.prem-spark', { 'aria-hidden': 'true', style: { '--i': '2' } }, '✦'),
-        h('span.prem-spark', { 'aria-hidden': 'true', style: { '--i': '3' } }, '✧'),
-      );
+      const glyphs = ['✦', '✧', '★', '✧', '✦', '⋆', '✦', '✧'];
+      for (let i = 0; i < glyphs.length; i++) {
+        wrap.append(h('span.prem-spark', {
+          'aria-hidden': 'true',
+          style: { '--i': String(i), '--n': String(glyphs.length) },
+        }, glyphs[i]));
+      }
     }
   }
   wrap.append(avatar(name, id, size, opts.avatarKey || null));

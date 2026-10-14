@@ -66,8 +66,13 @@ assert.ok(playflow.includes('preferredColor') && playflow.includes('TIME_GROUPS'
 const live = read('public/js/live.js');
 assert.ok(live.includes('backBtn') && !live.includes('syncTgBack'), 'single in-app back, no Telegram BackButton duplicate');
 assert.ok(live.includes("role: 'button'") && live.includes('live-game-card'), 'live game cards scroll-friendly');
-assert.ok(css.includes('box-shadow: 0 0 0 2.5px #f5c542') || css.includes('box-shadow: 0 0 0 2px #f5c542'), 'gold avatar border for premium');
+assert.ok(css.includes('prem-ring') && css.includes('prem-spin'), 'single rotating gold prem-ring (no second static border)');
+assert.ok(css.includes('tg-star-twinkle') || css.includes('prem-spark'), 'Telegram Stars–style sparkles');
 assert.ok(/\.prem-ic[\s\S]{0,160}width:\s*(2[8-9]|3[0-9])px/.test(css), 'premIc badge at least 28px');
+assert.ok(app.includes('openRankProfile') || (app.includes('paintRankBody') && app.includes('openUserProfile') && app.includes('rank-row')), 'rankings row opens profile');
+assert.ok(app.includes('avBlock(p.name') || app.includes('avBlock(p.name,'), 'rankings show avatars');
+assert.ok(read('public/js/userprofile.js').includes('filter(Boolean)'), 'user profile does not append null text nodes');
+assert.ok(read('src/server.js').includes('PREMIUM_SQL') || read('src/server.js').includes('premium: !!r.premium'), 'rankings API returns premium');
 assert.ok(profile.includes('/shop/order') || profile.includes('shop/order'));
 assert.ok(profile.includes('premiumPlans') || profile.includes('premium_plans'));
 assert.ok(app.includes("t === 'wallet'") || app.includes('m.t === \'wallet\''));
