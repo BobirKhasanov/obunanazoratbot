@@ -136,7 +136,8 @@ button.row:active { transform: scale(0.98); }
   font-weight: 800; font-size: 17px; background: var(--card-2);
 }
 .row .grow { flex: 1; min-width: 0; }
-.row .t { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .t { display: flex; align-items: center; font-weight: 700; font-size: 16px; min-width: 0; overflow: hidden; }
+.row .t .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .row .s { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .row .amt { font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .row .amt small { display: block; font-weight: 600; font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -482,7 +483,8 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .livepill { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 99px; background: var(--card); font-size: 13px; font-weight: 700; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; animation: pulse 1.8s infinite; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6); } 100% { box-shadow: 0 0 0 9px rgba(74, 222, 128, 0); } }
-.avwrap { position: relative; display: grid; } .avwrap .dot.on { animation: none; position: absolute; }
+.avwrap { position: relative; display: grid; place-items: center; width: 42px; height: 42px; flex: none; overflow: visible; }
+.avwrap .dot.on { animation: none; position: absolute; }
 .tile { color: var(--text); } .tile.hero { color: #fff; }
 .tile small { color: inherit; opacity: 0.7; font-size: 13px; margin-top: 2px; }
 .tile.hero svg { color: #fff; }
@@ -807,33 +809,48 @@ button.rating-tile:active { transform: scale(0.98); }
 .gems-bar i { display: block; height: 100%; border-radius: 8px; background: linear-gradient(90deg, #38bdf8, #818cf8); transition: width 0.6s var(--ease); }
 .gems-ok { color: #34c759; font-weight: 700; }
 .prem-badge {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 5px;
   background: linear-gradient(135deg, #f5c542, #f59e0b); color: #3b2a00;
-  border-radius: 99px; padding: 3px 10px; font-size: 12px; font-weight: 800;
+  border-radius: 99px; padding: 4px 11px; font-size: 12px; font-weight: 800;
 }
-.prem-badge .prem-ic { width: 16px; height: 16px; margin: 0; }
+.prem-badge .prem-ic { width: 22px; height: 22px; margin: 0; }
 .prem-ic {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 18px; height: 18px; margin-left: 6px; vertical-align: -3px;
+  width: 24px; height: 24px; margin-left: 8px; vertical-align: -5px;
   border-radius: 50%; background: linear-gradient(135deg, #f5c542, #f59e0b);
   color: #3b2a00; flex: none;
+  box-shadow: 0 1px 4px rgba(245, 158, 11, 0.45);
 }
-.prem-ic .ic { display: grid; place-items: center; color: #3b2a00; }
-.prem-ic .ic svg { width: 11px; height: 11px; }
-h2 .prem-ic { vertical-align: middle; }
-.row .t .prem-ic { margin-left: 6px; vertical-align: -2px; }
+.prem-ic .ic { display: grid; place-items: center; color: #3b2a00; line-height: 0; }
+.prem-ic .ic svg { width: 15px; height: 15px; }
+h2 .prem-ic { width: 26px; height: 26px; vertical-align: middle; }
+h2 .prem-ic .ic svg { width: 16px; height: 16px; }
+.row .t .prem-ic { margin-left: 8px; flex: none; }
 
-/* Rotating Premium ring around avatar (amber — same family as prem-ic) */
+/* Gold rotating Premium ring — solid gold border + spinning conic behind avatar */
 @keyframes prem-spin { to { transform: rotate(360deg); } }
-.avwrap.prem { isolation: isolate; }
+.avwrap.prem {
+  width: 48px; height: 48px;
+  overflow: visible;
+}
 .avwrap .prem-ring {
-  position: absolute; inset: -3px; border-radius: 16px; z-index: 0;
-  background: conic-gradient(from 0deg, #f59e0b, #fde68a, #fbbf24, #d97706, #f59e0b);
-  animation: prem-spin 2.4s linear infinite;
+  position: absolute; inset: 0; border-radius: 16px; z-index: 0;
+  background: conic-gradient(from 0deg, #b45309, #fde68a, #fbbf24, #f59e0b, #d97706, #fde68a, #b45309);
+  animation: prem-spin 2s linear infinite;
   pointer-events: none;
 }
-.avwrap.prem .avatar { position: relative; z-index: 1; }
-.avwrap.prem.xl { border-radius: 50%; }
-.avwrap.prem.xl .prem-ring { inset: -4px; border-radius: 50%; }
+.avwrap.prem .avatar {
+  position: relative; z-index: 1;
+  width: 40px; height: 40px; border-radius: 13px;
+  box-shadow: 0 0 0 2.5px #f5c542, 0 0 10px rgba(245, 158, 11, 0.35);
+}
+.avwrap.prem.xl {
+  width: 80px; height: 80px; border-radius: 50%;
+}
+.avwrap.prem.xl .prem-ring { border-radius: 50%; }
+.avwrap.prem.xl .avatar.xl {
+  width: 70px; height: 70px; border-radius: 50%;
+  box-shadow: 0 0 0 3px #f5c542, 0 0 14px rgba(245, 158, 11, 0.4);
+}
 .avwrap.prem .dot.on { z-index: 2; }
-.prof-me .avwrap.xl .avatar.xl { width: 72px; height: 72px; }
+.row, .list { overflow: visible; }

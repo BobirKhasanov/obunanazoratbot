@@ -138,8 +138,11 @@ function aiSheet() {
   });
 }
 
-const playerRow = (u, close) => h('div.row', h('div.avwrap', avatar(u.name, u.id), h('i.dot.on')),
-  h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.inGame ? t('in_game') : t('online'))),
+const playerRow = (u, close) => h('div.row',
+  avBlock(u.name, u.id, { premium: !!u.premium, online: true }),
+  h('div.grow',
+    h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
+    h('div.s', u.inGame ? t('in_game') : t('online'))),
   u.invited && u.inviteGameId
     ? h('button.mini', { onclick: () => cancelChallenge(u.inviteGameId) }, t('cancel'))
     : h('button.mini.ok', { disabled: u.inGame, onclick: () => { close(); challenge(u.id); } }, t('challenge')));
@@ -204,7 +207,7 @@ refreshers.play = async function renderPlay() {
     inv: (l.games.invites || []).map((g) => g.id),
     act: (l.games.active || []).map((g) => [g.id, g.turn, g.you]),
     wait: (l.games.waiting || []).map((g) => g.id),
-    on: onlinePlayers.map((u) => [u.id, !!u.invited, !!u.inGame, !!u.friend]),
+    on: onlinePlayers.map((u) => [u.id, !!u.invited, !!u.inGame, !!u.friend, !!u.premium]),
     sav: saved ? [saved.level, saved.fen] : null,
     ann: (anns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
   });
@@ -256,7 +259,7 @@ refreshers.play = async function renderPlay() {
       h('div.list', onlinePlayers.map((u) => h('div.row',
         avBlock(u.name, u.id, { premium: !!u.premium, online: true }),
         h('div.grow',
-          h('div.t', u.name, u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
+          h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
           h('div.s', u.invited ? t('challenge_sent') : t('online'))),
         challengeAction(u))))] : null,
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',

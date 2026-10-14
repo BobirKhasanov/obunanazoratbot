@@ -1,5 +1,5 @@
 // Profile hub: sectioned menu + slide-in subpages (friends, premium, settings, …).
-import { h, icon, haptic, toast, api, fail, avatar, avBlock, premIc, shareUrl, confirmSheet, toggle, tg } from './ui.js';
+import { h, icon, haptic, toast, api, fail, avBlock, premIc, shareUrl, confirmSheet, toggle, tg } from './ui.js';
 import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
 import { openScreen } from './screen.js';
 import { openAdmin } from './admin.js';
@@ -174,8 +174,11 @@ export function renderProfilePage(ctx) {
       h('div.card.invite-card', h('div.emoji-big', '🤝'), h('b', t('invite_friends')), h('p.muted', t('invite_sub')),
         h('button.btn', { onclick: () => state.meta.botUsername ? shareUrl(link, t('share_text')) : toast(t('e_server'), true) }, icon('share', 20), t('invite_btn'))),
       h('div.h2', t('your_friends')),
-      list.length ? h('div.list', list.map((f) => h('div.row', h('div.avwrap', avatar(f.name, f.id), f.online ? h('i.dot.on') : null),
-        h('div.grow', h('div.t', f.name), h('div.s', f.inGame ? t('in_game') : f.online ? t('online') : t('offline'))),
+      list.length ? h('div.list', list.map((f) => h('div.row',
+        avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online }),
+        h('div.grow',
+          h('div.t', h('span.name', f.name), f.premium ? premIc() : null),
+          h('div.s', f.inGame ? t('in_game') : f.online ? t('online') : t('offline'))),
         challengeAction({ ...f, online: f.online }),
         h('button.mini', { 'aria-label': t('remove_friend'), onclick: async () => {
           if (await confirmSheet(`${t('remove_friend')}: ${f.name}?`, t('remove_friend'), true)) {
@@ -319,7 +322,7 @@ export function renderProfilePage(ctx) {
       h('div.prof-me',
         avBlock(me.firstName, me.id, { premium: !!me.premium, size: 'xl' }),
         h('div.prof-meta',
-          h('h2', me.firstName, me.premium ? premIc() : null),
+          h('h2', h('span.name', me.firstName), me.premium ? premIc() : null),
           me.username ? h('div.muted', '@' + me.username) : h('div.muted', t('profile_title'))),
         h('button.prof-gem', {
           type: 'button',

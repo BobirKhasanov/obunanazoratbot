@@ -919,7 +919,7 @@ api.get('/lichess/rounds/:id/pgn', wrap(async (req, res) => {
 api.get('/friends', wrap(async (req, res) => {
   const uid = req.user.id;
   const rows = await db.prepare(`
-    SELECT u.id, u.first_name FROM friends f JOIN users u ON u.id = f.friend_id WHERE f.user_id = ? ORDER BY u.first_name
+    SELECT u.id, u.first_name, u.premium, u.premium_until FROM friends f JOIN users u ON u.id = f.friend_id WHERE f.user_id = ? ORDER BY u.first_name
   `).all(uid);
   const busy = new Set((await db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all()).flatMap((g) => [g.white_id, g.black_id]));
   const pending = await db.prepare(
@@ -929,6 +929,7 @@ api.get('/friends', wrap(async (req, res) => {
   res.json({
     friends: rows.map((r) => ({
       id: r.id, name: r.first_name || 'Player', online: realtime.isOnline(r.id), inGame: busy.has(r.id),
+      premium: isPremiumActive(r),
       invited: inviteGameByUser.has(r.id), inviteGameId: inviteGameByUser.get(r.id) || null,
     })).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name)),
   });

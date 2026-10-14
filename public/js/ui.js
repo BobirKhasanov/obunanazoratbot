@@ -242,13 +242,13 @@ export const initial = (name) => ([...String(name || '?').trim()][0] || '?').toU
 export const hue = (id) => (Number(id) * 47) % 360;
 export const avatar = (name, id, cls = '') => h('div.avatar' + (cls ? '.' + cls : ''), { style: { background: `hsl(${hue(id)} 45% 42%)`, color: '#fff' } }, initial(name));
 
-/** Compact Premium crown mark (next to names). */
-export function premIc() {
-  return h('span.prem-ic', { title: 'Premium', 'aria-label': 'Premium' }, icon('crown', 13));
+/** Premium crown mark next to names (larger gold badge). */
+export function premIc(size = 16) {
+  return h('span.prem-ic', { title: 'Premium', 'aria-label': 'Premium' }, icon('crown', size));
 }
 
 /**
- * Avatar wrap with optional online dot and rotating Premium ring.
+ * Avatar wrap with optional online dot and rotating gold Premium ring.
  * @param {string} name
  * @param {number|string} id
  * @param {{ premium?: boolean, online?: boolean, size?: string }} [opts]
@@ -256,7 +256,7 @@ export function premIc() {
 export function avBlock(name, id, opts = {}) {
   const size = opts.size || '';
   const wrap = h('div.avwrap' + (opts.premium ? '.prem' : '') + (size === 'xl' ? '.xl' : ''));
-  if (opts.premium) wrap.append(h('i.prem-ring', { 'aria-hidden': 'true' }));
+  if (opts.premium) wrap.append(h('span.prem-ring', { 'aria-hidden': 'true' }));
   wrap.append(avatar(name, id, size));
   if (opts.online) wrap.append(h('i.dot.on'));
   return wrap;
