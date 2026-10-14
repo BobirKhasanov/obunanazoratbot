@@ -17,11 +17,14 @@ export class Board {
     root.append(this.el);
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) this.squares.append(h('i' + ((r + c) % 2 ? '.dk' : '.lt')));
     this.el.addEventListener('pointerdown', (e) => this.down(e));
-    window.addEventListener('pointermove', (e) => this.move(e));
-    window.addEventListener('pointerup', (e) => this.up(e));
-    window.addEventListener('pointercancel', () => this.cancelDrag());
+    this.h = { move: (e) => this.move(e), up: (e) => this.up(e), cancel: () => this.cancelDrag() };
+    window.addEventListener('pointermove', this.h.move);
+    window.addEventListener('pointerup', this.h.up);
+    window.addEventListener('pointercancel', this.h.cancel);
     this.drag = null;
   }
+
+  destroy() { window.removeEventListener('pointermove', this.h.move); window.removeEventListener('pointerup', this.h.up); window.removeEventListener('pointercancel', this.h.cancel); clearTimeout(this.hintT); }
 
   // square name -> {x, y} in board cells for the current orientation
   xy(sq) {

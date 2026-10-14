@@ -3,10 +3,13 @@ import { h, $, $$, icon, haptic, toast, sheet, seg, toggle, api, fail, setInitDa
 import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { openAdmin } from './admin.js';
+import { Chess } from '/vendor/chess.js';
+import { Board } from './board.js';
+import { PUZZLES, goodMoves, mateIn } from './puzzles.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
 let selectedTime = 'any';
-const TABS = ['play', 'live', 'rankings', 'friends', 'profile'];
+const TABS = ['play', 'puzzles', 'rankings', 'live', 'profile'];
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const gameMeta = () => ({ me: { id: state.me.id, name: state.me.firstName }, botUsername: state.meta.botUsername, reactions: state.meta.REACTIONS });
 
@@ -230,22 +233,83 @@ refreshers.rankings = async function renderRankings() {
   );
 };
 
-refreshers.friends = async function renderFriends() {
-  const list = await loadFriends();
+/** Friends live inside the profile page now */
+function friendsSection(list) {
   const link = `https://t.me/${state.meta.botUsername}?start=i${state.me.id}`;
-  mount('friends',
-    h('div.top', h('h1', t('friends_title'))),
+  return [
+    h('div.h2', t('friends_title')),
     h('div.card.invite-card', h('div.emoji-big', '🤝'), h('b', t('invite_friends')), h('p.muted', t('invite_sub')),
       h('button.btn', { onclick: () => state.meta.botUsername ? shareUrl(link, t('share_text')) : toast(t('e_server'), true) }, icon('share', 20), t('invite_btn'))),
     h('div.h2', t('your_friends')),
     list.length ? h('div.list', list.map((f) => h('div.row', h('div.avwrap', avatar(f.name, f.id), f.online ? h('i.dot.on') : null),
       h('div.grow', h('div.t', f.name), h('div.s', f.inGame ? t('in_game') : f.online ? t('online') : t('offline'))),
       h('button.mini.ok', { disabled: !f.online || f.inGame || f.invited, onclick: () => challenge(f.id) }, f.invited ? icon('check', 18) : t('challenge')),
-      h('button.mini', { 'aria-label': t('remove_friend'), onclick: async () => { if (await confirmSheet(`${t('remove_friend')}: ${f.name}?`, t('remove_friend'), true)) { try { await api('DELETE', `/friends/${f.id}`); } catch (e) { fail(e); } refresh(); } } }, icon('x', 18))))) : empty(t('no_friends'), '👋'));
-};
+      h('button.mini', { 'aria-label': t('remove_friend'), onclick: async () => { if (await confirmSheet(`${t('remove_friend')}: ${f.name}?`, t('remove_friend'), true)) { try { await api('DELETE', `/friends/${f.id}`); } catch (e) { fail(e); } refresh(); } } }, icon('x', 18))))) : empty(t('no_friends'), '👋'),
+  ];
+}
+
+// ---------- puzzles (mate in 1-2, checked on the device) ----------
+const PZ_KEY = 'chess-puzzles-solved';
+const solvedSet = () => { try { return new Set(JSON.parse(localStorage.getItem(PZ_KEY)) || []); } catch { return new Set(); } };
+const markSolved = (id) => { try { const s = solvedSet(); s.add(id); localStorage.setItem(PZ_KEY, JSON.stringify([...s])); } catch { /* storage blocked */ } };
+let pz = null; // the puzzle on screen, or null for the list
+
+function puzzleList() {
+  const done = solvedSet();
+  mount('puzzles',
+    h('div.top', h('h1', '🧩 ' + t('puzzles_title')), h('div.livepill', t('puzzle_solved_count', { a: PUZZLES.filter((p) => done.has(p.id)).length, b: PUZZLES.length }))),
+    h('div.muted.pz-sub', t('puzzles_sub')),
+    h('div.list', PUZZLES.map((p, i) => rowBtn({ onclick: () => { haptic('light'); openPuzzle(i); } },
+      h('div.pz-num' + (done.has(p.id) ? '.done' : ''), done.has(p.id) ? icon('check', 18) : String(i + 1)),
+      h('div.grow', h('div.t', t('puzzle_n', { n: i + 1 })), h('div.s', t('mate_in', { n: p.n }) + ' · ' + (new Chess(p.fen).turn() === 'w' ? t('puzzle_white') : t('puzzle_black')))),
+      icon('arrow', 18)))));
+}
+
+function openPuzzle(i) {
+  if (pz && pz.board) pz.board.destroy();
+  const puzzle = PUZZLES[i];
+  const chess = new Chess(puzzle.fen);
+  const colour = chess.turn();
+  const status = h('div.pz-status', t(colour === 'w' ? 'puzzle_white' : 'puzzle_black'));
+  const host = h('div.board-host', { 'data-noswipe': '' });
+  const actions = h('div.pz-actions');
+  const state2 = { puzzle, i, chess, left: puzzle.n, locked: false };
+  let board = null;
+  const say = (text, cls) => { status.textContent = text; status.className = 'pz-status' + (cls ? ' ' + cls : ''); };
+  const draw = (lastMove) => board.set(chess, { orientation: colour, mine: state2.locked ? null : colour, lastMove, animate: true });
+  const buttons = (solved) => actions.replaceChildren(
+    h('button.btn.ghost.sm', { onclick: () => openPuzzle(i) }, t('puzzle_retry')),
+    solved ? (i + 1 < PUZZLES.length ? h('button.btn.sm', { onclick: () => openPuzzle(i + 1) }, t('puzzle_next')) : h('button.btn.sm', { onclick: closePuzzle }, t('puzzle_back')))
+      : h('button.btn.ghost.sm', { onclick: () => { const g = goodMoves(chess, state2.left)[0]; if (g) board.showHint({ from: g.from, to: g.to }); } }, t('puzzle_hint')));
+  const onMove = async (from, to, promotion) => {
+    if (state2.locked) return;
+    const good = goodMoves(chess, state2.left);
+    const mv = good.find((m) => m.from === from && m.to === to && (m.promotion || undefined) === (promotion || undefined));
+    if (!mv) { say(t('puzzle_wrong'), 'bad'); haptic('error'); draw(); return; }
+    chess.move({ from, to, promotion });
+    state2.locked = true; draw({ from, to });
+    if (chess.isCheckmate()) { markSolved(puzzle.id); say(t('puzzle_done'), 'ok'); haptic('success'); buttons(true); return; }
+    say(t('puzzle_continue'), 'ok'); haptic('light');
+    await sleep(550);
+    const replies = chess.moves({ verbose: true });
+    const r = replies[Math.floor(Math.random() * replies.length)];
+    chess.move(r); state2.left -= 1; state2.locked = false; draw({ from: r.from, to: r.to });
+    say(t(colour === 'w' ? 'puzzle_white' : 'puzzle_black'));
+  };
+  pz = state2;
+  mount('puzzles',
+    h('div.top', h('button.mini.back', { 'aria-label': t('puzzle_back'), onclick: closePuzzle }, icon('arrow', 18)),
+      h('h1', t('puzzle_n', { n: i + 1 })), h('div.livepill', t('mate_in', { n: puzzle.n }))),
+    host, status, actions);
+  board = state2.board = new Board(host, { onMove });
+  draw(); buttons(false);
+}
+function closePuzzle() { if (pz && pz.board) pz.board.destroy(); pz = null; haptic('light'); puzzleList(); }
+refreshers.puzzles = async function renderPuzzles() { if (!pz) puzzleList(); };
 
 refreshers.profile = async function renderProfile() {
   const me = state.me; const st = state.stats || (await api('GET', '/me')).stats; state.stats = st;
+  const friends = await loadFriends();
   const s = sumStats(st);
   const save = async (patch) => { try { state.me = (await api('PATCH', '/me', patch)).user; } catch (e) { fail(e); } };
   const langChips = h('div.chips', LANGS.map((l) => h('button.chip' + (getLang() === l ? '.on' : ''), { onclick: async () => { await save({ lang: l }); setLang(l); rebuildAll(); } }, LANG_NAMES[l])));
@@ -253,6 +317,7 @@ refreshers.profile = async function renderProfile() {
     h('div.top', h('h1', t('profile_title'))),
     h('div.me', h('div.big', avatar(me.firstName, me.id, 'xl')), h('div', h('h2', me.firstName), me.username ? h('div.muted', '@' + me.username) : null)),
     h('div.card.stats', stat(s.w, t('wins'), 'g'), stat(s.d, t('draws')), stat(s.l, t('losses'), 'r')),
+    friendsSection(friends),
     h('div.h2', t('language')), langChips,
     h('div.h2', t('theme')),
     seg([['dark', '🌙 ' + t('dark')], ['light', '☀️ ' + t('light')]], me.theme, async (v) => { applyTheme(v); await save({ theme: v }); }),
@@ -331,7 +396,7 @@ function initPager() {
 function rebuildNav() {
   $('#nav').querySelectorAll('.nav-btn').forEach((b, i) => { b.querySelector('span:last-child').textContent = t('nav_' + TABS[i]); b.setAttribute('aria-label', t('nav_' + TABS[i])); });
 }
-function rebuildAll() { rebuildNav(); $$('.page').forEach((p) => p.classList.remove('seen')); refresh(); }
+function rebuildAll() { if (pz && pz.board) pz.board.destroy(); pz = null; rebuildNav(); $$('.page').forEach((p) => p.classList.remove('seen')); refresh(); }
 
 // ---------- deep links ----------
 async function handleDeepLink() {
@@ -343,7 +408,7 @@ async function handleDeepLink() {
     try {
       const r = await api('POST', '/friends/join', { userId: Number(p.slice(1)) });
       toast(t('friend_added', { name: r.friend.name }));
-      go(2, true);
+      go(TABS.indexOf('profile'), true);
     } catch (e) { fail(e); }
   } else if (/^g[\w-]{4,20}$/.test(p)) await joinGame(p.slice(1));
   else if (gid && /^[\w-]{4,20}$/.test(gid)) await openById(gid);
@@ -367,7 +432,7 @@ async function boot() {
     else if (m.t === 'friend') { haptic('success'); refresh(); }
     else if (m.t === 'game' && m.game.id !== openGameId()) refresh();
   });
-  setInterval(() => { if (!document.hidden && !openGameId() && ['live', 'play', 'rankings'].includes(state.tab)) refresh(); }, 8000);
+  setInterval(() => { if (!document.hidden && !openGameId() && ['live', 'play', 'rankings', 'profile'].includes(state.tab)) refresh(); }, 8000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   await refresh();
   await handleDeepLink();

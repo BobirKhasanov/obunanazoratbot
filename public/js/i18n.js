@@ -274,3 +274,20 @@ export function errText(err) {
 
 export const missingKeys = () => Object.fromEntries(
   Object.entries(DICT).map(([l, d]) => [l, Object.keys(en).filter((k) => !(k in d))]));
+
+Object.assign(en, { nav_play: 'Home', nav_puzzles: 'Puzzles', nav_rankings: 'Ranking', nav_live: 'Online', nav_profile: 'Profile',
+  puzzles_title: 'Puzzles', puzzles_sub: 'Find the checkmate', mate_in: 'Mate in {n}', puzzle_n: 'Puzzle {n}', puzzle_solved_count: '{a} of {b} solved',
+  puzzle_wrong: 'Not this move, try again', puzzle_done: 'Checkmate! Solved', puzzle_next: 'Next puzzle', puzzle_retry: 'Restart', puzzle_hint: 'Hint',
+  puzzle_white: 'White to move', puzzle_black: 'Black to move', puzzle_back: 'All puzzles', puzzle_continue: 'Keep going, mate follows' });
+Object.assign(ru, { nav_play: 'Главная', nav_puzzles: 'Задачи', nav_rankings: 'Рейтинг', nav_live: 'Онлайн', nav_profile: 'Профиль',
+  puzzles_title: 'Задачи', puzzles_sub: 'Найдите мат', mate_in: 'Мат в {n}', puzzle_n: 'Задача {n}', puzzle_solved_count: 'Решено {a} из {b}',
+  puzzle_wrong: 'Не этот ход, попробуйте ещё', puzzle_done: 'Мат! Решено', puzzle_next: 'Следующая задача', puzzle_retry: 'Заново', puzzle_hint: 'Подсказка',
+  puzzle_white: 'Ход белых', puzzle_black: 'Ход чёрных', puzzle_back: 'Все задачи', puzzle_continue: 'Верно, дальше будет мат' });
+Object.assign(uz, { nav_play: 'Asosiy', nav_puzzles: 'Boshqotirma', nav_rankings: 'Reyting', nav_live: 'Online', nav_profile: 'Profil',
+  puzzles_title: 'Boshqotirmalar', puzzles_sub: 'Matni toping', mate_in: '{n} yurishda mat', puzzle_n: '{n}-boshqotirma', puzzle_solved_count: '{b} tadan {a} tasi yechildi',
+  puzzle_wrong: 'Bu yurish emas, qayta urinib ko‘ring', puzzle_done: 'Mat! Yechildi', puzzle_next: 'Keyingi boshqotirma', puzzle_retry: 'Qaytadan', puzzle_hint: 'Maslahat',
+  puzzle_white: 'Oqlar yuradi', puzzle_black: 'Qoralar yuradi', puzzle_back: 'Barcha boshqotirmalar', puzzle_continue: 'To‘g‘ri, endi mat keladi' });
+Object.assign(uzc, { nav_play: 'Асосий', nav_puzzles: 'Бошқотирма', nav_rankings: 'Рейтинг', nav_live: 'Онлайн', nav_profile: 'Профил',
+  puzzles_title: 'Бошқотирмалар', puzzles_sub: 'Матни топинг', mate_in: '{n} юришда мат', puzzle_n: '{n}-бошқотирма', puzzle_solved_count: '{b} тадан {a} таси ечилди',
+  puzzle_wrong: 'Бу юриш эмас, қайта уриниб кўринг', puzzle_done: 'Мат! Ечилди', puzzle_next: 'Кейинги бошқотирма', puzzle_retry: 'Қайтадан', puzzle_hint: 'Маслаҳат',
+  puzzle_white: 'Оқлар юради', puzzle_black: 'Қоралар юради', puzzle_back: 'Барча бошқотирмалар', puzzle_continue: 'Тўғри, энди мат келади' });

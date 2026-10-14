@@ -461,3 +461,14 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .rank-points b { display: block; font-size: 20px; font-weight: 850; }
 .rank-points small { display: block; color: var(--muted); font-size: 11px; }
 .rank-footnote { margin: 16px 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+/* puzzles */
+.pz-sub { margin: -8px 2px 14px; }
+.pz-num { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; background: var(--card2, rgba(127,127,127,0.15)); flex: none; }
+.pz-num.done { background: rgba(52, 199, 89, 0.18); color: #34c759; }
+.pz-status { text-align: center; font-weight: 700; margin: 16px 0 10px; min-height: 24px; transition: color 0.25s; }
+.pz-status.ok { color: #34c759; }
+.pz-status.bad { color: #ff453a; }
+.pz-actions { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
+.mini.back svg { transform: rotate(180deg); }
+.top .mini.back + h1 { margin-right: auto; margin-left: 10px; font-size: 24px; }
