@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-pieces="outline" data-board="classic">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../public/styles.css">
+  <style>
+    html, body { height: auto; overflow: auto; }
+    body { padding: 16px; max-width: 420px; margin: 0 auto; }
+    #app { position: static; }
+    #report { margin-top: 16px; font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; }
+    #report.ok { color: #4ade80; }
+    #report.fail { color: #f87171; }
+  </style>
+</head>
+<body>
+  <div id="mount"></div>
+  <pre id="report"></pre>
+  <script type="module">
+    import { stylePickerCard, BOARD_SWATCH, BOARD_THEMES } from '../public/js/style-ui.js';
+
+    let piece = 'classic';
+    let board = 'green';
+    const mount = document.getElementById('mount');
+    const report = document.getElementById('report');
+
+    function draw() {
+      document.documentElement.dataset.pieces = piece;
+      document.documentElement.dataset.board = board;
+      mount.replaceChildren(stylePickerCard({
+        pieceSet: piece,
+        boardTheme: board,
+        locked: false,
+        onPiece: (id) => { piece = id; draw(); check(); },
+        onBoard: (id) => { board = id; draw(); check(); },
+      }));
+      check();
+    }
+
+    function check() {
+      const buttons = [...mount.querySelectorAll('button.style-opt.board')];
+      const lines = [];
+      let fail = 0;
+      BOARD_THEMES.forEach((id, i) => {
+        const sw = BOARD_SWATCH[id];
+        const btn = buttons[i];
+        const style = btn ? btn.getAttribute('style') || '' : '';
+        const cs = btn ? getComputedStyle(btn) : null;
+        const hasHex = style.includes(sw.lt) && style.includes(sw.dk);
+        const hasImg = cs && cs.backgroundImage && cs.backgroundImage !== 'none';
+        const ok = hasHex && hasImg;
+        if (!ok) fail += 1;
+        lines.push(`${ok ? 'OK' : 'FAIL'} ${id} style=${hasHex} computedImg=${!!hasImg} bg=${cs ? cs.backgroundColor : '?'}`);
+      });
+      const preview = mount.querySelectorAll('.style-preview-sq');
+      lines.push(`preview squares: ${preview.length}`);
+      const pieces = mount.querySelectorAll('button.style-opt:not(.board)');
+      lines.push(`piece options: ${pieces.length}`);
+      report.textContent = lines.join('\n');
+      report.className = fail ? 'fail' : 'ok';
+      report.dataset.fail = String(fail);
+    }
+
+    draw();
+  </script>
+</body>
+</html>

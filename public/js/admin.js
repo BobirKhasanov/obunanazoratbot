@@ -1,9 +1,9 @@
 // Admin panel: live users, KPIs, post composer (media, button text + colours), users list.
 import { h, $, icon, haptic, toast, api, fail, getInitData, avatar, confirmSheet, seg } from './ui.js';
 import { t, LANGS, LANG_NAMES } from './i18n.js';
-import { PIECE_SETS, BOARD_THEMES, BOARD_SWATCH, pieceSvg } from './pieces.js';
 import { restyleBoards } from './board.js';
 import { restyleOpenGame } from './game.js';
+import { stylePickerCard } from './style-ui.js';
 
 let timer = null;
 const COLOR_KEYS = ['default', 'primary', 'success', 'danger'];
@@ -103,8 +103,7 @@ export function openAdmin(onClose) {
 
   // Admin appearance (piece set + board) — saved on this admin account
   let styleUser = { pieceSet: 'outline', boardTheme: 'classic' };
-  const pieceBox = h('div.style-swatches');
-  const boardBox = h('div.style-swatches');
+  const styleHost = h('div');
   const applyLocal = (pieceSet, boardTheme) => {
     document.documentElement.dataset.pieces = pieceSet;
     document.documentElement.dataset.board = boardTheme;
@@ -112,37 +111,27 @@ export function openAdmin(onClose) {
     try { restyleOpenGame(); } catch { /* ignore */ }
   };
   const drawStyle = () => {
-    pieceBox.replaceChildren(...PIECE_SETS.map((id) => h('button.style-sw' + (styleUser.pieceSet === id ? '.on' : ''), {
-      type: 'button',
-      'data-pieces': id,
-      'aria-label': t('piece_' + id),
-      onclick: async () => {
-        try {
-          styleUser = (await api('PATCH', '/me', { pieceSet: id })).user;
-          applyLocal(styleUser.pieceSet, styleUser.boardTheme);
-          drawStyle(); haptic('select'); toast(t('piece_' + id));
-        } catch (e) { fail(e); }
-      },
-    }, h('span.sw-pc', { html: pieceSvg('w', 'n', id) }), h('span.sw-lab', t('piece_' + id)))));
-    boardBox.replaceChildren(...BOARD_THEMES.map((id) => {
-      const sw = BOARD_SWATCH[id];
-      return h('button.style-sw.board' + (styleUser.boardTheme === id ? '.on' : ''), {
-        type: 'button',
-        'aria-label': t('board_' + id),
-        title: t('board_' + id),
-        onclick: async () => {
-          try {
-            styleUser = (await api('PATCH', '/me', { boardTheme: id })).user;
-            applyLocal(styleUser.pieceSet, styleUser.boardTheme);
-            drawStyle(); haptic('select'); toast(t('board_' + id));
-          } catch (e) { fail(e); }
-        },
-      },
-        h('i', { style: { background: sw.lt } }),
-        h('i', { style: { background: sw.dk } }),
-        h('i', { style: { background: sw.dk } }),
-        h('i', { style: { background: sw.lt } }));
-    }));
+    const pickPiece = async (id) => {
+      try {
+        styleUser = (await api('PATCH', '/me', { pieceSet: id })).user;
+        applyLocal(styleUser.pieceSet, styleUser.boardTheme);
+        drawStyle(); haptic('select'); toast(t('piece_' + id));
+      } catch (e) { fail(e); }
+    };
+    const pickBoard = async (id) => {
+      try {
+        styleUser = (await api('PATCH', '/me', { boardTheme: id })).user;
+        applyLocal(styleUser.pieceSet, styleUser.boardTheme);
+        drawStyle(); haptic('select'); toast(t('board_' + id));
+      } catch (e) { fail(e); }
+    };
+    styleHost.replaceChildren(stylePickerCard({
+      pieceSet: styleUser.pieceSet,
+      boardTheme: styleUser.boardTheme,
+      locked: false,
+      onPiece: pickPiece,
+      onBoard: pickBoard,
+    }), h('p.muted', t('admin_style_sub')));
   };
   api('GET', '/me').then((r) => {
     styleUser = r.user;
@@ -155,8 +144,7 @@ export function openAdmin(onClose) {
     h('div.top', h('h1', t('admin_title'))),
     liveBox, h('div.h2', t('stats')), kpis,
     h('div.h2', t('signups')), h('div.card', bars),
-    h('div.h2', t('admin_style')), h('p.muted', t('admin_style_sub')),
-    h('div.card', h('div.label', t('piece_set')), pieceBox, h('div.label', t('board_theme')), boardBox),
+    h('div.h2', t('admin_style')), styleHost,
     h('div.h2', t('composer')),
     h('div.card', text, mediaBox, file, h('div.label', t('buttons') + ' · ' + t('up_to')), btnBox, h('div.label', t('audience')), audience, h('div.label', t('preview')), preview, sendTest, sendAll),
     h('div.h2', t('history')), histBox,

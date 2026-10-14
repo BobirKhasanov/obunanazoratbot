@@ -25,8 +25,8 @@ for (const set of PIECE_SETS) {
 }
 assert.ok(pieces.includes('BOARD_THEMES'));
 assert.ok(pieces.includes('BOARD_SWATCH'));
-assert.ok(css.includes('style-sw.board'));
-assert.ok(css.includes('.sw-pc'));
+assert.ok(css.includes('style-opt.board'));
+assert.ok(css.includes('.style-preview'));
 
 assert.ok(pieces.includes('function pieceSvg'));
 assert.ok(pieces.includes('STAUNTON'));

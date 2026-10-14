@@ -16,9 +16,9 @@ export function h(sel, props, ...kids) {
     else if (k === 'style' && typeof v === 'object') {
       for (const [sk, sv] of Object.entries(v)) {
         if (sk.startsWith('--')) el.style.setProperty(sk, sv);
-        else el.style[sk] = sv;
+        else el.style.setProperty(sk.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase()), sv);
       }
-    }
+    } else if (k === 'style') el.setAttribute('style', String(v));
     else if (k === 'html') el.innerHTML = v;
     else el.setAttribute(k, v === true ? '' : v);
   }

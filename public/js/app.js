@@ -8,7 +8,8 @@ import { Board, restyleBoards } from './board.js';
 import { PUZZLES, goodMoves, mateIn } from './puzzles.js';
 import { normalizeTimeControl } from './time.js';
 import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
-import { PIECE_SETS, BOARD_THEMES, BOARD_SWATCH, pieceSvg } from './pieces.js';
+import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
+import { stylePickerCard } from './style-ui.js';
 import { restyleOpenGame } from './game.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
@@ -40,8 +41,6 @@ function canStyleChess(me) {
 
 function stylePickers(me) {
   const locked = !canStyleChess(me);
-  const piece = me.pieceSet || 'outline';
-  const board = me.boardTheme || 'classic';
   const pickPiece = async (v) => {
     if (locked) return toast(t('style_premium_only'), true);
     const prev = { pieceSet: me.pieceSet || 'outline', boardTheme: me.boardTheme || 'classic' };
@@ -71,30 +70,14 @@ function stylePickers(me) {
     }
   };
   return [
-    h('div.h2', t('piece_set'), locked ? h('span.count-pill', '★ Premium') : null),
-    locked ? h('p.muted', t('style_premium_hint')) : null,
-    h('div.style-swatches' + (locked ? '.style-lock' : ''),
-      PIECE_SETS.map((id) => h('button.style-sw' + (piece === id ? '.on' : ''), {
-        type: 'button',
-        'data-pieces': id,
-        'aria-label': t('piece_' + id),
-        onclick: () => pickPiece(id),
-      }, h('span.sw-pc', { html: pieceSvg('w', 'n', id) }), h('span.sw-lab', t('piece_' + id))))),
-    h('div.h2', t('board_theme'), locked ? h('span.count-pill', '★ Premium') : null),
-    h('div.style-swatches' + (locked ? '.style-lock' : ''),
-      BOARD_THEMES.map((id) => {
-        const sw = BOARD_SWATCH[id];
-        return h('button.style-sw.board' + (board === id ? '.on' : ''), {
-          type: 'button',
-          'aria-label': t('board_' + id),
-          title: t('board_' + id),
-          onclick: () => pickBoard(id),
-        },
-          h('i', { style: { background: sw.lt } }),
-          h('i', { style: { background: sw.dk } }),
-          h('i', { style: { background: sw.dk } }),
-          h('i', { style: { background: sw.lt } }));
-      })),
+    h('div.h2', t('admin_style'), locked ? h('span.count-pill', '★ Premium') : null),
+    stylePickerCard({
+      pieceSet: me.pieceSet,
+      boardTheme: me.boardTheme,
+      locked,
+      onPiece: pickPiece,
+      onBoard: pickBoard,
+    }),
   ];
 }
 
