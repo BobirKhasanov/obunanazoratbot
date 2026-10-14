@@ -10,7 +10,9 @@ const FONT_CSS = {
 };
 
 /** How long each slide stays before auto-advance (ms). */
-const DWELL_MS = 2000;
+const DWELL_MS = 6000;
+/** Puzzle carousel starts its timer this many ms after the home one (phase offset). */
+export const CAROUSEL_STAGGER_MS = 2000;
 const SWIPE_PX = 40;
 
 /** @type {Array<() => void>} */
@@ -155,7 +157,7 @@ function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {
 }
 
 /** Mount carousel into host (does not clear other carousels). Returns host or null. */
-export async function mountAnnouncementsCarousel(host, items, { onPage, botUsername, userId } = {}) {
+export async function mountAnnouncementsCarousel(host, items, { onPage, botUsername, userId, delayMs = 0 } = {}) {
   if (!host) return null;
   host.replaceChildren();
   if (!items || !items.length) { host.hidden = true; return null; }
@@ -172,6 +174,7 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
 
   const n = resolved.length;
   let timer = null;
+  let armed = false;
   const go = (next) => {
     go.idx = ((next % n) + n) % n;
     const w = host.clientWidth || 0;
@@ -182,10 +185,21 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
   };
   go.idx = 0;
 
-  const stopAuto = () => { clearInterval(timer); timer = null; };
+  const stopAuto = () => {
+    clearInterval(timer);
+    clearTimeout(timer);
+    timer = null;
+  };
   const armAuto = () => {
     stopAuto();
-    timer = setInterval(() => go(go.idx + 1), DWELL_MS);
+    const start = () => {
+      armed = true;
+      timer = setInterval(() => go(go.idx + 1), DWELL_MS);
+    };
+    // First mount: optional phase offset so two carousels don't flip together.
+    // After swipe/interaction: resume on the 6s cadence immediately.
+    if (!armed && delayMs > 0) timer = setTimeout(start, delayMs);
+    else start();
   };
 
   const unbindSwipe = bindSwipe(host, track, n, go, { armAuto, stopAuto });
@@ -194,7 +208,7 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
   const onResize = () => go(go.idx);
   addEventListener('resize', onResize);
   cleanups.push(() => {
-    clearInterval(timer);
+    stopAuto();
     try { unbindSwipe(); } catch { /* ignore */ }
     removeEventListener('resize', onResize);
   });

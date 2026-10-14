@@ -3,6 +3,7 @@ const db = require('./db');
 const { isAdmin } = require('./auth');
 const { LANG_BUTTONS, LANGS, STR, tr, fromTelegram } = require('./i18n');
 const realtime = require('./realtime');
+const { sendWelcome } = require('./welcome');
 
 const PARTY = '5046509860389126442'; // Telegram's built-in 🎉 message effect (private chats only)
 // Deep-link payloads: i<userId> = friend invite, g<gameId> = join a game
@@ -11,6 +12,15 @@ const PAYLOAD = /^[ig][A-Za-z0-9_-]{1,24}$/;
 function createBot(token, webAppUrl) {
   // TG_API_ROOT lets the tests point the bot at a fake Telegram server
   const bot = new Bot(token, process.env.TG_API_ROOT ? { client: { apiRoot: process.env.TG_API_ROOT } } : {});
+
+  let cachedUsername = process.env.BOT_USERNAME || null;
+  const ensureUsername = async () => {
+    if (cachedUsername) return cachedUsername;
+    try {
+      cachedUsername = (await bot.api.getMe()).username || null;
+    } catch { /* ignore */ }
+    return cachedUsername;
+  };
 
   const upsert = db.prepare(`
     INSERT INTO users (id, first_name, last_name, username, lang) VALUES (?, ?, ?, ?, ?)
@@ -30,6 +40,21 @@ function createBot(token, webAppUrl) {
   };
   const openKeyboard = (lang, payload) =>
     isHttps ? new InlineKeyboard().webApp(tr(lang).open, openUrl(payload)) : undefined;
+
+  const deliverWelcome = async (userId, lang, payload) => {
+    if (!isHttps) {
+      await bot.api.sendMessage(userId, tr(lang).welcome(``), { reply_markup: openKeyboard(lang, payload) });
+      return;
+    }
+    const botUsername = await ensureUsername();
+    await sendWelcome(bot, userId, lang, {
+      webAppUrl,
+      payload: payload || '',
+      botUsername,
+      userId,
+      messageEffectId: PARTY,
+    });
+  };
 
   const langKeyboard = (payload) => {
     const kb = new InlineKeyboard();
@@ -83,14 +108,7 @@ function createBot(token, webAppUrl) {
     await ctx.answerCallbackQuery({ text: LANG_BUTTONS.find((b) => b.code === code).label }).catch(() => {});
     await ctx.deleteMessage().catch(() => {});
 
-    const name = ctx.from.first_name ? `, ${ctx.from.first_name}` : '';
-    const text = tr(code).welcome(name);
-    const reply_markup = openKeyboard(code, payload);
-    try {
-      await ctx.api.sendMessage(ctx.from.id, text, { reply_markup, message_effect_id: PARTY });
-    } catch {
-      await ctx.api.sendMessage(ctx.from.id, text, { reply_markup }); // effect not supported: plain welcome
-    }
+    await deliverWelcome(ctx.from.id, code, payload);
   });
 
   const langOf = async (id) => ((await getUser.get(id)) || { lang: 'en' }).lang;

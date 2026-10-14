@@ -40,21 +40,29 @@ const fake = require('./helpers/fake-telegram');
   assert.ok(!/Welcome|Добро/.test(sent[0].body.text), 'no welcome before the language is chosen');
   step('/start asks for the language first (Uzbek, Uzbek Cyrillic, Russian, English)');
 
-  // 2. choosing a language deletes the picker and sends the welcome in that language with an Open button
-  for (const [code, word, btnText] of [['uz', 'Xush kelibsiz', "♟ O'ynash"], ['uzc', 'Хуш келибсиз', '♟ Ўйнаш'], ['ru', 'Добро пожаловать', '♟ Играть'], ['en', 'Welcome', '♟ Play']]) {
+  // 2. choosing a language deletes the picker and sends the welcome in that language with Open + Invite
+  for (const [code, word, openBtn, inviteBtn] of [
+    ['uz', 'XUSH KELIBSIZ', 'Ilovani ochish', "Do'stni taklif qilish"],
+    ['uzc', 'ХУШ КЕЛИБСИЗ', 'Иловани очиш', 'Дўстни таклиф қилиш'],
+    ['ru', 'ДОБРО ПОЖАЛОВАТЬ', 'Открыть приложение', 'Пригласить друга'],
+    ['en', 'WELCOME TO THE CHESS BOT', 'Open app', 'Invite a friend'],
+  ]) {
     tg.calls.length = 0;
     await press(501, `lang:${code}`, 'en');
     assert.ok(tg.calls.some((c) => c.method === 'deleteMessage'), 'picker removed');
     const welcome = tg.to(501).pop();
     assert.ok(welcome.body.text.includes(word), `${code}: welcome in the chosen language`);
-    const btn = welcome.body.reply_markup.inline_keyboard[0][0];
-    assert.strictEqual(btn.text, btnText);
-    assert.strictEqual(btn.web_app.url, 'https://chess.example.test/', 'Open button launches the Mini App');
+    const rows = welcome.body.reply_markup.inline_keyboard;
+    assert.strictEqual(rows[0][0].text, openBtn);
+    assert.strictEqual(rows[0][0].web_app.url, 'https://chess.example.test/', 'Open button launches the Mini App');
+    assert.strictEqual(rows[1][0].text, inviteBtn);
+    assert.ok(rows[1][0].url.includes('t.me/share/url'), 'Invite opens Telegram share');
+    assert.ok(decodeURIComponent(rows[1][0].url).includes('startapp=i501'), 'Invite uses personal referral');
     assert.ok(welcome.body.message_effect_id, 'welcome has the confetti effect');
     const u = await db.prepare('SELECT lang, lang_set FROM users WHERE id = 501').get();
     assert.deepStrictEqual({ ...u }, { lang: code, lang_set: 1 });
   }
-  step('each language choice stores the language and sends a localized welcome with an Open button');
+  step('each language choice stores the language and sends a localized welcome with Open + Invite');
 
   // 3. an invite deep link survives the language picker and ends up in the Open button
   tg.calls.length = 0;

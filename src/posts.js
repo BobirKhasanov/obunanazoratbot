@@ -11,7 +11,7 @@ function buildMarkup(buttons, webAppUrl, plain = false) {
   return {
     inline_keyboard: buttons.map((b) => {
       const btn = { text: b.text };
-      if (b.type === 'app') btn.web_app = { url: webAppUrl };
+      if (b.type === 'app') btn.web_app = { url: b.url || webAppUrl };
       else btn.url = b.url;
       if (!plain && STYLE[b.color]) btn.style = STYLE[b.color];
       return [btn];

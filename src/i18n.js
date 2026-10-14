@@ -5,6 +5,7 @@ const LANGS = ['uz', 'uzc', 'ru', 'en'];
 const STR = {
   en: {
     welcome: (n) => `♟ Welcome${n}!\n\nPlay chess against the computer, challenge players who are online or invite your friends, right here in Telegram.`,
+    shareText: 'Join me for a game of chess in Telegram! ♟',
     open: '♟ Play',
     openGame: '♟ Open game',
     invited: (n) => `🎮 ${n} invited you to a game of chess. Tap the button to join.`,
@@ -33,6 +34,7 @@ const STR = {
   },
   ru: {
     welcome: (n) => `♟ Добро пожаловать${n}!\n\nИграйте в шахматы с компьютером, вызывайте игроков онлайн или приглашайте друзей, прямо в Telegram.`,
+    shareText: 'Сыграем в шахматы в Telegram! ♟',
     open: '♟ Играть',
     openGame: '♟ Открыть партию',
     invited: (n) => `🎮 ${n} приглашает вас сыграть в шахматы. Нажмите кнопку, чтобы присоединиться.`,
@@ -61,6 +63,7 @@ const STR = {
   },
   uz: {
     welcome: (n) => `♟ Xush kelibsiz${n}!\n\nKompyuter bilan shaxmat o'ynang, onlayn o'yinchilarni o'yinga chorlang yoki do'stlaringizni taklif qiling, to'g'ridan-to'g'ri Telegramda.`,
+    shareText: "Telegramda men bilan shaxmat o'ynang! ♟",
     open: "♟ O'ynash",
     openGame: "♟ O'yinni ochish",
     invited: (n) => `🎮 ${n} sizni shaxmat o'ynashga taklif qildi. Qo'shilish uchun tugmani bosing.`,
@@ -89,6 +92,7 @@ const STR = {
   },
   uzc: {
     welcome: (n) => `♟ Хуш келибсиз${n}!\n\nКомпьютер билан шахмат ўйнанг, онлайн ўйинчиларни ўйинга чорланг ёки дўстларингизни таклиф қилинг, тўғридан-тўғри Телеграмда.`,
+    shareText: 'Телеграмда мен билан шахмат ўйнанг! ♟',
     open: '♟ Ўйнаш',
     openGame: '♟ Ўйинни очиш',
     invited: (n) => `🎮 ${n} сизни шахмат ўйнашга таклиф қилди. Қўшилиш учун тугмани босинг.`,

@@ -646,6 +646,193 @@ export function openAdmin(onClose) {
     ];
   });
 
+  // ----- welcome message (bot /start after language pick) -----
+  const welcomeHost = h('div');
+  let welcomeCfg = null;
+  let welcomeLang = 'uz';
+  const welcomeForm = {
+    text: '', mediaId: null, mediaPreview: null, mediaIsVideo: false, buttons: [],
+  };
+  const welcomeText = h('textarea.input', {
+    rows: 8, maxlength: 4096, placeholder: t('welcome_text'),
+    oninput: (e) => { welcomeForm.text = e.target.value; drawWelcomePreview(); },
+  });
+  const welcomeMediaBox = h('div.media-box');
+  const welcomeBtnBox = h('div.btn-editor');
+  const welcomePreview = h('div.tg-preview');
+  const welcomeFile = h('input', {
+    type: 'file', accept: 'image/jpeg,image/png,image/gif,video/mp4', hidden: true,
+    onchange: async (e) => {
+      const f = e.target.files[0]; e.target.value = '';
+      if (!f) return;
+      toast(t('uploading'));
+      try {
+        const res = await fetch('/api/admin/upload', {
+          method: 'POST',
+          headers: { 'X-Init-Data': getInitData(), 'Content-Type': 'application/octet-stream' },
+          body: f,
+        });
+        const d = await res.json();
+        if (!res.ok) throw Object.assign(new Error(d.error), { code: d.code });
+        welcomeForm.mediaId = d.id;
+        welcomeForm.mediaPreview = URL.createObjectURL(f);
+        welcomeForm.mediaIsVideo = f.type.startsWith('video');
+        drawWelcomeMedia(); drawWelcomePreview(); haptic('success');
+      } catch (err) { fail(err); }
+    },
+  });
+
+  function drawWelcomeMedia() {
+    welcomeMediaBox.replaceChildren();
+    if (welcomeForm.mediaPreview) {
+      const m = welcomeForm.mediaIsVideo
+        ? h('video', { src: welcomeForm.mediaPreview, muted: true, playsinline: true, loop: true, autoplay: true })
+        : h('img', { src: welcomeForm.mediaPreview, alt: '' });
+      welcomeMediaBox.append(
+        m,
+        h('button.mini', {
+          onclick: () => {
+            welcomeForm.mediaId = null; welcomeForm.mediaPreview = null; welcomeForm.mediaIsVideo = false;
+            drawWelcomeMedia(); drawWelcomePreview();
+          },
+        }, icon('x', 16), t('remove')),
+      );
+    } else {
+      welcomeMediaBox.append(h('button.btn.ghost.sm', { onclick: () => welcomeFile.click() }, icon('image', 18), t('add_media')));
+    }
+  }
+
+  function drawWelcomeButtons() {
+    welcomeBtnBox.replaceChildren(...welcomeForm.buttons.map((b, i) => h('div.beditor',
+      h('input.input', {
+        value: b.text, placeholder: t('btn_text'), maxlength: 64,
+        oninput: (e) => { b.text = e.target.value; drawWelcomePreview(); },
+      }),
+      seg(
+        [['app', t('btn_app')], ['invite', t('btn_invite')], ['url', t('btn_url')]],
+        b.type,
+        (v) => { b.type = v; drawWelcomeButtons(); drawWelcomePreview(); },
+      ),
+      b.type === 'url'
+        ? h('input.input', {
+          value: b.url || '', placeholder: t('btn_link'), inputmode: 'url',
+          oninput: (e) => { b.url = e.target.value; },
+        })
+        : b.type === 'invite'
+          ? h('p.muted', t('btn_invite_hint'))
+          : null,
+      h('div.swatches', COLOR_KEYS.map((c) => h('button.sw' + (b.color === c ? '.on' : ''), {
+        'aria-label': t('c_' + (c === 'default' ? 'default' : c)),
+        style: { background: swatch[c] },
+        onclick: () => { b.color = c; drawWelcomeButtons(); drawWelcomePreview(); },
+      }))),
+      h('button.mini', {
+        onclick: () => { welcomeForm.buttons.splice(i, 1); drawWelcomeButtons(); drawWelcomePreview(); },
+      }, icon('trash', 16), t('remove')),
+    )));
+    if (welcomeForm.buttons.length < 6) {
+      welcomeBtnBox.append(h('button.btn.ghost.sm', {
+        onclick: () => {
+          welcomeForm.buttons.push({ text: '', type: 'app', url: '', color: 'primary' });
+          drawWelcomeButtons(); drawWelcomePreview();
+        },
+      }, icon('plus', 18), t('add_button')));
+    }
+  }
+
+  function drawWelcomePreview() {
+    welcomePreview.replaceChildren(...[
+      welcomeForm.mediaPreview
+        ? (welcomeForm.mediaIsVideo
+          ? h('video', { src: welcomeForm.mediaPreview, muted: true, playsinline: true })
+          : h('img', { src: welcomeForm.mediaPreview, alt: '' }))
+        : null,
+      welcomeForm.text ? h('p', { style: { whiteSpace: 'pre-wrap' } }, welcomeForm.text) : null,
+      ...welcomeForm.buttons.map((b) => h('div.pb.c-' + (b.color || 'default'), b.text || '…')),
+    ].filter(Boolean));
+    welcomePreview.hidden = !welcomeForm.text && !welcomeForm.mediaPreview;
+  }
+
+  async function applyWelcomeLang(code) {
+    welcomeLang = code;
+    const entry = (welcomeCfg && welcomeCfg[code]) || { text: '', mediaId: null, buttons: [] };
+    welcomeForm.text = entry.text || '';
+    welcomeForm.mediaId = entry.mediaId || null;
+    welcomeForm.mediaPreview = null;
+    welcomeForm.mediaIsVideo = false;
+    welcomeForm.buttons = (entry.buttons || []).map((b) => ({
+      text: b.text || '', type: b.type || 'app', url: b.url || '', color: b.color || 'default',
+    }));
+    welcomeText.value = welcomeForm.text;
+    if (entry.mediaId) {
+      try {
+        const res = await fetch('/api/media/' + entry.mediaId, { headers: { 'X-Init-Data': getInitData() } });
+        if (res.ok) {
+          welcomeForm.mediaPreview = URL.createObjectURL(await res.blob());
+          const ct = res.headers.get('content-type') || '';
+          welcomeForm.mediaIsVideo = ct.startsWith('video');
+        }
+      } catch { /* ignore */ }
+    }
+    drawWelcomeMedia(); drawWelcomeButtons(); drawWelcomePreview();
+  }
+
+  async function loadWelcome() {
+    try {
+      const r = await api('GET', '/admin/welcome');
+      welcomeCfg = r.welcome || {};
+      await applyWelcomeLang(welcomeLang);
+    } catch (e) { fail(e); }
+  }
+
+  function renderWelcomeHost() {
+    const langSeg = seg(LANGS.map((l) => [l, LANG_NAMES[l].slice(0, 3)]), welcomeLang, (v) => { applyWelcomeLang(v); });
+    const saveBtn = h('button.btn', {
+      onclick: async () => {
+        try {
+          const r = await api('PATCH', '/admin/welcome', {
+            lang: welcomeLang,
+            text: welcomeForm.text,
+            mediaId: welcomeForm.mediaId,
+            buttons: welcomeForm.buttons.map((b) => ({
+              text: b.text, type: b.type, color: b.color,
+              url: b.type === 'url' ? b.url : undefined,
+            })),
+          });
+          if (!welcomeCfg) welcomeCfg = {};
+          welcomeCfg[welcomeLang] = r.entry;
+          toast(t('welcome_saved')); haptic('success');
+        } catch (e) { fail(e); }
+      },
+    }, icon('check', 18), t('save'));
+    const testBtn = h('button.btn.ghost', {
+      onclick: async () => {
+        try {
+          await api('POST', '/admin/welcome/test', { lang: welcomeLang });
+          toast(t('test_sent')); haptic('success');
+        } catch (e) { fail(e); }
+      },
+    }, icon('send', 18), t('send_test'));
+    welcomeHost.replaceChildren(
+      h('p.muted', t('welcome_sub')),
+      h('div.label', t('language')), langSeg,
+      h('div.label', t('welcome_text')), welcomeText,
+      h('div.label', t('ann_media')), welcomeMediaBox, welcomeFile,
+      h('div.label', t('buttons')), welcomeBtnBox,
+      h('div.label', t('preview')), welcomePreview,
+      saveBtn, testBtn,
+    );
+  }
+
+  const openWelcome = () => openScreen((close) => {
+    loadWelcome().then(() => renderWelcomeHost());
+    renderWelcomeHost();
+    return [
+      ...subTop(t('welcome_title'), close),
+      welcomeHost,
+    ];
+  });
+
   const openStyle = () => openScreen((close) => {
     drawStyle();
     return [
@@ -764,6 +951,7 @@ export function openAdmin(onClose) {
     sec(t('admin_sec_content')),
     menuCard(
       menuRow({ ic: 'send', title: t('composer'), sub: t('admin_sec_broadcast_sub'), onClick: openBroadcast }),
+      menuRow({ ic: 'play', title: t('welcome_title'), sub: t('welcome_menu_sub'), onClick: openWelcome }),
       menuRow({ ic: 'bell', title: t('admin_notif'), sub: t('admin_notif_menu_sub'), onClick: openInAppNotif }),
       menuRow({ ic: 'image', title: t('admin_banner'), sub: t('admin_banner_menu_sub'), onClick: openBanner }),
       menuRow({ ic: 'gear', title: t('admin_style'), sub: t('admin_style_sub'), onClick: openStyle }),

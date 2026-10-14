@@ -30,7 +30,7 @@ import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleOpenGame } from './game.js';
 import { renderProfilePage, openUserProfile } from './profile.js';
 import { closeScreen } from './screen.js';
-import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel } from './announcements.js';
+import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel, CAROUSEL_STAGGER_MS } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
@@ -388,7 +388,9 @@ refreshers.play = async function renderPlay() {
     };
     const opts = { botUsername: state.meta?.botUsername, userId: state.me?.id, onPage };
     await mountAnnouncementsCarousel(annHost, anns, opts);
-    if (puzzleAnns && puzzleAnns.length) await mountAnnouncementsCarousel(puzzleHost, puzzleAnns, opts);
+    if (puzzleAnns && puzzleAnns.length) {
+      await mountAnnouncementsCarousel(puzzleHost, puzzleAnns, { ...opts, delayMs: CAROUSEL_STAGGER_MS });
+    }
   }
 };
 refreshers.live = async function renderLive() {

@@ -26,6 +26,7 @@ const {
   monthKey, monthLabelEn, seasonLabel, previousMonthKey, tashkentDay, monthsForYear,
   normalizeConfig, generateMedalSvg, titleFor, DEFAULT_CONFIG, FONT_KEYS, PIECE_KEYS,
 } = require('./medals');
+const { loadWelcomeConfig, saveWelcomeLang, sendWelcome } = require('./welcome');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
@@ -2136,6 +2137,43 @@ admin.patch('/profile-banner', wrap(async (req, res) => {
   if (row.kind === 'video') throw bad('Use JPG, PNG or GIF', 'media_type');
   await setSetting('profile_banner_media_id', id);
   res.json(await profileBannerMeta());
+}));
+
+admin.get('/welcome', wrap(async (req, res) => {
+  const welcome = await loadWelcomeConfig();
+  res.json({ welcome, langs: LANGS, colors: COLORS });
+}));
+
+admin.patch('/welcome', wrap(async (req, res) => {
+  const b = req.body || {};
+  const lang = LANGS.includes(b.lang) ? b.lang : null;
+  if (!lang) throw bad('Pick a language', 'bad_request');
+  if (b.mediaId) {
+    const row = await db.prepare('SELECT id FROM media WHERE id = ?').get(String(b.mediaId));
+    if (!row) throw bad('Media not found, upload it again', 'media');
+  }
+  const entry = await saveWelcomeLang(lang, {
+    text: b.text,
+    mediaId: b.mediaId === undefined ? undefined : b.mediaId,
+    buttons: b.buttons,
+  });
+  res.json({ lang, entry });
+}));
+
+admin.post('/welcome/test', wrap(async (req, res) => {
+  const b = req.body || {};
+  const lang = LANGS.includes(b.lang) ? b.lang : req.user.lang || 'en';
+  try {
+    await sendWelcome(bot, req.user.id, lang, {
+      webAppUrl: WEBAPP_URL,
+      payload: '',
+      botUsername: await getBotUsername(),
+      userId: req.user.id,
+    });
+  } catch (e) {
+    throw bad(`Telegram refused: ${e.description || e.message}`, 'tg_error');
+  }
+  res.json({ ok: true, lang });
 }));
 
 admin.get('/shop', wrap(async (req, res) => {
