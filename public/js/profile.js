@@ -348,7 +348,7 @@ export function renderProfilePage(ctx) {
                   haptic('select');
                   shareUrl(m.url, `${m.title} · @${state.meta.botUsername || 'Chess_uz_bot'}`);
                 },
-              }, t('avatar_share')))))
+              }, t('avatar_share'))))))
           : h('div.empty', h('div.empty-ic', '🏅'), t('avatar_medals_empty')),
       );
     };

@@ -98,6 +98,17 @@ app.get('/healthz', (req, res) => res.json({ ok: true }));
 const wrap = (fn) => (req, res, next) => {
   try { Promise.resolve(fn(req, res)).catch(next); } catch (e) { next(e); }
 };
+
+// Medal SVGs are public so <img> / download / Telegram share work without initData headers
+app.get('/api/medals/:id.svg', wrap(async (req, res) => {
+  const id = String(req.params.id || '').replace(/\.svg$/i, '');
+  const row = await db.prepare('SELECT svg FROM medals WHERE id = ?').get(id);
+  if (!row) throw new HttpError(404, 'Not found', 'notfound');
+  res.set('Content-Type', 'image/svg+xml; charset=utf-8');
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.send(row.svg);
+}));
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const intParam = (v) => { const n = Number(v); if (!Number.isSafeInteger(n)) throw bad('Invalid id', 'bad_request'); return n; };
 const cleanText = (v, max, code, required = false) => {
@@ -996,15 +1007,6 @@ api.get('/medals/mine', wrap(async (req, res) => {
       title: r.title, url: `/api/medals/${r.id}.svg`, key: `medal:${r.id}`,
     })),
   });
-}));
-
-api.get('/medals/:id.svg', wrap(async (req, res) => {
-  const id = String(req.params.id || '').replace(/\.svg$/i, '');
-  const row = await db.prepare('SELECT svg FROM medals WHERE id = ?').get(id);
-  if (!row) throw new HttpError(404, 'Not found', 'notfound');
-  res.set('Content-Type', 'image/svg+xml; charset=utf-8');
-  res.set('Cache-Control', 'public, max-age=3600');
-  res.send(row.svg);
 }));
 
 // ---------- lobby: who is online and what games do I have ----------
