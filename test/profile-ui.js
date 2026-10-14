@@ -72,6 +72,8 @@ assert.ok(css.includes('scroll-behavior: smooth'));
 assert.ok(css.includes('.menu-card'));
 assert.ok(css.includes('.sec-label'));
 assert.ok(css.includes('.prof-me'));
-assert.ok(css.includes('#track.settle') && css.includes('0.55s'));
+assert.ok(css.includes('#track.settle') && /#track\.settle[^}]*0\.62s/.test(css), 'smooth pager settle');
+assert.ok(/#play-sticky[\s\S]{0,280}z-index:\s*25/.test(css), 'Play CTA above dock z-index');
+assert.ok(/#nav-ind\s*\{[^}]*0\.62s/.test(css), 'nav indicator matches pager timing');
 
 console.log('ok  profile-ui (hub + smooth nav)');

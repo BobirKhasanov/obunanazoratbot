@@ -493,11 +493,12 @@ function initPager() {
       if (prev === TABS.indexOf('play')) { stopAnnouncementsCarousel(); playSnap = ''; }
       if (state.tab === 'play') playSnap = '';
     }
-    setPlaySticky(state.tab === 'play');
+    // Sticky Play fades with CSS; toggle after paint so opacity/transform transitions run
     track.classList.toggle('settle', !!animate); ind.classList.remove('drag');
     setX(-state.index * W);
     ind.style.transform = `translateX(${state.index * 100}%)`;
     btns.forEach((b, j) => b.classList.toggle('active', j === state.index));
+    requestAnimationFrame(() => setPlaySticky(state.tab === 'play'));
     // smooth scroll pages to top when switching tabs
     if (state.index !== prev) {
       const p = page(state.tab);

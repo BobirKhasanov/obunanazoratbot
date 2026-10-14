@@ -59,7 +59,7 @@ h1, h2, h3, p { margin: 0; }
 #app { position: fixed; inset: 0; }
 #pager { position: absolute; inset: 0; overflow: hidden; touch-action: pan-y; }
 #track { display: flex; height: 100%; width: 100%; will-change: transform; transform: translate3d(0, 0, 0); }
-#track.settle { transition: transform 0.55s var(--ease); }
+#track.settle { transition: transform 0.62s var(--ease); }
 .page {
   flex: 0 0 100%; width: 100%; height: 100%; overflow-y: auto; overflow-x: hidden;
   padding: calc(var(--safe-t) + 14px) 14px calc(105px + var(--safe-b));
@@ -67,7 +67,7 @@ h1, h2, h3, p { margin: 0; }
   scroll-behavior: smooth;
 }
 /* Extra room above the fixed Play CTA on the home tab */
-.page[data-page="play"] { padding-bottom: calc(170px + var(--safe-b)); }
+.page[data-page="play"] { padding-bottom: calc(188px + var(--safe-b)); }
 .page::-webkit-scrollbar { display: none; }
 .page > * { animation: rise 0.5s var(--ease) both; }
 .page > *:nth-child(2) { animation-delay: 0.04s; }
@@ -179,6 +179,7 @@ button.row:active { transform: scale(0.98); }
 #dock {
   position: absolute; left: 50%; width: min(540px, calc(100% - 28px)); transform: translateX(-50%); bottom: calc(14px + var(--safe-b));
   display: flex; align-items: center; justify-content: center; z-index: 20; pointer-events: none;
+  transition: transform 0.45s var(--ease), opacity 0.35s var(--ease);
 }
 #nav {
   pointer-events: auto; position: relative; width: 100%; flex: none; display: flex; padding: 6px; border-radius: 32px;
@@ -187,16 +188,16 @@ button.row:active { transform: scale(0.98); }
 }
 #nav-ind {
   position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / 5); border-radius: 26px;
-  background: var(--card-2); will-change: transform; transition: transform 0.46s var(--ease);
+  background: var(--card-2); will-change: transform; transition: transform 0.62s var(--ease);
 }
 #nav-ind.drag { transition: none; }
 .nav-btn {
   position: relative; flex: 1; min-width: 0; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px; color: var(--muted); font-size: 10.5px; font-weight: 600; transition: color 0.3s, transform 0.2s var(--ease);
+  gap: 3px; color: var(--muted); font-size: 10.5px; font-weight: 600; transition: color 0.35s var(--ease), transform 0.25s var(--ease);
 }
 .nav-btn:active { transform: scale(0.92); }
 .nav-btn.active { color: var(--text); }
-.nav-btn svg { transition: transform 0.4s var(--ease); }
+.nav-btn svg { transition: transform 0.45s var(--ease); }
 .nav-btn.active svg { transform: translateY(-1px) scale(1.08); }
 /* ---------- bottom sheet ---------- */
 .backdrop { position: fixed; inset: 0; background: rgba(5, 8, 14, 0.62); opacity: 0; transition: opacity 0.35s var(--ease); z-index: 40; }
@@ -269,7 +270,7 @@ button.row:active { transform: scale(0.98); }
 .screen {
   position: absolute; inset: 0; z-index: 30; background: var(--bg); overflow-y: auto;
   padding: calc(var(--safe-t) + 14px) 14px calc(40px + var(--safe-b));
-  transform: translateX(100%); transition: transform 0.52s var(--ease), opacity 0.35s var(--ease);
+  transform: translateX(100%); transition: transform 0.58s var(--ease), opacity 0.4s var(--ease);
   visibility: hidden; opacity: 0; scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
 }
@@ -845,18 +846,24 @@ button.rating-tile:active { transform: scale(0.98); }
 .pcard:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.32); }
 .pcard-art { font-size: 38px; line-height: 1.1; }
 .pcard b { font-size: 14px; font-weight: 700; line-height: 1.25; }
-/* Fixed Play CTA sits above the floating dock while the home page scrolls */
+/* Fixed Play CTA sits clearly above the floating dock (higher z-index + clearance) */
 #play-sticky {
-  position: absolute; left: 50%; width: min(540px, calc(100% - 28px)); transform: translateX(-50%);
-  bottom: calc(76px + var(--safe-b)); z-index: 15; pointer-events: none;
-  padding: 0; opacity: 0; visibility: hidden; transition: opacity 0.25s var(--ease), visibility 0.25s;
+  position: absolute; left: 50%; width: min(540px, calc(100% - 28px));
+  bottom: calc(96px + var(--safe-b)); z-index: 25; pointer-events: none;
+  padding: 0; opacity: 0; visibility: hidden;
+  transform: translateX(-50%) translateY(14px);
+  transition: opacity 0.38s var(--ease), visibility 0.38s, transform 0.42s var(--ease);
 }
-#play-sticky.show { opacity: 1; visibility: visible; pointer-events: none; }
+#play-sticky.show {
+  opacity: 1; visibility: visible; pointer-events: none;
+  transform: translateX(-50%) translateY(0);
+}
 #play-sticky .cta { pointer-events: auto; }
 /* Keep sticky Play under full-screen overlays so it cannot steal taps */
 #app:has(#screen.show) #play-sticky,
 #app:has(#game.show) #play-sticky {
   opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translateX(-50%) translateY(10px);
 }
 .play-cta { margin: 0 0 12px; }
 .cta { width: 100%; height: 58px; border-radius: 20px; background: linear-gradient(180deg, #3a7be8, #2f68d3); color: #fff; font-size: 20px; font-weight: 800; box-shadow: 0 5px 0 #1d4698, 0 12px 26px rgba(0, 0, 0, 0.3); transition: transform 0.18s var(--ease), box-shadow 0.18s; }
