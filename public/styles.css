@@ -66,8 +66,8 @@ h1, h2, h3, p { margin: 0; }
   -webkit-overflow-scrolling: touch; scrollbar-width: none;
   scroll-behavior: smooth;
 }
-/* Extra room above the fixed Play CTA on the home tab */
-.page[data-page="play"] { padding-bottom: calc(188px + var(--safe-b)); }
+/* Extra room for dock + Play CTA stacked above the nav */
+.page[data-page="play"] { padding-bottom: calc(190px + var(--safe-b)); }
 .page::-webkit-scrollbar { display: none; }
 .page > * { animation: rise 0.5s var(--ease) both; }
 .page > *:nth-child(2) { animation-delay: 0.04s; }
@@ -178,7 +178,8 @@ button.row:active { transform: scale(0.98); }
 /* ---------- floating dock ---------- */
 #dock {
   position: absolute; left: 50%; width: min(540px, calc(100% - 28px)); transform: translateX(-50%); bottom: calc(14px + var(--safe-b));
-  display: flex; align-items: center; justify-content: center; z-index: 20; pointer-events: none;
+  display: flex; flex-direction: column; align-items: stretch; justify-content: flex-end; gap: 10px;
+  z-index: 20; pointer-events: none;
   transition: transform 0.45s var(--ease), opacity 0.35s var(--ease);
 }
 #nav {
@@ -846,24 +847,25 @@ button.rating-tile:active { transform: scale(0.98); }
 .pcard:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.32); }
 .pcard-art { font-size: 38px; line-height: 1.1; }
 .pcard b { font-size: 14px; font-weight: 700; line-height: 1.25; }
-/* Fixed Play CTA sits clearly above the floating dock (higher z-index + clearance) */
+/* Play CTA lives inside #dock, stacked above the nav — cannot sit behind the bar */
 #play-sticky {
-  position: absolute; left: 50%; width: min(540px, calc(100% - 28px));
-  bottom: calc(96px + var(--safe-b)); z-index: 25; pointer-events: none;
-  padding: 0; opacity: 0; visibility: hidden;
-  transform: translateX(-50%) translateY(14px);
-  transition: opacity 0.38s var(--ease), visibility 0.38s, transform 0.42s var(--ease);
+  position: relative; width: 100%; flex: none; order: -1;
+  max-height: 0; opacity: 0; visibility: hidden; overflow: hidden;
+  transform: translateY(10px); pointer-events: none;
+  transition: max-height 0.42s var(--ease), opacity 0.35s var(--ease),
+    visibility 0.35s, transform 0.42s var(--ease), margin 0.35s var(--ease);
+  margin: 0;
 }
 #play-sticky.show {
-  opacity: 1; visibility: visible; pointer-events: none;
-  transform: translateX(-50%) translateY(0);
+  max-height: 72px; opacity: 1; visibility: visible; margin: 0;
+  transform: none; pointer-events: none;
 }
-#play-sticky .cta { pointer-events: auto; }
-/* Keep sticky Play under full-screen overlays so it cannot steal taps */
+#play-sticky .cta { pointer-events: auto; width: 100%; }
+/* Hide Play under full-screen overlays */
 #app:has(#screen.show) #play-sticky,
 #app:has(#game.show) #play-sticky {
-  opacity: 0; visibility: hidden; pointer-events: none;
-  transform: translateX(-50%) translateY(10px);
+  max-height: 0; opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translateY(8px); margin: 0;
 }
 .play-cta { margin: 0 0 12px; }
 .cta { width: 100%; height: 58px; border-radius: 20px; background: linear-gradient(180deg, #3a7be8, #2f68d3); color: #fff; font-size: 20px; font-weight: 800; box-shadow: 0 5px 0 #1d4698, 0 12px 26px rgba(0, 0, 0, 0.3); transition: transform 0.18s var(--ease), box-shadow 0.18s; }

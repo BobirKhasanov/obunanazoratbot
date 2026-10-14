@@ -38,18 +38,20 @@ function ensurePlayFlow() {
 }
 
 function setPlaySticky(show) {
-  let el = $('#play-sticky');
-  if (!el) {
-    el = h('div#play-sticky', h('button.cta', {
+  const el = $('#play-sticky');
+  if (!el) return;
+  let btn = el.querySelector('.cta');
+  if (!btn) {
+    btn = h('button.cta', {
       type: 'button',
       onclick: () => { ensurePlayFlow().open(); },
-    }, t('play_btn')));
-    $('#app')?.append(el);
+    }, t('play_btn'));
+    el.append(btn);
   } else {
-    const btn = el.querySelector('.cta');
-    if (btn) btn.textContent = t('play_btn');
+    btn.textContent = t('play_btn');
   }
   el.classList.toggle('show', !!show);
+  el.setAttribute('aria-hidden', show ? 'false' : 'true');
 }
 
 function applyTheme(theme) {

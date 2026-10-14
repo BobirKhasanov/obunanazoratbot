@@ -37,7 +37,21 @@ export default {
       }));
     }
 
-    if (env.ASSETS) return env.ASSETS.fetch(request);
+    if (env.ASSETS) {
+      const res = await env.ASSETS.fetch(request);
+      // HTML must not be cached hard in Telegram WebView; hashed query on CSS/JS bustes the rest.
+      if (path === '/' || path.endsWith('.html')) {
+        const out = new Response(res.body, res);
+        out.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return out;
+      }
+      if (path.endsWith('.css') || path.endsWith('.js')) {
+        const out = new Response(res.body, res);
+        out.headers.set('Cache-Control', 'public, max-age=120, must-revalidate');
+        return out;
+      }
+      return res;
+    }
     return new Response('Not found', { status: 404 });
   },
 };
