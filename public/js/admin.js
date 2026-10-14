@@ -462,6 +462,11 @@ export function openAdmin(onClose) {
       value: cfg.titleTemplate || 'Top {place} Chess player of {month}', maxlength: 120,
       oninput: (e) => { cfg.titleTemplate = e.target.value; },
     });
+    const shieldIn = h('input.input', {
+      value: cfg.shieldText != null ? cfg.shieldText : 'CHESS', maxlength: 16,
+      placeholder: 'CHESS',
+      oninput: (e) => { cfg.shieldText = e.target.value; },
+    });
     const monthIn = h('input.input', {
       value: medalState.previewMonth || medalState.month || '',
       placeholder: 'YYYY-MM',
@@ -486,6 +491,8 @@ export function openAdmin(onClose) {
         h('div.label', t('admin_medals_bot')), botIn,
         h('div.label', t('admin_medals_title_tpl')), tplIn,
         h('p.muted', t('admin_medals_tpl_hint')),
+        h('div.label', t('admin_medals_shield')), shieldIn,
+        h('p.muted', t('admin_medals_shield_hint')),
         h('div.label', t('ann_colors')),
         h('div.ann-colors',
           color('primary', 'Primary'), color('secondary', 'Secondary'),

@@ -1,70 +1,96 @@
 /**
- * Monthly podium medal SVG generator (admin-configurable).
- * Top 1/2/3 = distinct chess pieces; 12 month backdrops × year palette shift.
- * Visual language: winged gold badge + crown + pedestal (share/avatar 512²).
+ * Professional winged chess medal SVG (admin-configurable).
+ * Layout matches game-UI crests: crown + tiered wings + glossy piece + shield.
+ * Top 1/2/3 = gold/silver/bronze + distinct piece icons.
+ * 12 months × year shift → unique wing flare / gem accent / background wash.
  */
 
 const FONTS = {
   serif: 'Georgia, "Times New Roman", serif',
   display: 'Palatino Linotype, Palatino, "Book Antiqua", Georgia, serif',
-  sans: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+  sans: 'system-ui, -apple-system, "Segoe UI", Arial, sans-serif',
   mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
-  rounded: 'ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", system-ui, sans-serif',
+  rounded: 'ui-rounded, "SF Pro Rounded", system-ui, sans-serif',
 };
 
 const FONT_KEYS = Object.keys(FONTS);
+const PIECE_KEYS = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn'];
 
 const DEFAULT_CONFIG = {
   botHandle: '@Chess_uz_bot',
   titleTemplate: 'Top {place} Chess player of {month}',
-  primary: '#f5c542',
-  secondary: '#1a0f05',
-  accent: '#ffe9a0',
+  primary: '#ffd54a',
+  secondary: '#0a0a0a',
+  accent: '#fff3c4',
   text: '#fff8e7',
-  muted: '#d4b87a',
+  muted: '#e8c878',
   fontFamily: 'sans',
   fontTitle: 'serif',
-  sizeInitial: 0, // unused on winged badge (piece is icon)
-  sizePlace: 28,
-  sizeName: 20,
-  sizeHandle: 14,
-  sizeTitle: 12,
-  sizeBot: 13,
-  // Piece icons per podium place (admin-overridable)
+  sizeInitial: 0,
+  sizePlace: 26,
+  sizeName: 18,
+  sizeHandle: 13,
+  sizeTitle: 11,
+  sizeBot: 12,
   pieceTop1: 'king',
   pieceTop2: 'queen',
   pieceTop3: 'knight',
-};
-
-const PIECE_KEYS = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn'];
-
-/** Chunky chess silhouette paths (24×28-ish local coords). */
-const PIECE = {
-  king: 'M11 1h2v3h3v2h-3v2.2l4.5 1.3-.6 2.2L13 10.5V13h5l-.8 12H6.8L6 13h5V10.5L6.1 11.7l-.6-2.2L10 8.2V6H7V4h3z',
-  queen: 'M5 9l1.8-5.5L9.5 7 12 2.5 14.5 7l2.7-3.5L19 9l-1.2 1.5H6.2zm2.2 3.2h9.6L15.6 24H8.4z',
-  rook: 'M6 3h3v3h2V3h2v3h2V3h3v7H6zm1.5 8h9L15.2 25H8.8z',
-  bishop: 'M12 2c2.8 3.2 5.5 5.2 5.5 9.2A5.5 5.5 0 1 1 6.5 11.2C6.5 7.2 9.2 5.2 12 2zm-3.2 18.5h6.4L14.2 26H9.8z',
-  knight: 'M7.5 25h10v-2.2l-2.2-1.2.8-3.2c2.2-2 3.4-4.2 3.4-6.5 0-3.4-2.2-5.6-5.6-5.6-1.2 0-2.3.35-3.3 1.05L7.2 9.2l1.1 2.1-2.3 1.1 1.1 2.2-3.2 1.15 2.2 3.2 1.15-1.1z',
-  pawn: 'M12 3.2a3.6 3.6 0 1 1 0 7.2 3.6 3.6 0 0 1 0-7.2zM9.2 12.2h5.6l1.3 3.4H7.9zm-1.3 4.5h8.2L15 26H9z',
+  shieldText: 'CHESS', // empty → TOP {place}
 };
 
 const MONTH_NAMES_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+/**
+ * Chunky piece silhouettes (viewBox 0 0 64 80) — game-icon style like the references.
+ */
+const PIECE = {
+  pawn: `
+    <circle cx="32" cy="18" r="12"/>
+    <path d="M20 32h24l4 10H16z"/>
+    <path d="M14 44h36l-4 28H18z"/>
+    <ellipse cx="32" cy="74" rx="22" ry="5"/>`,
+  rook: `
+    <path d="M12 8h10v10h6V8h8v10h6V8h10v22H12z"/>
+    <path d="M16 32h32v36H16z"/>
+    <path d="M12 68h40v8H12z"/>
+    <ellipse cx="32" cy="78" rx="24" ry="4"/>`,
+  knight: `
+    <path d="M18 72h32v-6l-6-4 2-10c6-6 10-12 10-20 0-12-8-20-20-20-5 0-9 1.5-12 4L14 22l4 7-8 4 4 7-10 4 8 12 4-4z"/>
+    <circle cx="28" cy="28" r="2.5" fill="#1a0f05"/>
+    <ellipse cx="32" cy="76" rx="22" ry="4"/>`,
+  bishop: `
+    <circle cx="32" cy="8" r="4"/>
+    <path d="M32 12c10 10 16 16 16 28a16 16 0 1 1-32 0c0-12 6-18 16-28z"/>
+    <path d="M26 18c6 4 10 10 12 18" fill="none" stroke="#1a0f05" stroke-width="3" stroke-linecap="round" opacity="0.35"/>
+    <path d="M18 58h28l-3 16H21z"/>
+    <ellipse cx="32" cy="76" rx="22" ry="4"/>`,
+  queen: `
+    <circle cx="12" cy="14" r="4"/><circle cx="32" cy="6" r="5"/><circle cx="52" cy="14" r="4"/>
+    <circle cx="22" cy="10" r="3.5"/><circle cx="42" cy="10" r="3.5"/>
+    <path d="M10 18l6 16h32l6-16-8 6-6-12-6 10-6-10-6 12z"/>
+    <path d="M16 36h32l-3 28H19z"/>
+    <path d="M14 64h36v8H14z"/>
+    <ellipse cx="32" cy="76" rx="24" ry="4"/>`,
+  king: `
+    <path d="M29 2h6v8h8v5h-8v8h-6v-8h-8V10h8z"/>
+    <path d="M14 26h36l-4 10H18z"/>
+    <path d="M16 38h32l-2 26H18z"/>
+    <path d="M12 64h40v8H12z"/>
+    <ellipse cx="32" cy="76" rx="24" ry="4"/>`,
+};
 
 function monthKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit',
   }).formatToParts(date);
-  const y = parts.find((p) => p.type === 'year').value;
-  const m = parts.find((p) => p.type === 'month').value;
-  return `${y}-${m}`;
+  return `${parts.find((p) => p.type === 'year').value}-${parts.find((p) => p.type === 'month').value}`;
 }
 
 function monthLabelEn(key) {
   const [y, m] = String(key).split('-');
   const names = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
-  const mi = Math.max(0, Math.min(11, Number(m) - 1));
-  return `${names[mi]} ${y}`;
+  return `${names[Math.max(0, Math.min(11, Number(m) - 1))]} ${y}`;
 }
 
 function previousMonthKey(key = monthKey()) {
@@ -75,10 +101,7 @@ function previousMonthKey(key = monthKey()) {
 
 function hash(s) {
   let h = 2166136261;
-  for (const c of String(s)) {
-    h ^= c.charCodeAt(0);
-    h = Math.imul(h, 16777619);
-  }
+  for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
   return h >>> 0;
 }
 
@@ -88,8 +111,7 @@ function hsl(h, s, l) {
 
 function clampSize(n, min, max, fallback) {
   const v = Math.floor(Number(n));
-  if (!Number.isFinite(v)) return fallback;
-  return Math.min(max, Math.max(min, v));
+  return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
 }
 
 function fontCss(key, fallback = 'sans') {
@@ -118,7 +140,7 @@ function normalizeConfig(raw) {
     fontFamily: FONT_KEYS.includes(cfg.fontFamily) ? cfg.fontFamily : DEFAULT_CONFIG.fontFamily,
     fontTitle: FONT_KEYS.includes(cfg.fontTitle) ? cfg.fontTitle : DEFAULT_CONFIG.fontTitle,
     sizeInitial: clampSize(cfg.sizeInitial, 0, 140, DEFAULT_CONFIG.sizeInitial),
-    sizePlace: clampSize(cfg.sizePlace, 16, 48, DEFAULT_CONFIG.sizePlace),
+    sizePlace: clampSize(cfg.sizePlace, 14, 48, DEFAULT_CONFIG.sizePlace),
     sizeName: clampSize(cfg.sizeName, 12, 36, DEFAULT_CONFIG.sizeName),
     sizeHandle: clampSize(cfg.sizeHandle, 10, 28, DEFAULT_CONFIG.sizeHandle),
     sizeTitle: clampSize(cfg.sizeTitle, 9, 22, DEFAULT_CONFIG.sizeTitle),
@@ -126,6 +148,7 @@ function normalizeConfig(raw) {
     pieceTop1: pieceKey(cfg.pieceTop1, DEFAULT_CONFIG.pieceTop1),
     pieceTop2: pieceKey(cfg.pieceTop2, DEFAULT_CONFIG.pieceTop2),
     pieceTop3: pieceKey(cfg.pieceTop3, DEFAULT_CONFIG.pieceTop3),
+    shieldText: String(cfg.shieldText != null ? cfg.shieldText : DEFAULT_CONFIG.shieldText).slice(0, 16),
   };
 }
 
@@ -137,10 +160,8 @@ function titleFor(cfg, place, month) {
 
 function esc(s) {
   return String(s || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function parseMonth(month) {
@@ -151,43 +172,9 @@ function parseMonth(month) {
   };
 }
 
-/** Month 0–11 style + year rotates palette so Oct 2026 ≠ Oct 2027. */
 function monthStyleIndex(month) {
   const { year, month: mo } = parseMonth(month);
   return (mo - 1 + ((year * 5) % 12)) % 12;
-}
-
-function metalPalette(place, cfg, year) {
-  const yearHue = (year * 47) % 360;
-  if (place === 1) {
-    return {
-      hi: cfg.accent || '#ffe9a0',
-      mid: cfg.primary || '#f5c542',
-      lo: '#b8860b',
-      deep: '#6b4a08',
-      spark: '#ffffff',
-      label: 'GOLD',
-    };
-  }
-  if (place === 2) {
-    return {
-      hi: '#f8fafc',
-      mid: '#c0c7d1',
-      lo: '#64748b',
-      deep: '#334155',
-      spark: '#ffffff',
-      label: 'SILVER',
-    };
-  }
-  // bronze — slight year tint
-  return {
-    hi: hsl(28 + (yearHue % 20), 70, 62),
-    mid: '#cd7f32',
-    lo: '#8b4513',
-    deep: '#5c2e0a',
-    spark: '#fff7ed',
-    label: 'BRONZE',
-  };
 }
 
 function pieceForPlace(cfg, place) {
@@ -196,121 +183,135 @@ function pieceForPlace(cfg, place) {
   return cfg.pieceTop3;
 }
 
-/** Wing / backdrop variants — one family per month slot. */
-function wingsSvg(styleIdx, uid, m) {
-  // Common: 3 layered plates left + right (reference look)
-  const plate = (side, i, extraRot = 0) => {
+/** Gold / silver / bronze metal stops (reference look). */
+function metalPalette(place, cfg, year) {
+  if (place === 1) {
+    return {
+      hi: cfg.accent || '#fff6c8',
+      mid: cfg.primary || '#ffd54a',
+      mid2: '#f0a820',
+      lo: '#c47a0a',
+      deep: '#7a4508',
+      ink: '#5c3006',
+      rim: '#ffe9a0',
+    };
+  }
+  if (place === 2) {
+    return {
+      hi: '#ffffff',
+      mid: '#e2e8f0',
+      mid2: '#94a3b8',
+      lo: '#64748b',
+      deep: '#334155',
+      ink: '#1e293b',
+      rim: '#f1f5f9',
+    };
+  }
+  const tint = (year * 3) % 15;
+  return {
+    hi: hsl(28 + tint, 75, 62),
+    mid: '#d4893a',
+    mid2: '#a85c22',
+    lo: '#7a3f14',
+    deep: '#4a240a',
+    ink: '#2e1608',
+    rim: '#f0c08a',
+  };
+}
+
+/** Tiered wing crest — styleIdx varies flare count / curve for month uniqueness. */
+function wingsCrest(uid, m, styleIdx) {
+  const tiers = 3 + (styleIdx % 3); // 3–5 wing plates
+  const spread = 16 + (styleIdx % 4) * 3;
+  const length = 92 + (styleIdx % 5) * 6;
+  const curve = 8 + (styleIdx % 4) * 2;
+
+  const plate = (side, i) => {
     const dir = side === 'L' ? -1 : 1;
-    const rot = dir * (18 + i * 14 + extraRot);
-    const x = side === 'L' ? 210 : 302;
-    return `<g transform="translate(${x} 210) rotate(${rot})">
-      <path d="M0 0 L${dir * 18} -95 L${dir * 52} -88 L${dir * 28} 8 Z"
-        fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="2" stroke-linejoin="round"/>
-      <path d="M${dir * 6} -20 L${dir * 22} -78" stroke="${esc(m.hi)}" stroke-width="3" stroke-opacity="0.55" stroke-linecap="round"/>
+    const rot = dir * (12 + i * spread * 0.55);
+    const w = 22 + i * 4;
+    const h = length - i * 8;
+    const skew = curve + i * 2;
+    // Jagged leaf/wing plate like the reference
+    return `<g transform="translate(256 210) rotate(${rot.toFixed(1)})">
+      <path d="M0 ${10 + i * 4}
+        C${dir * 8} ${-h * 0.25} ${dir * (w * 0.6)} ${-h * 0.55} ${dir * w} ${-h}
+        L${dir * (w + skew)} ${-h + 18}
+        L${dir * (w * 0.55)} ${-h * 0.35}
+        L${dir * (w * 0.35 + 4)} 18 Z"
+        fill="url(#metal-${uid})" stroke="${esc(m.ink)}" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M${dir * 4} ${-h * 0.15} L${dir * (w * 0.55)} ${-h * 0.75}"
+        fill="none" stroke="${esc(m.hi)}" stroke-width="3.5" stroke-opacity="0.65" stroke-linecap="round"/>
+      <path d="M${dir * 2} ${-h * 0.05} L${dir * (w * 0.35)} ${-h * 0.45}"
+        fill="none" stroke="${esc(m.rim)}" stroke-width="1.5" stroke-opacity="0.4" stroke-linecap="round"/>
     </g>`;
   };
 
-  switch (styleIdx) {
-    case 0: // classic triple wings
-      return [0, 1, 2].map((i) => plate('L', i) + plate('R', i)).join('');
-    case 1: // wider fan (5 plates)
-      return [0, 1, 2, 3, 4].map((i) => plate('L', i, -4) + plate('R', i, -4)).join('');
-    case 2: // short stubby wings
-      return [0, 1].map((i) => plate('L', i, 8) + plate('R', i, 8)).join('');
-    case 3: // laurel leaves
-      return Array.from({ length: 7 }, (_, i) => {
-        const a = -55 + i * 18;
-        const leaf = (dir) => `<g transform="translate(256 230) rotate(${dir * a})">
-          <ellipse cx="0" cy="-78" rx="14" ry="28" fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="1.5"/>
-          <path d="M0 -52 V-100" stroke="${esc(m.hi)}" stroke-width="2" stroke-opacity="0.5"/>
-        </g>`;
-        return leaf(-1) + leaf(1);
-      }).join('');
-    case 4: // sunburst spikes
-      return Array.from({ length: 12 }, (_, i) => {
-        const a = (i / 12) * 360;
-        return `<g transform="translate(256 205) rotate(${a})">
-          <path d="M-6 -40 L0 -130 L6 -40 Z" fill="url(#metal-${uid})" fill-opacity="0.85" stroke="${esc(m.lo)}" stroke-width="1"/>
-        </g>`;
-      }).join('');
-    case 5: // diamond shards
-      return [-2, -1, 0, 1, 2].map((i) => {
-        const x = 256 + i * 38;
-        return `<path d="M${x} 95 L${x + 16} 160 L${x} 210 L${x - 16} 160 Z" fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="1.5" opacity="${0.7 + Math.abs(i) * 0.05}"/>`;
-      }).join('');
-    case 6: // ribbon banners
-      return `
-        <path d="M90 180 Q160 120 210 200 Q160 250 90 220 Z" fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="2"/>
-        <path d="M422 180 Q352 120 302 200 Q352 250 422 220 Z" fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="2"/>`;
-    case 7: // arched halo
-      return `
-        <path d="M120 230 A136 136 0 0 1 392 230" fill="none" stroke="url(#metal-${uid})" stroke-width="22" stroke-linecap="round"/>
-        <path d="M135 230 A121 121 0 0 1 377 230" fill="none" stroke="${esc(m.hi)}" stroke-width="4" stroke-opacity="0.45"/>`;
-    case 8: // chevron stacks
-      return [-1, 0, 1].map((i) => `
-        <path d="M${200 + i * 8} ${150 + i * 18} L256 ${110 + i * 18} L${312 - i * 8} ${150 + i * 18} L256 ${175 + i * 18} Z"
-          fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="1.5" opacity="${0.9 - Math.abs(i) * 0.15}"/>`).join('');
-    case 9: // twin towers (rook motif)
-      return `
-        <rect x="118" y="120" width="44" height="120" rx="6" fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="2"/>
-        <rect x="350" y="120" width="44" height="120" rx="6" fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="2"/>
-        <path d="M118 120 h10 v-14 h8 v14 h8 v-14 h8 v14 h10" fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="1.5"/>
-        <path d="M350 120 h10 v-14 h8 v14 h8 v-14 h8 v14 h10" fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="1.5"/>`;
-    case 10: // star burst points
-      return Array.from({ length: 8 }, (_, i) => {
-        const a = i * 45;
-        return `<g transform="translate(256 205) rotate(${a})">
-          <path d="M0 -45 L8 -100 L0 -115 L-8 -100 Z" fill="${esc(m.hi)}" stroke="${esc(m.lo)}" stroke-width="1"/>
-        </g>`;
-      }).join('');
-    default: // month 11 — ornate double ring + wing tips
-      return `
-        <circle cx="256" cy="205" r="118" fill="none" stroke="url(#metal-${uid})" stroke-width="10" opacity="0.55"/>
-        <circle cx="256" cy="205" r="132" fill="none" stroke="${esc(m.hi)}" stroke-width="3" opacity="0.35"/>
-        ${[0, 1, 2].map((i) => plate('L', i, 2) + plate('R', i, 2)).join('')}`;
+  // Optional laurel overlay for some months
+  let laurel = '';
+  if (styleIdx === 3 || styleIdx === 11) {
+    laurel = Array.from({ length: 6 }, (_, i) => {
+      const a = -50 + i * 20;
+      const leaf = (dir) => `<g transform="translate(256 225) rotate(${dir * a})">
+        <ellipse cx="0" cy="-70" rx="11" ry="24" fill="url(#metal-${uid})" stroke="${esc(m.ink)}" stroke-width="1.5"/>
+        <path d="M0 -50 V-88" stroke="${esc(m.hi)}" stroke-width="1.8" stroke-opacity="0.5"/>
+      </g>`;
+      return leaf(-1) + leaf(1);
+    }).join('');
   }
+
+  // Fan shards for platinum-like months
+  let fan = '';
+  if (styleIdx === 7 || styleIdx === 9) {
+    fan = Array.from({ length: 7 }, (_, i) => {
+      const a = -48 + i * 16;
+      return `<g transform="translate(256 200) rotate(${a})">
+        <path d="M-5 -30 L0 -115 L5 -30 Z" fill="url(#metal-${uid})" fill-opacity="0.75" stroke="${esc(m.ink)}" stroke-width="1"/>
+      </g>`;
+    }).join('');
+  }
+
+  const plates = Array.from({ length: tiers }, (_, i) => plate('L', i) + plate('R', i)).join('');
+  return fan + plates + laurel;
 }
 
-function crownSvg(uid, m) {
-  return `<g transform="translate(256 78)">
-    <path d="M-42 28 L-36 -6 L-14 14 L0 -18 L14 14 L36 -6 L42 28 Z"
-      fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="2.5" stroke-linejoin="round"/>
-    <circle cx="-36" cy="-8" r="5" fill="${esc(m.hi)}"/>
-    <circle cx="0" cy="-20" r="6" fill="${esc(m.hi)}"/>
-    <circle cx="36" cy="-8" r="5" fill="${esc(m.hi)}"/>
-    <rect x="-40" y="26" width="80" height="10" rx="3" fill="${esc(m.lo)}"/>
+function crown(uid, m) {
+  return `<g transform="translate(256 72)">
+    <path d="M-48 34 L-40 -8 L-16 16 L0 -22 L16 16 L40 -8 L48 34 Z"
+      fill="url(#metal-${uid})" stroke="${esc(m.ink)}" stroke-width="2.8" stroke-linejoin="round"/>
+    <path d="M-36 8 L-40 -4" stroke="${esc(m.hi)}" stroke-width="3" stroke-opacity="0.7" stroke-linecap="round"/>
+    <circle cx="-40" cy="-10" r="6" fill="url(#metal-${uid})" stroke="${esc(m.ink)}" stroke-width="1.5"/>
+    <circle cx="0" cy="-24" r="7" fill="url(#metal-${uid})" stroke="${esc(m.ink)}" stroke-width="1.5"/>
+    <circle cx="40" cy="-10" r="6" fill="url(#metal-${uid})" stroke="${esc(m.ink)}" stroke-width="1.5"/>
+    <circle cx="-40" cy="-12" r="2" fill="${esc(m.hi)}"/>
+    <circle cx="0" cy="-26" r="2.5" fill="${esc(m.hi)}"/>
+    <circle cx="40" cy="-12" r="2" fill="${esc(m.hi)}"/>
+    <rect x="-46" y="30" width="92" height="12" rx="3" fill="${esc(m.lo)}" stroke="${esc(m.ink)}" stroke-width="1.5"/>
+    <rect x="-40" y="32" width="80" height="4" rx="1" fill="${esc(m.hi)}" opacity="0.35"/>
   </g>`;
 }
 
-function sparkles(uid, seed) {
-  const pts = [
-    [120, 140], [390, 130], [150, 280], [370, 270], [256, 95], [95, 210], [420, 215],
-  ];
+function sparkles(seed) {
+  const pts = [[108, 150], [404, 142], [130, 290], [382, 285], [256, 58], [86, 220], [426, 225], [200, 100], [312, 95]];
   return pts.map(([x, y], i) => {
-    const o = ((seed >> (i * 3)) & 7) / 10 + 0.35;
+    const s = 7 + ((seed >> (i * 2)) & 3);
+    const o = 0.45 + (((seed >> i) & 3) * 0.12);
     return `<g transform="translate(${x} ${y})" opacity="${o.toFixed(2)}">
-      <path d="M0 -10 L2.5 -2.5 L10 0 L2.5 2.5 L0 10 L-2.5 2.5 L-10 0 L-2.5 -2.5 Z" fill="#fff"/>
+      <path d="M0 -${s} L${s * 0.28} -${s * 0.28} L${s} 0 L${s * 0.28} ${s * 0.28} L0 ${s} L-${s * 0.28} ${s * 0.28} L-${s} 0 L-${s * 0.28} -${s * 0.28} Z" fill="#fff"/>
     </g>`;
   }).join('');
 }
 
-function pedestalSvg(uid, m) {
+function shield(uid, m, label, font, size) {
   return `
-    <ellipse cx="256" cy="318" rx="78" ry="16" fill="${esc(m.deep)}" opacity="0.55"/>
-    <path d="M178 300 Q256 330 334 300 L318 318 Q256 348 194 318 Z" fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="2"/>
-    <path d="M190 298 Q256 318 322 298" fill="none" stroke="${esc(m.hi)}" stroke-width="3" stroke-opacity="0.4"/>
-  `;
-}
-
-function shieldSvg(uid, m, label, font, size) {
-  return `
-    <path d="M156 340 L356 340 L348 400 Q256 445 164 400 Z"
-      fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="3" stroke-linejoin="round"/>
-    <path d="M170 348 L342 348 L336 392 Q256 428 176 392 Z"
-      fill="${esc(m.deep)}" fill-opacity="0.35"/>
-    <text x="256" y="392" text-anchor="middle" font-family="${esc(font)}" font-size="${size}"
-      font-weight="800" letter-spacing="2" fill="${esc(m.hi)}">${esc(label)}</text>
-  `;
+    <path d="M148 348 L364 348 L352 418 Q256 468 160 418 Z"
+      fill="url(#metal-${uid})" stroke="${esc(m.ink)}" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M162 358 L350 358 L340 408 Q256 448 172 408 Z"
+      fill="${esc(m.deep)}" fill-opacity="0.28"/>
+    <path d="M170 362 L340 362" stroke="${esc(m.hi)}" stroke-width="2" stroke-opacity="0.35"/>
+    <text x="256" y="408" text-anchor="middle" font-family="${esc(font)}" font-size="${size}"
+      font-weight="900" letter-spacing="3" fill="${esc(m.hi)}"
+      stroke="${esc(m.ink)}" stroke-width="0.8">${esc(label)}</text>`;
 }
 
 /**
@@ -322,11 +323,11 @@ function generateMedalSvg(opts) {
   const cfg = normalizeConfig(opts.config);
   const { year, month: mo } = parseMonth(month);
   const styleIdx = monthStyleIndex(month);
-  const seed = hash(`winged:${month}:${place}:${cfg.pieceTop1}`);
+  const seed = hash(`crest:${month}:${place}:${cfg.pieceTop1}:${cfg.pieceTop2}:${cfg.pieceTop3}`);
   const m = metalPalette(place, cfg, year);
-  const uid = `w${seed.toString(36)}`;
+  const uid = `c${seed.toString(36)}`;
   const piece = pieceForPlace(cfg, place);
-  const piecePath = PIECE[piece] || PIECE.king;
+  const pieceMarkup = PIECE[piece] || PIECE.king;
   const name = String(opts.name || 'Player').slice(0, 26);
   const handle = opts.username
     ? `@${String(opts.username).replace(/^@/, '').slice(0, 22)}`
@@ -335,68 +336,71 @@ function generateMedalSvg(opts) {
   const bodyFont = fontCss(cfg.fontFamily);
   const titleFont = fontCss(cfg.fontTitle, 'serif');
   const shortMonth = `${MONTH_NAMES_SHORT[mo - 1]} ${year}`;
-  const shieldLabel = `TOP ${place}`;
-  // Year-shifted background wash so same month differs across years
-  const bgHue = (year * 53 + mo * 17 + place * 11) % 360;
-  const bgA = hsl(bgHue, 35, 8);
-  const bgB = hsl((bgHue + 40) % 360, 40, 14);
+  const shieldLabel = (cfg.shieldText && cfg.shieldText.trim())
+    ? cfg.shieldText.trim().toUpperCase()
+    : `TOP ${place}`;
+  const bgHue = (year * 53 + mo * 19 + place * 11) % 360;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg-${uid}" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="${esc(bgA)}"/>
-      <stop offset="100%" stop-color="${esc(bgB)}"/>
+    <linearGradient id="bg-${uid}" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="${esc(hsl(bgHue, 20, 6))}"/>
+      <stop offset="100%" stop-color="${esc(cfg.secondary)}"/>
     </linearGradient>
-    <linearGradient id="metal-${uid}" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="metal-${uid}" x1="0.15" y1="0" x2="0.85" y2="1">
       <stop offset="0%" stop-color="${esc(m.hi)}"/>
-      <stop offset="35%" stop-color="${esc(m.mid)}"/>
-      <stop offset="70%" stop-color="${esc(m.lo)}"/>
+      <stop offset="22%" stop-color="${esc(m.mid)}"/>
+      <stop offset="48%" stop-color="${esc(m.mid2)}"/>
+      <stop offset="72%" stop-color="${esc(m.lo)}"/>
       <stop offset="100%" stop-color="${esc(m.deep)}"/>
     </linearGradient>
-    <radialGradient id="glow-${uid}" cx="50%" cy="40%" r="50%">
-      <stop offset="0%" stop-color="${esc(m.hi)}" stop-opacity="0.4"/>
-      <stop offset="100%" stop-color="${esc(bgA)}" stop-opacity="0"/>
+    <linearGradient id="piece-${uid}" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="${esc(m.hi)}"/>
+      <stop offset="40%" stop-color="${esc(m.mid)}"/>
+      <stop offset="100%" stop-color="${esc(m.lo)}"/>
+    </linearGradient>
+    <radialGradient id="glow-${uid}" cx="50%" cy="38%" r="48%">
+      <stop offset="0%" stop-color="${esc(m.hi)}" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="${esc(cfg.secondary)}" stop-opacity="0"/>
     </radialGradient>
-    <filter id="soft-${uid}" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="4" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <filter id="drop-${uid}" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.55"/>
     </filter>
   </defs>
 
-  <rect width="512" height="512" rx="48" fill="url(#bg-${uid})"/>
-  <rect width="512" height="512" rx="48" fill="url(#glow-${uid})"/>
+  <rect width="512" height="512" rx="40" fill="url(#bg-${uid})"/>
+  <rect width="512" height="512" rx="40" fill="url(#glow-${uid})"/>
 
-  <!-- month/year pattern watermark -->
-  <text x="256" y="500" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="64"
-    font-weight="900" fill="${esc(m.mid)}" fill-opacity="0.06" letter-spacing="6">${esc(shortMonth)}</text>
+  <g filter="url(#drop-${uid})">
+    ${wingsCrest(uid, m, styleIdx)}
+    ${crown(uid, m)}
 
-  ${wingsSvg(styleIdx, uid, m)}
-  ${crownSvg(uid, m)}
-  ${pedestalSvg(uid, m)}
-
-  <!-- central piece -->
-  <g transform="translate(256 205)" filter="url(#soft-${uid})">
-    <circle r="78" fill="${esc(m.deep)}" fill-opacity="0.35"/>
-    <g transform="translate(-48 -56) scale(4)" fill="url(#metal-${uid})" stroke="${esc(m.lo)}" stroke-width="0.6">
-      <path d="${piecePath}"/>
+    <!-- central glossy piece -->
+    <g transform="translate(256 198)">
+      <ellipse cx="0" cy="48" rx="54" ry="12" fill="#000" opacity="0.35"/>
+      <g transform="translate(-48 -58) scale(1.5)" fill="url(#piece-${uid})" stroke="${esc(m.ink)}" stroke-width="1.8" stroke-linejoin="round">
+        ${pieceMarkup}
+      </g>
+      <!-- gloss streak -->
+      <path d="M-22 -40 Q-8 -52 6 -28" fill="none" stroke="${esc(m.hi)}" stroke-width="6" stroke-opacity="0.55" stroke-linecap="round"/>
+      <path d="M-18 -36 Q-6 -46 4 -26" fill="none" stroke="#fff" stroke-width="2" stroke-opacity="0.35" stroke-linecap="round"/>
     </g>
-    <path d="M-30 -40 Q-10 -55 5 -35" fill="none" stroke="${esc(m.hi)}" stroke-width="5" stroke-opacity="0.55" stroke-linecap="round"/>
+
+    ${shield(uid, m, shieldLabel, bodyFont, cfg.sizePlace)}
   </g>
 
-  ${sparkles(uid, seed)}
-  ${shieldSvg(uid, m, shieldLabel, bodyFont, cfg.sizePlace)}
+  ${sparkles(seed)}
 
-  <text x="256" y="458" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${cfg.sizeName}"
+  <text x="256" y="488" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${cfg.sizeName}"
     font-weight="700" fill="${esc(cfg.text)}">${esc(name)}</text>
-  <text x="256" y="478" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${cfg.sizeHandle}"
-    fill="${esc(cfg.muted)}">${esc(handle)}</text>
-  <text x="256" y="496" text-anchor="middle" font-family="${esc(titleFont)}" font-size="${cfg.sizeTitle}"
-    font-weight="600" fill="${esc(cfg.accent)}">${esc(title)}</text>
-  <text x="40" y="36" font-family="${esc(bodyFont)}" font-size="${cfg.sizeBot}" font-weight="700"
-    fill="${esc(m.mid)}">${esc(shortMonth)}</text>
-  <text x="472" y="36" text-anchor="end" font-family="${esc(bodyFont)}" font-size="${cfg.sizeBot}" font-weight="700"
+  <text x="40" y="32" font-family="${esc(bodyFont)}" font-size="${cfg.sizeBot}" font-weight="800"
+    fill="${esc(m.mid)}" letter-spacing="1">${esc(shortMonth)}</text>
+  <text x="472" y="32" text-anchor="end" font-family="${esc(bodyFont)}" font-size="${cfg.sizeBot}" font-weight="700"
     fill="${esc(cfg.primary)}">${esc(cfg.botHandle)}</text>
+  ${handle ? `<text x="256" y="506" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${cfg.sizeHandle}" fill="${esc(cfg.muted)}">${esc(handle)}</text>` : ''}
+  <text x="256" y="28" text-anchor="middle" font-family="${esc(titleFont)}" font-size="${cfg.sizeTitle}"
+    font-weight="600" fill="${esc(cfg.accent)}" opacity="0.9">${esc(title)}</text>
 </svg>`;
 }
 

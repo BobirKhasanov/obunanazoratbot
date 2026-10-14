@@ -328,7 +328,7 @@ async function playMoves(game, players, moves, startPly = 0) {
         place: 1, name: 'Bob', username: 'bob', userId: USERS.B.id,
         config: { ...cfg.config, botHandle: '@Chess_uz_bot' },
       });
-      assert.ok(preview.svg.includes('Top 1') || preview.title.includes('Top 1') || preview.svg.includes('TOP 1'));
+      assert.ok(preview.svg.includes('Top 1') || preview.title.includes('Top 1') || preview.svg.includes('TOP 1') || preview.svg.includes('CHESS'));
       assert.ok(preview.svg.includes('@Chess_uz_bot'));
       assert.ok(preview.svg.includes('metal-'), 'winged metal gradient');
       const oct = await ok('ADMIN', 'POST', '/admin/medals/preview', {
@@ -343,10 +343,12 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.notStrictEqual(oct.svg, nov.svg, 'months use different patterns');
       assert.notStrictEqual(oct.svg, octNext.svg, 'same month different year differs');
       const p2 = await ok('ADMIN', 'POST', '/admin/medals/preview', {
-        place: 2, month: '2026-10', name: 'Bob', config: { ...cfg.config, pieceTop2: 'queen' },
+        place: 2, month: '2026-10', name: 'Bob',
+        config: { ...cfg.config, pieceTop2: 'queen', shieldText: '' },
       });
       const p3 = await ok('ADMIN', 'POST', '/admin/medals/preview', {
-        place: 3, month: '2026-10', name: 'Bob', config: { ...cfg.config, pieceTop3: 'knight' },
+        place: 3, month: '2026-10', name: 'Bob',
+        config: { ...cfg.config, pieceTop3: 'knight', shieldText: '' },
       });
       assert.ok(p2.svg.includes('TOP 2') && p3.svg.includes('TOP 3'));
       assert.notStrictEqual(oct.svg, p2.svg);
