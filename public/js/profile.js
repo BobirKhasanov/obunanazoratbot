@@ -3,6 +3,8 @@ import { h, icon, haptic, toast, api, fail, avBlock, premIc, shareUrl, confirmSh
 import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
 import { openScreen } from './screen.js';
 import { openAdmin } from './admin.js';
+import { openUserProfile } from './userprofile.js';
+export { openUserProfile };
 import { stylePickerCard } from './style-ui.js';
 import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleBoards } from './board.js';
@@ -57,7 +59,7 @@ function subTop(title, close) {
 
 /** @param {object} ctx { state, mount helpers via callbacks } */
 export function renderProfilePage(ctx) {
-  const { state, challengeAction, gameRow, goTab, rebuildAll, refresh } = ctx;
+  const { state, challengeAction, challenge, gameRow, goTab, rebuildAll, refresh } = ctx;
   const me = state.me;
   const st = state.stats;
   const friends = state.friends || [];
@@ -175,8 +177,20 @@ export function renderProfilePage(ctx) {
         h('button.btn', { onclick: () => state.meta.botUsername ? shareUrl(link, t('share_text')) : toast(t('e_server'), true) }, icon('share', 20), t('invite_btn'))),
       h('div.h2', t('your_friends')),
       list.length ? h('div.list', list.map((f) => h('div.row',
-        avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online, round: true }),
-        h('div.grow',
+        h('button.plain', {
+          type: 'button',
+          onclick: () => openUserProfile(f.id, {
+            onChallenge: challenge ? (u) => challenge(u.id) : undefined,
+            refreshHome: refresh,
+          }),
+        }, avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online, round: true })),
+        h('button.grow.plain', {
+          type: 'button',
+          onclick: () => openUserProfile(f.id, {
+            onChallenge: challenge ? (u) => challenge(u.id) : undefined,
+            refreshHome: refresh,
+          }),
+        },
           h('div.t', h('span.name', f.name), f.premium ? premIc() : null),
           h('div.s', f.inGame ? t('in_game') : f.online ? t('online') : t('offline'))),
         challengeAction({ ...f, online: f.online }),
@@ -380,19 +394,50 @@ export function renderProfilePage(ctx) {
           h('div.info-card',
             h('div.info-row', h('span', t('info_country')), h('b', dash(u.country))),
             h('div.info-row', h('span', t('info_region')), h('b', dash(u.region))))),
-        u.isAdmin
-          ? h('button.btn.ghost', {
-            type: 'button',
-            onclick: () => { try { tg.close(); } catch { /* ignore */ } },
-          }, t('close_app'))
-          : h('button.info-delete', {
+        u.premium || u.isAdmin
+          ? h('div.info-sec',
+            h('div.info-sec-h',
+              h('span', t('info_bio')),
+              h('button.info-edit', {
+                type: 'button', 'aria-label': t('profile_edit'),
+                onclick: () => {
+                  haptic('select');
+                  const inp = h('textarea.input', {
+                    rows: 3, maxlength: 160, value: u.bio || '', placeholder: t('info_bio_ph'),
+                  });
+                  sheet((c) => [
+                    h('h2', t('info_bio')),
+                    inp,
+                    h('button.cta', {
+                      type: 'button',
+                      onclick: async () => {
+                        try {
+                          state.me = await save({ bio: inp.value });
+                          toast(t('info_saved')); haptic('success');
+                          c(); draw(); refresh();
+                        } catch (e) { fail(e); }
+                      },
+                    }, t('save')),
+                  ]);
+                },
+              }, icon('pencil', 16))),
+            h('div.info-card',
+              h('div.info-row', h('span', t('info_bio')), h('b', dash(u.bio)))))
+          : null,
+        h('button.btn.ghost', {
+          type: 'button',
+          onclick: () => { haptic('light'); close(); },
+        }, icon('back', 18), t('back')),
+        !u.isAdmin
+          ? h('button.info-delete', {
             type: 'button',
             onclick: async () => {
               haptic('light');
               if (!(await confirmSheet(t('delete_confirm'), t('delete_data'), true))) return;
               try { await api('DELETE', '/me'); tg.close(); } catch (e) { fail(e); }
             },
-          }, t('delete_account')),
+          }, t('delete_account'))
+          : null,
       );
     };
     draw();
@@ -460,14 +505,33 @@ export function renderProfilePage(ctx) {
     return [...subTop(t('avatar_title'), close), host];
   });
 
-  const openHelp = () => openScreen((close) => [
-    ...subTop(t('help'), close),
-    h('div.card.prose',
-      h('b', t('help_title')),
-      h('p', t('help_p1')),
-      h('p', t('help_p2')),
-      h('p', t('help_p3'))),
-  ]);
+  const openHelp = () => openScreen((close) => {
+    const area = h('textarea.input', {
+      rows: 4, maxlength: 1000, placeholder: t('feedback_ph'),
+    });
+    const send = h('button.cta', {
+      type: 'button',
+      onclick: async () => {
+        try {
+          await api('POST', '/feedback', { body: area.value });
+          area.value = '';
+          toast(t('feedback_sent')); haptic('success');
+        } catch (e) { fail(e); }
+      },
+    }, t('feedback_send'));
+    return [
+      ...subTop(t('help'), close),
+      h('div.card.prose',
+        h('b', t('help_title')),
+        h('p', t('help_p1')),
+        h('p', t('help_p2')),
+        h('p', t('help_p3'))),
+      h('div.h2', t('feedback_title')),
+      h('p.muted', t('feedback_sub')),
+      area,
+      send,
+    ];
+  });
 
   const openTerms = () => openScreen((close) => [
     ...subTop(t('terms'), close),
@@ -490,10 +554,13 @@ export function renderProfilePage(ctx) {
           onclick: () => { haptic('select'); openMyInfo(); },
         }, icon('pencil', 16), t('profile_edit'))),
       h('div.prof-band',
-        h('button.prof-av', {
+        h('button.prof-av' + (me.premium ? '.prem-glow' : ''), {
           type: 'button',
           title: t('avatar_title'),
-          onclick: () => { haptic('select'); openAvatar(); },
+          onclick: () => {
+            haptic('select');
+            openUserProfile(me.id, { refreshHome: refresh });
+          },
         }, avBlock(shownName, me.id, { premium: !!me.premium, size: 'xl', round: true, avatarKey: me.avatarKey })),
         h('div.prof-meta',
           h('h2', h('span.name', shownName), me.premium ? premIc() : null),
@@ -556,12 +623,6 @@ export function renderProfilePage(ctx) {
         }),
       ),
 
-      me.isAdmin
-        ? h('button.btn.logout', {
-          type: 'button',
-          onclick: () => { try { tg.close(); } catch { /* ignore */ } },
-        }, icon('logout', 20), t('close_app'))
-        : null,
       h('div.app-ver', t('app_version', { v: APP_VERSION })),
     ),
   ];

@@ -9,7 +9,7 @@ import { normalizeTimeControl } from './time.js';
 import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
 import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleOpenGame } from './game.js';
-import { renderProfilePage } from './profile.js';
+import { renderProfilePage, openUserProfile } from './profile.js';
 import { closeScreen } from './screen.js';
 import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
@@ -195,7 +195,18 @@ function onlineSheet() {
         const l = await api('GET', '/lobby');
         if (!alive) return;
         list.replaceChildren(...(l.online.length
-          ? l.online.map((u) => playerRow(u, close))
+          ? l.online.map((u) => h('div.row',
+            h('button.plain', {
+              type: 'button',
+              onclick: () => { close(); openUserProfile(u.id, { onChallenge: (x) => challenge(x.id) }); },
+            }, avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true })),
+            h('button.grow.plain', {
+              type: 'button',
+              onclick: () => { close(); openUserProfile(u.id, { onChallenge: (x) => challenge(x.id) }); },
+            },
+              h('div.t', h('span.name', u.name), u.premium ? premIc() : null),
+              h('div.s', u.inGame ? t('in_game') : t('online'))),
+            challengeAction(u)))
           : [empty(t('nobody'), '🛰️')]));
       } catch (e) { /* keep the old list */ }
     };
@@ -236,7 +247,11 @@ const resultText = (g) => {
 
 let playSnap = '';
 refreshers.play = async function renderPlay() {
-  const [l, anns] = await Promise.all([loadLobby(), loadAnnouncements(api)]);
+  const [l, anns, puzzleAnns] = await Promise.all([
+    loadLobby(),
+    loadAnnouncements(api, 'home'),
+    loadAnnouncements(api, 'puzzle'),
+  ]);
   const saved = savedAiGame();
   // Full lobby list (free + in-game), same people as the Online sheet
   const onlinePlayers = l.online || [];
@@ -251,6 +266,7 @@ refreshers.play = async function renderPlay() {
     on: onlinePlayers.map((u) => [u.id, !!u.invited, !!u.inGame, !!u.friend, !!u.premium]),
     sav: saved ? [saved.level, saved.fen] : null,
     ann: (anns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
+    pz: (puzzleAnns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
   });
   const playEl = page('play');
   if (snap === playSnap && playEl && playEl.classList.contains('seen') && playEl.childElementCount) {
@@ -280,21 +296,28 @@ refreshers.play = async function renderPlay() {
     h('div.home-banner-text', h('b', title), h('small', sub)), h('span.home-banner-art', emoji));
   const card = (emoji, label, fn) => h('button.pcard', { onclick: () => { haptic('light'); fn(); } }, h('span.pcard-art', emoji), h('b', label));
   const annHost = h('div.ann-carousel', { hidden: true, 'data-noswipe': '' });
+  const puzzleHost = h('div.ann-carousel.ann-puzzle', { hidden: true, 'data-noswipe': '' });
+  const openProfile = (id) => openUserProfile(id, {
+    onChallenge: (u) => challenge(u.id),
+    refreshHome: () => { playSnap = ''; refresh('play'); },
+  });
   const onlineBlock = [
     h('div.h2.online-heading', t('online_players'), h('span.count-pill', String(onlinePlayers.length))),
     onlinePlayers.length
       ? h('div.list.home-online', ...onlinePlayers.map((u) => h('div.row',
-        avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true }),
-        h('div.grow',
+        h('button.plain', { type: 'button', onclick: () => openProfile(u.id) },
+          avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true })),
+        h('button.grow.plain', { type: 'button', onclick: () => openProfile(u.id) },
           h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
           h('div.s', u.invited ? t('challenge_sent') : (u.inGame ? t('in_game') : t('online')))),
         challengeAction(u))))
       : empty(t('nobody'), '🛰️'),
   ];
+  const puzzleFallback = banner('violet', '🧩', t('home_puzzle'), t('puzzles_sub'), () => go(TABS.indexOf('puzzles'), true));
   const nodes = [
     h('div.top', h('h1', '♟ ' + t('app')), h('div.pills', h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount })))),
     annHost,
-    banner('violet', '🧩', t('home_puzzle'), t('puzzles_sub'), () => go(TABS.indexOf('puzzles'), true)),
+    puzzleAnns && puzzleAnns.length ? puzzleHost : puzzleFallback,
     h('div.time-heading', t('choose_time')),
     modes,
     h('div.pcards',
@@ -313,17 +336,16 @@ refreshers.play = async function renderPlay() {
   mount('play', nodes);
   setPlaySticky(state.tab === 'play');
   if (state.tab === 'play') {
-    await mountAnnouncementsCarousel(annHost, anns, {
-      botUsername: state.meta?.botUsername,
-      userId: state.me?.id,
-      onPage: (page) => {
-        if (['play', 'puzzles', 'rankings', 'live', 'profile'].includes(page)) go(TABS.indexOf(page), true);
-        else if (page === 'premium' || page === 'friends' || page === 'settings' || page === 'diamonds' || page === 'gems' || page === 'stats') {
-          go(TABS.indexOf('profile'), true);
-          setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: page })), 520);
-        }
-      },
-    });
+    const onPage = (page) => {
+      if (['play', 'puzzles', 'rankings', 'live', 'profile'].includes(page)) go(TABS.indexOf(page), true);
+      else if (page === 'premium' || page === 'friends' || page === 'settings' || page === 'diamonds' || page === 'gems' || page === 'stats') {
+        go(TABS.indexOf('profile'), true);
+        setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: page })), 520);
+      }
+    };
+    const opts = { botUsername: state.meta?.botUsername, userId: state.me?.id, onPage };
+    await mountAnnouncementsCarousel(annHost, anns, opts);
+    if (puzzleAnns && puzzleAnns.length) await mountAnnouncementsCarousel(puzzleHost, puzzleAnns, opts);
   }
 };
 refreshers.live = async function renderLive() {
@@ -446,6 +468,7 @@ refreshers.profile = async function renderProfile() {
   mount('profile', ...renderProfilePage({
     state,
     challengeAction,
+    challenge,
     gameRow,
     goTab: (name) => { closeScreen(true); go(TABS.indexOf(name), true); },
     rebuildAll,

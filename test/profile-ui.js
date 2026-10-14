@@ -79,6 +79,11 @@ assert.ok(profile.includes('profile_edit') && profile.includes('prof-edit'), 'pr
 assert.ok(profile.includes('openMyInfo') && profile.includes('my_info'), 'Edit opens My information');
 assert.ok(profile.includes('info_username_locked'), 'username not editable in UI');
 assert.ok(profile.includes('delete_account') && profile.includes('confirmSheet'), 'delete account asks once');
+assert.ok(profile.includes('/feedback') && profile.includes('feedback_send'), 'help feedback chat');
+assert.ok(profile.includes('openUserProfile') || read('public/js/userprofile.js').includes('openUserProfile'), 'user profile view');
+assert.ok(css.includes('prem-glow') && css.includes('uprof-hero'), 'premium glow + public profile styles');
+assert.ok(admin.includes('ann_board_puzzle') && admin.includes("board: annBoard"), 'admin puzzle board');
+assert.ok(app.includes("loadAnnouncements(api, 'puzzle')") || app.includes("loadAnnouncements(api, \"puzzle\")"), 'puzzle carousel load');
 assert.ok(admin.includes('/admin/profile-banner') && admin.includes('admin_banner'), 'admin can change profile banner');
 assert.ok(i18n.includes('profile_edit:') && i18n.includes('admin_banner:') && i18n.includes('my_info:'));
 const server = read('src/server.js');

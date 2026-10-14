@@ -217,6 +217,7 @@ const publicUser = (u, admin) => {
     username: u.username || '',
     country: u.country || '',
     region: u.region || '',
+    bio: u.bio || '',
     lang: u.lang, theme: u.theme,
     langSet: !!u.lang_set, notifyEnabled: !!u.notify_enabled, discoverable: !!u.discoverable, isAdmin: admin,
     diamonds: Number(u.diamonds || 0), premium,
@@ -613,6 +614,12 @@ api.patch('/me', wrap(async (req, res) => {
   const region = b.region === undefined ? (u.region || '') : cleanText(b.region, 64, 'bad_request');
   if (b.firstName !== undefined && !firstName) throw bad('Name is required', 'bad_request');
 
+  let bio = u.bio || '';
+  if (b.bio !== undefined) {
+    if (!isPremiumActive(u) && !req.isAdmin) throw new HttpError(403, 'Premium required', 'premium_required');
+    bio = cleanText(b.bio, 160, 'bad_request');
+  }
+
   let pieceSet = u.piece_set || 'outline';
   let boardTheme = u.board_theme || 'classic';
   const wantsStyle = b.pieceSet !== undefined || b.boardTheme !== undefined;
@@ -643,11 +650,11 @@ api.patch('/me', wrap(async (req, res) => {
   }
 
   await db.prepare(`UPDATE users SET lang = ?, theme = ?, notify_enabled = ?, discoverable = ?, lang_set = ?,
-    piece_set = ?, board_theme = ?, avatar_key = ?, first_name = ?, last_name = ?, country = ?, region = ?
+    piece_set = ?, board_theme = ?, avatar_key = ?, first_name = ?, last_name = ?, country = ?, region = ?, bio = ?
     WHERE id = ?`)
     .run(
       lang, theme, notifyEnabled, discoverable, b.lang !== undefined ? 1 : u.lang_set,
-      pieceSet, boardTheme, avatarKey, firstName, lastName, country, region, u.id,
+      pieceSet, boardTheme, avatarKey, firstName, lastName, country, region, bio, u.id,
     );
   res.json({ user: publicUser(await getUser.get(u.id), req.isAdmin) });
 }));
@@ -1272,9 +1279,11 @@ api.get('/lobby', wrap(async (req, res) => {
     FROM users
     WHERE blocked = 0 AND id != ?
       AND present_until > now()
+      AND id NOT IN (SELECT blocked_id FROM user_blocks WHERE user_id = ?)
+      AND id NOT IN (SELECT user_id FROM user_blocks WHERE blocked_id = ?)
     ORDER BY present_until DESC
     LIMIT 40
-  `).all(uid);
+  `).all(uid, uid, uid);
   const online = rows
     .map((r) => ({
       id: r.id, name: displayName(r), inGame: busy.has(r.id), friend: friendIds.has(r.id),
@@ -1392,6 +1401,114 @@ api.get('/lichess/rounds/:id/pgn', wrap(async (req, res) => {
     if (e.code === 'notfound') throw e;
     lichessFail(e, 'Round not found');
   }
+}));
+
+// ---------- public profiles / likes / blocks ----------
+async function isBlockedEither(a, b) {
+  const row = await db.prepare(`
+    SELECT 1 AS ok FROM user_blocks
+    WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)
+    LIMIT 1
+  `).get(a, b, b, a);
+  return !!row;
+}
+
+api.get('/users/:id', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const id = intParam(req.params.id);
+  const u = await getUser.get(id);
+  if (!u || u.blocked) throw new HttpError(404, 'Player not found', 'notfound');
+  if (id !== uid && await isBlockedEither(uid, id)) {
+    const iBlocked = !!(await db.prepare('SELECT 1 AS ok FROM user_blocks WHERE user_id = ? AND blocked_id = ?').get(uid, id));
+    if (!iBlocked) throw new HttpError(404, 'Player not found', 'notfound');
+  }
+  const likes = Number((await db.prepare('SELECT COUNT(*)::int AS n FROM profile_likes WHERE to_id = ?').get(id))?.n || 0);
+  const likedByMe = id === uid
+    ? false
+    : !!(await db.prepare('SELECT 1 AS ok FROM profile_likes WHERE from_id = ? AND to_id = ?').get(uid, id));
+  const blockedByMe = id === uid
+    ? false
+    : !!(await db.prepare('SELECT 1 AS ok FROM user_blocks WHERE user_id = ? AND blocked_id = ?').get(uid, id));
+  const premium = isPremiumActive(u);
+  const presence = stillPresent(u.present_until) || realtime.isOnline(id);
+  res.json({
+    user: {
+      id: u.id,
+      firstName: u.first_name || '',
+      lastName: u.last_name || '',
+      displayName: displayName(u),
+      username: u.username || '',
+      country: u.country || '',
+      region: u.region || '',
+      bio: premium ? (u.bio || '') : '',
+      premium,
+      avatarKey: u.avatar_key || null,
+      elo: Number(u.elo || DEFAULT_ELO),
+      online: presence,
+      you: id === uid,
+    },
+    stats: await statsFor(id),
+    likes,
+    likedByMe,
+    blockedByMe,
+  });
+}));
+
+api.post('/users/:id/like', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const id = intParam(req.params.id);
+  if (id === uid) throw bad('Cannot like yourself', 'bad_request');
+  const u = await getUser.get(id);
+  if (!u || u.blocked) throw new HttpError(404, 'Player not found', 'notfound');
+  if (await isBlockedEither(uid, id)) throw bad('User unavailable', 'user_unavailable');
+  const exists = await db.prepare('SELECT 1 AS ok FROM profile_likes WHERE from_id = ? AND to_id = ?').get(uid, id);
+  if (exists) {
+    await db.prepare('DELETE FROM profile_likes WHERE from_id = ? AND to_id = ?').run(uid, id);
+  } else {
+    await db.prepare('INSERT INTO profile_likes (from_id, to_id) VALUES (?, ?) ON CONFLICT DO NOTHING').run(uid, id);
+  }
+  const likes = Number((await db.prepare('SELECT COUNT(*)::int AS n FROM profile_likes WHERE to_id = ?').get(id))?.n || 0);
+  const likedByMe = !exists;
+  res.json({ likes, likedByMe });
+}));
+
+api.post('/users/:id/block', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const id = intParam(req.params.id);
+  if (id === uid) throw bad('Cannot block yourself', 'bad_request');
+  if (isAdmin(id)) throw bad('Cannot block this user', 'admin_block');
+  const u = await getUser.get(id);
+  if (!u) throw new HttpError(404, 'Player not found', 'notfound');
+  const want = !(req.body && req.body.blocked === false);
+  if (want) {
+    await db.prepare('INSERT INTO user_blocks (user_id, blocked_id) VALUES (?, ?) ON CONFLICT DO NOTHING').run(uid, id);
+    await db.prepare('DELETE FROM profile_likes WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)').run(uid, id, id, uid);
+  } else {
+    await db.prepare('DELETE FROM user_blocks WHERE user_id = ? AND blocked_id = ?').run(uid, id);
+  }
+  res.json({ blockedByMe: want });
+}));
+
+api.post('/feedback', wrap(async (req, res) => {
+  const body = cleanText(req.body && req.body.body, 1000, 'text', true);
+  const uid = req.user.id;
+  const info = await db.prepare('INSERT INTO feedback (user_id, body) VALUES (?, ?) RETURNING id').run(uid, body);
+  const fid = info.rows?.[0]?.id || info.id;
+  const u = req.user;
+  const uname = u.username ? `@${u.username}` : '—';
+  const msg = [
+    '📩 Feedback / complaint',
+    `#${fid}`,
+    `User: ${displayName(u)} (${uname})`,
+    `ID: ${uid}`,
+    '',
+    body,
+  ].join('\n');
+  let sent = 0;
+  for (const adminId of ADMIN_IDS) {
+    if (await notify.toUser(adminId, () => msg, { force: true })) sent++;
+  }
+  res.status(201).json({ ok: true, id: fid, notified: sent });
 }));
 
 // ---------- friends ----------
@@ -1545,6 +1662,7 @@ function formatTashkent(iso) {
 function publicAnnouncement(row) {
   return {
     id: Number(row.id),
+    board: row.board === 'puzzle' ? 'puzzle' : 'home',
     title: row.title || '',
     body: row.body || '',
     titleColor: row.title_color,
@@ -1561,6 +1679,10 @@ function publicAnnouncement(row) {
     endsAt: row.ends_at,
     endsAtTashkent: formatTashkent(row.ends_at),
   };
+}
+
+function parseAnnBoard(raw) {
+  return raw === 'puzzle' ? 'puzzle' : 'home';
 }
 
 async function purgeExpiredAnnouncements() {
@@ -1620,10 +1742,11 @@ api.get('/media/:id', wrap(async (req, res) => {
 
 api.get('/announcements', wrap(async (req, res) => {
   await purgeExpiredAnnouncements();
+  const board = parseAnnBoard(req.query.board);
   const rows = await db.prepare(`
-    SELECT * FROM announcements WHERE ends_at > now() ORDER BY id DESC LIMIT 20
-  `).all();
-  res.json({ announcements: rows.map(publicAnnouncement), nowTashkent: formatTashkent(new Date()) });
+    SELECT * FROM announcements WHERE ends_at > now() AND board = ? ORDER BY id DESC LIMIT 20
+  `).all(board);
+  res.json({ announcements: rows.map(publicAnnouncement), board, nowTashkent: formatTashkent(new Date()) });
 }));
 
 // ---------- admin ----------
@@ -2011,9 +2134,11 @@ admin.get('/broadcasts', wrap(async (req, res) => {
 
 admin.get('/announcements', wrap(async (req, res) => {
   await purgeExpiredAnnouncements();
-  const rows = await db.prepare('SELECT * FROM announcements ORDER BY id DESC LIMIT 40').all();
+  const board = parseAnnBoard(req.query.board);
+  const rows = await db.prepare('SELECT * FROM announcements WHERE board = ? ORDER BY id DESC LIMIT 40').all(board);
   res.json({
     announcements: rows.map(publicAnnouncement),
+    board,
     fonts: ANN_FONTS,
     pages: ANN_PAGES,
     nowTashkent: formatTashkent(new Date()),
@@ -2022,6 +2147,7 @@ admin.get('/announcements', wrap(async (req, res) => {
 
 admin.post('/announcements', wrap(async (req, res) => {
   const p = parseAnnouncementBody(req.body || {});
+  const board = parseAnnBoard(req.body && req.body.board);
   if (p.mediaId) {
     const m = await db.prepare('SELECT id FROM media WHERE id = ?').get(p.mediaId);
     if (!m) throw bad('Media not found, upload it again', 'media');
@@ -2029,12 +2155,12 @@ admin.post('/announcements', wrap(async (req, res) => {
   const info = await db.prepare(`
     INSERT INTO announcements (
       admin_id, title, body, title_color, body_color, bg_from, bg_to,
-      font_family, font_size, media_id, link_type, link_url, link_page, ends_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      font_family, font_size, media_id, link_type, link_url, link_page, ends_at, board
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING *
   `).run(
     req.user.id, p.title, p.body, p.titleColor, p.bodyColor, p.bgFrom, p.bgTo,
-    p.fontFamily, p.fontSize, p.mediaId, p.linkType, p.linkUrl, p.linkPage, p.endsAt,
+    p.fontFamily, p.fontSize, p.mediaId, p.linkType, p.linkUrl, p.linkPage, p.endsAt, board,
   );
   res.status(201).json({ announcement: publicAnnouncement(info.rows[0]) });
 }));

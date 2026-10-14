@@ -13,13 +13,14 @@ const FONT_CSS = {
 const DWELL_MS = 6000;
 const SWIPE_PX = 48;
 
-let timer = null;
-let unbindSwipe = null;
+/** @type {Array<() => void>} */
+const cleanups = [];
 const blobUrls = [];
 
 export function stopAnnouncementsCarousel() {
-  clearInterval(timer); timer = null;
-  if (unbindSwipe) { try { unbindSwipe(); } catch { /* ignore */ } unbindSwipe = null; }
+  while (cleanups.length) {
+    try { cleanups.pop()(); } catch { /* ignore */ }
+  }
   while (blobUrls.length) {
     try { URL.revokeObjectURL(blobUrls.pop()); } catch { /* ignore */ }
   }
@@ -153,9 +154,8 @@ function bindSwipe(host, track, n, go, armAuto) {
   };
 }
 
-/** Mount carousel into host. Returns host or null. */
+/** Mount carousel into host (does not clear other carousels). Returns host or null. */
 export async function mountAnnouncementsCarousel(host, items, { onPage, botUsername, userId } = {}) {
-  stopAnnouncementsCarousel();
   if (!host) return null;
   host.replaceChildren();
   if (!items || !items.length) { host.hidden = true; return null; }
@@ -171,6 +171,7 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
   host.append(dots);
 
   const n = resolved.length;
+  let timer = null;
   const go = (next) => {
     go.idx = ((next % n) + n) % n;
     const w = host.clientWidth || 0;
@@ -186,24 +187,24 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
     timer = setInterval(() => go(go.idx + 1), DWELL_MS);
   };
 
-  unbindSwipe = bindSwipe(host, track, n, go, armAuto);
+  const unbindSwipe = bindSwipe(host, track, n, go, armAuto);
   armAuto();
 
-  // keep pixel offsets correct on resize
   const onResize = () => go(go.idx);
   addEventListener('resize', onResize);
-  const prevUnbind = unbindSwipe;
-  unbindSwipe = () => {
-    prevUnbind();
+  cleanups.push(() => {
+    clearInterval(timer);
+    try { unbindSwipe(); } catch { /* ignore */ }
     removeEventListener('resize', onResize);
-  };
+  });
 
   return host;
 }
 
-export async function loadAnnouncements(api) {
+export async function loadAnnouncements(api, board = 'home') {
   try {
-    const r = await api('GET', '/announcements');
+    const q = board && board !== 'home' ? `?board=${encodeURIComponent(board)}` : '';
+    const r = await api('GET', `/announcements${q}`);
     return r.announcements || [];
   } catch {
     return [];

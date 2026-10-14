@@ -184,6 +184,7 @@ export function openAdmin(onClose) {
 
   // ----- home announcements -----
   const annList = h('div.list');
+  let annBoard = 'home';
   const annForm = {
     title: '', body: '', titleColor: '#ffffff', bodyColor: '#fbbf24',
     bgFrom: '#3b82f6', bgTo: '#6366f1', fontFamily: 'system', fontSize: 18,
@@ -263,7 +264,7 @@ export function openAdmin(onClose) {
 
   async function loadAnnouncements() {
     try {
-      const r = await api('GET', '/admin/announcements');
+      const r = await api('GET', '/admin/announcements?board=' + encodeURIComponent(annBoard));
       if (!annForm.endsAtTashkent && r.nowTashkent) {
         const base = r.nowTashkent.slice(0, 10);
         const d = new Date(base + 'T12:00:00+05:00');
@@ -292,6 +293,7 @@ export function openAdmin(onClose) {
     onclick: async () => {
       try {
         await api('POST', '/admin/announcements', {
+          board: annBoard,
           title: annForm.title,
           body: annForm.body,
           titleColor: annForm.titleColor,
@@ -315,8 +317,15 @@ export function openAdmin(onClose) {
     },
   }, icon('plus', 18), t('ann_publish'));
 
+  const boardSeg = seg(
+    [['home', t('ann_board_home')], ['puzzle', t('ann_board_puzzle')]],
+    'home',
+    (v) => { annBoard = v; loadAnnouncements(); },
+  );
+
   const annCard = h('div.card',
     h('p.muted', t('ann_sub')),
+    h('div.label', t('ann_board')), boardSeg,
     h('div.label', t('ann_title')), titleIn,
     h('div.label', t('ann_body')), bodyIn,
     h('div.label', t('ann_font')), fontSeg,
