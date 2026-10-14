@@ -4,11 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#111827">
   <title>Chess</title>
-  <link rel="stylesheet" href="/styles.css?v=20261014o">
+  <link rel="stylesheet" href="/styles.css?v=20261014p">
+  <style>
+    /* Inline boot splash — always visible until JS reveals gate/app (never a blank black WebView) */
+    html, body { margin: 0; min-height: 100%; min-height: 100dvh; background: #111827; color: #fff; }
+    #boot {
+      position: fixed; inset: 0; z-index: 1000;
+      display: grid; place-items: center; gap: 14px;
+      background: #111827; color: #e5e7eb; font-family: system-ui, sans-serif;
+    }
+    #boot[hidden] { display: none !important; }
+    #boot .boot-ic {
+      width: 64px; height: 64px; border-radius: 20px; background: #54a4f7;
+      display: grid; place-items: center; font-size: 30px;
+    }
+    #boot p { margin: 0; font-weight: 700; font-size: 15px; opacity: 0.85; }
+  </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
+  <div id="boot" role="status" aria-live="polite">
+    <div class="boot-ic">♟</div>
+    <p>Loading…</p>
+  </div>
+
   <div id="gate" class="gate" hidden>
     <div class="gate-card">
       <div class="gate-icon">♟</div>
@@ -37,6 +58,17 @@
     <div id="sheet-root"></div>
     <div id="toast" role="status"></div>
   </main>
-  <script type="module" src="/js/app.js?v=20261014o"></script>
+  <script type="module" src="/js/app.js?v=20261014p"></script>
+  <script>
+    // If the module fails to load, leave a visible error instead of an empty black screen
+    window.addEventListener('error', function (ev) {
+      var b = document.getElementById('boot');
+      if (!b || b.hidden) return;
+      if (String(ev && ev.message || '').indexOf('Failed to fetch') >= 0
+        || String(ev && ev.message || '').indexOf('error loading') >= 0) {
+        b.innerHTML = '<div class="boot-ic">♟</div><p>Could not load app. Close and reopen.</p>';
+      }
+    });
+  </script>
 </body>
 </html>

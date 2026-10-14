@@ -1,7 +1,25 @@
 // Main app: boot, swipe pager, pages, deep links.
 import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, setInitData, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep } from './ui.js';
-import { headerInboxBtns, refreshInboxBadges } from './inbox.js';
 import { t, setLang } from './i18n.js';
+
+/** Lazy inbox — a missing/404 asset must never blank the whole Mini App. */
+let inboxMod = null;
+async function loadInbox() {
+  if (inboxMod) return inboxMod;
+  try { inboxMod = await import('./inbox.js?v=20261014p'); } catch (e) { console.warn('[inbox]', e); inboxMod = null; }
+  return inboxMod;
+}
+function headerInboxBtnsSafe() {
+  const slot = h('div.hdr-inbox');
+  loadInbox().then((m) => {
+    if (!m || !slot.isConnected) return;
+    try { slot.replaceWith(m.headerInboxBtns()); } catch (e) { console.warn('[inbox]', e); }
+  });
+  return slot;
+}
+function refreshInboxBadgesSafe(root) {
+  loadInbox().then((m) => { try { m && m.refreshInboxBadges(root); } catch { /* ignore */ } });
+}
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
 import { Board, restyleBoards } from './board.js';
@@ -292,7 +310,7 @@ refreshers.play = async function renderPlay() {
     if (pill) pill.replaceChildren(h('i.dot'), t('online_now', { n: l.onlineCount }));
     const gem = playEl.querySelector('.gempill');
     if (gem) gem.textContent = '💎 ' + (state.me.diamonds || 0);
-    refreshInboxBadges(playEl);
+    refreshInboxBadgesSafe(playEl);
     return;
   }
   playSnap = snap;
@@ -339,7 +357,7 @@ refreshers.play = async function renderPlay() {
       h('div.pills',
         h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)),
         h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount })),
-        headerInboxBtns())),
+        headerInboxBtnsSafe())),
     annHost,
     puzzleAnns && puzzleAnns.length ? puzzleHost : puzzleFallback,
     h('div.time-heading', t('choose_time')),
@@ -665,26 +683,70 @@ async function handleDeepLink() {
 }
 
 // ---------- boot ----------
+function hideBoot() {
+  const boot = $('#boot');
+  if (boot) boot.hidden = true;
+}
+function showGate(msg) {
+  hideBoot();
+  const gate = $('#gate');
+  const app = $('#app');
+  if (app) app.hidden = true;
+  if (gate) {
+    gate.hidden = false;
+    if (msg) {
+      const h1 = gate.querySelector('h1');
+      if (h1) h1.textContent = msg;
+    }
+  }
+}
+function showApp() {
+  hideBoot();
+  const gate = $('#gate');
+  const app = $('#app');
+  if (gate) gate.hidden = true;
+  if (app) app.hidden = false;
+}
+
 async function boot() {
-  if (!tg || !tg.initData) { $('#gate').hidden = false; return; }
-  setInitData(tg.initData);
-  tg.ready();
-  try { tg.expand(); } catch { /* ignore */ }
-  try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch { /* old client */ }
-  // Re-paint Telegram chrome whenever the Mini App expands / safe area changes
+  // Paint Telegram chrome immediately so expand never flashes pure black
   try {
-    tg.onEvent && tg.onEvent('viewportChanged', () => syncTgChrome());
-    tg.onEvent && tg.onEvent('themeChanged', () => syncTgChrome());
+    if (tg) {
+      tg.ready();
+      try { tg.expand(); } catch { /* ignore */ }
+      try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch { /* old client */ }
+      syncTgChrome('dark');
+      try {
+        tg.onEvent && tg.onEvent('viewportChanged', () => syncTgChrome());
+        tg.onEvent && tg.onEvent('themeChanged', () => syncTgChrome());
+      } catch { /* ignore */ }
+    }
   } catch { /* ignore */ }
-  syncTgChrome();
+
+  if (!tg || !tg.initData) {
+    showGate();
+    return;
+  }
+  setInitData(tg.initData);
+
   let me;
-  try { me = await api('GET', '/me'); } catch (e) { $('#gate').hidden = false; $('#gate h1').textContent = (await import('./i18n.js')).errText(e); return; }
+  try {
+    me = await api('GET', '/me');
+  } catch (e) {
+    const { errText } = await import('./i18n.js');
+    showGate(errText(e));
+    return;
+  }
+
   state.me = me.user; state.stats = me.stats; state.meta = me.meta;
   setLang(me.user.lang); applyTheme(me.user.theme);
   if (canStyleChess(me.user)) applyChessStyle(me.user.pieceSet, me.user.boardTheme);
   else applyChessStyle('outline', 'classic');
-  $('#gate').hidden = true; $('#app').hidden = false;
+
+  // Reveal shell BEFORE data refresh so the user never sits on a black void
+  showApp();
   initPager();
+
   connectWs((up) => { if (up) refresh(); });
   onWs((m) => {
     if (m.t === 'invite') { showInvite(m.game, m.ttl || 10000); refresh('play'); }
@@ -725,7 +787,22 @@ async function boot() {
     else closeScreen(true);
     setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: 'premium' })), already ? 60 : 520);
   });
-  await refresh();
-  await handleDeepLink();
+
+  try {
+    await refresh();
+    await handleDeepLink();
+  } catch (e) {
+    console.error('[boot] refresh', e);
+    fail(e);
+  }
+  // Warm inbox module in the background (non-blocking)
+  loadInbox();
 }
-boot();
+boot().catch((e) => {
+  console.error('[boot]', e);
+  try {
+    showGate((e && e.message) || 'Something went wrong');
+  } catch {
+    hideBoot();
+  }
+});

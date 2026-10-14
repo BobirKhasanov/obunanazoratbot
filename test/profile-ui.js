@@ -106,8 +106,11 @@ assert.ok(/#nav-ind\s*\{[^}]*0\.78s/.test(css), 'nav indicator matches pager tim
 assert.ok(css.includes('overscroll-behavior-y: contain'), 'pages contain overscroll for smoother feel');
 const html = read('public/index.html');
 assert.ok(html.includes('id="play-sticky"') && html.includes('id="dock"'), 'Play mount lives inside dock markup');
+assert.ok(html.includes('id="boot"'), 'boot splash in HTML');
 assert.ok(css.includes('pill-thumb') && ui.includes('pillBar'), 'sliding pill bars for section selection');
-assert.ok(app.includes('headerInboxBtns') && app.includes('rank-board-bar'), 'home inbox + ranking bars');
+assert.ok((app.includes('headerInboxBtns') || app.includes('headerInboxBtnsSafe')) && app.includes('rank-board-bar'), 'home inbox + ranking bars');
+assert.ok(app.includes("import('./inbox.js") || app.includes('loadInbox'), 'inbox loaded lazily so a missing asset cannot blank the app');
+assert.ok(app.includes('showApp') && app.includes('showGate') && app.includes('#boot'), 'boot never leaves a blank black screen');
 const inbox = read('public/js/inbox.js');
 assert.ok(inbox.includes('openNotifications') && inbox.includes('openMessages'), 'inbox screens');
 assert.ok(inbox.includes('/messages/search') && inbox.includes('/notifications'), 'inbox API wiring');

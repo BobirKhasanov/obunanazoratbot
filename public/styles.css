@@ -327,7 +327,7 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 }
 #toast.show { transform: translate(-50%, 0); opacity: 1; }
 #toast.err { background: var(--red); color: #fff; }
-.gate { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; }
+.gate { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--bg); z-index: 900; }
 .gate-card { text-align: center; max-width: 320px; }
 .gate-icon { width: 72px; height: 72px; border-radius: 24px; background: var(--blue); display: grid; place-items: center; font-size: 32px; margin: 0 auto 18px; }
 .gate h1 { font-size: 24px; margin-bottom: 8px; }
