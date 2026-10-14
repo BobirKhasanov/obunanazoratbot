@@ -1,10 +1,20 @@
 // Animated chess board. Pieces are keyed DOM elements positioned with CSS transforms, so every move
 // (including castling, captures and flips) glides instead of jumping.
 import { h, haptic } from './ui.js';
-import { pieceSvg } from './pieces.js';
+import { pieceSvg, clearPieceCache } from './pieces.js';
 import { t } from './i18n.js';
 
 const FILES = 'abcdefgh';
+const liveBoards = new Set();
+
+/** Rebuild SVG inside every live board after piece-set / theme change. */
+export function restyleBoards() {
+  clearPieceCache();
+  for (const b of liveBoards) {
+    for (const [, p] of b.pieces) p.el.innerHTML = pieceSvg(p.c, p.t);
+  }
+}
+
 export class Board {
   /** opts.onMove(from, to, promotion|undefined) -> called after the player makes a legal move */
   constructor(root, opts = {}) {
@@ -22,9 +32,16 @@ export class Board {
     window.addEventListener('pointerup', this.h.up);
     window.addEventListener('pointercancel', this.h.cancel);
     this.drag = null;
+    liveBoards.add(this);
   }
 
-  destroy() { window.removeEventListener('pointermove', this.h.move); window.removeEventListener('pointerup', this.h.up); window.removeEventListener('pointercancel', this.h.cancel); clearTimeout(this.hintT); }
+  destroy() {
+    liveBoards.delete(this);
+    window.removeEventListener('pointermove', this.h.move);
+    window.removeEventListener('pointerup', this.h.up);
+    window.removeEventListener('pointercancel', this.h.cancel);
+    clearTimeout(this.hintT);
+  }
 
   // square name -> {x, y} in board cells for the current orientation
   xy(sq) {

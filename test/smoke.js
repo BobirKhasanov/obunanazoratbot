@@ -153,6 +153,19 @@ async function playMoves(game, players, moves, startPly = 0) {
       await err('A', 'POST', '/premium/buy', null, 400, 'premium_owned');
     });
 
+    await step('piece/board style: premium or admin only; invalid values rejected', async () => {
+      await err('B', 'PATCH', '/me', { pieceSet: 'classic' }, 403, 'premium_required');
+      await err('B', 'PATCH', '/me', { boardTheme: 'green' }, 403, 'premium_required');
+      const prem = await ok('A', 'PATCH', '/me', { pieceSet: 'classic', boardTheme: 'wood' });
+      assert.deepStrictEqual([prem.user.pieceSet, prem.user.boardTheme], ['classic', 'wood']);
+      await err('A', 'PATCH', '/me', { pieceSet: 'neon' }, 400);
+      await err('A', 'PATCH', '/me', { boardTheme: 'pink' }, 400);
+      const adm = await ok('ADMIN', 'PATCH', '/me', { pieceSet: 'staunton', boardTheme: 'green' });
+      assert.deepStrictEqual([adm.user.pieceSet, adm.user.boardTheme], ['staunton', 'green']);
+      assert.ok((await ok('A', 'GET', '/me')).meta.PIECE_SETS.includes('neo'));
+      assert.ok((await ok('A', 'GET', '/me')).meta.BOARD_THEMES.includes('blue'));
+    });
+
     await step('challenge: in-app invitation only (no chat message), no duplicates', async () => {
       const wsB = await connect('B'); sockets.push(wsB);
       const c = await ok('A', 'POST', '/games', { opponentId: USERS.B.id });

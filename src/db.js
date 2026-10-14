@@ -164,6 +164,8 @@ CREATE TABLE IF NOT EXISTS broadcasts (
 -- The API is served only by this server (service connection); nobody should reach the tables through Supabase's public REST API
 ALTER TABLE users ADD COLUMN IF NOT EXISTS diamonds BIGINT NOT NULL DEFAULT 0;   -- in-app currency
 ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER NOT NULL DEFAULT 0;   -- 1 once bought with diamonds
+ALTER TABLE users ADD COLUMN IF NOT EXISTS piece_set TEXT NOT NULL DEFAULT 'outline';   -- outline | classic | neo | staunton
+ALTER TABLE users ADD COLUMN IF NOT EXISTS board_theme TEXT NOT NULL DEFAULT 'classic'; -- classic | green | wood | blue | brown
 ALTER TABLE games ADD COLUMN IF NOT EXISTS white_ms BIGINT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS black_ms BIGINT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS turn_started_at TIMESTAMPTZ;

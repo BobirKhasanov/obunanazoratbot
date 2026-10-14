@@ -4,10 +4,12 @@ import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { openAdmin } from './admin.js';
 import { Chess } from '/vendor/chess.js';
-import { Board } from './board.js';
+import { Board, restyleBoards } from './board.js';
 import { PUZZLES, goodMoves, mateIn } from './puzzles.js';
 import { normalizeTimeControl } from './time.js';
 import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
+import { PIECE_SETS } from './pieces.js';
+import { restyleOpenGame } from './game.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
 let selectedTime = 'any';
@@ -17,11 +19,69 @@ const gameMeta = () => ({ me: { id: state.me.id, name: state.me.firstName }, bot
 /** Exact home-screen preset sent to the server (Any → untimed classic). */
 const selectedPreset = () => normalizeTimeControl(selectedTime === 'any' ? 'classic' : selectedTime);
 
+const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown'];
+const BOARD_SWATCH = {
+  classic: { lt: '#b9c4d6', dk: '#5f7391' },
+  green: { lt: '#eedfbb', dk: '#769656' },
+  wood: { lt: '#f0d9b5', dk: '#b58863' },
+  blue: { lt: '#cdd7e8', dk: '#5b7fa6' },
+  brown: { lt: '#d8c3a5', dk: '#8b5e3c' },
+};
+
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   const bg = theme === 'light' ? '#f3f5f9' : '#111827';
   try { tg.setHeaderColor(bg); tg.setBackgroundColor(bg); tg.setBottomBarColor && tg.setBottomBarColor(bg); } catch { /* old client */ }
   const m = $('meta[name=color-scheme]'); if (m) m.content = theme;
+}
+
+function applyChessStyle(pieceSet, boardTheme) {
+  const root = document.documentElement;
+  root.dataset.pieces = PIECE_SETS.includes(pieceSet) ? pieceSet : 'outline';
+  root.dataset.board = BOARD_THEMES.includes(boardTheme) ? boardTheme : 'classic';
+  restyleBoards();
+  try { restyleOpenGame(); } catch { /* no open game */ }
+}
+
+function canStyleChess(me) {
+  return !!(me && (me.premium || me.isAdmin));
+}
+
+function stylePickers(me, save) {
+  const locked = !canStyleChess(me);
+  const piece = me.pieceSet || 'outline';
+  const board = me.boardTheme || 'classic';
+  const pickPiece = async (v) => {
+    if (locked) return toast(t('style_premium_only'), true);
+    applyChessStyle(v, me.boardTheme || 'classic');
+    haptic('select');
+    try { await save({ pieceSet: v }); refresh('profile'); } catch (e) { fail(e); }
+  };
+  const pickBoard = async (v) => {
+    if (locked) return toast(t('style_premium_only'), true);
+    applyChessStyle(me.pieceSet || 'outline', v);
+    haptic('select');
+    try { await save({ boardTheme: v }); refresh('profile'); } catch (e) { fail(e); }
+  };
+  return [
+    h('div.h2', t('piece_set'), locked ? h('span.count-pill', '★ Premium') : null),
+    locked ? h('p.muted.style-lock', t('style_premium_hint')) : null,
+    h('div.style-swatches' + (locked ? '.style-lock' : ''),
+      PIECE_SETS.map((id) => h('button.style-sw' + (piece === id ? '.on' : ''), {
+        type: 'button', 'aria-label': t('piece_' + id),
+        onclick: () => pickPiece(id),
+      }, t('piece_' + id).slice(0, 3)))),
+    h('div.h2', t('board_theme'), locked ? h('span.count-pill', '★ Premium') : null),
+    h('div.style-swatches' + (locked ? '.style-lock' : ''),
+      BOARD_THEMES.map((id) => {
+        const sw = BOARD_SWATCH[id];
+        return h('button.style-sw.board' + (board === id ? '.on' : ''), {
+          type: 'button', 'aria-label': t('board_' + id),
+          style: { '--sw-lt': sw.lt, '--sw-dk': sw.dk },
+          onclick: () => pickBoard(id),
+        });
+      })),
+  ];
 }
 
 const page = (name) => $(`.page[data-page="${name}"]`);
@@ -363,6 +423,7 @@ refreshers.profile = async function renderProfile() {
     h('div.h2', t('language')), langChips,
     h('div.h2', t('theme')),
     seg([['dark', '🌙 ' + t('dark')], ['light', '☀️ ' + t('light')]], me.theme, async (v) => { applyTheme(v); await save({ theme: v }); }),
+    ...stylePickers(me, save),
     h('div.card.settings',
       h('div.setting', h('div', h('b', t('notifications')), h('small', t('notifications_sub'))), toggle(me.notifyEnabled, (v) => save({ notifyEnabled: v }))),
       h('div.setting', h('div', h('b', t('discoverable')), h('small', t('discoverable_sub'))), toggle(me.discoverable, (v) => save({ discoverable: v })))),
@@ -488,6 +549,8 @@ async function boot() {
   try { me = await api('GET', '/me'); } catch (e) { $('#gate').hidden = false; $('#gate h1').textContent = (await import('./i18n.js')).errText(e); return; }
   state.me = me.user; state.stats = me.stats; state.meta = me.meta;
   setLang(me.user.lang); applyTheme(me.user.theme);
+  if (canStyleChess(me.user)) applyChessStyle(me.user.pieceSet, me.user.boardTheme);
+  else applyChessStyle('outline', 'classic');
   $('#gate').hidden = true; $('#app').hidden = false;
   initPager();
   connectWs((up) => { if (up) refresh(); });

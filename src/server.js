@@ -30,6 +30,8 @@ if (!BOT_TOKEN) {
 }
 
 const THEMES = ['dark', 'light'];
+const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton'];
+const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown'];
 const PREMIUM_PRICE = Number(process.env.PREMIUM_PRICE || 200); // diamonds
 const REFERRAL_REWARD = Number(process.env.REFERRAL_REWARD || 20); // diamonds for the inviter
 const REFERRAL_INVITEE_REWARD = Number(process.env.REFERRAL_INVITEE_REWARD || 10); // diamonds for the invited friend
@@ -102,6 +104,8 @@ const publicUser = (u, admin) => ({
   id: u.id, firstName: u.first_name, username: u.username, lang: u.lang, theme: u.theme,
   langSet: !!u.lang_set, notifyEnabled: !!u.notify_enabled, discoverable: !!u.discoverable, isAdmin: admin,
   diamonds: Number(u.diamonds || 0), premium: !!u.premium,
+  pieceSet: PIECE_SETS.includes(u.piece_set) ? u.piece_set : 'outline',
+  boardTheme: BOARD_THEMES.includes(u.board_theme) ? u.board_theme : 'classic',
 });
 
 // ---------- bot ----------
@@ -173,7 +177,10 @@ api.get('/me', wrap(async (req, res) => {
   res.json({
     user: publicUser(req.user, req.isAdmin),
     stats: await statsFor(req.user.id),
-    meta: { LANGS, THEMES, COLORS, REACTIONS, PREMIUM_PRICE, REFERRAL_REWARD, REFERRAL_INVITEE_REWARD, botUsername: await getBotUsername() },
+    meta: {
+      LANGS, THEMES, PIECE_SETS, BOARD_THEMES, COLORS, REACTIONS,
+      PREMIUM_PRICE, REFERRAL_REWARD, REFERRAL_INVITEE_REWARD, botUsername: await getBotUsername(),
+    },
   });
 }));
 
@@ -186,8 +193,25 @@ api.patch('/me', wrap(async (req, res) => {
   if (!THEMES.includes(theme)) throw bad('Unsupported theme', 'bad_request');
   const notifyEnabled = b.notifyEnabled === undefined ? u.notify_enabled : b.notifyEnabled ? 1 : 0;
   const discoverable = b.discoverable === undefined ? u.discoverable : b.discoverable ? 1 : 0;
-  await db.prepare('UPDATE users SET lang = ?, theme = ?, notify_enabled = ?, discoverable = ?, lang_set = ? WHERE id = ?')
-    .run(lang, theme, notifyEnabled, discoverable, b.lang !== undefined ? 1 : u.lang_set, u.id);
+
+  let pieceSet = u.piece_set || 'outline';
+  let boardTheme = u.board_theme || 'classic';
+  const wantsStyle = b.pieceSet !== undefined || b.boardTheme !== undefined;
+  if (wantsStyle) {
+    if (!u.premium && !req.isAdmin) throw new HttpError(403, 'Premium required', 'premium_required');
+    if (b.pieceSet !== undefined) {
+      if (!PIECE_SETS.includes(b.pieceSet)) throw bad('Unsupported piece set', 'bad_request');
+      pieceSet = b.pieceSet;
+    }
+    if (b.boardTheme !== undefined) {
+      if (!BOARD_THEMES.includes(b.boardTheme)) throw bad('Unsupported board theme', 'bad_request');
+      boardTheme = b.boardTheme;
+    }
+  }
+
+  await db.prepare(`UPDATE users SET lang = ?, theme = ?, notify_enabled = ?, discoverable = ?, lang_set = ?,
+    piece_set = ?, board_theme = ? WHERE id = ?`)
+    .run(lang, theme, notifyEnabled, discoverable, b.lang !== undefined ? 1 : u.lang_set, pieceSet, boardTheme, u.id);
   res.json({ user: publicUser(await getUser.get(u.id), req.isAdmin) });
 }));
 

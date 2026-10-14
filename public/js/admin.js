@@ -1,6 +1,18 @@
 // Admin panel: live users, KPIs, post composer (media, button text + colours), users list.
 import { h, $, icon, haptic, toast, api, fail, getInitData, avatar, confirmSheet, seg } from './ui.js';
 import { t, LANGS, LANG_NAMES } from './i18n.js';
+import { PIECE_SETS } from './pieces.js';
+import { restyleBoards } from './board.js';
+import { restyleOpenGame } from './game.js';
+
+const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown'];
+const BOARD_SWATCH = {
+  classic: { lt: '#b9c4d6', dk: '#5f7391' },
+  green: { lt: '#eedfbb', dk: '#769656' },
+  wood: { lt: '#f0d9b5', dk: '#b58863' },
+  blue: { lt: '#cdd7e8', dk: '#5b7fa6' },
+  brown: { lt: '#d8c3a5', dk: '#8b5e3c' },
+};
 
 let timer = null;
 const COLOR_KEYS = ['default', 'primary', 'success', 'danger'];
@@ -97,11 +109,54 @@ export function openAdmin(onClose) {
   const audience = seg([['all', t('all_users')], ...LANGS.map((l) => [l, LANG_NAMES[l].slice(0, 3)])], 'all', (v) => { post.lang = v; });
 
   const search = h('input.input.search', { placeholder: t('search'), oninput: (e) => { clearTimeout(search._t); search._t = setTimeout(() => loadUsers(e.target.value), 250); } });
+
+  // Admin appearance (piece set + board) — saved on this admin account
+  let styleUser = { pieceSet: 'outline', boardTheme: 'classic' };
+  const pieceBox = h('div.style-swatches');
+  const boardBox = h('div.style-swatches');
+  const applyLocal = (pieceSet, boardTheme) => {
+    document.documentElement.dataset.pieces = pieceSet;
+    document.documentElement.dataset.board = boardTheme;
+    restyleBoards();
+    try { restyleOpenGame(); } catch { /* ignore */ }
+  };
+  const drawStyle = () => {
+    pieceBox.replaceChildren(...PIECE_SETS.map((id) => h('button.style-sw' + (styleUser.pieceSet === id ? '.on' : ''), {
+      type: 'button', onclick: async () => {
+        try {
+          styleUser = (await api('PATCH', '/me', { pieceSet: id })).user;
+          applyLocal(styleUser.pieceSet, styleUser.boardTheme);
+          drawStyle(); haptic('select'); toast(t('piece_' + id));
+        } catch (e) { fail(e); }
+      },
+    }, t('piece_' + id).slice(0, 3))));
+    boardBox.replaceChildren(...BOARD_THEMES.map((id) => {
+      const sw = BOARD_SWATCH[id];
+      return h('button.style-sw.board' + (styleUser.boardTheme === id ? '.on' : ''), {
+        type: 'button', style: { '--sw-lt': sw.lt, '--sw-dk': sw.dk },
+        onclick: async () => {
+          try {
+            styleUser = (await api('PATCH', '/me', { boardTheme: id })).user;
+            applyLocal(styleUser.pieceSet, styleUser.boardTheme);
+            drawStyle(); haptic('select'); toast(t('board_' + id));
+          } catch (e) { fail(e); }
+        },
+      });
+    }));
+  };
+  api('GET', '/me').then((r) => {
+    styleUser = r.user;
+    applyLocal(styleUser.pieceSet || 'outline', styleUser.boardTheme || 'classic');
+    drawStyle();
+  }).catch(() => drawStyle());
+
   el.append(
     h('button.back', { onclick: close }, icon('back', 20), t('back')),
     h('div.top', h('h1', t('admin_title'))),
     liveBox, h('div.h2', t('stats')), kpis,
     h('div.h2', t('signups')), h('div.card', bars),
+    h('div.h2', t('admin_style')), h('p.muted', t('admin_style_sub')),
+    h('div.card', h('div.label', t('piece_set')), pieceBox, h('div.label', t('board_theme')), boardBox),
     h('div.h2', t('composer')),
     h('div.card', text, mediaBox, file, h('div.label', t('buttons') + ' · ' + t('up_to')), btnBox, h('div.label', t('audience')), audience, h('div.label', t('preview')), preview, sendTest, sendAll),
     h('div.h2', t('history')), histBox,

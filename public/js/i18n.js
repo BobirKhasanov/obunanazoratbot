@@ -51,6 +51,7 @@ const en = {
   e_game_unavailable: 'This game is no longer available', e_game_over: 'The game is over', e_too_many_games: 'You have too many games open',
   e_user_unavailable: 'This player is not available', e_bad_request: 'Something is wrong with the request', e_server: 'Something went wrong', e_net: 'No connection',
   e_upstream: 'Lichess is temporarily unavailable',
+  e_premium_required: 'Premium is required for this',
   // admin
   admin_title: 'Admin', live_users: 'Live users', k_users: 'Users', k_new: 'New today', k_active: 'Active 7d', k_games_live: 'Games now',
   k_games_played: 'Games played', k_unreachable: 'Blocked the bot', signups: 'Sign-ups, 14 days', nobody_live: 'Nobody online',
@@ -115,6 +116,7 @@ const ru = {
   e_game_unavailable: 'Эта партия больше недоступна', e_game_over: 'Партия окончена', e_too_many_games: 'Слишком много открытых партий',
   e_user_unavailable: 'Игрок недоступен', e_bad_request: 'Неверный запрос', e_server: 'Что-то пошло не так', e_net: 'Нет соединения',
   e_upstream: 'Lichess временно недоступен',
+  e_premium_required: 'Нужен Премиум',
   admin_title: 'Админ', live_users: 'Сейчас онлайн', k_users: 'Пользователи', k_new: 'Новые сегодня', k_active: 'Активные 7д', k_games_live: 'Партий сейчас',
   k_games_played: 'Сыграно партий', k_unreachable: 'Заблокировали бота', signups: 'Регистрации, 14 дней', nobody_live: 'Никого онлайн',
   composer: 'Новый пост', post_text: 'Текст сообщения', add_media: 'Добавить фото, видео или GIF', remove: 'Убрать', buttons: 'Кнопки',
@@ -178,6 +180,7 @@ const uz = {
   e_game_unavailable: "Bu o'yin endi mavjud emas", e_game_over: "O'yin tugagan", e_too_many_games: "Ochiq o'yinlar juda ko'p",
   e_user_unavailable: "O'yinchi mavjud emas", e_bad_request: "So'rov noto'g'ri", e_server: "Nimadir xato ketdi", e_net: 'Aloqa yo\'q',
   e_upstream: 'Lichess vaqtincha ishlamayapti',
+  e_premium_required: 'Buning uchun Premium kerak',
   admin_title: 'Admin', live_users: 'Hozir onlayn', k_users: 'Foydalanuvchilar', k_new: 'Bugun yangi', k_active: '7 kun faol', k_games_live: "Hozir o'yinlar",
   k_games_played: "O'ynalgan o'yinlar", k_unreachable: 'Botni bloklagan', signups: "Ro'yxatdan o'tish, 14 kun", nobody_live: 'Hech kim onlayn emas',
   composer: 'Yangi post', post_text: 'Xabar matni', add_media: "Rasm, video yoki GIF qo'shish", remove: "Olib tashlash", buttons: 'Tugmalar',
@@ -241,6 +244,7 @@ const uzc = {
   e_game_unavailable: 'Бу ўйин энди мавжуд эмас', e_game_over: 'Ўйин тугаган', e_too_many_games: 'Очиқ ўйинлар жуда кўп',
   e_user_unavailable: 'Ўйинчи мавжуд эмас', e_bad_request: 'Сўров нотўғри', e_server: 'Нимадир хато кетди', e_net: 'Алоқа йўқ',
   e_upstream: 'Lichess вақтинча ишламаяпти',
+  e_premium_required: 'Бунинг учун Премиум керак',
   admin_title: 'Админ', live_users: 'Ҳозир онлайн', k_users: 'Фойдаланувчилар', k_new: 'Бугун янги', k_active: '7 кун фаол', k_games_live: 'Ҳозир ўйинлар',
   k_games_played: 'Ўйналган ўйинлар', k_unreachable: 'Ботни блоклаган', signups: 'Рўйхатдан ўтиш, 14 кун', nobody_live: 'Ҳеч ким онлайн эмас',
   composer: 'Янги пост', post_text: 'Хабар матни', add_media: 'Расм, видео ёки GIF қўшиш', remove: 'Олиб ташлаш', buttons: 'Тугмалар',
@@ -328,6 +332,11 @@ Object.assign(en, {
   live_no_rounds: 'No rounds yet.', live_no_games: 'No games in this round.', live_no_uz: 'No Uzbekistan players in this round.',
   live_load_fail: 'Could not load. Try again.', moves_n: '{n} moves',
   turn_white: "White's turn", turn_black: "Black's turn", retry_live: 'Try again',
+  piece_set: 'Pieces', board_theme: 'Board colour', style_premium_only: 'Premium unlocks piece & board styles',
+  style_premium_hint: 'Buy Premium to change piece style and board colours.',
+  piece_outline: 'Outline', piece_classic: 'Classic', piece_neo: 'Neo', piece_staunton: 'Staunton',
+  board_classic: 'Default', board_green: 'Green', board_wood: 'Wood', board_blue: 'Blue', board_brown: 'Brown',
+  admin_style: 'Board & pieces', admin_style_sub: 'Admin can pick any piece set and board colour.',
 });
 Object.assign(ru, {
   live_tab_bot: 'Живые партии', live_tab_intl: 'Мировые турниры', live_games_count: '{n} live',
@@ -339,6 +348,11 @@ Object.assign(ru, {
   live_no_rounds: 'Туров пока нет.', live_no_games: 'В этом туре нет партий.', live_no_uz: 'В этом туре нет игроков из Узбекистана.',
   live_load_fail: 'Не удалось загрузить. Попробуйте ещё раз.', moves_n: '{n} ходов',
   turn_white: 'Ход белых', turn_black: 'Ход чёрных', retry_live: 'Ещё раз',
+  piece_set: 'Фигуры', board_theme: 'Цвет доски', style_premium_only: 'Стили фигур и доски — в Премиуме',
+  style_premium_hint: 'Купите Премиум, чтобы менять фигуры и цвет доски.',
+  piece_outline: 'Контур', piece_classic: 'Классика', piece_neo: 'Нео', piece_staunton: 'Стаунтон',
+  board_classic: 'Обычная', board_green: 'Зелёная', board_wood: 'Дерево', board_blue: 'Синяя', board_brown: 'Коричневая',
+  admin_style: 'Доска и фигуры', admin_style_sub: 'Админ может выбрать любой стиль фигур и цвет доски.',
 });
 Object.assign(uz, {
   live_tab_bot: "Live o'yinlar", live_tab_intl: 'Halqaro Live turnirlar', live_games_count: '{n} ta jonli',
@@ -350,6 +364,11 @@ Object.assign(uz, {
   live_no_rounds: "Raundlar yo'q.", live_no_games: "Bu raundda o'yin yo'q.", live_no_uz: "Bu raundda O'zbekiston o'yinchilari yo'q.",
   live_load_fail: "Yuklanmadi. Qayta urinib ko'ring.", moves_n: '{n}-yurish',
   turn_white: 'Oq navbati', turn_black: 'Qora navbati', retry_live: 'Qayta urinish',
+  piece_set: 'Donachalar', board_theme: 'Doska rangi', style_premium_only: 'Donacha va doska stillari Premiumda',
+  style_premium_hint: 'Donacha uslubi va doska rangini o‘zgartirish uchun Premium oling.',
+  piece_outline: 'Chiziq', piece_classic: 'Klassik', piece_neo: 'Neo', piece_staunton: 'Staunton',
+  board_classic: 'Oddiy', board_green: 'Yashil', board_wood: 'Yog‘och', board_blue: 'Ko‘k', board_brown: 'Jigarrang',
+  admin_style: 'Doska va donachalar', admin_style_sub: 'Admin istalgan donacha uslubi va doska rangini tanlay oladi.',
 });
 Object.assign(uzc, {
   live_tab_bot: 'Live ўйинлар', live_tab_intl: 'Халқаро Live турнирлар', live_games_count: '{n} та жонли',
@@ -361,4 +380,9 @@ Object.assign(uzc, {
   live_no_rounds: 'Раундлар йўқ.', live_no_games: 'Бу раундда ўйин йўқ.', live_no_uz: 'Бу раундда Ўзбекистон ўйинчилари йўқ.',
   live_load_fail: 'Юкланмади. Қайта уриниб кўринг.', moves_n: '{n}-юриш',
   turn_white: 'Оқ навбати', turn_black: 'Қора навбати', retry_live: 'Қайта уриниш',
+  piece_set: 'Доначалар', board_theme: 'Доска ранги', style_premium_only: 'Донача ва доска стиллари Премиумда',
+  style_premium_hint: 'Донача услуби ва доска рангини ўзгартириш учун Премиум олинг.',
+  piece_outline: 'Чизиқ', piece_classic: 'Классик', piece_neo: 'Нео', piece_staunton: 'Стаунтон',
+  board_classic: 'Оддий', board_green: 'Яшил', board_wood: 'Ёғоч', board_blue: 'Кўк', board_brown: 'Жигарранг',
+  admin_style: 'Доска ва доначалар', admin_style_sub: 'Админ исталган донача услуби ва доска рангини танлай олади.',
 });

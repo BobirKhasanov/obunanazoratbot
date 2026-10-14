@@ -11,6 +11,8 @@ const EMOTES = ['🤔', '😎', '😮', '👏', '🙈', '😀'];
 let ctx = null; // the open game, or null
 
 export const openGameId = () => (ctx && (ctx.kind === 'online' || ctx.kind === 'spectate') ? ctx.id : null);
+/** After piece-set change: refresh captures / clocks without animation. */
+export function restyleOpenGame() { if (ctx && ctx.render) ctx.render(false); }
 export const savedAiGame = () => { try { const s = JSON.parse(localStorage.getItem(AI_KEY)); return s && Array.isArray(s.moves) ? s : null; } catch { return null; } };
 const saveAi = (s) => { try { s ? localStorage.setItem(AI_KEY, JSON.stringify(s)) : localStorage.removeItem(AI_KEY); } catch { /* storage blocked */ } };
 
