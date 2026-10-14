@@ -48,9 +48,9 @@ async function main() {
   assert.ok(cssFile.includes('.style-preview'), 'css has live preview');
   assert.ok(cssFile.includes('data-board="classic"'), 'classic board colours defined');
 
-  const app = fs.readFileSync(path.join(__dirname, '../public/js/app.js'), 'utf8');
-  assert.ok(app.includes('stylePickerCard'), 'app uses stylePickerCard');
-  assert.ok(!app.includes("h('i', { style: { background:"), 'app no longer uses empty i colour cells');
+  const profile = fs.readFileSync(path.join(__dirname, '../public/js/profile.js'), 'utf8');
+  assert.ok(profile.includes('stylePickerCard'), 'profile settings uses stylePickerCard');
+  assert.ok(!profile.includes("h('i', { style: { background:"), 'profile no longer uses empty i colour cells');
 
   // Optional ESM smoke if Node can import (style-ui pulls DOM helpers — skip runtime import).
   void pathToFileURL;

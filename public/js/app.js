@@ -1,16 +1,16 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, rain, sheet, seg, toggle, api, fail, setInitData, connectWs, onWs, tg, avatar, shareUrl, confirmSheet, sleep } from './ui.js';
-import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, api, fail, setInitData, connectWs, onWs, tg, avatar, sleep } from './ui.js';
+import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
-import { openAdmin } from './admin.js';
 import { Chess } from '/vendor/chess.js';
 import { Board, restyleBoards } from './board.js';
 import { PUZZLES, goodMoves, mateIn } from './puzzles.js';
 import { normalizeTimeControl } from './time.js';
 import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
 import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
-import { stylePickerCard } from './style-ui.js';
 import { restyleOpenGame } from './game.js';
+import { renderProfilePage } from './profile.js';
+import { closeScreen } from './screen.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
 let selectedTime = 'any';
@@ -37,48 +37,6 @@ function applyChessStyle(pieceSet, boardTheme) {
 
 function canStyleChess(me) {
   return !!(me && (me.premium || me.isAdmin));
-}
-
-function stylePickers(me) {
-  const locked = !canStyleChess(me);
-  const pickPiece = async (v) => {
-    if (locked) return toast(t('style_premium_only'), true);
-    const prev = { pieceSet: me.pieceSet || 'outline', boardTheme: me.boardTheme || 'classic' };
-    applyChessStyle(v, prev.boardTheme);
-    haptic('select');
-    try {
-      state.me = (await api('PATCH', '/me', { pieceSet: v })).user;
-      applyChessStyle(state.me.pieceSet, state.me.boardTheme);
-      refresh('profile');
-    } catch (e) {
-      applyChessStyle(prev.pieceSet, prev.boardTheme);
-      fail(e);
-    }
-  };
-  const pickBoard = async (v) => {
-    if (locked) return toast(t('style_premium_only'), true);
-    const prev = { pieceSet: me.pieceSet || 'outline', boardTheme: me.boardTheme || 'classic' };
-    applyChessStyle(prev.pieceSet, v);
-    haptic('select');
-    try {
-      state.me = (await api('PATCH', '/me', { boardTheme: v })).user;
-      applyChessStyle(state.me.pieceSet, state.me.boardTheme);
-      refresh('profile');
-    } catch (e) {
-      applyChessStyle(prev.pieceSet, prev.boardTheme);
-      fail(e);
-    }
-  };
-  return [
-    h('div.h2', t('admin_style'), locked ? h('span.count-pill', '★ Premium') : null),
-    stylePickerCard({
-      pieceSet: me.pieceSet,
-      boardTheme: me.boardTheme,
-      locked,
-      onPiece: pickPiece,
-      onBoard: pickBoard,
-    }),
-  ];
 }
 
 const page = (name) => $(`.page[data-page="${name}"]`);
@@ -313,39 +271,6 @@ refreshers.rankings = async function renderRankings() {
   );
 };
 
-/** Diamonds: balance, progress to Premium and the buy button */
-function gemsCard() {
-  const me = state.me, price = state.meta.PREMIUM_PRICE || 200;
-  const inviterReward = state.meta.REFERRAL_REWARD || 20;
-  const inviteeReward = state.meta.REFERRAL_INVITEE_REWARD || 10;
-  const have = me.diamonds || 0, pct = Math.min(100, Math.round((have / price) * 100));
-  const buy = async () => {
-    try { state.me = (await api('POST', '/premium/buy')).user; toast(t('premium_bought')); haptic('success'); rain && rain(); refresh(); } catch (e) { fail(e); refresh(); }
-  };
-  return h('div.card.gems',
-    h('div.gems-top', h('div.gems-num', '💎 ', h('b', String(have))), me.premium ? h('span.prem-badge', '★ ' + t('premium')) : null),
-    h('small.muted', t('gems_sub', { n: inviterReward, m: inviteeReward })),
-    me.premium ? h('div.gems-ok', t('premium_have'))
-      : [h('div.gems-bar', h('i', { style: { width: pct + '%' } })),
-        h('small.muted', have >= price ? '' : t('premium_need', { n: price - have })),
-        h('button.btn' + (have >= price ? '' : '.ghost'), { disabled: have < price, onclick: buy }, t('premium_buy', { n: price }))]);
-}
-
-/** Friends live inside the profile page now */
-function friendsSection(list) {
-  const link = `https://t.me/${state.meta.botUsername}?start=i${state.me.id}`;
-  return [
-    h('div.h2', t('friends_title')),
-    h('div.card.invite-card', h('div.emoji-big', '🤝'), h('b', t('invite_friends')), h('p.muted', t('invite_sub')),
-      h('button.btn', { onclick: () => state.meta.botUsername ? shareUrl(link, t('share_text')) : toast(t('e_server'), true) }, icon('share', 20), t('invite_btn'))),
-    h('div.h2', t('your_friends')),
-    list.length ? h('div.list', list.map((f) => h('div.row', h('div.avwrap', avatar(f.name, f.id), f.online ? h('i.dot.on') : null),
-      h('div.grow', h('div.t', f.name), h('div.s', f.inGame ? t('in_game') : f.online ? t('online') : t('offline'))),
-      challengeAction({ ...f, online: f.online }),
-      h('button.mini', { 'aria-label': t('remove_friend'), onclick: async () => { if (await confirmSheet(`${t('remove_friend')}: ${f.name}?`, t('remove_friend'), true)) { try { await api('DELETE', `/friends/${f.id}`); } catch (e) { fail(e); } refresh(); } } }, icon('x', 18))))) : empty(t('no_friends'), '👋'),
-  ];
-}
-
 // ---------- puzzles (mate in 1-2, checked on the device) ----------
 const PZ_KEY = 'chess-puzzles-solved';
 const solvedSet = () => { try { return new Set(JSON.parse(localStorage.getItem(PZ_KEY)) || []); } catch { return new Set(); } };
@@ -406,26 +331,15 @@ function closePuzzle() { if (pz && pz.board) pz.board.destroy(); pz = null; hapt
 refreshers.puzzles = async function renderPuzzles() { if (!pz) puzzleList(); };
 
 refreshers.profile = async function renderProfile() {
-  const me = state.me; const st = state.stats || (await api('GET', '/me')).stats; state.stats = st;
-  const friends = await loadFriends();
-  const s = sumStats(st);
-  const save = async (patch) => { try { state.me = (await api('PATCH', '/me', patch)).user; } catch (e) { fail(e); } };
-  const langChips = h('div.chips', LANGS.map((l) => h('button.chip' + (getLang() === l ? '.on' : ''), { onclick: async () => { await save({ lang: l }); setLang(l); rebuildAll(); } }, LANG_NAMES[l])));
-  mount('profile',
-    h('div.top', h('h1', t('profile_title'))),
-    h('div.me', h('div.big', avatar(me.firstName, me.id, 'xl')), h('div', h('h2', me.firstName, me.premium ? h('span.prem-badge', ' ★') : null), me.username ? h('div.muted', '@' + me.username) : null)),
-    h('div.card.stats', stat(s.w, t('wins'), 'g'), stat(s.d, t('draws')), stat(s.l, t('losses'), 'r')),
-    gemsCard(),
-    friendsSection(friends),
-    h('div.h2', t('language')), langChips,
-    h('div.h2', t('theme')),
-    seg([['dark', '🌙 ' + t('dark')], ['light', '☀️ ' + t('light')]], me.theme, async (v) => { applyTheme(v); await save({ theme: v }); }),
-    ...stylePickers(me),
-    h('div.card.settings',
-      h('div.setting', h('div', h('b', t('notifications')), h('small', t('notifications_sub'))), toggle(me.notifyEnabled, (v) => save({ notifyEnabled: v }))),
-      h('div.setting', h('div', h('b', t('discoverable')), h('small', t('discoverable_sub'))), toggle(me.discoverable, (v) => save({ discoverable: v })))),
-    me.isAdmin ? h('button.btn.ghost', { onclick: () => openAdmin(rebuildAll) }, icon('shield', 20), t('admin_panel')) : null,
-    !me.isAdmin ? h('button.btn.danger', { onclick: async () => { if (await confirmSheet(t('delete_confirm'), t('delete_data'), true)) { try { await api('DELETE', '/me'); tg.close(); } catch (e) { fail(e); } } } }, icon('trash', 18), t('delete_data')) : null);
+  const st = state.stats || (await api('GET', '/me')).stats; state.stats = st;
+  await loadFriends();
+  mount('profile', ...renderProfilePage({
+    state,
+    challengeAction,
+    goTab: (name) => { closeScreen(true); go(TABS.indexOf(name), true); },
+    rebuildAll,
+    refresh: () => refresh('profile'),
+  }));
 };
 
 // Incoming / outgoing challenge banners (in-app only, ~10 s)
@@ -477,11 +391,17 @@ function initPager() {
   go = (i, animate) => {
     const prev = state.index;
     state.index = clamp(i, 0, TABS.length - 1); state.tab = TABS[state.index];
+    if (state.index !== prev) closeScreen(true);
     track.classList.toggle('settle', !!animate); ind.classList.remove('drag');
     setX(-state.index * W);
     ind.style.transform = `translateX(${state.index * 100}%)`;
     btns.forEach((b, j) => b.classList.toggle('active', j === state.index));
-    if (state.index !== prev) refresh();
+    // smooth scroll pages to top when switching tabs
+    if (state.index !== prev) {
+      const p = page(state.tab);
+      if (p) p.scrollTo({ top: 0, behavior: animate ? 'smooth' : 'auto' });
+      refresh();
+    }
   };
   addEventListener('resize', () => { W = pager.clientWidth; go(state.index, false); });
   let drag = null;

@@ -1,20 +1,16 @@
 // Admin panel: live users, KPIs, post composer (media, button text + colours), users list.
-import { h, $, icon, haptic, toast, api, fail, getInitData, avatar, confirmSheet, seg } from './ui.js';
+import { h, icon, haptic, toast, api, fail, getInitData, avatar, confirmSheet, seg } from './ui.js';
 import { t, LANGS, LANG_NAMES } from './i18n.js';
 import { restyleBoards } from './board.js';
 import { restyleOpenGame } from './game.js';
 import { stylePickerCard } from './style-ui.js';
+import { openScreen } from './screen.js';
 
 let timer = null;
 const COLOR_KEYS = ['default', 'primary', 'success', 'danger'];
 const swatch = { default: 'var(--card-2)', primary: '#2f81f7', success: '#2ea043', danger: '#e5484d' };
 
 export function openAdmin(onClose) {
-  const el = $('#screen');
-  el.replaceChildren(); el.classList.add('show'); el.removeAttribute('aria-hidden');
-  const close = () => { clearInterval(timer); el.classList.remove('show'); el.setAttribute('aria-hidden', 'true'); try { window.Telegram.WebApp.BackButton.offClick(close); window.Telegram.WebApp.BackButton.hide(); } catch { /* ignore */ } onClose && onClose(); };
-  try { const bb = window.Telegram.WebApp.BackButton; bb.onClick(close); bb.show(); } catch { /* ignore */ }
-
   const liveBox = h('div.card.live'), kpis = h('div.kpis'), bars = h('div.spark'), liveHead = h('div.livehead');
   const usersBox = h('div.list'), histBox = h('div.list');
 
@@ -139,18 +135,25 @@ export function openAdmin(onClose) {
     drawStyle();
   }).catch(() => drawStyle());
 
-  el.append(
-    h('button.back', { onclick: close }, icon('back', 20), t('back')),
-    h('div.top', h('h1', t('admin_title'))),
-    liveBox, h('div.h2', t('stats')), kpis,
-    h('div.h2', t('signups')), h('div.card', bars),
-    h('div.h2', t('admin_style')), styleHost,
-    h('div.h2', t('composer')),
-    h('div.card', text, mediaBox, file, h('div.label', t('buttons') + ' · ' + t('up_to')), btnBox, h('div.label', t('audience')), audience, h('div.label', t('preview')), preview, sendTest, sendAll),
-    h('div.h2', t('history')), histBox,
-    h('div.h2', t('users_list')), search, usersBox);
-  drawMedia(); drawButtons(); drawPreview();
-  loadLive(); loadUsers(); loadHistory();
-  clearInterval(timer); timer = setInterval(() => { if (!document.hidden) loadLive(); }, 5000);
-  el.scrollTop = 0;
+  openScreen((close) => {
+    drawMedia(); drawButtons(); drawPreview();
+    loadLive(); loadUsers(); loadHistory();
+    clearInterval(timer); timer = setInterval(() => { if (!document.hidden) loadLive(); }, 5000);
+    return [
+      h('button.back', { onclick: () => close() }, icon('back', 20), t('back')),
+      h('div.top', h('h1', t('admin_title'))),
+      liveBox, h('div.h2', t('stats')), kpis,
+      h('div.h2', t('signups')), h('div.card', bars),
+      h('div.h2', t('admin_style')), styleHost,
+      h('div.h2', t('composer')),
+      h('div.card', text, mediaBox, file, h('div.label', t('buttons') + ' · ' + t('up_to')), btnBox, h('div.label', t('audience')), audience, h('div.label', t('preview')), preview, sendTest, sendAll),
+      h('div.h2', t('history')), histBox,
+      h('div.h2', t('users_list')), search, usersBox,
+    ];
+  }, {
+    onClose: () => {
+      clearInterval(timer); timer = null;
+      onClose && onClose();
+    },
+  });
 }

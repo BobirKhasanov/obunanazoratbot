@@ -1,0 +1,273 @@
+// Profile hub: sectioned menu + slide-in subpages (friends, premium, settings, …).
+import { h, icon, haptic, toast, api, fail, avatar, shareUrl, confirmSheet, toggle, tg } from './ui.js';
+import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
+import { openScreen } from './screen.js';
+import { openAdmin } from './admin.js';
+import { stylePickerCard } from './style-ui.js';
+import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
+import { restyleBoards } from './board.js';
+import { restyleOpenGame } from './game.js';
+import { PUZZLES } from './puzzles.js';
+
+const APP_VERSION = '1.0.0';
+const PZ_KEY = 'chess-puzzles-solved';
+
+const solvedCount = () => {
+  try { return (JSON.parse(localStorage.getItem(PZ_KEY)) || []).length; } catch { return 0; }
+};
+
+function sec(label) {
+  return h('div.sec-label', label);
+}
+
+function menuCard(...rows) {
+  return h('div.menu-card', rows.filter(Boolean));
+}
+
+function menuRow({ ic, title, sub, onClick, trailing, danger, tag }) {
+  // Use div when trailing has its own control (e.g. switch) — nested <button> is invalid HTML.
+  const el = tag === 'div' ? 'div' : 'button';
+  return h(el + '.menu-row' + (danger ? '.danger' : ''), {
+    type: el === 'button' ? 'button' : undefined,
+    onclick: onClick && el === 'button' ? () => { haptic('select'); onClick(); } : undefined,
+  },
+    h('span.menu-ic' + (danger ? '.danger' : ''), icon(ic, 22)),
+    h('div.grow', h('div.t', title), sub ? h('div.s', sub) : null),
+    trailing || (onClick ? icon('chevron', 18) : null));
+}
+
+function applyChessStyle(pieceSet, boardTheme) {
+  const root = document.documentElement;
+  root.dataset.pieces = PIECE_SETS.includes(pieceSet) ? pieceSet : 'outline';
+  root.dataset.board = BOARD_THEMES.includes(boardTheme) ? boardTheme : 'classic';
+  restyleBoards();
+  try { restyleOpenGame(); } catch { /* no open game */ }
+}
+
+function canStyleChess(me) {
+  return !!(me && (me.premium || me.isAdmin));
+}
+
+function subTop(title, close) {
+  return [
+    h('button.back', { type: 'button', onclick: () => close() }, icon('back', 20), t('back')),
+    h('div.top', h('h1', title)),
+  ];
+}
+
+/** @param {object} ctx { state, mount helpers via callbacks } */
+export function renderProfilePage(ctx) {
+  const { state, challengeAction, goTab, rebuildAll, refresh } = ctx;
+  const me = state.me;
+  const st = state.stats;
+  const friends = state.friends || [];
+  const s = {
+    w: (st?.online?.w || 0) + (st?.ai?.w || 0),
+    d: (st?.online?.d || 0) + (st?.ai?.d || 0),
+    l: (st?.online?.l || 0) + (st?.ai?.l || 0),
+  };
+  const save = async (patch) => {
+    state.me = (await api('PATCH', '/me', patch)).user;
+    return state.me;
+  };
+
+  const openFriends = () => openScreen((close) => {
+    const link = `https://t.me/${state.meta.botUsername}?start=i${state.me.id}`;
+    const list = state.friends || [];
+    return [
+      ...subTop(t('friends_title'), close),
+      h('div.card.invite-card', h('div.emoji-big', '🤝'), h('b', t('invite_friends')), h('p.muted', t('invite_sub')),
+        h('button.btn', { onclick: () => state.meta.botUsername ? shareUrl(link, t('share_text')) : toast(t('e_server'), true) }, icon('share', 20), t('invite_btn'))),
+      h('div.h2', t('your_friends')),
+      list.length ? h('div.list', list.map((f) => h('div.row', h('div.avwrap', avatar(f.name, f.id), f.online ? h('i.dot.on') : null),
+        h('div.grow', h('div.t', f.name), h('div.s', f.inGame ? t('in_game') : f.online ? t('online') : t('offline'))),
+        challengeAction({ ...f, online: f.online }),
+        h('button.mini', { 'aria-label': t('remove_friend'), onclick: async () => {
+          if (await confirmSheet(`${t('remove_friend')}: ${f.name}?`, t('remove_friend'), true)) {
+            try { await api('DELETE', `/friends/${f.id}`); state.friends = (await api('GET', '/friends')).friends; openFriends(); } catch (e) { fail(e); }
+          }
+        } }, icon('x', 18))))) : h('div.empty', h('div.empty-ic', '👋'), t('no_friends')),
+    ];
+  });
+
+  const openPremium = () => openScreen((close) => {
+    const draw = () => {
+      const u = state.me;
+      const price = state.meta.PREMIUM_PRICE || 200;
+      const inviterReward = state.meta.REFERRAL_REWARD || 20;
+      const inviteeReward = state.meta.REFERRAL_INVITEE_REWARD || 10;
+      const have = u.diamonds || 0;
+      const pct = Math.min(100, Math.round((have / price) * 100));
+      const buy = async () => {
+        try {
+          state.me = (await api('POST', '/premium/buy')).user;
+          toast(t('premium_bought')); haptic('success');
+          openPremium();
+        } catch (e) { fail(e); }
+      };
+      return [
+        ...subTop(t('premium'), close),
+        h('div.card.gems',
+          h('div.gems-top', h('div.gems-num', '💎 ', h('b', String(have))), u.premium ? h('span.prem-badge', '★ ' + t('premium')) : null),
+          h('small.muted', t('gems_sub', { n: inviterReward, m: inviteeReward })),
+          u.premium ? h('div.gems-ok', t('premium_have'))
+            : [h('div.gems-bar', h('i', { style: { width: pct + '%' } })),
+              h('small.muted', have >= price ? '' : t('premium_need', { n: price - have })),
+              h('button.btn' + (have >= price ? '' : '.ghost'), { disabled: have < price, onclick: buy }, t('premium_buy', { n: price }))]),
+      ];
+    };
+    return draw();
+  });
+
+  const openLanguage = () => openScreen((close) => [
+    ...subTop(t('language'), close),
+    h('div.menu-card', LANGS.map((l) => menuRow({
+      ic: 'globe',
+      title: LANG_NAMES[l],
+      trailing: getLang() === l ? icon('check', 18) : icon('chevron', 18),
+      onClick: async () => {
+        try {
+          await save({ lang: l });
+          setLang(l);
+          rebuildAll();
+          openLanguage();
+        } catch (e) { fail(e); }
+      },
+    }))),
+  ]);
+
+  const openSettings = () => openScreen((close) => {
+    const u = state.me;
+    const locked = !canStyleChess(u);
+    const pickPiece = async (v) => {
+      if (locked) return toast(t('style_premium_only'), true);
+      const prev = { pieceSet: u.pieceSet || 'outline', boardTheme: u.boardTheme || 'classic' };
+      applyChessStyle(v, prev.boardTheme);
+      try {
+        state.me = await save({ pieceSet: v });
+        applyChessStyle(state.me.pieceSet, state.me.boardTheme);
+        openSettings();
+      } catch (e) {
+        applyChessStyle(prev.pieceSet, prev.boardTheme);
+        fail(e);
+      }
+    };
+    const pickBoard = async (v) => {
+      if (locked) return toast(t('style_premium_only'), true);
+      const prev = { pieceSet: u.pieceSet || 'outline', boardTheme: u.boardTheme || 'classic' };
+      applyChessStyle(prev.pieceSet, v);
+      try {
+        state.me = await save({ boardTheme: v });
+        applyChessStyle(state.me.pieceSet, state.me.boardTheme);
+        openSettings();
+      } catch (e) {
+        applyChessStyle(prev.pieceSet, prev.boardTheme);
+        fail(e);
+      }
+    };
+    return [
+      ...subTop(t('settings'), close),
+      h('div.card.settings',
+        h('div.setting', h('div', h('b', t('notifications')), h('small', t('notifications_sub'))),
+          toggle(u.notifyEnabled, async (v) => { try { state.me = await save({ notifyEnabled: v }); } catch (e) { fail(e); openSettings(); } })),
+        h('div.setting', h('div', h('b', t('discoverable')), h('small', t('discoverable_sub'))),
+          toggle(u.discoverable, async (v) => { try { state.me = await save({ discoverable: v }); } catch (e) { fail(e); openSettings(); } }))),
+      h('div.h2', t('admin_style'), locked ? h('span.count-pill', '★ Premium') : null),
+      stylePickerCard({
+        pieceSet: u.pieceSet,
+        boardTheme: u.boardTheme,
+        locked,
+        onPiece: pickPiece,
+        onBoard: pickBoard,
+      }),
+    ];
+  });
+
+  const openHelp = () => openScreen((close) => [
+    ...subTop(t('help'), close),
+    h('div.card.prose',
+      h('b', t('help_title')),
+      h('p', t('help_p1')),
+      h('p', t('help_p2')),
+      h('p', t('help_p3'))),
+  ]);
+
+  const openTerms = () => openScreen((close) => [
+    ...subTop(t('terms'), close),
+    h('div.card.prose',
+      h('b', t('terms_title')),
+      h('p', t('terms_p1')),
+      h('p', t('terms_p2'))),
+  ]);
+
+  const pzDone = solvedCount();
+
+  return [
+    h('div.prof-head',
+      h('div.prof-brand', t('app')),
+      h('div.prof-me',
+        h('div.big', avatar(me.firstName, me.id, 'xl')),
+        h('div.prof-meta',
+          h('h2', me.firstName, me.premium ? h('span.prem-badge', ' ★') : null),
+          me.username ? h('div.muted', '@' + me.username) : h('div.muted', t('profile_title'))),
+        h('div.prof-gem', '💎 ', h('b', String(me.diamonds || 0))))),
+
+    sec(t('sec_rating')),
+    h('div.rating-row',
+      h('div.card.rating-tile',
+        h('span.rating-ic', '♟'),
+        h('div', h('small.muted', t('stats')), h('b.rating-n', `${s.w}/${s.d}/${s.l}`)),
+        h('div.s', t('wins') + ' · ' + t('draws') + ' · ' + t('losses'))),
+      h('div.card.rating-tile',
+        h('span.rating-ic', '🧩'),
+        h('div', h('small.muted', t('nav_puzzles')), h('b.rating-n', String(pzDone))),
+        h('div.s', t('puzzle_solved_count', { a: pzDone, b: PUZZLES.length })))),
+
+    sec(t('sec_game')),
+    menuCard(
+      menuRow({ ic: 'rankings', title: t('nav_rankings'), onClick: () => goTab('rankings') }),
+      menuRow({ ic: 'handshake', title: t('friends_title'), sub: friends.length ? String(friends.length) : t('no_friends').split('\n')[0], onClick: openFriends }),
+      menuRow({ ic: 'crown', title: t('premium'), sub: me.premium ? t('premium_have') : t('diamonds') + ': ' + (me.diamonds || 0), onClick: openPremium }),
+      me.isAdmin ? menuRow({ ic: 'shield', title: t('admin_panel'), onClick: () => openAdmin(rebuildAll) }) : null,
+    ),
+
+    sec(t('sec_settings')),
+    menuCard(
+      menuRow({ ic: 'globe', title: t('language'), sub: LANG_NAMES[getLang()], onClick: openLanguage }),
+      menuRow({ ic: 'gear', title: t('settings'), onClick: openSettings }),
+      menuRow({ ic: 'help', title: t('help'), onClick: openHelp }),
+      menuRow({ ic: 'docs', title: t('terms'), onClick: openTerms }),
+      menuRow({
+        tag: 'div',
+        ic: 'moon',
+        title: t('dark_mode'),
+        trailing: toggle(me.theme === 'dark', async (on) => {
+          const v = on ? 'dark' : 'light';
+          try {
+            applyThemeLocal(v);
+            state.me = await save({ theme: v });
+            refresh();
+          } catch (e) { fail(e); refresh(); }
+        }),
+      }),
+    ),
+
+    h('button.btn.logout', {
+      type: 'button',
+      onclick: async () => {
+        if (me.isAdmin) { try { tg.close(); } catch { /* ignore */ } return; }
+        if (await confirmSheet(t('delete_confirm'), t('delete_data'), true)) {
+          try { await api('DELETE', '/me'); tg.close(); } catch (e) { fail(e); }
+        }
+      },
+    }, icon('logout', 20), me.isAdmin ? t('close_app') : t('delete_data')),
+    h('div.app-ver', t('app_version', { v: APP_VERSION })),
+  ];
+}
+
+function applyThemeLocal(theme) {
+  document.documentElement.dataset.theme = theme;
+  const bg = theme === 'light' ? '#f3f5f9' : '#111827';
+  try { tg.setHeaderColor(bg); tg.setBackgroundColor(bg); tg.setBottomBarColor && tg.setBottomBarColor(bg); } catch { /* old */ }
+  const m = document.querySelector('meta[name=color-scheme]'); if (m) m.content = theme;
+}
