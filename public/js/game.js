@@ -207,20 +207,32 @@ export function openGame(opts, onClose) {
             h('button.btn.sm.ghost', { onclick: async () => { try { await api('DELETE', `/games/${g.id}`); } catch (e) { return fail(e); } closeGame(); } }, t('cancel'))),
         );
       } else if (g.status === 'active' && g.drawBy && g.drawBy !== g.you) {
-        banner.classList.remove('wait'); banner.hidden = false;
-        banner.append(h('b', t('draw_received', { name: (g.opponent || {}).name || '' })), h('div.row2',
-          h('button.btn.sm', { onclick: () => drawAction('accept') }, t('accept')),
-          h('button.btn.sm.ghost', { onclick: () => drawAction('decline') }, t('decline'))));
+        banner.classList.remove('wait'); banner.classList.add('draw'); banner.hidden = false;
+        banner.append(
+          h('b', t('draw_received', { name: (g.opponent || {}).name || '' })),
+          h('small', t('draw_received_sub')),
+        );
       } else if (g.status === 'active' && g.drawBy === g.you) {
-        banner.classList.remove('wait'); banner.hidden = false; banner.append(h('small', t('draw_sent')));
+        banner.classList.remove('wait'); banner.classList.remove('draw'); banner.hidden = false;
+        banner.append(h('b', t('draw_sent')), h('small', t('draw_sent_sub')));
       }
     }
   }
 
   function renderActions() {
     actions.replaceChildren();
+    reactBar.hidden = true;
     const live = !S.over && (S.kind === 'ai' || (S.game && S.game.status === 'active'));
-    if (S.kind === 'ai' && live) {
+    const drawIn = S.kind === 'online' && live && S.game.drawBy && S.game.drawBy !== S.game.you;
+    const drawOut = S.kind === 'online' && live && S.game.drawBy === S.game.you;
+    if (drawIn) {
+      // Accept / Decline live in the bottom bar so they stay visible and do not clash with "Offer draw"
+      actions.append(
+        act('check', t('accept'), () => drawAction('accept')),
+        act('x', t('decline'), () => drawAction('decline')),
+        act('flag', t('resign'), resign),
+      );
+    } else if (S.kind === 'ai' && live) {
       actions.append(
         act('undo', t('undo'), undo),
         act('flag', t('resign'), resign),
@@ -228,11 +240,11 @@ export function openGame(opts, onClose) {
         act('globe', t('hint'), hint),
       );
     } else if (S.kind === 'online' && live) {
-      actions.append(act('handshake', t('offer_draw'), () => drawAction('offer')), act('flag', t('resign'), resign), act('smile', '', toggleReact));
+      if (!drawOut) actions.append(act('handshake', t('offer_draw'), () => drawAction('offer')));
+      actions.append(act('flag', t('resign'), resign), act('smile', '', toggleReact));
     } else if (S.over || (S.game && S.game.status === 'finished')) {
       actions.append(act('smile', '', toggleReact));
     }
-    reactBar.hidden = reactBar.hidden || !actions.children.length;
   }
 
   function toggleReact() {

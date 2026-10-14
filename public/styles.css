@@ -343,12 +343,14 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .reactbar button { font-size: 24px; width: 34px; height: 38px; transition: transform 0.2s var(--ease); }
 .reactbar button:active { transform: scale(1.4); }
 /* In-game wait / draw banner (do not reuse for home promo tiles) */
-#game .gbanner { padding: 12px 14px; border-radius: 18px; background: var(--card); display: grid; gap: 8px; animation: rise 0.3s var(--ease); color: var(--text); overflow: visible; min-height: 0; box-shadow: none; margin: 0; }
-#game .gbanner.wait { border: 1px solid var(--line, rgba(255,255,255,0.08)); }
+#game .gbanner { flex-shrink: 0; padding: 12px 14px; border-radius: 18px; background: var(--card); display: grid; gap: 8px; animation: rise 0.3s var(--ease); color: var(--text); overflow: visible; min-height: 0; box-shadow: none; margin: 0; }
+#game .gbanner.wait, #game .gbanner.draw { border: 1px solid var(--line, rgba(255,255,255,0.08)); }
+#game .gbanner.draw { border-color: rgba(84, 164, 247, 0.45); }
 #game .gbanner b { font-size: 16px; font-weight: 800; color: var(--text); }
 #game .gbanner small { color: var(--muted); font-size: 13px; opacity: 1; line-height: 1.35; }
 #game .gbanner .row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
-#game .gbanner .btn.sm { flex: 1 1 auto; min-width: 0; }
+#game .gbanner .btn.sm { flex: 1 1 auto; min-width: 0; margin-top: 0; }
+#game .gbanner .btn.ghost { margin-top: 0; }
 .row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .btn.sm { width: auto; flex: 1; margin-top: 0; padding: 11px 14px; font-size: 14px; border-radius: 14px; display: inline-flex; gap: 6px; align-items: center; justify-content: center; color: #fff; }
 .btn.ghost, .btn.danger { color: var(--text); }
