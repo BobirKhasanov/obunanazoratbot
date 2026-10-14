@@ -23,13 +23,20 @@ assert.ok(profile.includes('sec_rating'));
 assert.ok(profile.includes('sec_settings'));
 assert.ok(profile.includes('openScreen'));
 assert.ok(profile.includes('menu-card') || profile.includes('menuCard'));
+assert.ok(!profile.includes('prof-brand'), 'profile brand badge removed');
+assert.ok(profile.includes('openDiamonds'));
+assert.ok(profile.includes('shop_pay_btn') || profile.includes('openPayContact'));
+assert.ok(profile.includes('premium_renew') || profile.includes('premium_month'));
 
 assert.ok(screen.includes('export function openScreen'));
 assert.ok(screen.includes('export function closeScreen'));
 assert.ok(admin.includes("from './screen.js'"));
 assert.ok(admin.includes('openScreen'));
+assert.ok(admin.includes('admin_sec_shop') || admin.includes('/admin/shop'));
+assert.ok(admin.includes('admin_grant') || admin.includes('/diamonds'));
+assert.ok(admin.includes('menu-card') || admin.includes('menuCard'));
 
-for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version']) {
+for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until']) {
   assert.ok(i18n.includes(k + ':'), `i18n ${k}`);
 }
 

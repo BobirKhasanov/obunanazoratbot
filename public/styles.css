@@ -661,11 +661,6 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
   text-transform: uppercase; margin: 20px 0 8px 4px;
 }
 .prof-head { margin-bottom: 4px; }
-.prof-brand {
-  display: inline-flex; align-items: center; justify-content: center;
-  padding: 6px 14px; border-radius: 99px; background: var(--blue); color: #fff;
-  font-weight: 800; font-size: 13px; margin: 0 auto 14px; width: fit-content;
-}
 .prof-head { display: flex; flex-direction: column; align-items: stretch; }
 .prof-me { display: flex; align-items: center; gap: 12px; }
 .prof-meta { flex: 1; min-width: 0; }
@@ -673,8 +668,12 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .prof-gem {
   flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 12px;
   border-radius: 12px; background: rgba(251, 191, 36, 0.16); color: var(--amber);
-  font-weight: 800; font-size: 15px;
+  font-weight: 800; font-size: 15px; border: 0; cursor: pointer;
+  transition: transform 0.15s var(--ease), background 0.15s var(--ease);
 }
+.prof-gem:active { transform: scale(0.96); background: rgba(251, 191, 36, 0.28); }
+.shop-packs .shop-pack .pill { background: rgba(251, 191, 36, 0.16); color: var(--amber); }
+.shop-hint { margin: 12px 4px 8px; line-height: 1.4; }
 .rating-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .rating-tile { padding: 14px; display: grid; gap: 4px; }
 .rating-ic { font-size: 22px; line-height: 1; }

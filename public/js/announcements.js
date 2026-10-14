@@ -10,7 +10,7 @@ const FONT_CSS = {
 };
 
 /** How long each slide stays before auto-advance (ms). */
-const DWELL_MS = 7500;
+const DWELL_MS = 6000;
 const SWIPE_PX = 48;
 
 let timer = null;

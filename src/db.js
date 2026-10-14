@@ -184,7 +184,8 @@ CREATE INDEX IF NOT EXISTS idx_announcements_ends ON announcements(ends_at);
 
 -- The API is served only by this server (service connection); nobody should reach the tables through Supabase's public REST API
 ALTER TABLE users ADD COLUMN IF NOT EXISTS diamonds BIGINT NOT NULL DEFAULT 0;   -- in-app currency
-ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER NOT NULL DEFAULT 0;   -- 1 once bought with diamonds
+ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER NOT NULL DEFAULT 0;   -- 1 while premium_until is in the future (or legacy)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TIMESTAMPTZ;            -- monthly Premium expiry (UTC); null + premium=1 = legacy permanent
 ALTER TABLE users ADD COLUMN IF NOT EXISTS piece_set TEXT NOT NULL DEFAULT 'outline';   -- outline | classic | neo | staunton
 ALTER TABLE users ADD COLUMN IF NOT EXISTS board_theme TEXT NOT NULL DEFAULT 'classic'; -- classic | green | wood | blue | brown
 ALTER TABLE games ADD COLUMN IF NOT EXISTS white_ms BIGINT;
@@ -198,6 +199,11 @@ CREATE TABLE IF NOT EXISTS referrals (
   inviter_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Key/value shop config (Premium price, diamond packs, pay username)
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 ALTER TABLE referrals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE friends ENABLE ROW LEVEL SECURITY;
@@ -207,7 +213,17 @@ ALTER TABLE results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE broadcasts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 `;
+
+const DEFAULT_DIAMOND_PACKS = JSON.stringify([
+  { diamonds: 100, sum: 100000 },
+  { diamonds: 200, sum: 200000 },
+  { diamonds: 300, sum: 300000 },
+  { diamonds: 400, sum: 400000 },
+  { diamonds: 500, sum: 500000 },
+  { diamonds: 1000, sum: 1000000 },
+]);
 
 /** Creates the tables on first start and marks interrupted broadcasts. Await this before serving. */
 db.ready = (async () => {
@@ -216,6 +232,14 @@ db.ready = (async () => {
     await c.query('SELECT pg_advisory_lock(7301)'); // two instances starting together must not race on DDL
     await c.query(SCHEMA);
     await c.query("UPDATE broadcasts SET status = 'interrupted' WHERE status = 'sending'");
+    await c.query(
+      `INSERT INTO app_settings (key, value) VALUES
+         ('premium_price_diamonds', '200'),
+         ('diamond_packs', $1),
+         ('pay_username', 'hasanovbobur')
+       ON CONFLICT (key) DO NOTHING`,
+      [DEFAULT_DIAMOND_PACKS],
+    );
   } finally {
     await c.query('SELECT pg_advisory_unlock(7301)').catch(() => {});
     c.release();

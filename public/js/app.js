@@ -267,7 +267,7 @@ refreshers.play = async function renderPlay() {
       userId: state.me?.id,
       onPage: (page) => {
         if (['play', 'puzzles', 'rankings', 'live', 'profile'].includes(page)) go(TABS.indexOf(page), true);
-        else if (page === 'premium' || page === 'friends' || page === 'settings') {
+        else if (page === 'premium' || page === 'friends' || page === 'settings' || page === 'diamonds' || page === 'gems' || page === 'stats') {
           go(TABS.indexOf('profile'), true);
           setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: page })), 520);
         }

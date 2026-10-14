@@ -36,7 +36,7 @@ assert.ok(server.includes("b.linkType === 'invite'"));
 assert.ok(ann.includes('?start=i'));
 assert.ok(ann.includes('replaceChildren(track)'), 'must not append null dots');
 assert.ok(!ann.includes('host.append(track, dots)'));
-assert.ok(ann.includes('DWELL_MS') && /DWELL_MS\s*=\s*([6-9]\d{3}|[1-9]\d{4,})/.test(ann), 'dwell >= 6s');
+assert.ok(ann.includes('DWELL_MS') && /DWELL_MS\s*=\s*6000\b/.test(ann), 'dwell = 6s');
 assert.ok(ann.includes('bindSwipe') || ann.includes('pointermove'), 'swipe handlers');
 assert.ok(ann.includes('dragging'), 'live drag class');
 assert.ok(css.includes('0.72s') || css.includes('ann-track.dragging'));

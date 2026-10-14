@@ -140,17 +140,42 @@ async function playMoves(game, players, moves, startPly = 0) {
 
     // ---------------------------------------------------------------- challenge + a full game
     let gid, fm;
-    await step('diamonds: +20 to inviter and +10 to new friend once; Premium costs 200 and cannot be bought twice', async () => {
+    await step('diamonds: +20 to inviter and +10 to new friend once; Premium is 1 month for 200💎 and can be renewed', async () => {
       assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 20, 'inviter got 20 diamonds for the friend who joined');
       assert.strictEqual((await ok('B', 'GET', '/me')).user.diamonds, 10, 'new friend got 10 diamonds via referral');
       await ok('B', 'POST', '/friends/join', { userId: USERS.A.id }); // opening the link again must not pay again
       assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 20);
       assert.strictEqual((await ok('B', 'GET', '/me')).user.diamonds, 10);
+      const meta = (await ok('A', 'GET', '/me')).meta;
+      assert.strictEqual(meta.PREMIUM_PRICE, 200);
+      assert.ok(Array.isArray(meta.diamondPacks) && meta.diamondPacks.length >= 1);
+      assert.strictEqual(meta.payUsername, 'hasanovbobur');
       await err('A', 'POST', '/premium/buy', null, 400, 'no_diamonds');
       await pg.q('UPDATE users SET diamonds = 200 WHERE id = $1', USERS.A.id);
       const r = await ok('A', 'POST', '/premium/buy');
       assert.deepStrictEqual([r.user.premium, r.user.diamonds], [true, 0]);
-      await err('A', 'POST', '/premium/buy', null, 400, 'premium_owned');
+      assert.ok(r.user.premiumUntil, 'premium_until set');
+      await pg.q('UPDATE users SET diamonds = 200 WHERE id = $1', USERS.A.id);
+      const r2 = await ok('A', 'POST', '/premium/buy');
+      assert.strictEqual(r2.user.premium, true);
+      assert.ok(new Date(r2.user.premiumUntil) > new Date(r.user.premiumUntil), 'renewal extends expiry');
+    });
+
+    await step('admin shop settings + grant diamonds after payment', async () => {
+      const shop = await ok('ADMIN', 'GET', '/admin/shop');
+      assert.strictEqual(shop.shop.premiumPriceDiamonds, 200);
+      const patched = await ok('ADMIN', 'PATCH', '/admin/shop', {
+        premiumPriceDiamonds: 150,
+        diamondPacks: [{ diamonds: 100, sum: 100000 }, { diamonds: 200, sum: 200000 }],
+        payUsername: 'hasanovbobur',
+      });
+      assert.strictEqual(patched.shop.premiumPriceDiamonds, 150);
+      assert.strictEqual((await ok('B', 'GET', '/me')).meta.PREMIUM_PRICE, 150);
+      const before = (await ok('B', 'GET', '/me')).user.diamonds;
+      const g = await ok('ADMIN', 'POST', `/admin/users/${USERS.B.id}/diamonds`, { amount: 100 });
+      assert.strictEqual(g.user.diamonds, before + 100);
+      // restore default price for later steps
+      await ok('ADMIN', 'PATCH', '/admin/shop', { premiumPriceDiamonds: 200 });
     });
 
     await step('piece/board style: premium or admin only; invalid values rejected', async () => {

@@ -112,10 +112,48 @@ export function renderProfilePage(ctx) {
   const onProfileOpen = (e) => {
     const page = e.detail;
     if (page === 'premium') openPremium();
+    else if (page === 'diamonds' || page === 'gems') openDiamonds();
     else if (page === 'friends') openFriends();
     else if (page === 'settings') openSettings();
     else if (page === 'stats') openStats();
   };
+
+  const formatSom = (n) => {
+    const v = Math.floor(Number(n) || 0);
+    if (v >= 1000 && v % 1000 === 0) return `${(v / 1000).toLocaleString('uz-UZ')} ming so‘m`;
+    return `${v.toLocaleString('uz-UZ')} so‘m`;
+  };
+
+  const openPayContact = () => {
+    const user = (state.meta.payUsername || 'hasanovbobur').replace(/^@/, '');
+    const url = `https://t.me/${user}`;
+    try {
+      if (tg.openTelegramLink) tg.openTelegramLink(url);
+      else if (tg.openLink) tg.openLink(url);
+      else window.open(url, '_blank', 'noopener');
+    } catch { window.open(url, '_blank', 'noopener'); }
+  };
+
+  const openDiamonds = () => openScreen((close) => {
+    const packs = state.meta.diamondPacks || [];
+    const payUser = state.meta.payUsername || 'hasanovbobur';
+    const have = state.me.diamonds || 0;
+    return [
+      ...subTop(t('diamonds'), close),
+      h('div.card.gems',
+        h('div.gems-top', h('div.gems-num', '💎 ', h('b', String(have)))),
+        h('small.muted', t('shop_sub'))),
+      h('div.h2', t('shop_packs')),
+      packs.length
+        ? h('div.list.shop-packs', packs.map((p) => h('div.row.shop-pack',
+          h('div.grow', h('div.t', `💎 ${p.diamonds}`), h('div.s', formatSom(p.sum))),
+          h('span.pill', formatSom(p.sum)))))
+        : h('div.empty', t('shop_empty')),
+      h('p.muted.shop-hint', t('shop_pay_hint', { user: '@' + payUser })),
+      h('button.btn', { type: 'button', onclick: () => { haptic('select'); openPayContact(); } },
+        icon('share', 18), t('shop_pay_btn', { user: '@' + payUser })),
+    ];
+  });
   document.removeEventListener('profile-open', document._profileOpenHandler);
   document._profileOpenHandler = onProfileOpen;
   document.addEventListener('profile-open', onProfileOpen);
@@ -147,6 +185,9 @@ export function renderProfilePage(ctx) {
       const inviteeReward = state.meta.REFERRAL_INVITEE_REWARD || 10;
       const have = u.diamonds || 0;
       const pct = Math.min(100, Math.round((have / price) * 100));
+      const untilLabel = u.premiumUntilTashkent
+        ? u.premiumUntilTashkent.replace('T', ' ')
+        : null;
       const buy = async () => {
         try {
           state.me = (await api('POST', '/premium/buy')).user;
@@ -158,11 +199,17 @@ export function renderProfilePage(ctx) {
         ...subTop(t('premium'), close),
         h('div.card.gems',
           h('div.gems-top', h('div.gems-num', '💎 ', h('b', String(have))), u.premium ? h('span.prem-badge', '★ ' + t('premium')) : null),
+          h('small.muted', t('premium_month_sub', { n: price })),
           h('small.muted', t('gems_sub', { n: inviterReward, m: inviteeReward })),
-          u.premium ? h('div.gems-ok', t('premium_have'))
-            : [h('div.gems-bar', h('i', { style: { width: pct + '%' } })),
-              h('small.muted', have >= price ? '' : t('premium_need', { n: price - have })),
-              h('button.btn' + (have >= price ? '' : '.ghost'), { disabled: have < price, onclick: buy }, t('premium_buy', { n: price }))]),
+          u.premium && untilLabel ? h('div.gems-ok', t('premium_until', { d: untilLabel })) : null,
+          u.premium && !untilLabel ? h('div.gems-ok', t('premium_have')) : null,
+          h('div.gems-bar', h('i', { style: { width: pct + '%' } })),
+          h('small.muted', have >= price ? '' : t('premium_need', { n: price - have })),
+          h('button.btn' + (have >= price ? '' : '.ghost'), {
+            disabled: have < price,
+            onclick: buy,
+          }, u.premium ? t('premium_renew', { n: price }) : t('premium_buy', { n: price })),
+          h('button.btn.ghost', { type: 'button', onclick: () => { close(); openDiamonds(); } }, t('shop_get_diamonds'))),
       ];
     };
     return draw();
@@ -253,13 +300,15 @@ export function renderProfilePage(ctx) {
 
   return [
     h('div.prof-head',
-      h('div.prof-brand', t('app')),
       h('div.prof-me',
         h('div.big', avatar(me.firstName, me.id, 'xl')),
         h('div.prof-meta',
           h('h2', me.firstName, me.premium ? h('span.prem-badge', ' ★') : null),
           me.username ? h('div.muted', '@' + me.username) : h('div.muted', t('profile_title'))),
-        h('div.prof-gem', '💎 ', h('b', String(me.diamonds || 0))))),
+        h('button.prof-gem', {
+          type: 'button',
+          onclick: () => { haptic('select'); openDiamonds(); },
+        }, '💎 ', h('b', String(me.diamonds || 0))))),
 
     sec(t('sec_rating')),
     h('div.rating-row',
@@ -277,7 +326,15 @@ export function renderProfilePage(ctx) {
       menuRow({ ic: 'chart', title: t('stats'), sub: `${s.w}W · ${s.d}D · ${s.l}L`, onClick: openStats }),
       menuRow({ ic: 'rankings', title: t('nav_rankings'), onClick: () => goTab('rankings') }),
       menuRow({ ic: 'handshake', title: t('friends_title'), sub: friends.length ? String(friends.length) : t('no_friends').split('\n')[0], onClick: openFriends }),
-      menuRow({ ic: 'crown', title: t('premium'), sub: me.premium ? t('premium_have') : t('diamonds') + ': ' + (me.diamonds || 0), onClick: openPremium }),
+      menuRow({ ic: 'gem', title: t('diamonds'), sub: String(me.diamonds || 0) + ' 💎', onClick: openDiamonds }),
+      menuRow({
+        ic: 'crown',
+        title: t('premium'),
+        sub: me.premium
+          ? (me.premiumUntilTashkent ? t('premium_until', { d: me.premiumUntilTashkent.replace('T', ' ') }) : t('premium_have'))
+          : t('premium_month_sub', { n: state.meta.PREMIUM_PRICE || 200 }),
+        onClick: openPremium,
+      }),
       me.isAdmin ? menuRow({ ic: 'shield', title: t('admin_panel'), onClick: () => openAdmin(rebuildAll) }) : null,
     ),
 

@@ -32,9 +32,18 @@ if (!BOT_TOKEN) {
 const THEMES = ['dark', 'light'];
 const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton'];
 const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown'];
-const PREMIUM_PRICE = Number(process.env.PREMIUM_PRICE || 200); // diamonds
+const PREMIUM_PRICE_FALLBACK = Number(process.env.PREMIUM_PRICE || 200); // diamonds / month (DB may override)
 const REFERRAL_REWARD = Number(process.env.REFERRAL_REWARD || 20); // diamonds for the inviter
 const REFERRAL_INVITEE_REWARD = Number(process.env.REFERRAL_INVITEE_REWARD || 10); // diamonds for the invited friend
+const DEFAULT_DIAMOND_PACKS = [
+  { diamonds: 100, sum: 100000 },
+  { diamonds: 200, sum: 200000 },
+  { diamonds: 300, sum: 300000 },
+  { diamonds: 400, sum: 400000 },
+  { diamonds: 500, sum: 500000 },
+  { diamonds: 1000, sum: 1000000 },
+];
+const DEFAULT_PAY_USERNAME = 'hasanovbobur';
 const REACTIONS = ['👍', '😀', '😮', '😢', '🔥', '👏', '🤔', '😎', '🎉', '🙈'];
 const MAX_OPEN_GAMES = 10;
 // A challenge is only shown inside the app (no chat message). It stays valid this long; the popup itself shows for 10 s
@@ -101,13 +110,102 @@ async function person(id) {
   return { id, name: u.first_name || 'Player', username: u.username || '', online: realtime.isOnline(id) };
 }
 
-const publicUser = (u, admin) => ({
-  id: u.id, firstName: u.first_name, username: u.username, lang: u.lang, theme: u.theme,
-  langSet: !!u.lang_set, notifyEnabled: !!u.notify_enabled, discoverable: !!u.discoverable, isAdmin: admin,
-  diamonds: Number(u.diamonds || 0), premium: !!u.premium,
-  pieceSet: PIECE_SETS.includes(u.piece_set) ? u.piece_set : 'outline',
-  boardTheme: BOARD_THEMES.includes(u.board_theme) ? u.board_theme : 'classic',
-});
+/** Active Premium: unexpired premium_until, or legacy premium=1 with no expiry. */
+function isPremiumActive(u) {
+  if (!u) return false;
+  if (u.premium_until) return new Date(u.premium_until).getTime() > Date.now();
+  return !!u.premium;
+}
+
+const publicUser = (u, admin) => {
+  const premium = isPremiumActive(u);
+  const until = u.premium_until ? new Date(u.premium_until) : null;
+  return {
+    id: u.id, firstName: u.first_name, username: u.username, lang: u.lang, theme: u.theme,
+    langSet: !!u.lang_set, notifyEnabled: !!u.notify_enabled, discoverable: !!u.discoverable, isAdmin: admin,
+    diamonds: Number(u.diamonds || 0), premium,
+    premiumUntil: until && !Number.isNaN(until.getTime()) ? until.toISOString() : null,
+    premiumUntilTashkent: until && !Number.isNaN(until.getTime()) ? formatTashkent(until) : null,
+    pieceSet: PIECE_SETS.includes(u.piece_set) ? u.piece_set : 'outline',
+    boardTheme: BOARD_THEMES.includes(u.board_theme) ? u.board_theme : 'classic',
+  };
+};
+
+async function getSetting(key, fallback) {
+  const row = await db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key);
+  return row ? row.value : fallback;
+}
+
+async function setSetting(key, value) {
+  await db.prepare(`
+    INSERT INTO app_settings (key, value) VALUES (?, ?)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `).run(key, String(value));
+}
+
+function normalizeDiamondPacks(raw) {
+  let arr = raw;
+  if (typeof arr === 'string') {
+    try { arr = JSON.parse(arr); } catch { return DEFAULT_DIAMOND_PACKS.slice(); }
+  }
+  if (!Array.isArray(arr) || !arr.length) return DEFAULT_DIAMOND_PACKS.slice();
+  const out = [];
+  for (const p of arr) {
+    const diamonds = Math.floor(Number(p && p.diamonds));
+    const sum = Math.floor(Number(p && p.sum));
+    if (!(diamonds >= 1 && diamonds <= 1_000_000 && sum >= 1000 && sum <= 1_000_000_000)) continue;
+    out.push({ diamonds, sum });
+  }
+  return out.length ? out : DEFAULT_DIAMOND_PACKS.slice();
+}
+
+async function getShopSettings() {
+  const [priceRaw, packsRaw, payRaw] = await Promise.all([
+    getSetting('premium_price_diamonds', String(PREMIUM_PRICE_FALLBACK)),
+    getSetting('diamond_packs', JSON.stringify(DEFAULT_DIAMOND_PACKS)),
+    getSetting('pay_username', DEFAULT_PAY_USERNAME),
+  ]);
+  let premiumPriceDiamonds = Math.floor(Number(priceRaw));
+  if (!(premiumPriceDiamonds >= 1 && premiumPriceDiamonds <= 1_000_000)) {
+    premiumPriceDiamonds = PREMIUM_PRICE_FALLBACK;
+  }
+  let payUsername = String(payRaw || DEFAULT_PAY_USERNAME).replace(/^@/, '').trim().slice(0, 64);
+  if (!/^[A-Za-z0-9_]{5,64}$/.test(payUsername)) payUsername = DEFAULT_PAY_USERNAME;
+  return {
+    premiumPriceDiamonds,
+    diamondPacks: normalizeDiamondPacks(packsRaw),
+    payUsername,
+  };
+}
+
+/** Add one calendar month in Asia/Tashkent wall clock. */
+function addOneMonthTashkent(from) {
+  const d0 = from instanceof Date ? from : new Date(from);
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(d0);
+  const g = (t) => Number((parts.find((p) => p.type === t) || {}).value || 0);
+  let y = g('year'); let m = g('month'); let day = g('day');
+  const h = g('hour'); const mi = g('minute'); const s = g('second');
+  m += 1;
+  if (m > 12) { m = 1; y += 1; }
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  day = Math.min(day, last);
+  const pad = (n) => String(n).padStart(2, '0');
+  return new Date(`${y}-${pad(m)}-${pad(day)}T${pad(h)}:${pad(mi)}:${pad(s)}+05:00`);
+}
+
+/** Soft-expire Premium flag when premium_until has passed. */
+async function syncPremiumExpiry(u) {
+  if (!u || !u.premium_until) return u;
+  if (new Date(u.premium_until).getTime() > Date.now()) return u;
+  if (u.premium) {
+    await db.prepare('UPDATE users SET premium = 0 WHERE id = ? AND premium_until IS NOT NULL AND premium_until <= now()').run(u.id);
+    u.premium = 0;
+  }
+  return u;
+}
 
 // ---------- bot ----------
 const bot = createBot(BOT_TOKEN, WEBAPP_URL || 'https://example.com');
@@ -138,8 +236,9 @@ async function auth(req, res, next) {
   if (n > 300) return res.status(429).json({ error: 'Too many requests', code: 'limit' });
 
   await upsertUser.run(tg.id, tg.first_name || '', tg.username || '', fromTelegram(tg.language_code));
-  const user = await getUser.get(tg.id);
+  let user = await getUser.get(tg.id);
   if (user.blocked) return res.status(403).json({ error: 'Your access has been disabled', code: 'blocked' });
+  user = await syncPremiumExpiry(user);
 
   realtime.markRest(user.id);
   req.user = user;
@@ -175,12 +274,17 @@ const statsFor = async (uid) => ({
 
 // ---------- profile ----------
 api.get('/me', wrap(async (req, res) => {
+  const shop = await getShopSettings();
   res.json({
     user: publicUser(req.user, req.isAdmin),
     stats: await statsFor(req.user.id),
     meta: {
       LANGS, THEMES, PIECE_SETS, BOARD_THEMES, COLORS, REACTIONS,
-      PREMIUM_PRICE, REFERRAL_REWARD, REFERRAL_INVITEE_REWARD, botUsername: await getBotUsername(),
+      PREMIUM_PRICE: shop.premiumPriceDiamonds,
+      REFERRAL_REWARD, REFERRAL_INVITEE_REWARD,
+      diamondPacks: shop.diamondPacks,
+      payUsername: shop.payUsername,
+      botUsername: await getBotUsername(),
     },
   });
 }));
@@ -199,7 +303,7 @@ api.patch('/me', wrap(async (req, res) => {
   let boardTheme = u.board_theme || 'classic';
   const wantsStyle = b.pieceSet !== undefined || b.boardTheme !== undefined;
   if (wantsStyle) {
-    if (!u.premium && !req.isAdmin) throw new HttpError(403, 'Premium required', 'premium_required');
+    if (!isPremiumActive(u) && !req.isAdmin) throw new HttpError(403, 'Premium required', 'premium_required');
     if (b.pieceSet !== undefined) {
       if (!PIECE_SETS.includes(b.pieceSet)) throw bad('Unsupported piece set', 'bad_request');
       pieceSet = b.pieceSet;
@@ -823,14 +927,21 @@ api.post('/friends/join', wrap(async (req, res) => {
   });
 }));
 
-// Spend diamonds on Premium (all-or-nothing in one statement, so two taps cannot overspend)
+// Spend diamonds on 1-month Premium (Tashkent calendar month); renewals extend from current expiry
 api.post('/premium/buy', wrap(async (req, res) => {
-  const r = await db.prepare('UPDATE users SET diamonds = diamonds - ?, premium = 1 WHERE id = ? AND premium = 0 AND diamonds >= ?')
-    .run(PREMIUM_PRICE, req.user.id, PREMIUM_PRICE);
-  if (!r.changes) {
-    const u = await getUser.get(req.user.id);
-    throw bad(u.premium ? 'You already have Premium' : 'Not enough diamonds', u.premium ? 'premium_owned' : 'no_diamonds');
-  }
+  const shop = await getShopSettings();
+  const price = shop.premiumPriceDiamonds;
+  const u = await getUser.get(req.user.id);
+  if (Number(u.diamonds || 0) < price) throw bad('Not enough diamonds', 'no_diamonds');
+  const base = (u.premium_until && new Date(u.premium_until).getTime() > Date.now())
+    ? new Date(u.premium_until)
+    : new Date();
+  const until = addOneMonthTashkent(base);
+  const r = await db.prepare(`
+    UPDATE users SET diamonds = diamonds - ?, premium = 1, premium_until = ?
+    WHERE id = ? AND diamonds >= ?
+  `).run(price, until.toISOString(), req.user.id, price);
+  if (!r.changes) throw bad('Not enough diamonds', 'no_diamonds');
   res.json({ user: publicUser(await getUser.get(req.user.id), req.isAdmin) });
 }));
 
@@ -842,7 +953,7 @@ api.delete('/friends/:id', wrap(async (req, res) => {
 
 // ---------- announcements (home carousel) ----------
 const ANN_FONTS = ['system', 'rounded', 'serif', 'mono'];
-const ANN_PAGES = ['play', 'puzzles', 'rankings', 'live', 'profile', 'premium', 'friends', 'settings'];
+const ANN_PAGES = ['play', 'puzzles', 'rankings', 'live', 'profile', 'premium', 'friends', 'settings', 'diamonds'];
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 /** Tashkent is UTC+5 year-round. Accept "YYYY-MM-DDTHH:mm" wall clock → ISO UTC. */
@@ -993,12 +1104,22 @@ admin.get('/users', wrap(async (req, res) => {
   const like = `%${q.replace(/[%_]/g, '')}%`;
   const rows = await db.prepare(`
     SELECT u.id, u.first_name, u.username, u.lang, u.blocked, u.bot_blocked, u.created_at, u.last_seen,
+      u.diamonds, u.premium, u.premium_until,
       (SELECT COUNT(*) FROM games g WHERE g.status = 'finished' AND (g.white_id = u.id OR g.black_id = u.id)) games
     FROM users u
     WHERE ? = '' OR u.first_name ILIKE ? OR u.username ILIKE ? OR CAST(u.id AS TEXT) LIKE ?
     ORDER BY u.last_seen DESC LIMIT 100
   `).all(q, like, like, like);
-  res.json({ users: rows.map((u) => ({ ...u, online: realtime.isOnline(u.id), isAdmin: isAdmin(u.id) })) });
+  res.json({
+    users: rows.map((u) => ({
+      ...u,
+      diamonds: Number(u.diamonds || 0),
+      premium: isPremiumActive(u),
+      premiumUntilTashkent: u.premium_until ? formatTashkent(u.premium_until) : null,
+      online: realtime.isOnline(u.id),
+      isAdmin: isAdmin(u.id),
+    })),
+  });
 }));
 
 admin.post('/users/:id/block', wrap(async (req, res) => {
@@ -1007,6 +1128,47 @@ admin.post('/users/:id/block', wrap(async (req, res) => {
   const blocked = req.body && req.body.blocked ? 1 : 0;
   if (!(await db.prepare('UPDATE users SET blocked = ? WHERE id = ?').run(blocked, id)).changes) throw new HttpError(404, 'User not found', 'notfound');
   res.json({ ok: true, blocked: !!blocked });
+}));
+
+/** Grant (or remove) diamonds after a real payment was accepted. */
+admin.post('/users/:id/diamonds', wrap(async (req, res) => {
+  const id = intParam(req.params.id);
+  const amount = Math.floor(Number(req.body && req.body.amount));
+  if (!Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 1_000_000) {
+    throw bad('Amount must be a non-zero integer (±1…1000000)', 'bad_request');
+  }
+  const u = await getUser.get(id);
+  if (!u) throw new HttpError(404, 'User not found', 'notfound');
+  if (amount < 0 && Number(u.diamonds || 0) + amount < 0) {
+    throw bad('Not enough diamonds to remove', 'no_diamonds');
+  }
+  await db.prepare('UPDATE users SET diamonds = diamonds + ? WHERE id = ?').run(amount, id);
+  const next = await getUser.get(id);
+  res.json({ ok: true, user: publicUser(next, isAdmin(next.id)) });
+}));
+
+admin.get('/shop', wrap(async (req, res) => {
+  res.json({ shop: await getShopSettings() });
+}));
+
+admin.patch('/shop', wrap(async (req, res) => {
+  const b = req.body || {};
+  if (b.premiumPriceDiamonds !== undefined) {
+    const n = Math.floor(Number(b.premiumPriceDiamonds));
+    if (!(n >= 1 && n <= 1_000_000)) throw bad('Premium price must be 1…1000000 diamonds', 'bad_request');
+    await setSetting('premium_price_diamonds', String(n));
+  }
+  if (b.diamondPacks !== undefined) {
+    const packs = normalizeDiamondPacks(b.diamondPacks);
+    if (!packs.length) throw bad('Need at least one diamond pack', 'bad_request');
+    await setSetting('diamond_packs', JSON.stringify(packs));
+  }
+  if (b.payUsername !== undefined) {
+    const name = String(b.payUsername || '').replace(/^@/, '').trim();
+    if (!/^[A-Za-z0-9_]{5,64}$/.test(name)) throw bad('Invalid Telegram username', 'bad_request');
+    await setSetting('pay_username', name);
+  }
+  res.json({ shop: await getShopSettings() });
 }));
 
 // ----- post composer: media upload -----
