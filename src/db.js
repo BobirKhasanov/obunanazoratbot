@@ -161,6 +161,27 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Home-page announcement banners (expire by ends_at, Tashkent-wall-clock stored as timestamptz)
+CREATE TABLE IF NOT EXISTS announcements (
+  id BIGSERIAL PRIMARY KEY,
+  admin_id BIGINT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  title_color TEXT NOT NULL DEFAULT '#ffffff',
+  body_color TEXT NOT NULL DEFAULT '#fbbf24',
+  bg_from TEXT NOT NULL DEFAULT '#3b82f6',
+  bg_to TEXT NOT NULL DEFAULT '#6366f1',
+  font_family TEXT NOT NULL DEFAULT 'system',  -- system | rounded | serif | mono
+  font_size INTEGER NOT NULL DEFAULT 18,
+  media_id TEXT,
+  link_type TEXT NOT NULL DEFAULT 'none',     -- none | url | page
+  link_url TEXT,
+  link_page TEXT,                             -- play | puzzles | rankings | live | profile | premium | friends | settings
+  ends_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_announcements_ends ON announcements(ends_at);
+
 -- The API is served only by this server (service connection); nobody should reach the tables through Supabase's public REST API
 ALTER TABLE users ADD COLUMN IF NOT EXISTS diamonds BIGINT NOT NULL DEFAULT 0;   -- in-app currency
 ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER NOT NULL DEFAULT 0;   -- 1 once bought with diamonds
@@ -185,6 +206,7 @@ ALTER TABLE game_invites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE broadcasts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
 `;
 
 /** Creates the tables on first start and marks interrupted broadcasts. Await this before serving. */

@@ -347,6 +347,14 @@ Object.assign(en, {
   terms_title: 'Terms',
   terms_p1: 'This mini app runs inside Telegram. Game data and profile settings are stored to run matches and rankings.',
   terms_p2: 'You can delete your account and data anytime from Profile. By using the app you agree to fair play and respectful behaviour.',
+  ann_title_section: 'Home announcements',
+  ann_sub: 'Banners on the home screen. They disappear automatically after the Tashkent end date.',
+  ann_title: 'Title', ann_body: 'Subtitle', ann_font: 'Font', ann_colors: 'Colours',
+  ann_title_color: 'Title', ann_body_color: 'Subtitle', ann_bg_from: 'Background A', ann_bg_to: 'Background B',
+  ann_media: 'Media', ann_link: 'Link', ann_link_none: 'None', ann_link_url: 'URL', ann_link_page: 'In-app page',
+  ann_ends: 'End date', ann_publish: 'Publish announcement', ann_list: 'Active & scheduled',
+  ann_empty: 'No announcements yet.', ann_until: 'Until', ann_delete_confirm: 'Delete this announcement?',
+  ann_deleted: 'Announcement deleted', ann_saved: 'Announcement published',
 });
 Object.assign(ru, {
   live_tab_bot: 'Живые партии', live_tab_intl: 'Мировые турниры', live_games_count: '{n} live',
@@ -373,6 +381,14 @@ Object.assign(ru, {
   terms_title: 'Условия',
   terms_p1: 'Мини-приложение работает в Telegram. Данные партий и профиля нужны для матчей и рейтинга.',
   terms_p2: 'Вы можете удалить аккаунт и данные в любой момент в Профиле. Используя приложение, вы соглашаетесь на честную игру.',
+  ann_title_section: 'Объявления на главной',
+  ann_sub: 'Баннеры на главном экране. Исчезают автоматически после даты окончания (Ташкент).',
+  ann_title: 'Заголовок', ann_body: 'Подзаголовок', ann_font: 'Шрифт', ann_colors: 'Цвета',
+  ann_title_color: 'Заголовок', ann_body_color: 'Подзаголовок', ann_bg_from: 'Фон A', ann_bg_to: 'Фон B',
+  ann_media: 'Медиа', ann_link: 'Ссылка', ann_link_none: 'Нет', ann_link_url: 'URL', ann_link_page: 'Страница в приложении',
+  ann_ends: 'Дата окончания', ann_publish: 'Опубликовать', ann_list: 'Активные и запланированные',
+  ann_empty: 'Пока нет объявлений.', ann_until: 'До', ann_delete_confirm: 'Удалить это объявление?',
+  ann_deleted: 'Объявление удалено', ann_saved: 'Объявление опубликовано',
 });
 Object.assign(uz, {
   live_tab_bot: "Live o'yinlar", live_tab_intl: 'Halqaro Live turnirlar', live_games_count: '{n} ta jonli',
@@ -399,6 +415,14 @@ Object.assign(uz, {
   terms_title: 'Shartlar',
   terms_p1: "Bu mini ilova Telegram ichida ishlaydi. O'yin va profil ma'lumotlari partiyalar va reyting uchun saqlanadi.",
   terms_p2: "Hisobingizni istalgan vaqt Profil orqali o'chirishingiz mumkin. Ilovadan foydalanish — odil o'yin va hurmatli munosabatga rozilik demak.",
+  ann_title_section: "Asosiy e'lonlar",
+  ann_sub: "Asosiy sahifadagi bannerlar. Toshkent vaqtidagi tugash sanasidan keyin avtomatik yo'qoladi.",
+  ann_title: 'Sarlavha', ann_body: "Qo'shimcha matn", ann_font: 'Shrift', ann_colors: 'Ranglar',
+  ann_title_color: 'Sarlavha', ann_body_color: 'Matn', ann_bg_from: 'Fon A', ann_bg_to: 'Fon B',
+  ann_media: 'Media', ann_link: 'Havola', ann_link_none: "Yo'q", ann_link_url: 'URL', ann_link_page: 'Ilova sahifasi',
+  ann_ends: 'Tugash sanasi', ann_publish: "E'lonni chiqarish", ann_list: 'Faol va rejalangan',
+  ann_empty: "Hali e'lon yo'q.", ann_until: 'Gacha', ann_delete_confirm: "Bu e'lon o'chirilsinmi?",
+  ann_deleted: "E'lon o'chirildi", ann_saved: "E'lon chiqarildi",
 });
 Object.assign(uzc, {
   live_tab_bot: 'Live ўйинлар', live_tab_intl: 'Халқаро Live турнирлар', live_games_count: '{n} та жонли',
@@ -425,4 +449,12 @@ Object.assign(uzc, {
   terms_title: 'Шартлар',
   terms_p1: 'Бу мини илова Telegram ичида ишлайди. Ўйин ва профил маълумотлари партиялар ва рейтинг учун сақланади.',
   terms_p2: 'Ҳисобингизни исталган вақт Профил орқали ўчиришингиз мумкин. Иловадан фойдаланиш — одил ўйин ва ҳурматли муносабатга розилик демак.',
+  ann_title_section: 'Асосий эълонлар',
+  ann_sub: 'Асосий саҳифадаги баннерлар. Тошкент вақтидаги тугаш санасидан кейин автоматик йўқолади.',
+  ann_title: 'Сарлавҳа', ann_body: 'Қўшимча матн', ann_font: 'Шрифт', ann_colors: 'Ранглар',
+  ann_title_color: 'Сарлавҳа', ann_body_color: 'Матн', ann_bg_from: 'Фон A', ann_bg_to: 'Фон B',
+  ann_media: 'Медиа', ann_link: 'Ҳавола', ann_link_none: 'Йўқ', ann_link_url: 'URL', ann_link_page: 'Илова саҳифаси',
+  ann_ends: 'Тугаш санаси', ann_publish: 'Эълонни чиқариш', ann_list: 'Фаол ва режаланган',
+  ann_empty: 'Ҳали эълон йўқ.', ann_until: 'Гача', ann_delete_confirm: 'Бу эълон ўчирилсинми?',
+  ann_deleted: 'Эълон ўчирилди', ann_saved: 'Эълон чиқарилди',
 });

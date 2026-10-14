@@ -41,6 +41,7 @@ const MAX_OPEN_GAMES = 10;
 const POPUP_MS = 10_000;
 const INVITE_TTL_MS = Number(process.env.INVITE_TTL_MS || 30_000);
 const SQUARE = /^[a-h][1-8]$/;
+const URL_RE = /^(https?:\/\/[^\s]{3,500}|tg:\/\/[^\s]{3,200})$/i;
 
 const app = express();
 const server = http.createServer(app);
@@ -839,6 +840,111 @@ api.delete('/friends/:id', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ---------- announcements (home carousel) ----------
+const ANN_FONTS = ['system', 'rounded', 'serif', 'mono'];
+const ANN_PAGES = ['play', 'puzzles', 'rankings', 'live', 'profile', 'premium', 'friends', 'settings'];
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+/** Tashkent is UTC+5 year-round. Accept "YYYY-MM-DDTHH:mm" wall clock → ISO UTC. */
+function parseTashkentEnd(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(s || '').trim());
+  if (!m) throw bad('End date must be YYYY-MM-DD HH:mm (Tashkent)', 'ends_at');
+  const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] || '00'}+05:00`;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) throw bad('Invalid end date', 'ends_at');
+  return d;
+}
+
+function formatTashkent(iso) {
+  const d = iso instanceof Date ? iso : new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const g = (t) => (parts.find((p) => p.type === t) || {}).value || '00';
+  return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
+}
+
+function publicAnnouncement(row) {
+  return {
+    id: Number(row.id),
+    title: row.title || '',
+    body: row.body || '',
+    titleColor: row.title_color,
+    bodyColor: row.body_color,
+    bgFrom: row.bg_from,
+    bgTo: row.bg_to,
+    fontFamily: ANN_FONTS.includes(row.font_family) ? row.font_family : 'system',
+    fontSize: Math.min(28, Math.max(14, Number(row.font_size) || 18)),
+    mediaId: row.media_id || null,
+    mediaUrl: row.media_id ? `/api/media/${row.media_id}` : null,
+    linkType: row.link_type || 'none',
+    linkUrl: row.link_url || null,
+    linkPage: row.link_page || null,
+    endsAt: row.ends_at,
+    endsAtTashkent: formatTashkent(row.ends_at),
+  };
+}
+
+async function purgeExpiredAnnouncements() {
+  await db.prepare('DELETE FROM announcements WHERE ends_at <= now()').run();
+}
+
+function parseAnnouncementBody(b, { requireFuture = true } = {}) {
+  const title = cleanText(b.title, 80, 'title', false);
+  const body = cleanText(b.body, 160, 'body', false);
+  if (!title && !body && !b.mediaId) throw bad('Add text or media', 'text');
+  const titleColor = HEX.test(b.titleColor) ? b.titleColor : '#ffffff';
+  const bodyColor = HEX.test(b.bodyColor) ? b.bodyColor : '#fbbf24';
+  const bgFrom = HEX.test(b.bgFrom) ? b.bgFrom : '#3b82f6';
+  const bgTo = HEX.test(b.bgTo) ? b.bgTo : '#6366f1';
+  const fontFamily = ANN_FONTS.includes(b.fontFamily) ? b.fontFamily : 'system';
+  const fontSize = Math.min(28, Math.max(14, Number(b.fontSize) || 18));
+  let mediaId = null;
+  if (b.mediaId) mediaId = String(b.mediaId);
+  let linkType = 'none';
+  let linkUrl = null;
+  let linkPage = null;
+  if (b.linkType === 'url') {
+    const url = String(b.linkUrl || '').trim();
+    if (!URL_RE.test(url)) throw bad('Link must start with https:// or tg://', 'link_url');
+    linkType = 'url';
+    linkUrl = url;
+  } else if (b.linkType === 'page') {
+    if (!ANN_PAGES.includes(b.linkPage)) throw bad('Unknown in-app page', 'link_page');
+    linkType = 'page';
+    linkPage = b.linkPage;
+  }
+  const ends = parseTashkentEnd(b.endsAtTashkent || b.endsAt);
+  if (requireFuture && ends.getTime() <= Date.now()) throw bad('End date must be in the future (Tashkent)', 'ends_at');
+  return {
+    title, body, titleColor, bodyColor, bgFrom, bgTo, fontFamily, fontSize,
+    mediaId, linkType, linkUrl, linkPage, endsAt: ends.toISOString(),
+  };
+}
+
+api.get('/media/:id', wrap(async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw bad('Not found', 'notfound');
+  const row = await db.prepare('SELECT mime, data FROM media WHERE id = ?').get(id);
+  if (!row) throw bad('Not found', 'notfound');
+  res.set({
+    'Content-Type': row.mime,
+    'Cache-Control': 'private, max-age=3600',
+    'Content-Length': row.data.length,
+  });
+  res.end(row.data);
+}));
+
+api.get('/announcements', wrap(async (req, res) => {
+  await purgeExpiredAnnouncements();
+  const rows = await db.prepare(`
+    SELECT * FROM announcements WHERE ends_at > now() ORDER BY id DESC LIMIT 20
+  `).all();
+  res.json({ announcements: rows.map(publicAnnouncement), nowTashkent: formatTashkent(new Date()) });
+}));
+
 // ---------- admin ----------
 const admin = express.Router();
 admin.use((req, res, next) => (req.isAdmin ? next() : res.status(404).json({ error: 'Not found', code: 'notfound' }))); // do not reveal the panel
@@ -927,8 +1033,6 @@ admin.post('/upload', express.raw({ type: () => true, limit: '26mb' }), wrap(asy
 }));
 
 // ----- post composer: validate + send -----
-const URL_RE = /^(https?:\/\/[^\s]{3,500}|tg:\/\/[^\s]{3,200})$/i;
-
 function parseButtons(raw) {
   if (raw == null) return [];
   if (!Array.isArray(raw) || raw.length > 6) throw bad('Up to 6 buttons', 'buttons');
@@ -1019,6 +1123,80 @@ admin.get('/broadcasts', wrap(async (req, res) => {
     busy: broadcasting,
     broadcasts: await db.prepare('SELECT id, text, media_id, lang, total, sent, failed, status, created_at FROM broadcasts ORDER BY id DESC LIMIT 8').all(),
   });
+}));
+
+admin.get('/announcements', wrap(async (req, res) => {
+  await purgeExpiredAnnouncements();
+  const rows = await db.prepare('SELECT * FROM announcements ORDER BY id DESC LIMIT 40').all();
+  res.json({
+    announcements: rows.map(publicAnnouncement),
+    fonts: ANN_FONTS,
+    pages: ANN_PAGES,
+    nowTashkent: formatTashkent(new Date()),
+  });
+}));
+
+admin.post('/announcements', wrap(async (req, res) => {
+  const p = parseAnnouncementBody(req.body || {});
+  if (p.mediaId) {
+    const m = await db.prepare('SELECT id FROM media WHERE id = ?').get(p.mediaId);
+    if (!m) throw bad('Media not found, upload it again', 'media');
+  }
+  const info = await db.prepare(`
+    INSERT INTO announcements (
+      admin_id, title, body, title_color, body_color, bg_from, bg_to,
+      font_family, font_size, media_id, link_type, link_url, link_page, ends_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    RETURNING *
+  `).run(
+    req.user.id, p.title, p.body, p.titleColor, p.bodyColor, p.bgFrom, p.bgTo,
+    p.fontFamily, p.fontSize, p.mediaId, p.linkType, p.linkUrl, p.linkPage, p.endsAt,
+  );
+  res.status(201).json({ announcement: publicAnnouncement(info.rows[0]) });
+}));
+
+admin.patch('/announcements/:id', wrap(async (req, res) => {
+  const id = intParam(req.params.id);
+  const cur = await db.prepare('SELECT * FROM announcements WHERE id = ?').get(id);
+  if (!cur) throw bad('Not found', 'notfound');
+  const b = req.body || {};
+  const merged = {
+    title: b.title !== undefined ? b.title : cur.title,
+    body: b.body !== undefined ? b.body : cur.body,
+    titleColor: b.titleColor !== undefined ? b.titleColor : cur.title_color,
+    bodyColor: b.bodyColor !== undefined ? b.bodyColor : cur.body_color,
+    bgFrom: b.bgFrom !== undefined ? b.bgFrom : cur.bg_from,
+    bgTo: b.bgTo !== undefined ? b.bgTo : cur.bg_to,
+    fontFamily: b.fontFamily !== undefined ? b.fontFamily : cur.font_family,
+    fontSize: b.fontSize !== undefined ? b.fontSize : cur.font_size,
+    mediaId: b.mediaId !== undefined ? b.mediaId : cur.media_id,
+    linkType: b.linkType !== undefined ? b.linkType : cur.link_type,
+    linkUrl: b.linkUrl !== undefined ? b.linkUrl : cur.link_url,
+    linkPage: b.linkPage !== undefined ? b.linkPage : cur.link_page,
+    endsAtTashkent: b.endsAtTashkent !== undefined ? b.endsAtTashkent : formatTashkent(cur.ends_at),
+  };
+  const p = parseAnnouncementBody(merged, { requireFuture: false });
+  if (p.mediaId) {
+    const m = await db.prepare('SELECT id FROM media WHERE id = ?').get(p.mediaId);
+    if (!m) throw bad('Media not found, upload it again', 'media');
+  }
+  await db.prepare(`
+    UPDATE announcements SET
+      title = ?, body = ?, title_color = ?, body_color = ?, bg_from = ?, bg_to = ?,
+      font_family = ?, font_size = ?, media_id = ?, link_type = ?, link_url = ?, link_page = ?, ends_at = ?
+    WHERE id = ?
+  `).run(
+    p.title, p.body, p.titleColor, p.bodyColor, p.bgFrom, p.bgTo,
+    p.fontFamily, p.fontSize, p.mediaId, p.linkType, p.linkUrl, p.linkPage, p.endsAt, id,
+  );
+  res.json({ announcement: publicAnnouncement(await db.prepare('SELECT * FROM announcements WHERE id = ?').get(id)) });
+}));
+
+admin.delete('/announcements/:id', wrap(async (req, res) => {
+  const id = intParam(req.params.id);
+  const r = await db.prepare('DELETE FROM announcements WHERE id = ?').run(id);
+  if (!r.changes) throw bad('Not found', 'notfound');
+  res.json({ ok: true });
 }));
 
 api.use('/admin', admin);

@@ -57,7 +57,7 @@ function subTop(title, close) {
 
 /** @param {object} ctx { state, mount helpers via callbacks } */
 export function renderProfilePage(ctx) {
-  const { state, challengeAction, goTab, rebuildAll, refresh } = ctx;
+  const { state, challengeAction, gameRow, goTab, rebuildAll, refresh } = ctx;
   const me = state.me;
   const st = state.stats;
   const friends = state.friends || [];
@@ -70,6 +70,55 @@ export function renderProfilePage(ctx) {
     state.me = (await api('PATCH', '/me', patch)).user;
     return state.me;
   };
+
+  const openStats = async () => {
+    let recent = [];
+    let stats = st;
+    try {
+      const l = await api('GET', '/lobby');
+      recent = l.games?.recent || [];
+      stats = l.stats || stats;
+      state.stats = stats;
+    } catch (e) { fail(e); }
+    const tot = {
+      w: (stats?.online?.w || 0) + (stats?.ai?.w || 0),
+      d: (stats?.online?.d || 0) + (stats?.ai?.d || 0),
+      l: (stats?.online?.l || 0) + (stats?.ai?.l || 0),
+    };
+    openScreen((close) => [
+      ...subTop(t('stats'), close),
+      h('div.card.stats',
+        h('div.stat', h('b.g', String(tot.w)), h('small', t('wins'))),
+        h('div.stat', h('b', String(tot.d)), h('small', t('draws'))),
+        h('div.stat', h('b.r', String(tot.l)), h('small', t('losses')))),
+      h('div.h2', t('vs_online')),
+      h('div.card.stats',
+        h('div.stat', h('b', String(stats?.online?.w || 0)), h('small', t('wins'))),
+        h('div.stat', h('b', String(stats?.online?.d || 0)), h('small', t('draws'))),
+        h('div.stat', h('b', String(stats?.online?.l || 0)), h('small', t('losses')))),
+      h('div.h2', t('vs_pc')),
+      h('div.card.stats',
+        h('div.stat', h('b', String(stats?.ai?.w || 0)), h('small', t('wins'))),
+        h('div.stat', h('b', String(stats?.ai?.d || 0)), h('small', t('draws'))),
+        h('div.stat', h('b', String(stats?.ai?.l || 0)), h('small', t('losses')))),
+      h('div.h2', t('recent')),
+      recent.length && gameRow
+        ? h('div.list', recent.map((g) => gameRow(g, 'recent')))
+        : h('div.empty', h('div.empty-ic', '♞'), t('no_games')),
+    ]);
+  };
+
+  // Deep-link from announcement carousel → profile subpages
+  const onProfileOpen = (e) => {
+    const page = e.detail;
+    if (page === 'premium') openPremium();
+    else if (page === 'friends') openFriends();
+    else if (page === 'settings') openSettings();
+    else if (page === 'stats') openStats();
+  };
+  document.removeEventListener('profile-open', document._profileOpenHandler);
+  document._profileOpenHandler = onProfileOpen;
+  document.addEventListener('profile-open', onProfileOpen);
 
   const openFriends = () => openScreen((close) => {
     const link = `https://t.me/${state.meta.botUsername}?start=i${state.me.id}`;
@@ -214,17 +263,18 @@ export function renderProfilePage(ctx) {
 
     sec(t('sec_rating')),
     h('div.rating-row',
-      h('div.card.rating-tile',
+      h('button.card.rating-tile', { type: 'button', onclick: () => { haptic('select'); openStats(); } },
         h('span.rating-ic', '♟'),
         h('div', h('small.muted', t('stats')), h('b.rating-n', `${s.w}/${s.d}/${s.l}`)),
         h('div.s', t('wins') + ' · ' + t('draws') + ' · ' + t('losses'))),
-      h('div.card.rating-tile',
+      h('button.card.rating-tile', { type: 'button', onclick: () => { haptic('select'); goTab('puzzles'); } },
         h('span.rating-ic', '🧩'),
         h('div', h('small.muted', t('nav_puzzles')), h('b.rating-n', String(pzDone))),
         h('div.s', t('puzzle_solved_count', { a: pzDone, b: PUZZLES.length })))),
 
     sec(t('sec_game')),
     menuCard(
+      menuRow({ ic: 'chart', title: t('stats'), sub: `${s.w}W · ${s.d}D · ${s.l}L`, onClick: openStats }),
       menuRow({ ic: 'rankings', title: t('nav_rankings'), onClick: () => goTab('rankings') }),
       menuRow({ ic: 'handshake', title: t('friends_title'), sub: friends.length ? String(friends.length) : t('no_friends').split('\n')[0], onClick: openFriends }),
       menuRow({ ic: 'crown', title: t('premium'), sub: me.premium ? t('premium_have') : t('diamonds') + ': ' + (me.diamonds || 0), onClick: openPremium }),

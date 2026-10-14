@@ -731,6 +731,44 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 #dock { z-index: 20; }
 
 /* ---------- home ---------- */
+/* ---------- home announcements carousel ---------- */
+.ann-carousel {
+  position: relative; width: 100%; margin: 0 0 14px; border-radius: 22px; overflow: hidden;
+  min-height: 110px; touch-action: pan-y;
+}
+.ann-track {
+  display: flex; width: 100%; will-change: transform;
+  transition: transform 0.55s var(--ease);
+}
+.ann-slide {
+  flex: 0 0 100%; width: 100%; min-height: 110px; padding: 16px 18px;
+  display: flex; align-items: center; gap: 12px; text-align: left; color: #fff;
+  position: relative; overflow: hidden;
+  background-image: repeating-conic-gradient(rgba(255,255,255,.06) 0% 25%, transparent 0% 50%) 0 0 / 18px 18px;
+}
+.ann-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; z-index: 1; }
+.ann-title { font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
+.ann-body { font-weight: 700; line-height: 1.25; opacity: 0.95; }
+.ann-media {
+  flex: none; width: 88px; height: 72px; border-radius: 14px; overflow: hidden;
+  display: grid; place-items: center; background: rgba(0,0,0,.18);
+  box-shadow: 0 8px 18px rgba(0,0,0,.25);
+}
+.ann-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ann-media.emoji { font-size: 40px; }
+.ann-dots {
+  position: absolute; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center; gap: 5px; z-index: 2; pointer-events: none;
+}
+.ann-dots i {
+  width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.35); display: block;
+}
+.ann-dots i.on { background: #fff; width: 14px; border-radius: 4px; }
+.ann-colors { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.ann-color { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+.ann-color input[type=color] { width: 42px; height: 32px; border: 0; padding: 0; background: none; cursor: pointer; }
+.rating-tile { cursor: pointer; transition: transform 0.2s var(--ease); text-align: left; color: inherit; }
+button.rating-tile:active { transform: scale(0.98); }
+
 .home-banner-text { display: flex; flex-direction: column; gap: 4px; }
 .home-banner { position: relative; width: 100%; min-height: 84px; border-radius: 22px; padding: 14px 110px 14px 20px; text-align: left; color: #fff; overflow: hidden;
   display: flex; flex-direction: column; justify-content: center; gap: 4px; margin: 2px 0 12px; box-shadow: 0 5px 0 rgba(0, 0, 0, 0.32); transition: transform 0.2s var(--ease), box-shadow 0.2s; }

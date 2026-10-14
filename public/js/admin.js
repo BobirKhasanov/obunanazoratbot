@@ -135,15 +135,159 @@ export function openAdmin(onClose) {
     drawStyle();
   }).catch(() => drawStyle());
 
+  // ----- home announcements -----
+  const annList = h('div.list');
+  const annForm = {
+    title: '', body: '', titleColor: '#ffffff', bodyColor: '#fbbf24',
+    bgFrom: '#3b82f6', bgTo: '#6366f1', fontFamily: 'system', fontSize: 18,
+    mediaId: null, mediaPreview: null, linkType: 'none', linkUrl: '', linkPage: 'play',
+    endsAtTashkent: '',
+  };
+  const annMediaBox = h('div.media-box');
+  const annFile = h('input', {
+    type: 'file', accept: 'image/jpeg,image/png,image/gif', hidden: true,
+    onchange: async (e) => {
+      const f = e.target.files[0]; e.target.value = '';
+      if (!f) return;
+      toast(t('uploading'));
+      try {
+        const res = await fetch('/api/admin/upload', {
+          method: 'POST',
+          headers: { 'X-Init-Data': getInitData(), 'Content-Type': 'application/octet-stream' },
+          body: f,
+        });
+        const d = await res.json();
+        if (!res.ok) throw Object.assign(new Error(d.error), { code: d.code });
+        annForm.mediaId = d.id;
+        annForm.mediaPreview = URL.createObjectURL(f);
+        drawAnnMedia(); haptic('success');
+      } catch (err) { fail(err); }
+    },
+  });
+  function drawAnnMedia() {
+    annMediaBox.replaceChildren();
+    if (annForm.mediaPreview) {
+      annMediaBox.append(
+        h('img', { src: annForm.mediaPreview, alt: '' }),
+        h('button.mini', { onclick: () => { annForm.mediaId = null; annForm.mediaPreview = null; drawAnnMedia(); } }, icon('x', 16), t('remove')),
+      );
+    } else annMediaBox.append(h('button.btn.ghost.sm', { onclick: () => annFile.click() }, icon('image', 18), t('add_media')));
+  }
+  drawAnnMedia();
+
+  const titleIn = h('input.input', { placeholder: t('ann_title'), maxlength: 80, oninput: (e) => { annForm.title = e.target.value; } });
+  const bodyIn = h('input.input', { placeholder: t('ann_body'), maxlength: 160, oninput: (e) => { annForm.body = e.target.value; } });
+  const endsIn = h('input.input', { type: 'datetime-local', oninput: (e) => { annForm.endsAtTashkent = e.target.value; } });
+  const fontSeg = seg([['system', 'Aa'], ['rounded', 'Rd'], ['serif', 'Se'], ['mono', 'Mo']], 'system', (v) => { annForm.fontFamily = v; });
+  const linkSeg = seg([['none', t('ann_link_none')], ['url', t('ann_link_url')], ['page', t('ann_link_page')]], 'none', (v) => {
+    annForm.linkType = v; drawAnnLink();
+  });
+  const linkExtra = h('div');
+  function drawAnnLink() {
+    linkExtra.replaceChildren();
+    if (annForm.linkType === 'url') {
+      linkExtra.append(h('input.input', {
+        placeholder: 'https://…', inputmode: 'url', value: annForm.linkUrl,
+        oninput: (e) => { annForm.linkUrl = e.target.value; },
+      }));
+    } else if (annForm.linkType === 'page') {
+      const pages = ['play', 'puzzles', 'rankings', 'live', 'profile', 'premium', 'friends', 'settings'];
+      linkExtra.append(h('div.chips', pages.map((p) => h('button.chip' + (annForm.linkPage === p ? '.on' : ''), {
+        type: 'button',
+        onclick: () => { annForm.linkPage = p; drawAnnLink(); },
+      }, p))));
+    }
+  }
+  drawAnnLink();
+
+  const colorRow = (label, key, def) => h('div.ann-color',
+    h('span', label),
+    h('input', {
+      type: 'color', value: def,
+      oninput: (e) => { annForm[key] = e.target.value; },
+    }));
+
+  async function loadAnnouncements() {
+    try {
+      const r = await api('GET', '/admin/announcements');
+      if (!annForm.endsAtTashkent && r.nowTashkent) {
+        // default end = tomorrow 23:59 Tashkent
+        const base = r.nowTashkent.slice(0, 10);
+        const d = new Date(base + 'T12:00:00+05:00');
+        d.setDate(d.getDate() + 1);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        annForm.endsAtTashkent = `${y}-${m}-${day}T23:59`;
+        endsIn.value = annForm.endsAtTashkent;
+      }
+      annList.replaceChildren(...(r.announcements || []).map((a) => h('div.row',
+        h('div.grow',
+          h('div.t', a.title || a.body || '—'),
+          h('div.s', `${t('ann_until')}: ${a.endsAtTashkent.replace('T', ' ')} (Tashkent)`)),
+        h('button.mini', {
+          onclick: async () => {
+            if (!(await confirmSheet(t('ann_delete_confirm'), t('remove'), true))) return;
+            try { await api('DELETE', `/admin/announcements/${a.id}`); loadAnnouncements(); toast(t('ann_deleted')); } catch (e) { fail(e); }
+          },
+        }, icon('trash', 16)))));
+      if (!(r.announcements || []).length) annList.append(h('div.muted', t('ann_empty')));
+    } catch (e) { fail(e); }
+  }
+
+  const saveAnn = h('button.btn', {
+    onclick: async () => {
+      try {
+        await api('POST', '/admin/announcements', {
+          title: annForm.title,
+          body: annForm.body,
+          titleColor: annForm.titleColor,
+          bodyColor: annForm.bodyColor,
+          bgFrom: annForm.bgFrom,
+          bgTo: annForm.bgTo,
+          fontFamily: annForm.fontFamily,
+          fontSize: annForm.fontSize,
+          mediaId: annForm.mediaId || undefined,
+          linkType: annForm.linkType,
+          linkUrl: annForm.linkUrl,
+          linkPage: annForm.linkPage,
+          endsAtTashkent: annForm.endsAtTashkent,
+        });
+        toast(t('ann_saved')); haptic('success');
+        annForm.title = ''; annForm.body = ''; annForm.mediaId = null; annForm.mediaPreview = null;
+        titleIn.value = ''; bodyIn.value = '';
+        drawAnnMedia();
+        loadAnnouncements();
+      } catch (e) { fail(e); }
+    },
+  }, icon('plus', 18), t('ann_publish'));
+
+  const annCard = h('div.card',
+    h('p.muted', t('ann_sub')),
+    h('div.label', t('ann_title')), titleIn,
+    h('div.label', t('ann_body')), bodyIn,
+    h('div.label', t('ann_font')), fontSeg,
+    h('div.label', t('ann_colors')),
+    h('div.ann-colors',
+      colorRow(t('ann_title_color'), 'titleColor', '#ffffff'),
+      colorRow(t('ann_body_color'), 'bodyColor', '#fbbf24'),
+      colorRow(t('ann_bg_from'), 'bgFrom', '#3b82f6'),
+      colorRow(t('ann_bg_to'), 'bgTo', '#6366f1')),
+    h('div.label', t('ann_media')), annMediaBox, annFile,
+    h('div.label', t('ann_link')), linkSeg, linkExtra,
+    h('div.label', t('ann_ends') + ' · Tashkent (UTC+5)'), endsIn,
+    saveAnn);
+
   openScreen((close) => {
     drawMedia(); drawButtons(); drawPreview();
-    loadLive(); loadUsers(); loadHistory();
+    loadLive(); loadUsers(); loadHistory(); loadAnnouncements();
     clearInterval(timer); timer = setInterval(() => { if (!document.hidden) loadLive(); }, 5000);
     return [
       h('button.back', { onclick: () => close() }, icon('back', 20), t('back')),
       h('div.top', h('h1', t('admin_title'))),
       liveBox, h('div.h2', t('stats')), kpis,
       h('div.h2', t('signups')), h('div.card', bars),
+      h('div.h2', t('ann_title_section')), annCard, h('div.h2', t('ann_list')), annList,
       h('div.h2', t('admin_style')), styleHost,
       h('div.h2', t('composer')),
       h('div.card', text, mediaBox, file, h('div.label', t('buttons') + ' · ' + t('up_to')), btnBox, h('div.label', t('audience')), audience, h('div.label', t('preview')), preview, sendTest, sendAll),

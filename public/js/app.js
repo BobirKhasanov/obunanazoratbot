@@ -11,6 +11,7 @@ import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleOpenGame } from './game.js';
 import { renderProfilePage } from './profile.js';
 import { closeScreen } from './screen.js';
+import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel } from './announcements.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
 let selectedTime = 'any';
@@ -193,7 +194,6 @@ const resultText = (g) => {
 refreshers.play = async function renderPlay() {
   const l = await loadLobby();
   const saved = savedAiGame();
-  const s = sumStats(l.stats);
   const controls = [
     ['1+0', '1+0', 'Bullet'],
     ['3+2', '3+2', 'Blitz'],
@@ -211,8 +211,10 @@ refreshers.play = async function renderPlay() {
   const banner = (cls, emoji, title, sub, fn) => h('button.home-banner.' + cls, { onclick: () => { haptic('light'); fn(); } },
     h('div.home-banner-text', h('b', title), h('small', sub)), h('span.home-banner-art', emoji));
   const card = (emoji, label, fn) => h('button.pcard', { onclick: () => { haptic('light'); fn(); } }, h('span.pcard-art', emoji), h('b', label));
+  const annHost = h('div.ann-carousel', { hidden: true });
   const nodes = [
     h('div.top', h('h1', '♟ ' + t('app')), h('div.pills', h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount })))),
+    annHost,
     banner('violet', '🧩', t('home_puzzle'), t('puzzles_sub'), () => go(TABS.indexOf('puzzles'), true)),
     h('div.time-heading', t('choose_time')),
     modes,
@@ -233,12 +235,20 @@ refreshers.play = async function renderPlay() {
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
       saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('cpu', 22)), h('div.grow', h('div.t', t('computer') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
-    h('div.h2', t('stats')),
-    h('div.card.stats', stat(s.w, t('wins'), 'g'), stat(s.d, t('draws')), stat(s.l, t('losses'), 'r')),
-    h('div.h2', t('recent')),
-    l.games.recent.length ? h('div.list', l.games.recent.map((g) => gameRow(g, 'recent'))) : empty(t('no_games'), '♞'),
   ];
   mount('play', nodes);
+  const anns = await loadAnnouncements(api);
+  if (state.tab === 'play') {
+    mountAnnouncementsCarousel(annHost, anns, {
+      onPage: (page) => {
+        if (['play', 'puzzles', 'rankings', 'live', 'profile'].includes(page)) go(TABS.indexOf(page), true);
+        else if (page === 'premium' || page === 'friends' || page === 'settings') {
+          go(TABS.indexOf('profile'), true);
+          setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: page })), 520);
+        }
+      },
+    });
+  }
 };
 refreshers.live = async function renderLive() {
   await renderLivePage(
@@ -336,6 +346,7 @@ refreshers.profile = async function renderProfile() {
   mount('profile', ...renderProfilePage({
     state,
     challengeAction,
+    gameRow,
     goTab: (name) => { closeScreen(true); go(TABS.indexOf(name), true); },
     rebuildAll,
     refresh: () => refresh('profile'),
@@ -391,7 +402,10 @@ function initPager() {
   go = (i, animate) => {
     const prev = state.index;
     state.index = clamp(i, 0, TABS.length - 1); state.tab = TABS[state.index];
-    if (state.index !== prev) closeScreen(true);
+    if (state.index !== prev) {
+      closeScreen(true);
+      if (prev === TABS.indexOf('play')) stopAnnouncementsCarousel();
+    }
     track.classList.toggle('settle', !!animate); ind.classList.remove('drag');
     setX(-state.index * W);
     ind.style.transform = `translateX(${state.index * 100}%)`;
