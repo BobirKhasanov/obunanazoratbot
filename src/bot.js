@@ -15,7 +15,7 @@ function createBot(token, webAppUrl) {
   const upsert = db.prepare(`
     INSERT INTO users (id, first_name, username, lang) VALUES (?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET first_name = excluded.first_name, username = excluded.username,
-      bot_blocked = 0, last_seen = datetime('now')
+      bot_blocked = 0, last_seen = now()
   `);
   const getUser = db.prepare('SELECT lang, blocked FROM users WHERE id = ?');
   const touch = (from) => upsert.run(from.id, from.first_name || '', from.username || '', fromTelegram(from.language_code));
@@ -47,22 +47,22 @@ function createBot(token, webAppUrl) {
   // /start always begins with the language picker; the welcome message comes after the choice
   bot.command('start', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
-    touch(ctx.from);
+    await touch(ctx.from);
     const p = String(ctx.match || '').trim();
     await askLanguage(ctx, PAYLOAD.test(p) ? p : '');
   });
 
   bot.command('lang', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
-    touch(ctx.from);
+    await touch(ctx.from);
     await askLanguage(ctx, '');
   });
 
   bot.callbackQuery(/^lang:(uz|uzc|ru|en)(?::([ig][A-Za-z0-9_-]{1,24}))?$/, async (ctx) => {
     const code = ctx.match[1];
     const payload = ctx.match[2] || '';
-    touch(ctx.from);
-    db.prepare('UPDATE users SET lang = ?, lang_set = 1 WHERE id = ?').run(code, ctx.from.id);
+    await touch(ctx.from);
+    await db.prepare('UPDATE users SET lang = ?, lang_set = 1 WHERE id = ?').run(code, ctx.from.id);
     await ctx.answerCallbackQuery({ text: LANG_BUTTONS.find((b) => b.code === code).label }).catch(() => {});
     await ctx.deleteMessage().catch(() => {});
 
@@ -76,26 +76,26 @@ function createBot(token, webAppUrl) {
     }
   });
 
-  const langOf = (id) => (getUser.get(id) || { lang: 'en' }).lang;
+  const langOf = async (id) => ((await getUser.get(id)) || { lang: 'en' }).lang;
 
-  bot.command(['play', 'help'], (ctx) => {
+  bot.command(['play', 'help'], async (ctx) => {
     if (ctx.chat.type !== 'private') return;
-    touch(ctx.from);
-    const lang = langOf(ctx.from.id);
+    await touch(ctx.from);
+    const lang = await langOf(ctx.from.id);
     return ctx.reply(tr(lang).help, { reply_markup: openKeyboard(lang) });
   });
 
   // Quick admin summary in chat (the full panel lives in the mini app)
   bot.command('admin', async (ctx) => {
     if (!isAdmin(ctx.from.id)) return; // silently ignore everyone else
-    const n = (sql) => db.prepare(sql).get().n;
+    const n = async (sql) => (await db.prepare(sql).get()).n;
     await ctx.reply(
       [
         'Admin summary',
-        `Users: ${n('SELECT COUNT(*) n FROM users')}`,
+        `Users: ${await n('SELECT COUNT(*) n FROM users')}`,
         `Online now: ${realtime.onlineIds().length}`,
-        `Games in progress: ${n("SELECT COUNT(*) n FROM games WHERE status = 'active'")}`,
-        `Games played: ${n("SELECT COUNT(*) n FROM games WHERE status = 'finished'")}`,
+        `Games in progress: ${await n("SELECT COUNT(*) n FROM games WHERE status = 'active'")}`,
+        `Games played: ${await n("SELECT COUNT(*) n FROM games WHERE status = 'finished'")}`,
       ].join('\n'),
       { reply_markup: openKeyboard('en') }
     );
@@ -104,16 +104,16 @@ function createBot(token, webAppUrl) {
   // Any other private message just offers the game
   bot.on('message', async (ctx, next) => {
     if (ctx.chat.type !== 'private') return next();
-    touch(ctx.from);
-    const lang = langOf(ctx.from.id);
+    await touch(ctx.from);
+    const lang = await langOf(ctx.from.id);
     await ctx.reply(tr(lang).unknown, { reply_markup: openKeyboard(lang) });
   });
 
   // Users who block the bot are skipped by notifications and broadcasts
-  bot.on('my_chat_member', (ctx) => {
+  bot.on('my_chat_member', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     const status = ctx.myChatMember.new_chat_member.status;
-    db.prepare('UPDATE users SET bot_blocked = ? WHERE id = ?').run(status === 'kicked' ? 1 : 0, ctx.from.id);
+    await db.prepare('UPDATE users SET bot_blocked = ? WHERE id = ?').run(status === 'kicked' ? 1 : 0, ctx.from.id);
   });
 
   bot.catch((err) => console.error('[bot] error:', err.message));

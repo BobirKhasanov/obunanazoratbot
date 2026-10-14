@@ -29,7 +29,7 @@ const getUser = db.prepare('SELECT lang, notify_enabled, bot_blocked, blocked FR
  */
 async function toUser(userId, build, { gameId, effect, force } = {}) {
   if (!bot) return false;
-  const u = getUser.get(userId);
+  const u = await getUser.get(userId);
   if (!u || u.blocked || u.bot_blocked) return false;
   if (!u.notify_enabled && !force) return false;
 
@@ -48,7 +48,7 @@ async function toUser(userId, build, { gameId, effect, force } = {}) {
     }
     return true;
   } catch (e) {
-    if (e.error_code === 403) db.prepare('UPDATE users SET bot_blocked = 1 WHERE id = ?').run(userId);
+    if (e.error_code === 403) await db.prepare('UPDATE users SET bot_blocked = 1 WHERE id = ?').run(userId).catch(() => {});
     else console.error('[notify] send failed:', e.description || e.message);
     return false;
   }

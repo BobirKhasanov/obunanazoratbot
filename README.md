@@ -32,8 +32,8 @@ npm run test:engine # chess engine strength/sanity
 ## Deploy (Render, Docker)
 
 1. Environment: `BOT_TOKEN`, `WEBAPP_URL` (your https URL), `ADMIN_IDS`.
-2. Attach a **persistent disk at `/app/data`** (SQLite + uploaded post media).
-3. One instance only (long polling + SQLite). Health check: `/healthz`.
+2. Set `DATABASE_URL` to your Supabase **Session pooler** connection string (no disk needed; tables are created on first start).
+3. One instance only (long polling). Health check: `/healthz`.
 
 ## Configuration
 
@@ -43,7 +43,7 @@ npm run test:engine # chess engine strength/sanity
 | `WEBAPP_URL` | Public HTTPS URL of this server |
 | `ADMIN_IDS` | Comma-separated admin Telegram IDs |
 | `BOT_USERNAME` | Optional, otherwise fetched with `getMe` |
-| `DB_PATH` | SQLite file (default `./data/app.db`) |
+| `DATABASE_URL` | Postgres connection string (Supabase Session pooler) |
 | `REMIND_AFTER_HOURS` | Idle time before a "your move" reminder (default 6) |
 
 Revoke any token that was ever pasted into a chat or committed (BotFather → `/revoke`).

@@ -7,7 +7,7 @@ const os = require('os');
 const fs = require('fs');
 const assert = require('assert');
 const WebSocket = require('ws');
-const { DatabaseSync } = require('node:sqlite');
+const { freshDb } = require('./helpers/pg');
 const fake = require('./helpers/fake-telegram');
 
 const TOKEN = '123456:TEST_TOKEN_NOT_REAL';
@@ -86,11 +86,11 @@ async function playMoves(game, players, moves, startPly = 0) {
 (async () => {
   const tg = await fake.start();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chess-'));
-  const dbFile = path.join(dir, 'test.db');
+  const pg = await freshDb();
   const srv = spawn('node', ['src/server.js'], {
     cwd: path.join(__dirname, '..'),
     env: {
-      ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', PORT: String(PORT), DB_PATH: dbFile, ADMIN_IDS: String(ADMIN_ID),
+      ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', PORT: String(PORT), DATABASE_URL: pg.url, ADMIN_IDS: String(ADMIN_ID),
       TG_API_ROOT: tg.url, WEBAPP_URL: 'https://chess.example.test', PRESENCE_REST_MS: '300', INVITE_TTL_MS: '60000', SCHEDULER_MS: '300', NODE_NO_WARNINGS: '1',
     },
     stdio: ['ignore', 'pipe', 'inherit'],
@@ -130,6 +130,7 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.deepStrictEqual((await ok('A', 'GET', '/friends')).friends.map((f) => f.id), [USERS.B.id]);
       assert.deepStrictEqual((await ok('B', 'GET', '/friends')).friends.map((f) => f.id), [USERS.A.id]);
       await err('B', 'POST', '/friends/join', { userId: USERS.B.id }, 404, 'user_unavailable');
+      await sleep(250); // notifications are sent in the background
       const msgs = tg.to(USERS.A.id);
       assert.strictEqual(msgs.length, 1, 'exactly one notification (the repeat must not spam)');
       assert.ok(/Bob/.test(msgs[0].body.text) && /друзья/.test(msgs[0].body.text), 'in Alice\'s language (ru)');
@@ -321,20 +322,18 @@ async function playMoves(game, players, moves, startPly = 0) {
       const m = sent[sent.length - 1];
       assert.ok(m.body.reply_markup.inline_keyboard[0][0].web_app.url.includes(`game=${g.id}`), 'button opens that game');
       // reminder job: not before the delay, then exactly once per move
-      const db = new DatabaseSync(dbFile);
       const remindersBefore = () => tg.to(USERS[other].id).filter((x) => /waiting|ждёт/.test(x.body.text)).length;
       assert.strictEqual(remindersBefore(), 0);
-      db.prepare("UPDATE games SET last_move_at = datetime('now', '-7 hours') WHERE id = ?").run(g.id);
+      await pg.q("UPDATE games SET last_move_at = now() - interval '7 hours' WHERE id = $1", g.id);
       await sleep(900);
       assert.strictEqual(remindersBefore(), 1, 'one reminder after 6h of silence');
       await sleep(700);
       assert.strictEqual(remindersBefore(), 1, 'and not again for the same move');
       // abandoned for a week: the waiting player wins
-      db.prepare("UPDATE games SET last_move_at = datetime('now', '-8 days') WHERE id = ?").run(g.id);
+      await pg.q("UPDATE games SET last_move_at = now() - interval '8 days' WHERE id = $1", g.id);
       await sleep(700);
-      const end = db.prepare('SELECT status, result, reason FROM games WHERE id = ?').get(g.id);
+      const [end] = await pg.q('SELECT status, result, reason FROM games WHERE id = $1', g.id);
       assert.deepStrictEqual({ ...end }, { status: 'finished', result: '1-0', reason: 'abandoned' }, 'black to move for a week -> white wins');
-      db.close();
     });
 
     // ---------------------------------------------------------------- lobby + presence
@@ -488,9 +487,7 @@ async function playMoves(game, players, moves, startPly = 0) {
       await sleep(450);
       await err('A', 'POST', '/games', { opponentId: USERS.D.id }, 409, 'user_offline');
       const g = (await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game;
-      const raw = new DatabaseSync(dbFile);
-      raw.prepare("UPDATE games SET updated_at = datetime('now', '-120 seconds') WHERE id = ?").run(g.id);
-      raw.close();
+      await pg.q("UPDATE games SET updated_at = now() - interval '120 seconds' WHERE id = $1", g.id);
       assert.ok(!(await ok('B', 'GET', '/lobby')).games.invites.some((x) => x.id === g.id), 'expired invite is hidden');
       await err('B', 'POST', `/games/${g.id}/join`, null, 400, 'game_unavailable');
       assert.strictEqual((await ok('A', 'GET', `/games/${g.id}`)).game.status, 'cancelled');
@@ -534,5 +531,6 @@ async function playMoves(game, players, moves, startPly = 0) {
     for (const s of sockets) s.ws.terminate();
     srv.kill();
     tg.close();
+    await pg.drop();
   }
 })();

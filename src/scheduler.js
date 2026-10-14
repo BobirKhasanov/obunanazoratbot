@@ -2,7 +2,6 @@
 //  1. "Your move" reminders: a player who has not answered for a while gets a Telegram message
 //     with an Open button (once per move).
 //  2. Housekeeping: stale invitations are cancelled, abandoned games are closed, old media is deleted.
-const fs = require('fs');
 const db = require('./db');
 const notify = require('./notify');
 const realtime = require('./realtime');
@@ -12,61 +11,57 @@ const REMIND_AFTER_HOURS = Number(process.env.REMIND_AFTER_HOURS || 6); // env o
 const ABANDON_AFTER_DAYS = 7;
 
 const nameOf = db.prepare('SELECT first_name FROM users WHERE id = ?');
-const name = (id) => (nameOf.get(id) || {}).first_name || 'Player';
+const name = async (id) => ((await nameOf.get(id)) || {}).first_name || 'Player';
 
 async function remindMoves() {
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT * FROM games
-    WHERE status = 'active' AND last_move_at < datetime('now', ?)
-  `).all(`-${REMIND_AFTER_HOURS} hours`);
+    WHERE status = 'active' AND last_move_at < now() - (? * interval '1 hour')
+  `).all(REMIND_AFTER_HOURS);
 
   for (const g of rows) {
-    const ply = JSON.parse(g.moves).length;
+    const moves = JSON.parse(g.moves);
+    const ply = moves.length;
     if (g.reminded_ply === ply) continue; // already reminded for this move
-    const waiting = turnOf(JSON.parse(g.moves)) === 'w' ? g.white_id : g.black_id;
+    const waiting = turnOf(moves) === 'w' ? g.white_id : g.black_id;
     const other = waiting === g.white_id ? g.black_id : g.white_id;
-    db.prepare('UPDATE games SET reminded_ply = ? WHERE id = ?').run(ply, g.id);
+    await db.prepare('UPDATE games SET reminded_ply = ? WHERE id = ?').run(ply, g.id);
     if (realtime.isOnline(waiting)) continue; // they are in the app right now
-    await notify.toUser(waiting, (T) => T.reminder(name(other)), { gameId: g.id });
+    const otherName = await name(other);
+    await notify.toUser(waiting, (T) => T.reminder(otherName), { gameId: g.id });
     await new Promise((r) => setTimeout(r, 50)); // far below Telegram's rate limit
   }
 }
 
-function housekeeping(onGameChanged) {
+async function housekeeping(onGameChanged) {
   // Invitations nobody answered within a day
-  const stale = db.prepare(`
-    SELECT id FROM games WHERE status IN ('open', 'invited') AND updated_at < datetime('now', '-1 day')
-  `).all();
-  for (const g of stale) db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ?").run(g.id);
+  await db.prepare("UPDATE games SET status = 'cancelled' WHERE status IN ('open', 'invited') AND updated_at < now() - interval '1 day'").run();
 
   // Games where nobody moved for a week: the player who was waiting wins
-  const dead = db.prepare(`
-    SELECT * FROM games WHERE status = 'active' AND last_move_at < datetime('now', ?)
-  `).all(`-${ABANDON_AFTER_DAYS} days`);
+  const dead = await db.prepare(`
+    SELECT * FROM games WHERE status = 'active' AND last_move_at < now() - (? * interval '1 day')
+  `).all(ABANDON_AFTER_DAYS);
   for (const g of dead) {
-    const turn = turnOf(JSON.parse(g.moves));
-    const result = turn === 'w' ? '0-1' : '1-0';
-    db.prepare("UPDATE games SET status = 'finished', result = ?, reason = 'abandoned', updated_at = datetime('now') WHERE id = ?")
-      .run(result, g.id);
-    if (onGameChanged) onGameChanged(g.id);
+    const result = turnOf(JSON.parse(g.moves)) === 'w' ? '0-1' : '1-0';
+    await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = 'abandoned', updated_at = now() WHERE id = ?").run(result, g.id);
+    if (onGameChanged) await onGameChanged(g.id);
   }
 
   // Uploaded post media is only needed for a few days
-  const oldMedia = db.prepare("SELECT id, path FROM media WHERE created_at < datetime('now', '-7 days')").all();
-  for (const m of oldMedia) {
-    fs.rm(m.path, { force: true }, () => {});
-    db.prepare('DELETE FROM media WHERE id = ?').run(m.id);
-  }
+  await db.prepare("DELETE FROM media WHERE created_at < now() - interval '7 days'").run();
 }
 
 function startScheduler(onGameChanged) {
+  let running = false;
   const tick = async () => {
+    if (running) return; // a slow run must not overlap the next one
+    running = true;
     try {
-      housekeeping(onGameChanged);
+      await housekeeping(onGameChanged);
       await remindMoves();
     } catch (e) {
       console.error('[scheduler] error:', e);
-    }
+    } finally { running = false; }
   };
   const timer = setInterval(tick, Number(process.env.SCHEDULER_MS || 10 * 60 * 1000));
   timer.unref();

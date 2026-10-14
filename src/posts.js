@@ -25,7 +25,7 @@ async function once(bot, chatId, post, plain) {
   const reply_markup = buildMarkup(post.buttons, post.webAppUrl, plain);
   const m = post.media;
   if (!m) return bot.api.sendMessage(chatId, post.text, { reply_markup, link_preview_options: { is_disabled: true } });
-  const file = m.fileId || new InputFile(m.path);
+  const file = m.fileId || new InputFile(m.data, m.filename);
   const opts = { caption: post.text || undefined, reply_markup };
   if (m.kind === 'photo') return bot.api.sendPhoto(chatId, file, opts);
   if (m.kind === 'animation') return bot.api.sendAnimation(chatId, file, opts);

@@ -7,10 +7,12 @@ const fake = require('./helpers/fake-telegram');
 
 (async () => {
   const tg = await fake.start();
-  process.env.DB_PATH = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'chessbot-')), 'bot.db');
+  const pg = await require('./helpers/pg').freshDb();
+  process.env.DATABASE_URL = pg.url;
   process.env.TG_API_ROOT = tg.url;
   process.env.NODE_NO_WARNINGS = '1';
   const db = require('../src/db');
+  await db.ready;
   const { createBot, setupMenu } = require('../src/bot');
 
   const bot = createBot('123456:TEST_TOKEN_NOT_REAL', 'https://chess.example.test');
@@ -49,7 +51,7 @@ const fake = require('./helpers/fake-telegram');
     assert.strictEqual(btn.text, btnText);
     assert.strictEqual(btn.web_app.url, 'https://chess.example.test/', 'Open button launches the Mini App');
     assert.ok(welcome.body.message_effect_id, 'welcome has the confetti effect');
-    const u = db.prepare('SELECT lang, lang_set FROM users WHERE id = 501').get();
+    const u = await db.prepare('SELECT lang, lang_set FROM users WHERE id = 501').get();
     assert.deepStrictEqual({ ...u }, { lang: code, lang_set: 1 });
   }
   step('each language choice stores the language and sends a localized welcome with an Open button');
@@ -96,9 +98,9 @@ const fake = require('./helpers/fake-telegram');
 
   // 6. blocking / unblocking the bot is tracked
   await bot.handleUpdate({ update_id: updateId++, my_chat_member: { chat: { id: 501, type: 'private' }, from: from(501, 'en'), date: 1, old_chat_member: { status: 'member' }, new_chat_member: { status: 'kicked', user: { id: 99, is_bot: true, first_name: 'b' } } } });
-  assert.strictEqual(db.prepare('SELECT bot_blocked b FROM users WHERE id = 501').get().b, 1);
+  assert.strictEqual((await db.prepare('SELECT bot_blocked b FROM users WHERE id = 501').get()).b, 1);
   await say(501, '/start', 'en'); // coming back clears the flag
-  assert.strictEqual(db.prepare('SELECT bot_blocked b FROM users WHERE id = 501').get().b, 0);
+  assert.strictEqual((await db.prepare('SELECT bot_blocked b FROM users WHERE id = 501').get()).b, 0);
   step('bot block / unblock is tracked');
 
   // 7. menu button, per-language commands and descriptions are registered
@@ -113,4 +115,6 @@ const fake = require('./helpers/fake-telegram');
 
   console.log(`\nAll ${n} bot tests passed`);
   tg.close();
+  await db.close().catch(() => {});
+  await pg.drop();
 })().catch((e) => { console.error('\nFAILED:', e.stack || e.message); process.exit(1); });

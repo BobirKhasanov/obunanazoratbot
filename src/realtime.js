@@ -47,20 +47,21 @@ function attach(server, botToken, hooks) {
     const authTimer = setTimeout(() => ws.close(4001, 'auth timeout'), 8000);
     ws.on('pong', () => { ws.isAlive = true; });
 
-    ws.on('message', (raw) => {
+    ws.on('message', async (raw) => {
       let msg;
       try { msg = JSON.parse(raw); } catch { return; }
       if (msg.t === 'auth' && !userId) {
         const u = validateInitData(String(msg.initData || ''), botToken);
-        const row = u && hooks.getUser(u.id);
-        if (!row || row.blocked) return ws.close(4003, 'denied');
+        let row = null;
+        try { row = u && await hooks.getUser(u.id); } catch { return ws.close(1011, 'error'); }
+        if (!row || row.blocked || userId || ws.readyState !== 1) return ws.close(4003, 'denied');
         userId = u.id;
         clearTimeout(authTimer);
         add(userId, ws);
-        hooks.touch(userId);
+        hooks.touch(userId).catch(() => {});
         ws.send(JSON.stringify({ t: 'hello' }));
       } else if (msg.t === 'ping' && userId) {
-        hooks.touch(userId);
+        hooks.touch(userId).catch(() => {});
         ws.send(JSON.stringify({ t: 'pong' }));
       }
     });
