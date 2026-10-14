@@ -26,17 +26,21 @@ assert.ok(profile.includes('menu-card') || profile.includes('menuCard'));
 assert.ok(!profile.includes('prof-brand'), 'profile brand badge removed');
 assert.ok(profile.includes('openDiamonds'));
 assert.ok(profile.includes('shop_pay_btn') || profile.includes('openPayContact'));
-assert.ok(profile.includes('premium_renew') || profile.includes('premium_month'));
+assert.ok(profile.includes('premiumPlans') || profile.includes('premium_plans') || profile.includes('premium_plan_'));
 
 assert.ok(screen.includes('export function openScreen'));
 assert.ok(screen.includes('export function closeScreen'));
+assert.ok(screen.includes('stack') || screen.includes('stack.length'), 'screen stack for admin back');
 assert.ok(admin.includes("from './screen.js'"));
 assert.ok(admin.includes('openScreen'));
 assert.ok(admin.includes('admin_sec_shop') || admin.includes('/admin/shop'));
 assert.ok(admin.includes('admin_grant') || admin.includes('/diamonds'));
 assert.ok(admin.includes('menu-card') || admin.includes('menuCard'));
+assert.ok(profile.includes('/shop/order') || profile.includes('shop/order'));
+assert.ok(profile.includes('premiumPlans') || profile.includes('premium_plans'));
+assert.ok(app.includes("t === 'wallet'") || app.includes('m.t === \'wallet\''));
 
-for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until']) {
+for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans']) {
   assert.ok(i18n.includes(k + ':'), `i18n ${k}`);
 }
 

@@ -138,6 +138,13 @@ export function renderProfilePage(ctx) {
     const packs = state.meta.diamondPacks || [];
     const payUser = state.meta.payUsername || 'hasanovbobur';
     const have = state.me.diamonds || 0;
+    const orderPack = async (p) => {
+      try {
+        await api('POST', '/shop/order', { diamonds: p.diamonds, sum: p.sum });
+        toast(t('shop_order_sent')); haptic('success');
+        openPayContact();
+      } catch (e) { fail(e); }
+    };
     return [
       ...subTop(t('diamonds'), close),
       h('div.card.gems',
@@ -145,13 +152,14 @@ export function renderProfilePage(ctx) {
         h('small.muted', t('shop_sub'))),
       h('div.h2', t('shop_packs')),
       packs.length
-        ? h('div.list.shop-packs', packs.map((p) => h('div.row.shop-pack',
+        ? h('div.list.shop-packs', packs.map((p) => h('button.row.shop-pack', {
+          type: 'button',
+          onclick: () => { haptic('select'); orderPack(p); },
+        },
           h('div.grow', h('div.t', `💎 ${p.diamonds}`), h('div.s', formatSom(p.sum))),
-          h('span.pill', formatSom(p.sum)))))
+          h('span.pill', t('shop_buy')))))
         : h('div.empty', t('shop_empty')),
       h('p.muted.shop-hint', t('shop_pay_hint', { user: '@' + payUser })),
-      h('button.btn', { type: 'button', onclick: () => { haptic('select'); openPayContact(); } },
-        icon('share', 18), t('shop_pay_btn', { user: '@' + payUser })),
     ];
   });
   document.removeEventListener('profile-open', document._profileOpenHandler);
@@ -180,17 +188,20 @@ export function renderProfilePage(ctx) {
   const openPremium = () => openScreen((close) => {
     const draw = () => {
       const u = state.me;
-      const price = state.meta.PREMIUM_PRICE || 200;
+      const plans = state.meta.premiumPlans || [
+        { months: 1, diamonds: state.meta.PREMIUM_PRICE || 200 },
+      ];
       const inviterReward = state.meta.REFERRAL_REWARD || 20;
       const inviteeReward = state.meta.REFERRAL_INVITEE_REWARD || 10;
       const have = u.diamonds || 0;
-      const pct = Math.min(100, Math.round((have / price) * 100));
       const untilLabel = u.premiumUntilTashkent
         ? u.premiumUntilTashkent.replace('T', ' ')
         : null;
-      const buy = async () => {
+      const planLabel = (months) => (months === 12 ? t('premium_plan_year') : t('premium_plan_months', { n: months }));
+      const buy = async (months) => {
         try {
-          state.me = (await api('POST', '/premium/buy')).user;
+          const r = await api('POST', '/premium/buy', { months });
+          state.me = r.user;
           toast(t('premium_bought')); haptic('success');
           openPremium();
         } catch (e) { fail(e); }
@@ -199,17 +210,22 @@ export function renderProfilePage(ctx) {
         ...subTop(t('premium'), close),
         h('div.card.gems',
           h('div.gems-top', h('div.gems-num', '💎 ', h('b', String(have))), u.premium ? h('span.prem-badge', '★ ' + t('premium')) : null),
-          h('small.muted', t('premium_month_sub', { n: price })),
           h('small.muted', t('gems_sub', { n: inviterReward, m: inviteeReward })),
           u.premium && untilLabel ? h('div.gems-ok', t('premium_until', { d: untilLabel })) : null,
-          u.premium && !untilLabel ? h('div.gems-ok', t('premium_have')) : null,
-          h('div.gems-bar', h('i', { style: { width: pct + '%' } })),
-          h('small.muted', have >= price ? '' : t('premium_need', { n: price - have })),
-          h('button.btn' + (have >= price ? '' : '.ghost'), {
-            disabled: have < price,
-            onclick: buy,
-          }, u.premium ? t('premium_renew', { n: price }) : t('premium_buy', { n: price })),
-          h('button.btn.ghost', { type: 'button', onclick: () => { close(); openDiamonds(); } }, t('shop_get_diamonds'))),
+          u.premium && !untilLabel ? h('div.gems-ok', t('premium_have')) : null),
+        h('div.h2', t('premium_plans')),
+        h('div.list', plans.map((p) => {
+          const can = have >= p.diamonds;
+          return h('div.row',
+            h('div.grow',
+              h('div.t', planLabel(p.months)),
+              h('div.s', `${p.diamonds} 💎`)),
+            h('button.mini.ok', {
+              disabled: !can,
+              onclick: () => buy(p.months),
+            }, can ? t('premium_buy_short') : t('premium_need_short', { n: p.diamonds - have })));
+        })),
+        h('button.btn.ghost', { type: 'button', onclick: () => openDiamonds() }, t('shop_get_diamonds')),
       ];
     };
     return draw();
@@ -332,7 +348,7 @@ export function renderProfilePage(ctx) {
         title: t('premium'),
         sub: me.premium
           ? (me.premiumUntilTashkent ? t('premium_until', { d: me.premiumUntilTashkent.replace('T', ' ') }) : t('premium_have'))
-          : t('premium_month_sub', { n: state.meta.PREMIUM_PRICE || 200 }),
+          : t('premium_plans'),
         onClick: openPremium,
       }),
       me.isAdmin ? menuRow({ ic: 'shield', title: t('admin_panel'), onClick: () => openAdmin(rebuildAll) }) : null,

@@ -514,6 +514,17 @@ async function boot() {
   onWs((m) => {
     if (m.t === 'invite') { showInvite(m.game, m.ttl || 10000); refresh('play'); }
     else if (m.t === 'friend') { haptic('success'); if (m.reward) { state.me.diamonds = (state.me.diamonds || 0) + m.reward; toast(t('friend_reward', { n: m.reward })); } refresh(); }
+    else if (m.t === 'wallet' && m.user) {
+      state.me = { ...state.me, ...m.user };
+      const g = m.granted || {};
+      const bits = [];
+      if (g.diamonds > 0) bits.push(`+${g.diamonds} 💎`);
+      if (g.premiumMonths > 0) bits.push(`★ +${g.premiumMonths}`);
+      toast(bits.length ? bits.join(' · ') : t('wallet_updated'));
+      haptic('success');
+      if (canStyleChess(state.me)) applyChessStyle(state.me.pieceSet, state.me.boardTheme);
+      refresh();
+    }
     else if (m.t === 'game') {
       // Opponent accepted while we stayed on the list — open the board only when the game starts
       if (m.game.status === 'active' && m.game.id !== openGameId()) { clearInvitePop(); openOnline(m.game); }

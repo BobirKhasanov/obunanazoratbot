@@ -62,13 +62,24 @@ export function openAdmin(onClose) {
         h('button.mini', {
           title: t('admin_grant_diamonds'),
           onclick: async () => {
-            const raw = window.prompt(t('admin_grant_prompt', { name: u.first_name || u.id }), '100');
-            if (raw == null || raw === '') return;
-            const amount = Math.floor(Number(raw));
-            if (!Number.isFinite(amount) || amount === 0) return toast(t('e_bad_request'), true);
+            const rawD = window.prompt(t('admin_grant_prompt', { name: u.first_name || u.id }), '100');
+            if (rawD == null) return;
+            const amount = rawD === '' ? 0 : Math.floor(Number(rawD));
+            if (rawD !== '' && (!Number.isFinite(amount) || amount === 0)) return toast(t('e_bad_request'), true);
+            const rawM = window.prompt(t('admin_grant_premium_prompt'), '0');
+            if (rawM == null) return;
+            const premiumMonths = rawM === '' ? 0 : Math.floor(Number(rawM));
+            if (premiumMonths && ![1, 3, 6, 12].includes(premiumMonths)) {
+              return toast(t('admin_grant_premium_bad'), true);
+            }
+            if (!amount && !premiumMonths) return toast(t('e_bad_request'), true);
             try {
-              await api('POST', `/admin/users/${u.id}/diamonds`, { amount });
-              toast(t('admin_grant_ok', { n: amount })); haptic('success');
+              await api('POST', `/admin/users/${u.id}/diamonds`, { amount, premiumMonths });
+              toast(t('admin_grant_ok_full', {
+                d: amount || 0,
+                m: premiumMonths || 0,
+              }));
+              haptic('success');
               loadUsers(q);
             } catch (e) { fail(e); }
           },
@@ -331,18 +342,44 @@ export function openAdmin(onClose) {
     saveAnn);
 
   // ----- shop settings -----
-  let shop = { premiumPriceDiamonds: 200, diamondPacks: [], payUsername: 'hasanovbobur' };
+  let shop = {
+    premiumPriceDiamonds: 200,
+    premiumPlans: [
+      { months: 1, diamonds: 200 },
+      { months: 3, diamonds: 500 },
+      { months: 6, diamonds: 900 },
+      { months: 12, diamonds: 1600 },
+    ],
+    diamondPacks: [],
+    payUsername: 'hasanovbobur',
+  };
   const shopHost = h('div');
 
   function drawShop() {
-    const priceIn = h('input.input', {
-      type: 'number', min: 1, max: 1000000, value: String(shop.premiumPriceDiamonds),
-      oninput: (e) => { shop.premiumPriceDiamonds = Math.floor(Number(e.target.value) || 0); },
-    });
+    if (!shop.premiumPlans || !shop.premiumPlans.length) {
+      shop.premiumPlans = [
+        { months: 1, diamonds: shop.premiumPriceDiamonds || 200 },
+        { months: 3, diamonds: 500 },
+        { months: 6, diamonds: 900 },
+        { months: 12, diamonds: 1600 },
+      ];
+    }
     const payIn = h('input.input', {
       value: shop.payUsername, maxlength: 64,
       oninput: (e) => { shop.payUsername = e.target.value.replace(/^@/, ''); },
     });
+    const plansBox = h('div.list');
+    const redrawPlans = () => {
+      plansBox.replaceChildren(...(shop.premiumPlans || []).map((p) => h('div.row',
+        h('span.muted', p.months === 12 ? t('premium_plan_year') : t('premium_plan_months', { n: p.months })),
+        h('input.input', {
+          type: 'number', value: String(p.diamonds), style: { maxWidth: '110px' },
+          oninput: (e) => { p.diamonds = Math.floor(Number(e.target.value) || 0); },
+        }),
+        h('span.muted', '💎'),
+      )));
+    };
+    redrawPlans();
     const packsBox = h('div.list');
     const redrawPacks = () => {
       packsBox.replaceChildren(...(shop.diamondPacks || []).map((p, i) => h('div.row',
@@ -365,7 +402,7 @@ export function openAdmin(onClose) {
     shopHost.replaceChildren(
       h('div.card',
         h('p.muted', t('admin_shop_sub')),
-        h('div.label', t('admin_premium_price')), priceIn,
+        h('div.label', t('admin_premium_plans')), plansBox,
         h('div.label', t('admin_pay_user')), payIn,
         h('div.label', t('shop_packs')), packsBox,
         h('button.btn.ghost.sm', {
@@ -378,7 +415,7 @@ export function openAdmin(onClose) {
           onclick: async () => {
             try {
               const r = await api('PATCH', '/admin/shop', {
-                premiumPriceDiamonds: shop.premiumPriceDiamonds,
+                premiumPlans: shop.premiumPlans,
                 diamondPacks: shop.diamondPacks,
                 payUsername: shop.payUsername,
               });

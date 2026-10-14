@@ -225,6 +225,13 @@ const DEFAULT_DIAMOND_PACKS = JSON.stringify([
   { diamonds: 1000, sum: 1000000 },
 ]);
 
+const DEFAULT_PREMIUM_PLANS = JSON.stringify([
+  { months: 1, diamonds: 200 },
+  { months: 3, diamonds: 500 },
+  { months: 6, diamonds: 900 },
+  { months: 12, diamonds: 1600 },
+]);
+
 /** Creates the tables on first start and marks interrupted broadcasts. Await this before serving. */
 db.ready = (async () => {
   const c = await pool.connect(); // lock and unlock must happen on the same connection
@@ -235,10 +242,11 @@ db.ready = (async () => {
     await c.query(
       `INSERT INTO app_settings (key, value) VALUES
          ('premium_price_diamonds', '200'),
-         ('diamond_packs', $1),
+         ('premium_plans', $1),
+         ('diamond_packs', $2),
          ('pay_username', 'hasanovbobur')
        ON CONFLICT (key) DO NOTHING`,
-      [DEFAULT_DIAMOND_PACKS],
+      [DEFAULT_PREMIUM_PLANS, DEFAULT_DIAMOND_PACKS],
     );
   } finally {
     await c.query('SELECT pg_advisory_unlock(7301)').catch(() => {});

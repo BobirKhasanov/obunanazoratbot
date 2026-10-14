@@ -322,6 +322,51 @@ Object.assign(ru, { diamonds: 'Алмазы', gems_title: 'Ваши алмазы
 Object.assign(uz, { diamonds: 'Olmoslar', gems_title: 'Sizning olmoslaringiz', gems_sub: 'Yangi do‘st taklif qiling: sizga {n} 💎, unga {m} 💎', premium: 'Premium', premium_buy: '1 oylik Premium · {n} 💎', premium_renew: '1 oyga uzaytirish · {n} 💎', premium_have: 'Premium faol', premium_until: '{d} gacha (Toshkent)', premium_month_sub: '1 oy = {n} 💎', premium_need: 'Premium uchun yana {n} ta olmos kerak', premium_bought: 'Premium ochildi! 🎉', friend_reward: 'Do‘st taklif qilgani uchun +{n} 💎', invitee_reward: '+{n} 💎 sovg‘a! Siz va {name} endi do‘stsiz', e_no_diamonds: 'Olmos yetarli emas', e_premium_owned: 'Sizda Premium bor', shop_sub: 'Olmos sotib oling — to‘lovdan keyin admin hisobingizga qo‘shadi.', shop_packs: 'Olmos paketlar', shop_empty: 'Paketlar yo‘q.', shop_pay_hint: 'Telegram orqali to‘lang, keyin admin olmos qo‘shadi: {user}', shop_pay_btn: 'To‘lash · {user}', shop_get_diamonds: 'Olmos sotib olish', save: 'Saqlash', admin_sec_overview: 'Umumiy', admin_sec_economy: 'Iqtisod', admin_sec_content: 'Kontent', admin_sec_live: 'Jonli va statistika', admin_sec_live_sub: 'Onlayn foydalanuvchilar va KPI', admin_sec_ann_sub: 'Asosiy bannerlar (Toshkent tugash sanasi)', admin_sec_shop: 'Do‘kon narxlari', admin_shop_sub: 'Olmos paketlar, Premium narxi, to‘lov username', admin_sec_broadcast_sub: 'Foydalanuvchilarga xabar', admin_users_sub: 'Qidiruv va to‘lovdan keyin olmos berish', admin_grant_diamonds: 'Olmos berish', admin_grant_prompt: '{name} uchun olmos (+ yoki −)', admin_grant_ok: '{n} 💎 yangilandi', admin_premium_price: 'Premium narxi (olmos / oy)', admin_pay_user: 'To‘lov Telegram username', admin_add_pack: 'Paket qo‘shish', admin_shop_saved: 'Do‘kon sozlamalari saqlandi' });
 Object.assign(uzc, { diamonds: 'Олмослар', gems_title: 'Сизнинг олмосларингиз', gems_sub: 'Янги дўст таклиф қилинг: сизга {n} 💎, унга {m} 💎', premium: 'Премиум', premium_buy: '1 ойлик Премиум · {n} 💎', premium_renew: '1 ойга узайтириш · {n} 💎', premium_have: 'Премиум фаол', premium_until: '{d} гача (Тошкент)', premium_month_sub: '1 ой = {n} 💎', premium_need: 'Премиум учун яна {n} та олмос керак', premium_bought: 'Премиум очилди! 🎉', friend_reward: 'Дўст таклиф қилгани учун +{n} 💎', invitee_reward: '+{n} 💎 совға! Сиз ва {name} энди дўстсиз', e_no_diamonds: 'Олмос етарли эмас', e_premium_owned: 'Сизда Премиум бор', shop_sub: 'Олмос сотиб олинг — тўловдан кейин админ ҳисобингизга қўшади.', shop_packs: 'Олмос пакетлар', shop_empty: 'Пакетлар йўқ.', shop_pay_hint: 'Telegram орқали тўланг, кейин админ олмос қўшади: {user}', shop_pay_btn: 'Тўлаш · {user}', shop_get_diamonds: 'Олмос сотиб олиш', save: 'Сақлаш', admin_sec_overview: 'Умумий', admin_sec_economy: 'Иқтисод', admin_sec_content: 'Контент', admin_sec_live: 'Жонли ва статистика', admin_sec_live_sub: 'Онлайн фойдаланувчилар ва KPI', admin_sec_ann_sub: 'Асосий баннерлар (Тошкент тугаш санаси)', admin_sec_shop: 'Дўкон нархлари', admin_shop_sub: 'Олмос пакетлар, Премиум нархи, тўлов username', admin_sec_broadcast_sub: 'Фойдаланувчиларга хабар', admin_users_sub: 'Қидирув ва тўловдан кейин олмос бериш', admin_grant_diamonds: 'Олмос бериш', admin_grant_prompt: '{name} учун олмос (+ ёки −)', admin_grant_ok: '{n} 💎 янгиланди', admin_premium_price: 'Премиум нархи (олмос / ой)', admin_pay_user: 'Тўлов Telegram username', admin_add_pack: 'Пакет қўшиш', admin_shop_saved: 'Дўкон созламалари сақланди' });
 
+
+Object.assign(en, {
+  shop_buy: 'Buy', shop_order_sent: 'Request sent to admin. Complete payment in Telegram.',
+  premium_plans: 'Premium plans', premium_plan_months: '{n} months', premium_plan_year: '1 year',
+  premium_buy_short: 'Buy', premium_need_short: 'Need {n} 💎',
+  wallet_updated: 'Balance updated',
+  admin_grant_premium_prompt: 'Premium months (0, 1, 3, 6 or 12)',
+  admin_grant_premium_bad: 'Use 1, 3, 6 or 12 months',
+  admin_grant_ok_full: 'Granted: {d} 💎, Premium +{m} mo',
+  admin_premium_plans: 'Premium prices (diamonds)',
+});
+
+Object.assign(ru, {
+  shop_buy: 'Купить', shop_order_sent: 'Запрос отправлен админу. Оплатите в Telegram.',
+  premium_plans: 'Тарифы Премиум', premium_plan_months: '{n} мес.', premium_plan_year: '1 год',
+  premium_buy_short: 'Купить', premium_need_short: 'Нужно {n} 💎',
+  wallet_updated: 'Баланс обновлён',
+  admin_grant_premium_prompt: 'Месяцы Премиум (0, 1, 3, 6 или 12)',
+  admin_grant_premium_bad: 'Укажите 1, 3, 6 или 12 месяцев',
+  admin_grant_ok_full: 'Выдано: {d} 💎, Премиум +{m} мес.',
+  admin_premium_plans: 'Цены Премиум (алмазы)',
+});
+
+Object.assign(uz, {
+  shop_buy: 'Sotib olish', shop_order_sent: "So'rov adminga yuborildi. Telegramda to'lovni yakunlang.",
+  premium_plans: 'Premium tariflar', premium_plan_months: '{n} oy', premium_plan_year: '1 yil',
+  premium_buy_short: 'Olish', premium_need_short: '{n} 💎 kerak',
+  wallet_updated: 'Balans yangilandi',
+  admin_grant_premium_prompt: 'Premium oylari (0, 1, 3, 6 yoki 12)',
+  admin_grant_premium_bad: '1, 3, 6 yoki 12 oy kiriting',
+  admin_grant_ok_full: "Berildi: {d} 💎, Premium +{m} oy",
+  admin_premium_plans: 'Premium narxlari (olmos)',
+});
+
+Object.assign(uzc, {
+  shop_buy: 'Сотиб олиш', shop_order_sent: 'Сўров админга юборилди. Телеграмда тўловни якунланг.',
+  premium_plans: 'Премиум тарифлар', premium_plan_months: '{n} ой', premium_plan_year: '1 йил',
+  premium_buy_short: 'Олиш', premium_need_short: '{n} 💎 керак',
+  wallet_updated: 'Баланс янгиланди',
+  admin_grant_premium_prompt: 'Премиум ойлари (0, 1, 3, 6 ёки 12)',
+  admin_grant_premium_bad: '1, 3, 6 ёки 12 ой киритинг',
+  admin_grant_ok_full: 'Берилди: {d} 💎, Премиум +{m} ой',
+  admin_premium_plans: 'Премиум нархлари (олмос)',
+});
+
 Object.assign(en, {
   live_tab_bot: 'Live games', live_tab_intl: 'World live tournaments', live_games_count: '{n} live',
   live_no_bot_games: 'No live games in the bot right now.\nChallenge someone and come back!',

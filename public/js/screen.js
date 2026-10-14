@@ -1,43 +1,83 @@
-// Full-screen subpages (slide in from the right). Shared by profile + admin.
+// Full-screen subpages (slide in from the right). Stacked so admin sections return to the admin hub.
 import { $, tg } from './ui.js';
 
-let closer = null;
+/** @type {{ build: Function, opts: object, close: Function }[]} */
+const stack = [];
 
-/** build(close) → nodes to put inside #screen. opts.onClose runs after dismiss. */
+function hideShell() {
+  const el = $('#screen');
+  if (!el) return;
+  el.classList.remove('show');
+  el.setAttribute('aria-hidden', 'true');
+  try { tg.BackButton.hide(); } catch { /* ignore */ }
+  setTimeout(() => { if (!el.classList.contains('show')) el.replaceChildren(); }, 520);
+}
+
+function bindBack(close) {
+  try {
+    // Drop handlers from lower stack levels so only the top screen responds
+    for (const e of stack) {
+      try { tg.BackButton.offClick(e.close); } catch { /* ignore */ }
+    }
+    tg.BackButton.onClick(close);
+    tg.BackButton.show();
+  } catch { /* ignore */ }
+}
+
+function renderTop({ animate } = { animate: true }) {
+  const el = $('#screen');
+  if (!el) return;
+  const top = stack[stack.length - 1];
+  if (!top) {
+    hideShell();
+    return;
+  }
+  el.replaceChildren(...[].concat(top.build(top.close)).flat(Infinity).filter(Boolean));
+  el.scrollTop = 0;
+  el.removeAttribute('aria-hidden');
+  if (animate) {
+    el.classList.remove('show');
+    void el.offsetWidth;
+  }
+  el.classList.add('show');
+  bindBack(top.close);
+}
+
+/** build(close) → nodes to put inside #screen. opts.onClose runs after this level is dismissed. */
 export function openScreen(build, opts = {}) {
   const el = $('#screen');
   if (!el) return () => {};
-  if (closer) {
-    const prev = closer;
-    closer = null;
-    try { prev(true); } catch { /* ignore */ }
-  }
+
   let closed = false;
+  const entry = { build, opts, close: null };
   const close = (silent) => {
     if (closed) return;
+    if (stack[stack.length - 1] !== entry) return;
     closed = true;
-    if (closer === close) closer = null;
-    el.classList.remove('show');
-    el.setAttribute('aria-hidden', 'true');
-    try { tg.BackButton.offClick(close); if (!silent) tg.BackButton.hide(); } catch { /* ignore */ }
+    stack.pop();
+    try { tg.BackButton.offClick(close); } catch { /* ignore */ }
     try { opts.onClose && opts.onClose(); } catch { /* ignore */ }
-    setTimeout(() => { if (!el.classList.contains('show')) el.replaceChildren(); }, 520);
+    if (stack.length) {
+      // Re-open previous level (e.g. admin hub) instead of jumping to profile
+      renderTop({ animate: !silent });
+    } else {
+      hideShell();
+    }
   };
-  closer = close;
-  el.replaceChildren(...[].concat(build(close)).flat(Infinity).filter(Boolean));
-  el.scrollTop = 0;
-  el.removeAttribute('aria-hidden');
-  // force reflow so the slide-in animates
-  void el.offsetWidth;
-  el.classList.add('show');
-  try { tg.BackButton.onClick(close); tg.BackButton.show(); } catch { /* ignore */ }
+  entry.close = close;
+  stack.push(entry);
+  renderTop({ animate: true });
   return close;
 }
 
 export function closeScreen(silent) {
-  if (closer) closer(silent);
+  // Close the entire stack (tab change / leave profile)
+  while (stack.length) {
+    const top = stack[stack.length - 1];
+    top.close(silent || stack.length > 1);
+  }
 }
 
 export function screenOpen() {
-  return !!closer;
+  return stack.length > 0;
 }

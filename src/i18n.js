@@ -18,6 +18,13 @@ const STR = {
     draw: (n) => `🤝 Draw against ${n}.`,
     drawOffer: (n) => `🤝 ${n} offers a draw.`,
     friendJoined: (n) => `👋 ${n} joined through your invite. You are now friends. Challenge them to a game!`,
+    walletGranted: ({ diamonds, months, until }) => {
+      const lines = ['✅ Payment confirmed!'];
+      if (diamonds > 0) lines.push(`💎 +${diamonds} diamonds credited.`);
+      if (months > 0) lines.push(`★ Premium: +${months} month${months === 1 ? '' : 's'}.`);
+      if (until) lines.push(`Premium until ${until} (Tashkent).`);
+      return lines.join('\n');
+    },
     unknown: 'Tap the button below to start playing.',
     description: 'Play chess against the computer, online players or your friends, right inside Telegram.',
     shortDescription: 'Chess in Telegram: vs computer, online or friends',
@@ -37,6 +44,13 @@ const STR = {
     draw: (n) => `🤝 Ничья с ${n}.`,
     drawOffer: (n) => `🤝 ${n} предлагает ничью.`,
     friendJoined: (n) => `👋 ${n} присоединился(ась) по вашему приглашению. Теперь вы друзья. Вызовите на партию!`,
+    walletGranted: ({ diamonds, months, until }) => {
+      const lines = ['✅ Оплата подтверждена!'];
+      if (diamonds > 0) lines.push(`💎 +${diamonds} алмазов зачислено.`);
+      if (months > 0) lines.push(`★ Премиум: +${months} мес.`);
+      if (until) lines.push(`Премиум до ${until} (Ташкент).`);
+      return lines.join('\n');
+    },
     unknown: 'Нажмите кнопку ниже, чтобы начать игру.',
     description: 'Играйте в шахматы с компьютером, игроками онлайн или друзьями, прямо в Telegram.',
     shortDescription: 'Шахматы в Telegram: с компьютером, онлайн или с друзьями',
@@ -56,6 +70,13 @@ const STR = {
     draw: (n) => `🤝 ${n} bilan durang.`,
     drawOffer: (n) => `🤝 ${n} durang taklif qilmoqda.`,
     friendJoined: (n) => `👋 ${n} taklifingiz orqali qo'shildi. Endi do'stsiz. O'yinga chorlang!`,
+    walletGranted: ({ diamonds, months, until }) => {
+      const lines = ["✅ To'lov tasdiqlandi!"];
+      if (diamonds > 0) lines.push(`💎 +${diamonds} olmos hisobingizga qo'shildi.`);
+      if (months > 0) lines.push(`★ Premium: +${months} oy.`);
+      if (until) lines.push(`Premium ${until} gacha (Toshkent).`);
+      return lines.join('\n');
+    },
     unknown: "O'ynashni boshlash uchun pastdagi tugmani bosing.",
     description: "Kompyuter, onlayn o'yinchilar yoki do'stlaringiz bilan shaxmat o'ynang, to'g'ridan-to'g'ri Telegramda.",
     shortDescription: "Telegramda shaxmat: kompyuter, onlayn yoki do'stlar bilan",
@@ -75,6 +96,13 @@ const STR = {
     draw: (n) => `🤝 ${n} билан дуранг.`,
     drawOffer: (n) => `🤝 ${n} дуранг таклиф қилмоқда.`,
     friendJoined: (n) => `👋 ${n} таклифингиз орқали қўшилди. Энди дўстсиз. Ўйинга чорланг!`,
+    walletGranted: ({ diamonds, months, until }) => {
+      const lines = ['✅ Тўлов тасдиқланди!'];
+      if (diamonds > 0) lines.push(`💎 +${diamonds} олмос ҳисобингизга қўшилди.`);
+      if (months > 0) lines.push(`★ Премиум: +${months} ой.`);
+      if (until) lines.push(`Премиум ${until} гача (Тошкент).`);
+      return lines.join('\n');
+    },
     unknown: 'Ўйнашни бошлаш учун пастдаги тугмани босинг.',
     description: 'Компьютер, онлайн ўйинчилар ёки дўстларингиз билан шахмат ўйнанг, тўғридан-тўғри Телеграмда.',
     shortDescription: 'Телеграмда шахмат: компьютер, онлайн ёки дўстлар билан',

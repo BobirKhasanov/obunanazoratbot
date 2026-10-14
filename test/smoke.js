@@ -140,7 +140,7 @@ async function playMoves(game, players, moves, startPly = 0) {
 
     // ---------------------------------------------------------------- challenge + a full game
     let gid, fm;
-    await step('diamonds: +20 to inviter and +10 to new friend once; Premium is 1 month for 200💎 and can be renewed', async () => {
+    await step('diamonds: +20/+10 referral; Premium 1/3/6/12 months; pack order notifies admin', async () => {
       assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 20, 'inviter got 20 diamonds for the friend who joined');
       assert.strictEqual((await ok('B', 'GET', '/me')).user.diamonds, 10, 'new friend got 10 diamonds via referral');
       await ok('B', 'POST', '/friends/join', { userId: USERS.A.id }); // opening the link again must not pay again
@@ -149,33 +149,62 @@ async function playMoves(game, players, moves, startPly = 0) {
       const meta = (await ok('A', 'GET', '/me')).meta;
       assert.strictEqual(meta.PREMIUM_PRICE, 200);
       assert.ok(Array.isArray(meta.diamondPacks) && meta.diamondPacks.length >= 1);
+      assert.ok(Array.isArray(meta.premiumPlans) && meta.premiumPlans.some((p) => p.months === 12));
       assert.strictEqual(meta.payUsername, 'hasanovbobur');
-      await err('A', 'POST', '/premium/buy', null, 400, 'no_diamonds');
+
+      const adminBefore = tg.to(ADMIN_ID).length;
+      const ord = await ok('A', 'POST', '/shop/order', { diamonds: 100, sum: 100000 });
+      assert.strictEqual(ord.pack.diamonds, 100);
+      assert.ok(ord.notified >= 1);
+      const adminMsgs = tg.to(ADMIN_ID).slice(adminBefore);
+      assert.ok(adminMsgs.some((m) => /100/.test(m.body.text) && /Alice/.test(m.body.text)), 'admin got pack order');
+
+      await err('A', 'POST', '/premium/buy', { months: 1 }, 400, 'no_diamonds');
       await pg.q('UPDATE users SET diamonds = 200 WHERE id = $1', USERS.A.id);
-      const r = await ok('A', 'POST', '/premium/buy');
-      assert.deepStrictEqual([r.user.premium, r.user.diamonds], [true, 0]);
+      const r = await ok('A', 'POST', '/premium/buy', { months: 1 });
+      assert.deepStrictEqual([r.user.premium, r.user.diamonds, r.months], [true, 0, 1]);
       assert.ok(r.user.premiumUntil, 'premium_until set');
-      await pg.q('UPDATE users SET diamonds = 200 WHERE id = $1', USERS.A.id);
-      const r2 = await ok('A', 'POST', '/premium/buy');
+      await pg.q('UPDATE users SET diamonds = 500 WHERE id = $1', USERS.A.id);
+      const r2 = await ok('A', 'POST', '/premium/buy', { months: 3 });
       assert.strictEqual(r2.user.premium, true);
-      assert.ok(new Date(r2.user.premiumUntil) > new Date(r.user.premiumUntil), 'renewal extends expiry');
+      assert.strictEqual(r2.months, 3);
+      assert.ok(new Date(r2.user.premiumUntil) > new Date(r.user.premiumUntil), '3 months extends further');
     });
 
-    await step('admin shop settings + grant diamonds after payment', async () => {
+    await step('admin shop settings + grant diamonds/premium with notify', async () => {
       const shop = await ok('ADMIN', 'GET', '/admin/shop');
       assert.strictEqual(shop.shop.premiumPriceDiamonds, 200);
       const patched = await ok('ADMIN', 'PATCH', '/admin/shop', {
-        premiumPriceDiamonds: 150,
+        premiumPlans: [
+          { months: 1, diamonds: 150 },
+          { months: 3, diamonds: 400 },
+          { months: 6, diamonds: 700 },
+          { months: 12, diamonds: 1200 },
+        ],
         diamondPacks: [{ diamonds: 100, sum: 100000 }, { diamonds: 200, sum: 200000 }],
         payUsername: 'hasanovbobur',
       });
       assert.strictEqual(patched.shop.premiumPriceDiamonds, 150);
       assert.strictEqual((await ok('B', 'GET', '/me')).meta.PREMIUM_PRICE, 150);
       const before = (await ok('B', 'GET', '/me')).user.diamonds;
-      const g = await ok('ADMIN', 'POST', `/admin/users/${USERS.B.id}/diamonds`, { amount: 100 });
+      const bBefore = tg.to(USERS.B.id).length;
+      const g = await ok('ADMIN', 'POST', `/admin/users/${USERS.B.id}/diamonds`, { amount: 100, premiumMonths: 1 });
       assert.strictEqual(g.user.diamonds, before + 100);
-      // restore default price for later steps
-      await ok('ADMIN', 'PATCH', '/admin/shop', { premiumPriceDiamonds: 200 });
+      assert.strictEqual(g.user.premium, true);
+      assert.ok(g.user.premiumUntil);
+      const toB = tg.to(USERS.B.id).slice(bBefore);
+      assert.ok(toB.some((m) => /100/.test(m.body.text) || /💎/.test(m.body.text)), 'user notified about grant');
+      // restore default plans for later steps
+      await ok('ADMIN', 'PATCH', '/admin/shop', {
+        premiumPlans: [
+          { months: 1, diamonds: 200 },
+          { months: 3, diamonds: 500 },
+          { months: 6, diamonds: 900 },
+          { months: 12, diamonds: 1600 },
+        ],
+      });
+      // B received test Premium above — clear so the next style gate test still applies
+      await pg.q('UPDATE users SET premium = 0, premium_until = NULL WHERE id = $1', USERS.B.id);
     });
 
     await step('piece/board style: premium or admin only; invalid values rejected', async () => {

@@ -43,6 +43,13 @@ const DEFAULT_DIAMOND_PACKS = [
   { diamonds: 500, sum: 500000 },
   { diamonds: 1000, sum: 1000000 },
 ];
+const DEFAULT_PREMIUM_PLANS = [
+  { months: 1, diamonds: 200 },
+  { months: 3, diamonds: 500 },
+  { months: 6, diamonds: 900 },
+  { months: 12, diamonds: 1600 },
+];
+const PREMIUM_MONTH_OPTIONS = [1, 3, 6, 12];
 const DEFAULT_PAY_USERNAME = 'hasanovbobur';
 const REACTIONS = ['👍', '😀', '😮', '😢', '🔥', '👏', '🤔', '😎', '🎉', '🙈'];
 const MAX_OPEN_GAMES = 10;
@@ -159,9 +166,34 @@ function normalizeDiamondPacks(raw) {
   return out.length ? out : DEFAULT_DIAMOND_PACKS.slice();
 }
 
+function normalizePremiumPlans(raw, fallbackMonthPrice) {
+  let arr = raw;
+  if (typeof arr === 'string') {
+    try { arr = JSON.parse(arr); } catch { arr = null; }
+  }
+  const out = [];
+  if (Array.isArray(arr)) {
+    for (const p of arr) {
+      const months = Math.floor(Number(p && p.months));
+      const diamonds = Math.floor(Number(p && p.diamonds));
+      if (!PREMIUM_MONTH_OPTIONS.includes(months)) continue;
+      if (!(diamonds >= 1 && diamonds <= 1_000_000)) continue;
+      if (out.some((x) => x.months === months)) continue;
+      out.push({ months, diamonds });
+    }
+  }
+  out.sort((a, b) => a.months - b.months);
+  if (out.length) return out;
+  const base = Math.floor(Number(fallbackMonthPrice)) || PREMIUM_PRICE_FALLBACK;
+  return DEFAULT_PREMIUM_PLANS.map((p) => (
+    p.months === 1 ? { months: 1, diamonds: base } : { ...p }
+  ));
+}
+
 async function getShopSettings() {
-  const [priceRaw, packsRaw, payRaw] = await Promise.all([
+  const [priceRaw, plansRaw, packsRaw, payRaw] = await Promise.all([
     getSetting('premium_price_diamonds', String(PREMIUM_PRICE_FALLBACK)),
+    getSetting('premium_plans', JSON.stringify(DEFAULT_PREMIUM_PLANS)),
     getSetting('diamond_packs', JSON.stringify(DEFAULT_DIAMOND_PACKS)),
     getSetting('pay_username', DEFAULT_PAY_USERNAME),
   ]);
@@ -169,31 +201,45 @@ async function getShopSettings() {
   if (!(premiumPriceDiamonds >= 1 && premiumPriceDiamonds <= 1_000_000)) {
     premiumPriceDiamonds = PREMIUM_PRICE_FALLBACK;
   }
+  const premiumPlans = normalizePremiumPlans(plansRaw, premiumPriceDiamonds);
+  // Keep legacy single-month field in sync with the 1-month plan
+  const one = premiumPlans.find((p) => p.months === 1);
+  if (one) premiumPriceDiamonds = one.diamonds;
   let payUsername = String(payRaw || DEFAULT_PAY_USERNAME).replace(/^@/, '').trim().slice(0, 64);
   if (!/^[A-Za-z0-9_]{5,64}$/.test(payUsername)) payUsername = DEFAULT_PAY_USERNAME;
   return {
     premiumPriceDiamonds,
+    premiumPlans,
     diamondPacks: normalizeDiamondPacks(packsRaw),
     payUsername,
   };
 }
 
-/** Add one calendar month in Asia/Tashkent wall clock. */
+/** Add N calendar months in Asia/Tashkent wall clock. */
+function addMonthsTashkent(from, months) {
+  const n = Math.floor(Number(months));
+  if (!(n >= 1 && n <= 120)) throw bad('Invalid premium duration', 'bad_request');
+  let d = from instanceof Date ? new Date(from.getTime()) : new Date(from);
+  for (let i = 0; i < n; i++) {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    }).formatToParts(d);
+    const g = (t) => Number((parts.find((p) => p.type === t) || {}).value || 0);
+    let y = g('year'); let m = g('month'); let day = g('day');
+    const h = g('hour'); const mi = g('minute'); const s = g('second');
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    day = Math.min(day, last);
+    const pad = (x) => String(x).padStart(2, '0');
+    d = new Date(`${y}-${pad(m)}-${pad(day)}T${pad(h)}:${pad(mi)}:${pad(s)}+05:00`);
+  }
+  return d;
+}
+
 function addOneMonthTashkent(from) {
-  const d0 = from instanceof Date ? from : new Date(from);
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  }).formatToParts(d0);
-  const g = (t) => Number((parts.find((p) => p.type === t) || {}).value || 0);
-  let y = g('year'); let m = g('month'); let day = g('day');
-  const h = g('hour'); const mi = g('minute'); const s = g('second');
-  m += 1;
-  if (m > 12) { m = 1; y += 1; }
-  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  day = Math.min(day, last);
-  const pad = (n) => String(n).padStart(2, '0');
-  return new Date(`${y}-${pad(m)}-${pad(day)}T${pad(h)}:${pad(mi)}:${pad(s)}+05:00`);
+  return addMonthsTashkent(from, 1);
 }
 
 /** Soft-expire Premium flag when premium_until has passed. */
@@ -282,6 +328,7 @@ api.get('/me', wrap(async (req, res) => {
       LANGS, THEMES, PIECE_SETS, BOARD_THEMES, COLORS, REACTIONS,
       PREMIUM_PRICE: shop.premiumPriceDiamonds,
       REFERRAL_REWARD, REFERRAL_INVITEE_REWARD,
+      premiumPlans: shop.premiumPlans,
       diamondPacks: shop.diamondPacks,
       payUsername: shop.payUsername,
       botUsername: await getBotUsername(),
@@ -927,22 +974,58 @@ api.post('/friends/join', wrap(async (req, res) => {
   });
 }));
 
-// Spend diamonds on 1-month Premium (Tashkent calendar month); renewals extend from current expiry
+// Spend diamonds on Premium (1 / 3 / 6 / 12 Tashkent months); renewals extend from current expiry
 api.post('/premium/buy', wrap(async (req, res) => {
   const shop = await getShopSettings();
-  const price = shop.premiumPriceDiamonds;
+  const months = Math.floor(Number((req.body && req.body.months) ?? 1));
+  const plan = shop.premiumPlans.find((p) => p.months === months);
+  if (!plan) throw bad('Choose 1, 3, 6 or 12 months', 'bad_request');
+  const price = plan.diamonds;
   const u = await getUser.get(req.user.id);
   if (Number(u.diamonds || 0) < price) throw bad('Not enough diamonds', 'no_diamonds');
   const base = (u.premium_until && new Date(u.premium_until).getTime() > Date.now())
     ? new Date(u.premium_until)
     : new Date();
-  const until = addOneMonthTashkent(base);
+  const until = addMonthsTashkent(base, months);
   const r = await db.prepare(`
     UPDATE users SET diamonds = diamonds - ?, premium = 1, premium_until = ?
     WHERE id = ? AND diamonds >= ?
   `).run(price, until.toISOString(), req.user.id, price);
   if (!r.changes) throw bad('Not enough diamonds', 'no_diamonds');
-  res.json({ user: publicUser(await getUser.get(req.user.id), req.isAdmin) });
+  const next = publicUser(await getUser.get(req.user.id), req.isAdmin);
+  res.json({ user: next, months, price });
+}));
+
+/** User taps a diamond pack → notify admins so they can confirm payment and grant diamonds. */
+api.post('/shop/order', wrap(async (req, res) => {
+  const shop = await getShopSettings();
+  const diamonds = Math.floor(Number(req.body && req.body.diamonds));
+  const sum = Math.floor(Number(req.body && req.body.sum));
+  const pack = shop.diamondPacks.find((p) => p.diamonds === diamonds && p.sum === sum);
+  if (!pack) throw bad('Unknown diamond pack', 'bad_request');
+  const u = req.user;
+  const uname = u.username ? `@${u.username}` : '—';
+  const som = pack.sum >= 1000 && pack.sum % 1000 === 0
+    ? `${pack.sum / 1000} ming so'm`
+    : `${pack.sum} so'm`;
+  const text = [
+    '💎 Olmos buyurtmasi',
+    `User: ${u.first_name || 'Player'} (${uname})`,
+    `ID: ${u.id}`,
+    `Paket: ${pack.diamonds} 💎 — ${som}`,
+    '',
+    'To\'lovni tekshirib, Admin → Users orqali olmos bering.',
+  ].join('\n');
+  let notified = 0;
+  for (const adminId of ADMIN_IDS) {
+    try {
+      await bot.api.sendMessage(adminId, text);
+      notified++;
+    } catch (e) {
+      console.error('[shop/order] admin notify failed:', adminId, e.description || e.message);
+    }
+  }
+  res.json({ ok: true, pack, notified, payUsername: shop.payUsername });
 }));
 
 api.delete('/friends/:id', wrap(async (req, res) => {
@@ -1130,21 +1213,62 @@ admin.post('/users/:id/block', wrap(async (req, res) => {
   res.json({ ok: true, blocked: !!blocked });
 }));
 
-/** Grant (or remove) diamonds after a real payment was accepted. */
+/**
+ * Grant diamonds and/or Premium months after payment.
+ * Body: { amount?: number, premiumMonths?: 1|3|6|12 }
+ */
 admin.post('/users/:id/diamonds', wrap(async (req, res) => {
   const id = intParam(req.params.id);
-  const amount = Math.floor(Number(req.body && req.body.amount));
-  if (!Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 1_000_000) {
-    throw bad('Amount must be a non-zero integer (±1…1000000)', 'bad_request');
+  const amount = Math.floor(Number(req.body && req.body.amount)) || 0;
+  const premiumMonths = Math.floor(Number(req.body && req.body.premiumMonths)) || 0;
+  if (!amount && !premiumMonths) {
+    throw bad('Provide diamonds amount and/or premium months', 'bad_request');
+  }
+  if (amount && (Math.abs(amount) > 1_000_000)) {
+    throw bad('Amount must be ±1…1000000', 'bad_request');
+  }
+  if (premiumMonths && !PREMIUM_MONTH_OPTIONS.includes(premiumMonths)) {
+    throw bad('Premium months must be 1, 3, 6 or 12', 'bad_request');
   }
   const u = await getUser.get(id);
   if (!u) throw new HttpError(404, 'User not found', 'notfound');
   if (amount < 0 && Number(u.diamonds || 0) + amount < 0) {
     throw bad('Not enough diamonds to remove', 'no_diamonds');
   }
-  await db.prepare('UPDATE users SET diamonds = diamonds + ? WHERE id = ?').run(amount, id);
-  const next = await getUser.get(id);
-  res.json({ ok: true, user: publicUser(next, isAdmin(next.id)) });
+
+  let untilIso = u.premium_until || null;
+  if (premiumMonths > 0) {
+    const base = (u.premium_until && new Date(u.premium_until).getTime() > Date.now())
+      ? new Date(u.premium_until)
+      : new Date();
+    untilIso = addMonthsTashkent(base, premiumMonths).toISOString();
+  }
+
+  if (amount && premiumMonths > 0) {
+    await db.prepare('UPDATE users SET diamonds = diamonds + ?, premium = 1, premium_until = ? WHERE id = ?')
+      .run(amount, untilIso, id);
+  } else if (amount) {
+    await db.prepare('UPDATE users SET diamonds = diamonds + ? WHERE id = ?').run(amount, id);
+  } else {
+    await db.prepare('UPDATE users SET premium = 1, premium_until = ? WHERE id = ?').run(untilIso, id);
+  }
+
+  const nextRow = await getUser.get(id);
+  const next = publicUser(nextRow, isAdmin(nextRow.id));
+  realtime.send(id, {
+    t: 'wallet',
+    user: next,
+    granted: { diamonds: amount || 0, premiumMonths: premiumMonths || 0 },
+  });
+  const untilLabel = next.premiumUntilTashkent
+    ? next.premiumUntilTashkent.replace('T', ' ')
+    : null;
+  await notify.toUser(id, (T) => T.walletGranted({
+    diamonds: amount > 0 ? amount : 0,
+    months: premiumMonths || 0,
+    until: untilLabel,
+  }), { force: true, effect: 'party' });
+  res.json({ ok: true, user: next });
 }));
 
 admin.get('/shop', wrap(async (req, res) => {
@@ -1153,10 +1277,20 @@ admin.get('/shop', wrap(async (req, res) => {
 
 admin.patch('/shop', wrap(async (req, res) => {
   const b = req.body || {};
-  if (b.premiumPriceDiamonds !== undefined) {
+  if (b.premiumPlans !== undefined) {
+    const plans = normalizePremiumPlans(b.premiumPlans, PREMIUM_PRICE_FALLBACK);
+    if (plans.length < 1) throw bad('Need at least one premium plan', 'bad_request');
+    await setSetting('premium_plans', JSON.stringify(plans));
+    const one = plans.find((p) => p.months === 1);
+    if (one) await setSetting('premium_price_diamonds', String(one.diamonds));
+  } else if (b.premiumPriceDiamonds !== undefined) {
     const n = Math.floor(Number(b.premiumPriceDiamonds));
     if (!(n >= 1 && n <= 1_000_000)) throw bad('Premium price must be 1…1000000 diamonds', 'bad_request');
     await setSetting('premium_price_diamonds', String(n));
+    const shop = await getShopSettings();
+    const plans = shop.premiumPlans.map((p) => (p.months === 1 ? { ...p, diamonds: n } : p));
+    if (!plans.some((p) => p.months === 1)) plans.unshift({ months: 1, diamonds: n });
+    await setSetting('premium_plans', JSON.stringify(plans));
   }
   if (b.diamondPacks !== undefined) {
     const packs = normalizeDiamondPacks(b.diamondPacks);
