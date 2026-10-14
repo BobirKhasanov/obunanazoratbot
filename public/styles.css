@@ -734,18 +734,22 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 /* ---------- home announcements carousel ---------- */
 .ann-carousel {
   position: relative; width: 100%; margin: 0 0 14px; border-radius: 22px; overflow: hidden;
-  min-height: 0; touch-action: pan-y; contain: layout paint;
+  min-height: 0; touch-action: pan-x; contain: layout paint; user-select: none;
+  -webkit-user-select: none;
 }
 .ann-carousel:not([hidden]) { min-height: 110px; }
 .ann-track {
-  display: flex; width: 100%;
-  transition: transform 0.55s var(--ease);
+  display: flex; width: 100%; will-change: transform;
+  transition: transform 0.72s cubic-bezier(0.22, 1, 0.36, 1);
 }
+.ann-track.dragging { transition: none; }
 .ann-slide {
-  flex: 0 0 100%; width: 100%; min-height: 110px; padding: 16px 18px;
+  flex: 0 0 100%; width: 100%; min-height: 110px; padding: 16px 18px 22px;
   display: flex; align-items: center; gap: 12px; text-align: left; color: #fff;
-  position: relative; overflow: hidden; border: 0;
+  position: relative; overflow: hidden; border: 0; cursor: grab;
+  -webkit-user-drag: none;
 }
+.ann-slide:active { cursor: grabbing; }
 .ann-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; z-index: 1; }
 .ann-title { font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
 .ann-body { font-weight: 700; line-height: 1.25; opacity: 0.95; }

@@ -235,7 +235,7 @@ refreshers.play = async function renderPlay() {
   const banner = (cls, emoji, title, sub, fn) => h('button.home-banner.' + cls, { onclick: () => { haptic('light'); fn(); } },
     h('div.home-banner-text', h('b', title), h('small', sub)), h('span.home-banner-art', emoji));
   const card = (emoji, label, fn) => h('button.pcard', { onclick: () => { haptic('light'); fn(); } }, h('span.pcard-art', emoji), h('b', label));
-  const annHost = h('div.ann-carousel', { hidden: true });
+  const annHost = h('div.ann-carousel', { hidden: true, 'data-noswipe': '' });
   const nodes = [
     h('div.top', h('h1', '♟ ' + t('app')), h('div.pills', h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount })))),
     annHost,
