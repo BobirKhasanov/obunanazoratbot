@@ -6,12 +6,15 @@ import { openAdmin } from './admin.js';
 import { Chess } from '/vendor/chess.js';
 import { Board } from './board.js';
 import { PUZZLES, goodMoves, mateIn } from './puzzles.js';
+import { normalizeTimeControl } from './time.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
 let selectedTime = 'any';
 const TABS = ['play', 'puzzles', 'rankings', 'live', 'profile'];
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const gameMeta = () => ({ me: { id: state.me.id, name: state.me.firstName }, botUsername: state.meta.botUsername, reactions: state.meta.REACTIONS });
+/** Exact home-screen preset sent to the server (Any → untimed classic). */
+const selectedPreset = () => normalizeTimeControl(selectedTime === 'any' ? 'classic' : selectedTime);
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
@@ -51,17 +54,16 @@ async function refresh(which = state.tab) {
 // ---------- actions ----------
 const openOnline = (g) => openGame({ kind: 'online', game: g, meta: gameMeta() }, () => refresh());
 const rankingCategory = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapid', classic: 'Classic' };
-const selectedControlCategory = () => selectedTime === 'any' ? 'classic' : selectedTime === '1+0' ? 'bullet' : ['3+2', '5+0'].includes(selectedTime) ? 'blitz' : 'rapid';
 let selectedRanking = 'bullet';
 async function startQuick() {
-  try { const r = await api('POST', '/games/quick', { timeControl: selectedControlCategory() }); openOnline(r.game); } catch (e) { fail(e); }
+  try { const r = await api('POST', '/games/quick', { timeControl: selectedPreset() }); openOnline(r.game); } catch (e) { fail(e); }
 }
 async function startFriendGame() {
-  try { const r = await api('POST', '/games'); openOnline(r.game); } catch (e) { fail(e); }
+  try { const r = await api('POST', '/games', { timeControl: selectedPreset() }); openOnline(r.game); } catch (e) { fail(e); }
 }
 async function challenge(id) {
   try {
-    const r = await api('POST', '/games', { opponentId: id, timeControl: selectedControlCategory() });
+    const r = await api('POST', '/games', { opponentId: id, timeControl: selectedPreset() });
     haptic('success');
     showChallengeSent(r.game, 10000);
     refresh();

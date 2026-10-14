@@ -14,9 +14,11 @@ const nameOf = db.prepare('SELECT first_name FROM users WHERE id = ?');
 const name = async (id) => ((await nameOf.get(id)) || {}).first_name || 'Player';
 
 async function remindMoves() {
+  // Live-clock games (bullet/blitz/rapid) do not need "your move" DMs — the clock is the reminder
   const rows = await db.prepare(`
     SELECT * FROM games
-    WHERE status = 'active' AND last_move_at < now() - (? * interval '1 hour')
+    WHERE status = 'active' AND white_ms IS NULL
+      AND last_move_at < now() - (? * interval '1 hour')
   `).all(REMIND_AFTER_HOURS);
 
   for (const g of rows) {
@@ -37,9 +39,10 @@ async function housekeeping(onGameChanged) {
   // Invitations nobody answered within a day
   await db.prepare("UPDATE games SET status = 'cancelled' WHERE status IN ('open', 'invited') AND updated_at < now() - interval '1 day'").run();
 
-  // Games where nobody moved for a week: the player who was waiting wins
+  // Untimed games where nobody moved for a week: the player who was waiting wins
   const dead = await db.prepare(`
-    SELECT * FROM games WHERE status = 'active' AND last_move_at < now() - (? * interval '1 day')
+    SELECT * FROM games WHERE status = 'active' AND white_ms IS NULL
+      AND last_move_at < now() - (? * interval '1 day')
   `).all(ABANDON_AFTER_DAYS);
   for (const g of dead) {
     const result = turnOf(parseMoves(g.moves)) === 'w' ? '0-1' : '1-0';

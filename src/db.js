@@ -100,11 +100,14 @@ CREATE TABLE IF NOT EXISTS games (
   invited_id BIGINT,
   status TEXT NOT NULL,                     -- open | invited | active | finished | cancelled
   mode TEXT NOT NULL DEFAULT 'friend',      -- friend | online
-  time_control TEXT NOT NULL DEFAULT 'classic',
+  time_control TEXT NOT NULL DEFAULT 'classic', -- 1+0 | 3+2 | 5+0 | 10+0 | 15+10 | classic
   result TEXT,                              -- 1-0 | 0-1 | 1/2-1/2
-  reason TEXT,                              -- checkmate, resign, stalemate, agreement, ...
+  reason TEXT,                              -- checkmate, resign, stalemate, agreement, timeout, ...
   moves JSONB NOT NULL DEFAULT '[]'::jsonb,
   draw_by TEXT,                             -- colour that currently offers a draw
+  white_ms BIGINT,                          -- remaining clock (null = untimed / classic)
+  black_ms BIGINT,
+  turn_started_at TIMESTAMPTZ,              -- when the side-to-move clock started
   notified_ply INTEGER NOT NULL DEFAULT -1,
   reminded_ply INTEGER NOT NULL DEFAULT -1,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -161,6 +164,11 @@ CREATE TABLE IF NOT EXISTS broadcasts (
 -- The API is served only by this server (service connection); nobody should reach the tables through Supabase's public REST API
 ALTER TABLE users ADD COLUMN IF NOT EXISTS diamonds BIGINT NOT NULL DEFAULT 0;   -- in-app currency
 ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER NOT NULL DEFAULT 0;   -- 1 once bought with diamonds
+ALTER TABLE games ADD COLUMN IF NOT EXISTS white_ms BIGINT;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS black_ms BIGINT;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS turn_started_at TIMESTAMPTZ;
+-- Allow home-screen presets (and keep legacy category values already stored)
+ALTER TABLE games DROP CONSTRAINT IF EXISTS games_time_control_check;
 -- one reward payout per invited person, ever (inviter + invitee; PK blocks farming)
 CREATE TABLE IF NOT EXISTS referrals (
   invitee_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

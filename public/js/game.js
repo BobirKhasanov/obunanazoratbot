@@ -4,6 +4,7 @@ import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatE
 import { t, getLang } from './i18n.js';
 import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
+import { formatClock, remainingMs, isTimed } from './time.js';
 
 const AI_KEY = 'chess-ai-game';
 const EMOTES = ['🤔', '😎', '😮', '👏', '🙈', '😀'];
@@ -50,7 +51,7 @@ function captured(chess) {
   }
   return { lost, score };
 }
-const reasonKey = (r) => ({ checkmate: 'reason_checkmate', resign: 'reason_resign', stalemate: 'reason_stalemate', agreement: 'reason_agreement', insufficient: 'reason_insufficient', repetition: 'reason_repetition', fifty: 'reason_fifty', abandoned: 'reason_abandoned' }[r] || 'reason_checkmate');
+const reasonKey = (r) => ({ checkmate: 'reason_checkmate', resign: 'reason_resign', stalemate: 'reason_stalemate', agreement: 'reason_agreement', insufficient: 'reason_insufficient', repetition: 'reason_repetition', fifty: 'reason_fifty', abandoned: 'reason_abandoned', timeout: 'reason_timeout', timeout_draw: 'reason_timeout_draw' }[r] || 'reason_checkmate');
 
 // ---------- the screen ----------
 export function openGame(opts, onClose) {
@@ -60,6 +61,7 @@ export function openGame(opts, onClose) {
   const S = ctx = {
     kind: opts.kind, onClose, level: opts.level || 3, colour: opts.colour || 'w', id: opts.game ? opts.game.id : null,
     moves: [], chess: new Chess(), over: false, busy: false, game: opts.game || null, flipped: false, meta: opts.meta || {}, thinking: false,
+    clockTimer: null, flagClaimed: false,
   };
 
   const bar = (cls) => ({
@@ -95,13 +97,56 @@ export function openGame(opts, onClose) {
     };
   }
 
+  function sideClock(side) {
+    const g = S.game;
+    if (!g || !g.clock) return null;
+    if (g.status === 'open' || g.status === 'invited') {
+      const base = g.clock.initialMs;
+      const inc = g.clock.incrementMs || 0;
+      return formatClock(base) + (inc ? `+${inc / 1000}` : '');
+    }
+    return formatClock(remainingMs(g.clock, side, g.turn, g.status));
+  }
+
   function fillBar(b, p, colour, cap, ai) {
     b.av.replaceChildren(ai ? h('div.avatar.ai', icon('cpu', 22)) : avatar(p.name, p.id));
     b.name.textContent = p.name;
-    b.sub.textContent = colour === 'w' ? t('white') : t('black');
+    const clock = sideClock(colour);
+    b.sub.textContent = clock != null ? clock : (colour === 'w' ? t('white') : t('black'));
+    const ms = S.game && S.game.clock && S.game.status === 'active'
+      ? remainingMs(S.game.clock, colour, S.game.turn, S.game.status) : null;
+    b.el.classList.toggle('low', ms != null && ms <= 20_000);
     b.cap.replaceChildren(...cap.lost[colour === 'w' ? 'b' : 'w'].map((k) => h('span.cp', { html: pieceSvg(colour === 'w' ? 'b' : 'w', k) })));
     const diff = (colour === 'w' ? 1 : -1) * cap.score;
     b.mat.textContent = diff > 0 ? `+${diff}` : '';
+  }
+
+  function syncClocks() {
+    if (!ctx || ctx !== S || S.kind !== 'online' || !S.game || !S.game.clock || S.over) return;
+    if (S.game.status !== 'active') return;
+    const ori = orientation();
+    const oppCol = S.colour === 'w' ? 'b' : 'w';
+    const topIsOpp = ori === S.colour;
+    const topSide = topIsOpp ? oppCol : S.colour;
+    const botSide = topIsOpp ? S.colour : oppCol;
+    top.sub.textContent = sideClock(topSide) || '';
+    bot.sub.textContent = sideClock(botSide) || '';
+    const topMs = remainingMs(S.game.clock, topSide, S.game.turn, S.game.status);
+    const botMs = remainingMs(S.game.clock, botSide, S.game.turn, S.game.status);
+    top.el.classList.toggle('low', topMs != null && topMs <= 20_000);
+    bot.el.classList.toggle('low', botMs != null && botMs <= 20_000);
+    if (!S.flagClaimed && (topMs === 0 || botMs === 0)) {
+      S.flagClaimed = true;
+      api('POST', `/games/${S.id}/flag`).then((r) => applyServer(r.game, true)).catch(() => { S.flagClaimed = false; });
+    }
+  }
+
+  function armClock() {
+    clearInterval(S.clockTimer);
+    S.clockTimer = null;
+    if (S.kind !== 'online' || !S.game || !S.game.clock || S.game.status !== 'active' || S.over) return;
+    S.clockTimer = setInterval(syncClocks, 200);
+    syncClocks();
   }
 
   function render(animate = true) {
@@ -134,6 +179,7 @@ export function openGame(opts, onClose) {
     const san = c.history(); moveStrip.replaceChildren(...san.map((m, i) => h('span' + (i === san.length - 1 ? '.cur' : ''), i % 2 === 0 ? `${i / 2 + 1}. ${m}` : m)));
     moveStrip.scrollLeft = moveStrip.scrollWidth;
     renderActions(); renderBanner();
+    armClock();
   }
 
   function renderBanner() {
@@ -151,9 +197,10 @@ export function openGame(opts, onClose) {
           if (!link) return toast(t('e_server'), true);
           if (await copyText(link)) toast(t('link_copied'));
         };
+        const tcHint = g.timeControl && g.timeControl !== 'classic' ? ` · ${g.timeControl}` : '';
         banner.append(
           h('b', g.status === 'invited' ? t('wait_invite', { name: (g.opponent || {}).name || '' }) : (g.mode === 'online' ? t('searching') : t('wait_friend'))),
-          h('small', g.status === 'invited' ? t('wait_invite_sub') : (g.mode === 'online' ? t('searching_sub') : t('wait_friend_sub'))),
+          h('small', (g.status === 'invited' ? t('wait_invite_sub') : (g.mode === 'online' ? t('searching_sub') : t('wait_friend_sub'))) + tcHint),
           h('div.row2',
             g.mode === 'friend' && g.status === 'open' ? h('button.btn.sm', { onclick: shareFriend }, icon('share', 18), t('share_link')) : null,
             g.mode === 'friend' && g.status === 'open' ? h('button.btn.sm.ghost', { onclick: copyFriend }, icon('link', 18), t('copy_link')) : null,
@@ -287,7 +334,7 @@ export function openGame(opts, onClose) {
     sheet((close) => [
       h('div.result', h('div.result-emoji', emo), h('h2', ttl), h('p.muted', t(reasonKey(reason)))),
       S.kind === 'ai' ? h('button.btn', { onclick: () => { close(); const o = { kind: 'ai', level: S.level, colour: S.colour === 'w' ? 'b' : 'w', meta: S.meta }; const cb = S.onClose, st = S.onStats; openGame(o, cb); ctx.onStats = st; } }, t('play_again')) : null,
-      S.kind === 'online' && S.game.opponent ? h('button.btn', { onclick: async () => { close(); try { const r = await api('POST', '/games', { opponentId: S.game.opponent.id }); closeNow(); openGame({ kind: 'online', game: r.game, meta: S.meta }, S.onClose); } catch (e) { fail(e); } } }, t('rematch')) : null,
+      S.kind === 'online' && S.game.opponent ? h('button.btn', { onclick: async () => { close(); try { const r = await api('POST', '/games', { opponentId: S.game.opponent.id, timeControl: S.game.timeControl || 'classic' }); closeNow(); openGame({ kind: 'online', game: r.game, meta: S.meta }, S.onClose); } catch (e) { fail(e); } } }, t('rematch')) : null,
       h('button.btn.ghost', { onclick: () => { close(); closeGame(); } }, t('close')),
     ]);
   }
@@ -309,7 +356,12 @@ export function openGame(opts, onClose) {
       return;
     }
     if (g.status === 'cancelled' && was !== 'cancelled') { toast(was === 'invited' ? t('challenge_expired') : t('opponent_left'), true); closeGame(); return; }
-    if (g.status === 'active' && was !== 'active') { toast(t('you_are', { c: g.you === 'w' ? t('white') : t('black') })); haptic('success'); }
+    if (g.status === 'active' && was !== 'active') {
+      const tc = isTimed(g.timeControl) ? ` · ${g.timeControl}` : '';
+      toast(t('you_are', { c: g.you === 'w' ? t('white') : t('black') }) + tc);
+      haptic('success');
+      S.flagClaimed = false;
+    }
     S.over = g.status === 'finished';
     render(grew);
   }
@@ -335,6 +387,7 @@ export function openGame(opts, onClose) {
 function closeNow() {
   if (!ctx) return;
   if (ctx.unsub) ctx.unsub();
+  clearInterval(ctx.clockTimer);
   ctx.token = null; clearTimeout(ctx.emoteT);
   const root = $('#game');
   root.classList.remove('show'); root.setAttribute('aria-hidden', 'true');

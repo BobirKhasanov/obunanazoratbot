@@ -211,11 +211,13 @@ async function playMoves(game, players, moves, startPly = 0) {
       }
 
       const challenge = (await ok('A', 'POST', '/games', {
-        opponentId: USERS.B.id, timeControl: 'bullet',
+        opponentId: USERS.B.id, timeControl: '1+0',
       })).game;
-      assert.strictEqual(challenge.timeControl, 'bullet');
+      assert.strictEqual(challenge.timeControl, '1+0');
+      assert.strictEqual(challenge.timeCategory, 'bullet');
       const joined = (await ok('B', 'POST', `/games/${challenge.id}/join`)).game;
       assert.strictEqual(joined.status, 'active');
+      assert.ok(joined.clock && joined.clock.whiteMs === 60_000 && joined.clock.blackMs === 60_000, 'bullet clocks start at 1:00');
       await ok('A', 'POST', `/games/${challenge.id}/resign`);
 
       const leaderboard = (await ok('A', 'GET', '/rankings?category=bullet')).rankings;

@@ -10,10 +10,14 @@ const { HttpError, bad } = require('./errors');
 const { LANGS, fromTelegram } = require('./i18n');
 const realtime = require('./realtime');
 const notify = require('./notify');
-const { applyMove, turnOf, parseMoves, movesJson } = require('./game');
+const { applyMove, turnOf, parseMoves, movesJson, replay } = require('./game');
 const { sendPost, COLORS } = require('./posts');
 const { createBot, setupMenu } = require('./bot');
 const { startScheduler } = require('./scheduler');
+const {
+  normalizeTimeControl, presetOf, categoryOf, isTimed,
+  settleClocks, afterMoveClocks,
+} = require('./time');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
@@ -206,19 +210,59 @@ api.post('/ping', wrap(async (req, res) => res.json({ ok: true })));
 // ---------- games ----------
 const getGame = db.prepare('SELECT * FROM games WHERE id = ?');
 
+function clockPayload(row, now = Date.now()) {
+  const tc = normalizeTimeControl(row.time_control);
+  const spec = presetOf(tc);
+  if (!isTimed(tc) || row.white_ms == null || row.black_ms == null) return null;
+  // Stored remaining at last move; clients drain the active side using turnStartedAt
+  return {
+    whiteMs: Number(row.white_ms),
+    blackMs: Number(row.black_ms),
+    turnStartedAt: row.status === 'active' && row.turn_started_at
+      ? (row.turn_started_at instanceof Date ? row.turn_started_at.toISOString() : row.turn_started_at)
+      : null,
+    serverNow: new Date(now).toISOString(),
+    initialMs: spec.baseMs,
+    incrementMs: spec.incMs,
+  };
+}
+
 async function gameFor(row, uid, full = true) {
   const moves = parseMoves(row.moves);
   const you = row.white_id === uid ? 'w' : row.black_id === uid ? 'b' : null;
   const opponentId = [row.creator_id, row.invited_id, row.white_id, row.black_id].find((x) => x && x !== uid) || null;
+  const tc = normalizeTimeControl(row.time_control);
   const g = {
-    id: row.id, status: row.status, mode: row.mode, timeControl: row.time_control || 'classic', you, creator: row.creator_id, invitedId: row.invited_id,
+    id: row.id, status: row.status, mode: row.mode, timeControl: tc, timeCategory: categoryOf(tc),
+    you, creator: row.creator_id, invitedId: row.invited_id,
     white: await person(row.white_id), black: await person(row.black_id), opponent: await person(opponentId),
     ply: moves.length, turn: turnOf(moves), result: row.result, reason: row.reason,
     drawBy: row.draw_by, updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+    clock: clockPayload(row),
   };
   if (row.status === 'invited' && row.creator_id === uid) g.invitees = await Promise.all((await invitesOf(row.id)).map(person));
   if (full) g.moves = moves;
   return g;
+}
+
+/** Timeout: loser flagged. Only a bare king for the winner → draw. */
+async function finishTimeout(row, flaggedColour) {
+  const chess = replay(parseMoves(row.moves));
+  const winner = flaggedColour === 'w' ? 'b' : 'w';
+  let mating = false;
+  for (const rank of chess.board()) {
+    for (const p of rank) if (p && p.color === winner && p.type !== 'k') { mating = true; break; }
+    if (mating) break;
+  }
+  const result = mating ? (flaggedColour === 'w' ? '0-1' : '1-0') : '1/2-1/2';
+  return finish(row, result, mating ? 'timeout' : 'timeout_draw');
+}
+
+async function claimFlagIfNeeded(row) {
+  if (row.status !== 'active' || !isTimed(row.time_control) || row.white_ms == null) return row;
+  const settled = settleClocks(row);
+  if (!settled.flagged) return row;
+  return finishTimeout(row, settled.flagged);
 }
 
 const inviteExpired = (row) => row.status === 'invited' && Date.now() - new Date(row.updated_at).getTime() > INVITE_TTL_MS;
@@ -258,9 +302,14 @@ const areFriends = async (a, b) => !!(await db.prepare('SELECT 1 FROM friends WH
 /** Seat the joiner next to the creator (random colours) and start the game. Only one joiner can win the race. */
 async function startGame(row, joinerId) {
   const creatorWhite = Math.random() < 0.5;
+  const tc = normalizeTimeControl(row.time_control);
+  const spec = presetOf(tc);
+  const whiteId = creatorWhite ? row.creator_id : joinerId;
+  const blackId = creatorWhite ? joinerId : row.creator_id;
   const r = await db.prepare(`UPDATE games SET status = 'active', white_id = ?, black_id = ?, invited_id = ?,
+    time_control = ?, white_ms = ?, black_ms = ?, turn_started_at = CASE WHEN ?::bigint IS NULL THEN NULL ELSE now() END,
     updated_at = now(), last_move_at = now() WHERE id = ? AND status IN ('open', 'invited')`)
-    .run(creatorWhite ? row.creator_id : joinerId, creatorWhite ? joinerId : row.creator_id, joinerId, row.id);
+    .run(whiteId, blackId, joinerId, tc, spec.baseMs, spec.baseMs, spec.baseMs, row.id);
   if (!r.changes) throw bad('This game is no longer available', 'game_unavailable'); // somebody else was faster
   if (row.mode === 'friend') await befriend(row.creator_id, joinerId); // playing through an invite makes you friends
   await dropInvites(row, joinerId); // the others are told that someone was faster
@@ -273,10 +322,12 @@ async function startGame(row, joinerId) {
   return next;
 }
 
+const parseTimeControl = (raw) => normalizeTimeControl(raw);
+
 // Online match-making: pair with someone who is waiting right now, otherwise wait
 api.post('/games/quick', wrap(async (req, res) => {
   const uid = req.user.id;
-  const timeControl = ['bullet', 'blitz', 'rapid', 'classic'].includes(req.body && req.body.timeControl) ? req.body.timeControl : 'classic';
+  const timeControl = parseTimeControl(req.body && req.body.timeControl);
   const waiting = (await db.prepare("SELECT * FROM games WHERE status = 'open' AND mode = 'online' AND time_control = ? AND creator_id != ? ORDER BY created_at LIMIT 20").all(timeControl, uid))
     .find((g) => realtime.isOnline(g.creator_id));
   if (waiting) return res.json({ game: await gameFor(await startGame(waiting, uid), uid) });
@@ -295,7 +346,7 @@ api.post('/games/quick', wrap(async (req, res) => {
 api.post('/games', wrap(async (req, res) => {
   const uid = req.user.id;
   const b = req.body || {};
-  const timeControl = ['bullet', 'blitz', 'rapid', 'classic'].includes(b.timeControl) ? b.timeControl : 'classic';
+  const timeControl = parseTimeControl(b.timeControl);
   const wanted = [...new Set((Array.isArray(b.opponentIds) ? b.opponentIds : b.opponentId != null ? [b.opponentId] : []).map(intParam))].slice(0, 10);
   await ensureRoom(uid);
 
@@ -399,7 +450,8 @@ async function finish(row, result, reason) {
 }
 
 async function activeGame(id, uid) {
-  const row = await loadGame(id, uid);
+  let row = await loadGame(id, uid);
+  if (row.status === 'active') row = await claimFlagIfNeeded(row);
   if (row.status !== 'active') throw bad('The game is over', 'game_over');
   return { row, colour: row.white_id === uid ? 'w' : 'b' };
 }
@@ -412,10 +464,22 @@ api.post('/games/:id/move', wrap(async (req, res) => {
   const moves = parseMoves(row.moves);
   if (turnOf(moves) !== colour) throw bad('Not your turn', 'not_your_turn');
 
+  const now = Date.now();
+  const clocks = afterMoveClocks(row, colour, now);
+  if (clocks && clocks.flagged) {
+    const next = await finishTimeout(row, clocks.flagged);
+    return res.json({ game: await gameFor(next, uid) });
+  }
+
   const r = applyMove(moves, from, to, promotion);
   const ply = r.moves.length;
-  const upd = await db.prepare(`UPDATE games SET moves = ?, draw_by = NULL, updated_at = now(), last_move_at = now()
-    WHERE id = ? AND status = 'active' AND moves::text = ?`).run(movesJson(r.moves), row.id, movesJson(row.moves));
+  const upd = clocks
+    ? await db.prepare(`UPDATE games SET moves = ?, draw_by = NULL, white_ms = ?, black_ms = ?, turn_started_at = now(),
+        updated_at = now(), last_move_at = now()
+      WHERE id = ? AND status = 'active' AND moves::text = ?`)
+      .run(movesJson(r.moves), clocks.whiteMs, clocks.blackMs, row.id, movesJson(row.moves))
+    : await db.prepare(`UPDATE games SET moves = ?, draw_by = NULL, updated_at = now(), last_move_at = now()
+      WHERE id = ? AND status = 'active' AND moves::text = ?`).run(movesJson(r.moves), row.id, movesJson(row.moves));
   if (!upd.changes) throw bad('Not your turn', 'not_your_turn'); // another move got in first
 
   let next;
@@ -425,12 +489,22 @@ api.post('/games/:id/move', wrap(async (req, res) => {
     next = await getGame.get(row.id);
     await pushGame(next);
     const other = colour === 'w' ? row.black_id : row.white_id;
-    if (!realtime.isOnline(other) && row.notified_ply < ply) {
+    // Timed games rely on the clock; only ping Telegram for untimed / classic
+    if (!clocks && !realtime.isOnline(other) && row.notified_ply < ply) {
       await db.prepare('UPDATE games SET notified_ply = ? WHERE id = ?').run(ply, row.id);
       const me = (await person(uid)).name;
       notify.toUser(other, (T) => T.yourMove(me), { gameId: row.id });
     }
   }
+  res.json({ game: await gameFor(next, uid) });
+}));
+
+/** Either player may claim a flag when a live clock has hit zero. */
+api.post('/games/:id/flag', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const row = await loadGame(req.params.id, uid);
+  if (row.status !== 'active') return res.json({ game: await gameFor(row, uid) });
+  const next = await claimFlagIfNeeded(row);
   res.json({ game: await gameFor(next, uid) });
 }));
 
@@ -499,7 +573,13 @@ api.get('/rankings', wrap(async (req, res) => {
         SUM(CASE WHEN (g.white_id = u.id AND g.result = '0-1') OR (g.black_id = u.id AND g.result = '1-0') THEN 1 ELSE 0 END) AS losses
       FROM games g JOIN users u ON u.id = g.white_id OR u.id = g.black_id
       WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online', 'friend')
-        AND COALESCE(g.time_control, 'classic') = ? AND u.blocked = 0
+        AND CASE COALESCE(g.time_control, 'classic')
+          WHEN '1+0' THEN 'bullet' WHEN 'bullet' THEN 'bullet'
+          WHEN '3+2' THEN 'blitz' WHEN '5+0' THEN 'blitz' WHEN 'blitz' THEN 'blitz'
+          WHEN '10+0' THEN 'rapid' WHEN '15+10' THEN 'rapid' WHEN 'rapid' THEN 'rapid'
+          ELSE 'classic'
+        END = ?
+        AND u.blocked = 0
       GROUP BY u.id, u.first_name
     ) r
     ORDER BY (wins * 2 + draws) DESC, wins DESC, games DESC, lower(name) ASC
@@ -851,7 +931,7 @@ async function boot() {
   }
   startScheduler(async (id) => pushGame(await getGame.get(id)));
 
-  // Expire unanswered challenges and tell the player who sent them
+  // Expire unanswered challenges and claim live-clock flags
   let sweeping = false;
   setInterval(async () => {
     if (sweeping) return;
@@ -862,6 +942,10 @@ async function boot() {
         await dropInvites(g);
         await db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ? AND status = 'invited'").run(g.id);
         await pushGame(await getGame.get(g.id));
+      }
+      for (const g of await db.prepare('SELECT * FROM games WHERE status = \'active\' AND white_ms IS NOT NULL').all()) {
+        const next = await claimFlagIfNeeded(g);
+        if (next.status !== 'active') await pushGame(next);
       }
     } catch (e) { console.error('[sweeper]', e.message); } finally { sweeping = false; }
   }, 2000).unref();
