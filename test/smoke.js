@@ -171,7 +171,7 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok(new Date(r2.user.premiumUntil) > new Date(r.user.premiumUntil), '3 months extends further');
     });
 
-    await step('admin shop settings + grant diamonds/premium with notify', async () => {
+    await step('admin shop settings + grant diamonds with notify', async () => {
       const shop = await ok('ADMIN', 'GET', '/admin/shop');
       assert.strictEqual(shop.shop.premiumPriceDiamonds, 200);
       const patched = await ok('ADMIN', 'PATCH', '/admin/shop', {
@@ -188,12 +188,19 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual((await ok('B', 'GET', '/me')).meta.PREMIUM_PRICE, 150);
       const before = (await ok('B', 'GET', '/me')).user.diamonds;
       const bBefore = tg.to(USERS.B.id).length;
-      const g = await ok('ADMIN', 'POST', `/admin/users/${USERS.B.id}/diamonds`, { amount: 100, premiumMonths: 1 });
+      const g = await ok('ADMIN', 'POST', `/admin/users/${USERS.B.id}/diamonds`, { amount: 100 });
       assert.strictEqual(g.user.diamonds, before + 100);
-      assert.strictEqual(g.user.premium, true);
-      assert.ok(g.user.premiumUntil);
+      assert.strictEqual(g.user.premium, false, 'diamond grant must not auto-add Premium');
       const toB = tg.to(USERS.B.id).slice(bBefore);
       assert.ok(toB.some((m) => /100/.test(m.body.text) || /💎/.test(m.body.text)), 'user notified about grant');
+      // lobby exposes premium flag for online list badges (use C so A's Premium from buy stays for style tests)
+      await ok('C', 'GET', '/me'); // create + mark C online first
+      await pg.q('UPDATE users SET premium = 1, premium_until = now() + interval \'30 days\', discoverable = 1 WHERE id = $1', USERS.C.id);
+      const lob = await ok('B', 'GET', '/lobby');
+      const cara = (lob.online || []).find((u) => u.id === USERS.C.id);
+      assert.ok(cara, 'C should appear in lobby online list');
+      assert.strictEqual(cara.premium, true);
+      await pg.q('UPDATE users SET premium = 0, premium_until = NULL WHERE id = $1', USERS.C.id);
       // restore default plans for later steps
       await ok('ADMIN', 'PATCH', '/admin/shop', {
         premiumPlans: [
@@ -203,8 +210,6 @@ async function playMoves(game, players, moves, startPly = 0) {
           { months: 12, diamonds: 1600 },
         ],
       });
-      // B received test Premium above — clear so the next style gate test still applies
-      await pg.q('UPDATE users SET premium = 0, premium_until = NULL WHERE id = $1', USERS.B.id);
     });
 
     await step('piece/board style: premium or admin only; invalid values rejected', async () => {

@@ -806,4 +806,34 @@ button.rating-tile:active { transform: scale(0.98); }
 .gems-bar { height: 10px; border-radius: 8px; background: var(--card-soft); overflow: hidden; }
 .gems-bar i { display: block; height: 100%; border-radius: 8px; background: linear-gradient(90deg, #38bdf8, #818cf8); transition: width 0.6s var(--ease); }
 .gems-ok { color: #34c759; font-weight: 700; }
-.prem-badge { background: linear-gradient(135deg, #f5c542, #f59e0b); color: #3b2a00; border-radius: 99px; padding: 3px 10px; font-size: 12px; font-weight: 800; }
+.prem-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: linear-gradient(135deg, #f5c542, #f59e0b); color: #3b2a00;
+  border-radius: 99px; padding: 3px 10px; font-size: 12px; font-weight: 800;
+}
+.prem-badge .prem-ic { width: 16px; height: 16px; margin: 0; }
+.prem-ic {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; margin-left: 6px; vertical-align: -3px;
+  border-radius: 50%; background: linear-gradient(135deg, #f5c542, #f59e0b);
+  color: #3b2a00; flex: none;
+}
+.prem-ic .ic { display: grid; place-items: center; color: #3b2a00; }
+.prem-ic .ic svg { width: 11px; height: 11px; }
+h2 .prem-ic { vertical-align: middle; }
+.row .t .prem-ic { margin-left: 6px; vertical-align: -2px; }
+
+/* Rotating Premium ring around avatar (amber — same family as prem-ic) */
+@keyframes prem-spin { to { transform: rotate(360deg); } }
+.avwrap.prem { isolation: isolate; }
+.avwrap .prem-ring {
+  position: absolute; inset: -3px; border-radius: 16px; z-index: 0;
+  background: conic-gradient(from 0deg, #f59e0b, #fde68a, #fbbf24, #d97706, #f59e0b);
+  animation: prem-spin 2.4s linear infinite;
+  pointer-events: none;
+}
+.avwrap.prem .avatar { position: relative; z-index: 1; }
+.avwrap.prem.xl { border-radius: 50%; }
+.avwrap.prem.xl .prem-ring { inset: -4px; border-radius: 50%; }
+.avwrap.prem .dot.on { z-index: 2; }
+.prof-me .avwrap.xl .avatar.xl { width: 72px; height: 72px; }

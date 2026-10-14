@@ -1,5 +1,5 @@
 // Profile hub: sectioned menu + slide-in subpages (friends, premium, settings, …).
-import { h, icon, haptic, toast, api, fail, avatar, shareUrl, confirmSheet, toggle, tg } from './ui.js';
+import { h, icon, haptic, toast, api, fail, avatar, avBlock, premIc, shareUrl, confirmSheet, toggle, tg } from './ui.js';
 import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
 import { openScreen } from './screen.js';
 import { openAdmin } from './admin.js';
@@ -209,7 +209,7 @@ export function renderProfilePage(ctx) {
       return [
         ...subTop(t('premium'), close),
         h('div.card.gems',
-          h('div.gems-top', h('div.gems-num', '💎 ', h('b', String(have))), u.premium ? h('span.prem-badge', '★ ' + t('premium')) : null),
+          h('div.gems-top', h('div.gems-num', '💎 ', h('b', String(have))), u.premium ? h('span.prem-badge', premIc(), ' ', t('premium')) : null),
           h('small.muted', t('gems_sub', { n: inviterReward, m: inviteeReward })),
           u.premium && untilLabel ? h('div.gems-ok', t('premium_until', { d: untilLabel })) : null,
           u.premium && !untilLabel ? h('div.gems-ok', t('premium_have')) : null),
@@ -317,9 +317,9 @@ export function renderProfilePage(ctx) {
   return [
     h('div.prof-head',
       h('div.prof-me',
-        h('div.big', avatar(me.firstName, me.id, 'xl')),
+        avBlock(me.firstName, me.id, { premium: !!me.premium, size: 'xl' }),
         h('div.prof-meta',
-          h('h2', me.firstName, me.premium ? h('span.prem-badge', ' ★') : null),
+          h('h2', me.firstName, me.premium ? premIc() : null),
           me.username ? h('div.muted', '@' + me.username) : h('div.muted', t('profile_title'))),
         h('button.prof-gem', {
           type: 'button',

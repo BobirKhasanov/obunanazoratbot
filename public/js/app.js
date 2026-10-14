@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, api, fail, setInitData, connectWs, onWs, tg, avatar, sleep } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, api, fail, setInitData, connectWs, onWs, tg, avatar, avBlock, premIc, sleep } from './ui.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -253,8 +253,11 @@ refreshers.play = async function renderPlay() {
       h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
       h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } playSnap = ''; refresh(); } }, icon('x', 18)))))] : null,
     onlinePlayers.length ? [h('div.h2.online-heading', t('online_players'), h('span.count-pill', String(onlinePlayers.length))),
-      h('div.list', onlinePlayers.map((u) => h('div.row', h('div.avwrap', avatar(u.name, u.id), h('i.dot.on')),
-        h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.invited ? t('challenge_sent') : t('online'))),
+      h('div.list', onlinePlayers.map((u) => h('div.row',
+        avBlock(u.name, u.id, { premium: !!u.premium, online: true }),
+        h('div.grow',
+          h('div.t', u.name, u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
+          h('div.s', u.invited ? t('challenge_sent') : t('online'))),
         challengeAction(u))))] : null,
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
       saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('cpu', 22)), h('div.grow', h('div.t', t('computer') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,

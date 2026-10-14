@@ -62,23 +62,13 @@ export function openAdmin(onClose) {
         h('button.mini', {
           title: t('admin_grant_diamonds'),
           onclick: async () => {
-            const rawD = window.prompt(t('admin_grant_prompt', { name: u.first_name || u.id }), '100');
-            if (rawD == null) return;
-            const amount = rawD === '' ? 0 : Math.floor(Number(rawD));
-            if (rawD !== '' && (!Number.isFinite(amount) || amount === 0)) return toast(t('e_bad_request'), true);
-            const rawM = window.prompt(t('admin_grant_premium_prompt'), '0');
-            if (rawM == null) return;
-            const premiumMonths = rawM === '' ? 0 : Math.floor(Number(rawM));
-            if (premiumMonths && ![1, 3, 6, 12].includes(premiumMonths)) {
-              return toast(t('admin_grant_premium_bad'), true);
-            }
-            if (!amount && !premiumMonths) return toast(t('e_bad_request'), true);
+            const raw = window.prompt(t('admin_grant_prompt', { name: u.first_name || u.id }), '100');
+            if (raw == null || raw === '') return;
+            const amount = Math.floor(Number(raw));
+            if (!Number.isFinite(amount) || amount === 0) return toast(t('e_bad_request'), true);
             try {
-              await api('POST', `/admin/users/${u.id}/diamonds`, { amount, premiumMonths });
-              toast(t('admin_grant_ok_full', {
-                d: amount || 0,
-                m: premiumMonths || 0,
-              }));
+              await api('POST', `/admin/users/${u.id}/diamonds`, { amount });
+              toast(t('admin_grant_ok', { n: amount }));
               haptic('success');
               loadUsers(q);
             } catch (e) { fail(e); }
