@@ -612,7 +612,7 @@ async function boot() {
     if (document.hidden || openGameId()) return;
     if (state.tab === 'live' && liveBlocksAutoRefresh()) return;
     if (['live', 'play', 'rankings', 'profile'].includes(state.tab)) refresh();
-  }, 12_000);
+  }, 6_000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   // Premium crown taps → Premium shop (works from Online list, profile, sheets)
   document.addEventListener('open-premium', () => {

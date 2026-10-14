@@ -24,6 +24,10 @@ export default {
         });
       }
       const target = new URL(path + url.search, origin);
+      // WebSocket upgrades must forward the original Request (Upgrade / Connection).
+      if ((request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') {
+        return fetch(new Request(target, request));
+      }
       const headers = new Headers(request.headers);
       headers.set('Host', target.host);
       headers.delete('cf-connecting-ip');

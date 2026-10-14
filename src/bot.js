@@ -93,7 +93,10 @@ function createBot(token, webAppUrl) {
       [
         'Admin summary',
         `Users: ${await n('SELECT COUNT(*) n FROM users')}`,
-        `Online now: ${realtime.onlineIds().length}`,
+        `Online now: ${(await db.prepare(`
+          SELECT COUNT(*)::int AS n FROM users
+          WHERE blocked = 0 AND last_seen > now() - (? * interval '1 millisecond')
+        `).get(realtime.presenceMs))?.n || realtime.onlineIds().length}`,
         `Games in progress: ${await n("SELECT COUNT(*) n FROM games WHERE status = 'active'")}`,
         `Games played: ${await n("SELECT COUNT(*) n FROM games WHERE status = 'finished'")}`,
       ].join('\n'),

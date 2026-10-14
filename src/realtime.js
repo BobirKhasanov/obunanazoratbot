@@ -8,7 +8,8 @@ const { validateInitData } = require('./auth');
 
 const sockets = new Map();   // userId -> Set<ws>
 const lastRest = new Map();  // userId -> ms of the last HTTP request (fallback when WebSocket is unavailable)
-const REST_ONLINE_MS = Number(process.env.PRESENCE_REST_MS || 35_000); // env override is for tests
+// Default 90s so multi-instance / CF→Render setups still see each other between lobby polls.
+const REST_ONLINE_MS = Number(process.env.PRESENCE_REST_MS || 90_000); // env override is for tests
 
 const add = (id, ws) => { if (!sockets.has(id)) sockets.set(id, new Set()); sockets.get(id).add(ws); };
 function remove(id, ws) {
@@ -88,4 +89,4 @@ function attach(server, botToken, hooks) {
   return wss;
 }
 
-module.exports = { attach, send, isOnline, onlineIds, markRest };
+module.exports = { attach, send, isOnline, onlineIds, markRest, presenceMs: REST_ONLINE_MS };
