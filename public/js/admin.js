@@ -721,6 +721,33 @@ export function openAdmin(onClose) {
     ];
   });
 
+  const openInAppNotif = () => openScreen((close) => {
+    const title = h('input.input', { placeholder: t('admin_notif_title_ph'), maxlength: 80 });
+    const body = h('textarea.input', { rows: 4, placeholder: t('admin_notif_body_ph'), maxlength: 1000 });
+    const send = h('button.btn', {
+      type: 'button',
+      onclick: async () => {
+        try {
+          const r = await api('POST', '/admin/notifications', {
+            title: title.value.trim(),
+            body: body.value.trim(),
+          });
+          toast(t('admin_notif_sent', { n: r.sent || 0 }));
+          haptic('success');
+          title.value = '';
+          body.value = '';
+        } catch (e) { fail(e); }
+      },
+    }, icon('bell', 18), t('admin_notif_send'));
+    return [
+      ...subTop(t('admin_notif'), close),
+      h('p.muted', t('admin_notif_sub')),
+      h('div.field', h('label', t('admin_notif_title')), title),
+      h('div.field', h('label', t('admin_notif_body')), body),
+      send,
+    ];
+  });
+
   openScreen((close) => [
     h('button.back', { type: 'button', onclick: () => close() }, icon('back', 20), t('back')),
     h('div.top', h('h1', t('admin_title'))),
@@ -737,6 +764,7 @@ export function openAdmin(onClose) {
     sec(t('admin_sec_content')),
     menuCard(
       menuRow({ ic: 'send', title: t('composer'), sub: t('admin_sec_broadcast_sub'), onClick: openBroadcast }),
+      menuRow({ ic: 'bell', title: t('admin_notif'), sub: t('admin_notif_menu_sub'), onClick: openInAppNotif }),
       menuRow({ ic: 'image', title: t('admin_banner'), sub: t('admin_banner_menu_sub'), onClick: openBanner }),
       menuRow({ ic: 'gear', title: t('admin_style'), sub: t('admin_style_sub'), onClick: openStyle }),
       menuRow({ ic: 'rankings', title: t('admin_medals'), sub: t('admin_medals_sub'), onClick: openMedals }),

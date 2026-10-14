@@ -1496,6 +1496,18 @@ api.post('/feedback', wrap(async (req, res) => {
   const fid = info.rows?.[0]?.id || info.id;
   const u = req.user;
   const uname = u.username ? `@${u.username}` : '—';
+  const title = `Feedback · ${displayName(u)}`;
+  const meta = JSON.stringify({
+    feedbackId: fid,
+    fromUserId: uid,
+    fromName: displayName(u),
+    username: u.username || null,
+  });
+  for (const adminId of ADMIN_IDS) {
+    await db.prepare(`
+      INSERT INTO notifications (user_id, kind, title, body, meta) VALUES (?, 'feedback', ?, ?, ?::jsonb)
+    `).run(adminId, title, body, meta);
+  }
   const msg = [
     '📩 Feedback / complaint',
     `#${fid}`,
@@ -1509,6 +1521,173 @@ api.post('/feedback', wrap(async (req, res) => {
     if (await notify.toUser(adminId, () => msg, { force: true })) sent++;
   }
   res.status(201).json({ ok: true, id: fid, notified: sent });
+}));
+
+function mapNotif(r) {
+  let meta = r.meta;
+  if (typeof meta === 'string') {
+    try { meta = JSON.parse(meta); } catch { meta = null; }
+  }
+  return {
+    id: r.id,
+    kind: r.kind,
+    title: r.title,
+    body: r.body || '',
+    meta: meta || null,
+    read: !!r.read_at,
+    createdAt: r.created_at,
+  };
+}
+
+api.get('/notifications', wrap(async (req, res) => {
+  const rows = await db.prepare(`
+    SELECT id, kind, title, body, meta, read_at, created_at
+    FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 100
+  `).all(req.user.id);
+  res.json({ notifications: rows.map(mapNotif) });
+}));
+
+api.get('/notifications/unread-count', wrap(async (req, res) => {
+  const row = await db.prepare(`
+    SELECT COUNT(*)::int AS n FROM notifications WHERE user_id = ? AND read_at IS NULL
+  `).get(req.user.id);
+  res.json({ count: row?.n || 0 });
+}));
+
+api.post('/notifications/:id/read', wrap(async (req, res) => {
+  const id = intParam(req.params.id);
+  await db.prepare(`
+    UPDATE notifications SET read_at = now() WHERE id = ? AND user_id = ? AND read_at IS NULL
+  `).run(id, req.user.id);
+  res.json({ ok: true });
+}));
+
+function dmPair(a, b) {
+  const x = Number(a); const y = Number(b);
+  return x < y ? [x, y] : [y, x];
+}
+
+async function blockedEither(a, b) {
+  const row = await db.prepare(`
+    SELECT 1 FROM user_blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?) LIMIT 1
+  `).get(a, b, b, a);
+  return !!row;
+}
+
+api.get('/messages/unread-count', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const row = await db.prepare(`
+    SELECT COUNT(*)::int AS n FROM dm_messages m
+    JOIN dm_threads t ON t.id = m.thread_id
+    WHERE (t.user_a = ? OR t.user_b = ?) AND m.sender_id <> ? AND m.read_at IS NULL
+  `).get(uid, uid, uid);
+  res.json({ count: row?.n || 0 });
+}));
+
+api.get('/messages/search', wrap(async (req, res) => {
+  const q = cleanText(req.query && req.query.q, 40, 'bad_request', true).toLowerCase();
+  const uid = req.user.id;
+  const rows = await db.prepare(`
+    SELECT u.id, u.first_name, u.last_name, u.username, u.premium, u.premium_until
+    FROM users u
+    WHERE u.id <> ? AND u.blocked = FALSE
+      AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.user_id = ? AND b.blocked_id = u.id) OR (b.user_id = u.id AND b.blocked_id = ?))
+      AND (
+        lower(u.first_name) LIKE ? OR lower(coalesce(u.last_name,'')) LIKE ?
+        OR lower(coalesce(u.username,'')) LIKE ?
+      )
+    ORDER BY u.first_name ASC
+    LIMIT 20
+  `).all(uid, uid, uid, `%${q}%`, `%${q}%`, `%${q}%`);
+  res.json({
+    users: rows.map((u) => ({
+      id: u.id, name: displayName(u), username: u.username || null, premium: isPremiumActive(u),
+    })),
+  });
+}));
+
+api.get('/messages/threads', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const rows = await db.prepare(`
+    SELECT t.id, t.updated_at, t.user_a, t.user_b,
+      ua.first_name AS a_first, ua.last_name AS a_last, ua.username AS a_user, ua.premium AS a_prem, ua.premium_until AS a_until,
+      ub.first_name AS b_first, ub.last_name AS b_last, ub.username AS b_user, ub.premium AS b_prem, ub.premium_until AS b_until,
+      (SELECT body FROM dm_messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS last_body,
+      (SELECT COUNT(*)::int FROM dm_messages m WHERE m.thread_id = t.id AND m.sender_id <> ? AND m.read_at IS NULL) AS unread
+    FROM dm_threads t
+    JOIN users ua ON ua.id = t.user_a
+    JOIN users ub ON ub.id = t.user_b
+    WHERE t.user_a = ? OR t.user_b = ?
+    ORDER BY t.updated_at DESC
+    LIMIT 50
+  `).all(uid, uid, uid);
+  res.json({
+    threads: rows.map((r) => {
+      const peer = r.user_a === uid
+        ? { id: r.user_b, name: displayName({ first_name: r.b_first, last_name: r.b_last }), username: r.b_user, premium: isPremiumActive({ premium: r.b_prem, premium_until: r.b_until }) }
+        : { id: r.user_a, name: displayName({ first_name: r.a_first, last_name: r.a_last }), username: r.a_user, premium: isPremiumActive({ premium: r.a_prem, premium_until: r.a_until }) };
+      return { id: r.id, peer, lastBody: r.last_body || '', unread: r.unread || 0, updatedAt: r.updated_at };
+    }),
+  });
+}));
+
+api.post('/messages/threads', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const other = intParam(req.body && req.body.userId);
+  if (other === uid) throw bad('Invalid user', 'bad_request');
+  const u = await getUser.get(other);
+  if (!u || u.blocked) throw new HttpError(404, 'Player not found', 'notfound');
+  if (await blockedEither(uid, other)) throw bad('Blocked', 'blocked');
+  const [a, b] = dmPair(uid, other);
+  let row = await db.prepare('SELECT id FROM dm_threads WHERE user_a = ? AND user_b = ?').get(a, b);
+  if (!row) {
+    const ins = await db.prepare('INSERT INTO dm_threads (user_a, user_b) VALUES (?, ?) RETURNING id').run(a, b);
+    row = { id: ins.rows?.[0]?.id || ins.id };
+  }
+  res.status(201).json({
+    id: row.id,
+    peer: { id: u.id, name: displayName(u), username: u.username || null, premium: isPremiumActive(u) },
+  });
+}));
+
+api.get('/messages/threads/:id', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const tid = intParam(req.params.id);
+  const th = await db.prepare('SELECT * FROM dm_threads WHERE id = ?').get(tid);
+  if (!th || (th.user_a !== uid && th.user_b !== uid)) throw new HttpError(404, 'Not found', 'notfound');
+  await db.prepare(`
+    UPDATE dm_messages SET read_at = now()
+    WHERE thread_id = ? AND sender_id <> ? AND read_at IS NULL
+  `).run(tid, uid);
+  const msgs = await db.prepare(`
+    SELECT id, sender_id, body, created_at FROM dm_messages
+    WHERE thread_id = ? ORDER BY created_at ASC LIMIT 200
+  `).all(tid);
+  res.json({
+    messages: msgs.map((m) => ({
+      id: m.id, body: m.body, mine: m.sender_id === uid, createdAt: m.created_at,
+    })),
+  });
+}));
+
+api.post('/messages/threads/:id', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const tid = intParam(req.params.id);
+  const body = cleanText(req.body && req.body.body, 1000, 'text', true);
+  const th = await db.prepare('SELECT * FROM dm_threads WHERE id = ?').get(tid);
+  if (!th || (th.user_a !== uid && th.user_b !== uid)) throw new HttpError(404, 'Not found', 'notfound');
+  const other = th.user_a === uid ? th.user_b : th.user_a;
+  if (await blockedEither(uid, other)) throw bad('Blocked', 'blocked');
+  const ins = await db.prepare(`
+    INSERT INTO dm_messages (thread_id, sender_id, body) VALUES (?, ?, ?) RETURNING id, created_at
+  `).run(tid, uid, body);
+  await db.prepare('UPDATE dm_threads SET updated_at = now() WHERE id = ?').run(tid);
+  res.status(201).json({
+    id: ins.rows?.[0]?.id || ins.id,
+    body,
+    mine: true,
+    createdAt: ins.rows?.[0]?.created_at || new Date().toISOString(),
+  });
 }));
 
 // ---------- friends ----------
@@ -1823,6 +2002,29 @@ admin.post('/users/:id/block', wrap(async (req, res) => {
   const blocked = req.body && req.body.blocked ? 1 : 0;
   if (!(await db.prepare('UPDATE users SET blocked = ? WHERE id = ?').run(blocked, id)).changes) throw new HttpError(404, 'User not found', 'notfound');
   res.json({ ok: true, blocked: !!blocked });
+}));
+
+/** In-app notification: one user or everyone (except blocked). */
+admin.post('/notifications', wrap(async (req, res) => {
+  const title = cleanText(req.body && req.body.title, 80, 'title', true);
+  const body = cleanText(req.body && req.body.body, 1000, 'text', true);
+  const one = req.body && req.body.userId != null ? intParam(req.body.userId) : null;
+  let targets;
+  if (one) {
+    const u = await getUser.get(one);
+    if (!u || u.blocked) throw new HttpError(404, 'User not found', 'notfound');
+    targets = [one];
+  } else {
+    targets = (await db.prepare('SELECT id FROM users WHERE blocked = FALSE').all()).map((r) => r.id);
+  }
+  let n = 0;
+  for (const id of targets) {
+    await db.prepare(`
+      INSERT INTO notifications (user_id, kind, title, body, meta) VALUES (?, 'admin', ?, ?, ?::jsonb)
+    `).run(id, title, body, JSON.stringify({ fromAdmin: req.user.id }));
+    n++;
+  }
+  res.status(201).json({ ok: true, sent: n });
 }));
 
 /**

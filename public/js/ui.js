@@ -67,6 +67,8 @@ const P = {
   docs: '<path d="M8 4h7l4 4v12a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M15 4v4h4M10 12h6M10 16h6"/>',
   logout: '<path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M9 12h10"/>',
   chart: '<path d="M4 19V5M4 19h16M8 16v-5M12 16V8M16 16v-3"/>',
+  mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4.5 7.5L12 13l7.5-5.5"/>',
+  bell: '<path d="M6.5 10a5.5 5.5 0 0 1 11 0c0 4 1.5 5.5 1.5 5.5H5S6.5 14 6.5 10z"/><path d="M10 18.5a2 2 0 0 0 4 0"/>',
 };
 export const icon = (name, size = 24, sw = 1.9) => h('span.ic', {
   html: `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`,
@@ -140,18 +142,32 @@ export function confirmSheet(title, okText, danger = false) {
 
 /** Segmented control with a sliding thumb */
 export function seg(options, value, onChange) {
-  const thumb = h('i');
-  const el = h('div.seg', thumb);
-  const btns = options.map(([v, label]) => h('button', { type: 'button', onclick: () => set(v, true) }, label));
+  return pillBar(options, value, onChange, { className: 'seg' });
+}
+
+/**
+ * Sliding pill selector used by seg / rankings / live filters.
+ * options: [value, labelNodeOrString][]
+ */
+export function pillBar(options, value, onChange, { className = 'pill-bar', fireOnInit = false } = {}) {
+  const n = Math.max(1, options.length);
+  const thumb = h('i.pill-thumb');
+  const el = h('div.' + String(className).split(/\s+/).filter(Boolean).join('.'), thumb);
+  const btns = options.map(([v, label]) => h('button', {
+    type: 'button',
+    onclick: () => set(v, true),
+  }, label));
   el.append(...btns);
+  el.style.setProperty('--pill-n', String(n));
   function set(v, fire) {
     const i = Math.max(0, options.findIndex(([x]) => x === v));
-    thumb.style.width = `calc((100% - 8px) / ${options.length})`;
+    const pad = /rank-tabs|rank-board|live-tabs/.test(className) ? 10 : 8;
+    thumb.style.width = `calc((100% - ${pad}px) / ${n})`;
     thumb.style.transform = `translateX(${i * 100}%)`;
     btns.forEach((b, j) => b.classList.toggle('on', j === i));
-    if (fire) { haptic('select'); onChange(options[i][0]); }
+    if (fire) { haptic('select'); onChange && onChange(options[i][0]); }
   }
-  set(value, false);
+  set(value, !!fireOnInit);
   return Object.assign(el, { set: (v) => set(v, false) });
 }
 

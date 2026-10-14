@@ -1,6 +1,6 @@
 // Online tab: bot live spectate + Lichess international broadcasts.
 import { Chess } from '/vendor/chess.js';
-import { h, icon, haptic, api, fail, avatar, tg } from './ui.js';
+import { h, icon, haptic, api, fail, avatar, tg, pillBar } from './ui.js';
 import { t } from './i18n.js';
 import { Board } from './board.js';
 import { openGame } from './game.js';
@@ -37,7 +37,6 @@ function destroyBoards() {
 function setSection(s) {
   section = s;
   if (s === 'bot') nav = { view: 'list' };
-  haptic('select');
 }
 
 function backIntl() {
@@ -129,13 +128,11 @@ function startsLabel(ts) {
 }
 
 function tabsEl(onRefresh) {
-  return h('div.rank-tabs.live-tabs',
-    h('button.rank-tab' + (section === 'bot' ? '.on' : ''), {
-      onclick: () => { setSection('bot'); onRefresh(); },
-    }, t('live_tab_bot')),
-    h('button.rank-tab' + (section === 'intl' ? '.on' : ''), {
-      onclick: () => { setSection('intl'); onRefresh(); },
-    }, t('live_tab_intl')),
+  return pillBar(
+    [['bot', t('live_tab_bot')], ['intl', t('live_tab_intl')]],
+    section,
+    (s) => { setSection(s); onRefresh(); },
+    { className: 'rank-tabs live-tabs' },
   );
 }
 
@@ -477,15 +474,12 @@ async function renderRound(mount, onRefresh) {
         round.name ? ` · ${round.name}` : '',
         live ? ` · ${t('jonli')}` : '',
       ].filter(Boolean).join(''))),
-    h('div.live-filters',
-      h('button.live-filter' + (filter === 'all' ? '.on' : ''), {
-        type: 'button',
-        onclick: () => { nav = { ...nav, filter: 'all' }; haptic('select'); onRefresh(); },
-      }, t('filter_all', { n: games.length })),
-      h('button.live-filter' + (filter === 'uz' ? '.on' : ''), {
-        type: 'button',
-        onclick: () => { nav = { ...nav, filter: 'uz' }; haptic('select'); onRefresh(); },
-      }, t('filter_uz', { n: uzGames.length }))),
+    pillBar(
+      [['all', t('filter_all', { n: games.length })], ['uz', t('filter_uz', { n: uzGames.length })]],
+      filter,
+      (f) => { nav = { ...nav, filter: f }; onRefresh(); },
+      { className: 'live-filters' },
+    ),
     grid,
   ]);
 

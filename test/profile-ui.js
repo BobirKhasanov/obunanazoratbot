@@ -99,5 +99,17 @@ assert.ok(/#nav-ind\s*\{[^}]*0\.78s/.test(css), 'nav indicator matches pager tim
 assert.ok(css.includes('overscroll-behavior-y: contain'), 'pages contain overscroll for smoother feel');
 const html = read('public/index.html');
 assert.ok(html.includes('id="play-sticky"') && html.includes('id="dock"'), 'Play mount lives inside dock markup');
+assert.ok(css.includes('pill-thumb') && ui.includes('pillBar'), 'sliding pill bars for section selection');
+assert.ok(app.includes('headerInboxBtns') && app.includes('rank-board-bar'), 'home inbox + ranking bars');
+const inbox = read('public/js/inbox.js');
+assert.ok(inbox.includes('openNotifications') && inbox.includes('openMessages'), 'inbox screens');
+assert.ok(inbox.includes('/messages/search') && inbox.includes('/notifications'), 'inbox API wiring');
+assert.ok(server.includes("CREATE TABLE IF NOT EXISTS notifications") || read('src/db.js').includes('CREATE TABLE IF NOT EXISTS notifications'), 'notifications table');
+assert.ok(read('src/db.js').includes('dm_threads') && read('src/db.js').includes('dm_messages'), 'DM tables');
+assert.ok(server.includes("admin.post('/notifications'") && server.includes("api.get('/notifications'"), 'notif APIs');
+assert.ok(server.includes("api.get('/messages/threads'") && server.includes("api.post('/messages/threads'"), 'messages APIs');
+assert.ok(admin.includes('admin_notif') && admin.includes('/admin/notifications'), 'admin in-app notif composer');
+assert.ok(css.includes('.hdr-ic') && css.includes('.hdr-badge'), 'header mail/bell style');
+assert.ok(i18n.includes('xabarnoma:') && i18n.includes('messages:') && i18n.includes('msg_search_ph:'), 'inbox i18n');
 
 console.log('ok  profile-ui (hub + smooth nav)');

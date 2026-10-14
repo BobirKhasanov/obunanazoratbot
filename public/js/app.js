@@ -1,5 +1,6 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, api, fail, setInitData, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, setInitData, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep } from './ui.js';
+import { headerInboxBtns, refreshInboxBadges } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -274,6 +275,7 @@ refreshers.play = async function renderPlay() {
     if (pill) pill.replaceChildren(h('i.dot'), t('online_now', { n: l.onlineCount }));
     const gem = playEl.querySelector('.gempill');
     if (gem) gem.textContent = '💎 ' + (state.me.diamonds || 0);
+    refreshInboxBadges(playEl);
     return;
   }
   playSnap = snap;
@@ -315,7 +317,12 @@ refreshers.play = async function renderPlay() {
   ];
   const puzzleFallback = banner('violet', '🧩', t('home_puzzle'), t('puzzles_sub'), () => go(TABS.indexOf('puzzles'), true));
   const nodes = [
-    h('div.top', h('h1', '♟ ' + t('app')), h('div.pills', h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount })))),
+    h('div.top',
+      h('h1', '♟ ' + t('app')),
+      h('div.pills',
+        h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)),
+        h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount })),
+        headerInboxBtns())),
     annHost,
     puzzleAnns && puzzleAnns.length ? puzzleHost : puzzleFallback,
     h('div.time-heading', t('choose_time')),
@@ -357,6 +364,28 @@ refreshers.live = async function renderLive() {
   );
 };
 
+/** Keep ranking chrome mounted so pill thumbs can slide without remount flicker. */
+let rankUi = null;
+function paintRankBody(host, data, isElo) {
+  const rows = data.rankings || [];
+  const unit = isElo ? t('elo') : t('points');
+  const hint = isElo ? t('rankings_elo_hint') : t('rankings_monthly_hint', { month: data.monthLabel || '' });
+  const foot = isElo ? t('rankings_elo_scoring') : t('rankings_scoring');
+  host.replaceChildren(
+    h('div.card.rank-summary',
+      h('div.rank-summary-title', rankingCategory[selectedRanking] + ' · ' + (isElo ? t('rank_board_elo') : t('rank_board_monthly'))),
+      h('div.muted', hint),
+      rows.length ? h('div.list.rank-list', rows.map((p) => h('div.row.rank-row',
+        h('div.rank-place' + (p.rank <= 3 ? '.podium-' + p.rank : ''), p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : String(p.rank)),
+        h('div.grow', h('div.t', p.name, p.id === state.me.id ? h('span.star', ' · ' + t('you')) : null),
+          h('div.s', isElo
+            ? t('rank_games', { n: p.games || 0 })
+            : t('rank_record', { w: p.wins || 0, d: p.draws || 0, l: p.losses || 0 }))),
+        h('div.rank-points', h('b', String(isElo ? (p.elo ?? p.points) : p.points)), h('small', unit)))))
+        : h('div.empty.rank-empty', t('rankings_empty'))),
+    h('div.rank-footnote', foot),
+  );
+}
 refreshers.rankings = async function renderRankings() {
   const isElo = selectedRankingBoard === 'elo';
   const categories = isElo
@@ -367,40 +396,47 @@ refreshers.rankings = async function renderRankings() {
   try {
     data = await api('GET', `/rankings?board=${selectedRankingBoard}&category=${selectedRanking}`);
   } catch (e) { fail(e); return; }
-  const boardBar = h('div.rank-board-bar',
-    [['elo', t('rank_board_elo')], ['monthly', t('rank_board_monthly')]].map(([id, label]) =>
-      h('button.rank-board' + (selectedRankingBoard === id ? '.on' : ''), {
-        type: 'button',
-        onclick: () => {
-          selectedRankingBoard = id;
-          selectedRanking = id === 'elo' ? 'bullet' : 'all';
-          haptic('select');
-          refresh('rankings');
-        },
-      }, label)));
-  const tabs = h('div.rank-tabs' + (isElo ? '' : '.five'), categories.map((category) => h('button.rank-tab' + (category === selectedRanking ? '.on' : ''), {
-    onclick: () => { selectedRanking = category; haptic('select'); refresh('rankings'); }
-  }, rankingCategory[category])));
-  const rows = data.rankings || [];
-  const unit = isElo ? t('elo') : t('points');
-  const hint = isElo ? t('rankings_elo_hint') : t('rankings_monthly_hint', { month: data.monthLabel || '' });
-  const foot = isElo ? t('rankings_elo_scoring') : t('rankings_scoring');
-  mount('rankings',
+
+  const p = page('rankings');
+  const sameChrome = rankUi && rankUi.board === selectedRankingBoard && p.contains(rankUi.root);
+  if (sameChrome) {
+    rankUi.tabs.set(selectedRanking);
+    rankUi.boardBar.set(selectedRankingBoard);
+    paintRankBody(rankUi.body, data, isElo);
+    return;
+  }
+
+  const body = h('div.rank-body');
+  const boardBar = pillBar(
+    [['elo', t('rank_board_elo')], ['monthly', t('rank_board_monthly')]],
+    selectedRankingBoard,
+    (id) => {
+      if (id === selectedRankingBoard) return;
+      selectedRankingBoard = id;
+      selectedRanking = id === 'elo' ? 'bullet' : 'all';
+      refresh('rankings');
+    },
+    { className: 'rank-board-bar' },
+  );
+  const tabs = pillBar(
+    categories.map((c) => [c, rankingCategory[c]]),
+    selectedRanking,
+    (category) => {
+      if (category === selectedRanking) return;
+      selectedRanking = category;
+      refresh('rankings');
+    },
+    { className: 'rank-tabs' + (isElo ? '' : ' five') },
+  );
+  const root = h('div.rank-root',
     h('div.top', h('h1', '♜ ' + t('rankings_title')), h('div.livepill', h('i.dot'), t('rankings_live'))),
     boardBar,
     tabs,
-    h('div.card.rank-summary',
-      h('div.rank-summary-title', rankingCategory[selectedRanking] + ' · ' + (isElo ? t('rank_board_elo') : t('rank_board_monthly'))),
-      h('div.muted', hint)),
-    rows.length ? h('div.list.rank-list', rows.map((p) => h('div.row.rank-row',
-      h('div.rank-place' + (p.rank <= 3 ? '.podium-' + p.rank : ''), p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : String(p.rank)),
-      h('div.grow', h('div.t', p.name, p.id === state.me.id ? h('span.star', ' · ' + t('you')) : null),
-        h('div.s', isElo
-          ? t('rank_games', { n: p.games || 0 })
-          : t('rank_record', { w: p.wins || 0, d: p.draws || 0, l: p.losses || 0 }))),
-      h('div.rank-points', h('b', String(isElo ? (p.elo ?? p.points) : p.points)), h('small', unit))))) : empty(t('rankings_empty'), '♟'),
-    h('div.rank-footnote', foot)
+    body,
   );
+  paintRankBody(body, data, isElo);
+  mount('rankings', root);
+  rankUi = { root, body, boardBar, tabs, board: selectedRankingBoard };
 };
 
 // ---------- puzzles (mate in 1-2, checked on the device) ----------

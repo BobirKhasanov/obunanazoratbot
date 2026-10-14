@@ -229,9 +229,42 @@ CREATE TABLE IF NOT EXISTS feedback (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback(created_at DESC);
+CREATE TABLE IF NOT EXISTS notifications (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT 'admin', -- admin | feedback | system
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  meta JSONB,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id) WHERE read_at IS NULL;
+CREATE TABLE IF NOT EXISTS dm_threads (
+  id BIGSERIAL PRIMARY KEY,
+  user_a BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_b BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_a, user_b),
+  CHECK (user_a < user_b)
+);
+CREATE INDEX IF NOT EXISTS idx_dm_threads_updated ON dm_threads(updated_at DESC);
+CREATE TABLE IF NOT EXISTS dm_messages (
+  id BIGSERIAL PRIMARY KEY,
+  thread_id BIGINT NOT NULL REFERENCES dm_threads(id) ON DELETE CASCADE,
+  sender_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  read_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_dm_messages_thread ON dm_messages(thread_id, created_at);
 ALTER TABLE profile_likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dm_threads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dm_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS preferred_color TEXT; -- w | b | null (random) — creator preference while waiting
 -- Allow home-screen presets (and keep legacy category values already stored)
 ALTER TABLE games DROP CONSTRAINT IF EXISTS games_time_control_check;
