@@ -52,6 +52,7 @@ assert.ok(css.includes('#play-sticky'), 'sticky Play CTA above dock');
 assert.ok(css.includes('#app:has(#screen.show) #play-sticky'), 'sticky Play hidden under overlays');
 assert.ok(app.includes('createPlayFlow') && app.includes('setPlaySticky'), 'home wires play flow + sticky Play');
 assert.ok(!app.includes("t('home_rank')"), 'live ranking banner removed from home');
+assert.ok(app.includes("t('online_players')") && app.includes('home-online'), 'home shows live online players list');
 const playflow = read('public/js/playflow.js');
 assert.ok(playflow.includes('openSearching') && playflow.includes('/games/quick'), 'play flow searching + quick match');
 assert.ok(playflow.includes('preferredColor') && playflow.includes('TIME_GROUPS'), 'time/color setup in play flow');

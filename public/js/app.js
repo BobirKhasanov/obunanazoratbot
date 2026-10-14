@@ -232,7 +232,8 @@ let playSnap = '';
 refreshers.play = async function renderPlay() {
   const [l, anns] = await Promise.all([loadLobby(), loadAnnouncements(api)]);
   const saved = savedAiGame();
-  const onlinePlayers = l.online.filter((u) => !u.inGame);
+  // Full lobby list (free + in-game), same people as the Online sheet
+  const onlinePlayers = l.online || [];
   // Skip full remount when nothing visible changed — stops home-page flicker every poll.
   const snap = JSON.stringify({
     t: selectedTime,
@@ -287,13 +288,15 @@ refreshers.play = async function renderPlay() {
       avatar(g.opponent.name, g.opponent.id), h('div.grow', h('div.t', g.opponent.name), h('div.s', t('challenge'))),
       h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
       h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } playSnap = ''; refresh(); } }, icon('x', 18)))))] : null,
-    onlinePlayers.length ? [h('div.h2.online-heading', t('online_players'), h('span.count-pill', String(onlinePlayers.length))),
-      h('div.list', onlinePlayers.map((u) => h('div.row',
+    h('div.h2.online-heading', t('online_players'), h('span.count-pill', String(onlinePlayers.length))),
+    onlinePlayers.length
+      ? h('div.list.home-online', onlinePlayers.map((u) => h('div.row',
         avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true }),
         h('div.grow',
           h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
-          h('div.s', u.invited ? t('challenge_sent') : t('online'))),
-        challengeAction(u))))] : null,
+          h('div.s', u.invited ? t('challenge_sent') : (u.inGame ? t('in_game') : t('online')))),
+        challengeAction(u))))
+      : empty(t('nobody'), '🛰️'),
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
       saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('cpu', 22)), h('div.grow', h('div.t', t('computer') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
