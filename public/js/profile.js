@@ -120,8 +120,8 @@ export function renderProfilePage(ctx) {
 
   const formatSom = (n) => {
     const v = Math.floor(Number(n) || 0);
-    if (v >= 1000 && v % 1000 === 0) return `${(v / 1000).toLocaleString('uz-UZ')} ming so‘m`;
-    return `${v.toLocaleString('uz-UZ')} so‘m`;
+    if (v >= 1000 && v % 1000 === 0) return `${(v / 1000).toLocaleString('uz-UZ')} ming so'm`;
+    return `${v.toLocaleString('uz-UZ')} so'm`;
   };
 
   const openPayContact = () => {

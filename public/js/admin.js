@@ -355,10 +355,11 @@ export function openAdmin(onClose) {
           type: 'number', value: String(p.sum), style: { flex: '1' },
           oninput: (e) => { p.sum = Math.floor(Number(e.target.value) || 0); },
         }),
-        h('span.muted', 'so‘m'),
+        h('span.muted', "so'm"),
         h('button.mini', {
           onclick: () => { shop.diamondPacks.splice(i, 1); redrawPacks(); },
-        }, icon('trash', 16))));
+        }, icon('trash', 16)),
+      )));
     };
     redrawPacks();
     shopHost.replaceChildren(
