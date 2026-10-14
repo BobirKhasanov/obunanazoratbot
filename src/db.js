@@ -200,6 +200,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_blitz INTEGER NOT NULL DEFAULT 12
 ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_rapid INTEGER NOT NULL DEFAULT 1200;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_classic INTEGER NOT NULL DEFAULT 1200;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key TEXT; -- null = letter; medal:<id> = monthly medal
+ALTER TABLE games ADD COLUMN IF NOT EXISTS preferred_color TEXT; -- w | b | null (random) — creator preference while waiting
 -- Allow home-screen presets (and keep legacy category values already stored)
 ALTER TABLE games DROP CONSTRAINT IF EXISTS games_time_control_check;
 CREATE TABLE IF NOT EXISTS monthly_scores (

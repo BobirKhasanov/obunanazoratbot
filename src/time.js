@@ -4,10 +4,14 @@ const { parseMoves, turnOf } = require('./game');
 
 const PRESETS = {
   '1+0': { baseMs: 60_000, incMs: 0, category: 'bullet', label: '1+0' },
+  '1+1': { baseMs: 60_000, incMs: 1_000, category: 'bullet', label: '1+1' },
+  '2+1': { baseMs: 120_000, incMs: 1_000, category: 'bullet', label: '2+1' },
+  '3+0': { baseMs: 180_000, incMs: 0, category: 'blitz', label: '3+0' },
   '3+2': { baseMs: 180_000, incMs: 2_000, category: 'blitz', label: '3+2' },
   '5+0': { baseMs: 300_000, incMs: 0, category: 'blitz', label: '5+0' },
   '10+0': { baseMs: 600_000, incMs: 0, category: 'rapid', label: '10+0' },
   '15+10': { baseMs: 900_000, incMs: 10_000, category: 'rapid', label: '15+10' },
+  '30+0': { baseMs: 1_800_000, incMs: 0, category: 'rapid', label: '30+0' },
   classic: { baseMs: null, incMs: 0, category: 'classic', label: '∞' },
 };
 

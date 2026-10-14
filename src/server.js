@@ -670,9 +670,10 @@ const makeFriends = db.prepare('INSERT INTO friends (user_id, friend_id) VALUES 
 const befriend = async (a, b) => { await makeFriends.run(a, b); await makeFriends.run(b, a); };
 const areFriends = async (a, b) => !!(await db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(a, b));
 
-/** Seat the joiner next to the creator (random colours) and start the game. Only one joiner can win the race. */
+/** Seat the joiner next to the creator (honour preferred_color when set) and start the game. Only one joiner can win the race. */
 async function startGame(row, joinerId) {
-  const creatorWhite = Math.random() < 0.5;
+  const pref = row.preferred_color === 'w' || row.preferred_color === 'b' ? row.preferred_color : null;
+  const creatorWhite = pref === 'w' ? true : pref === 'b' ? false : Math.random() < 0.5;
   const tc = normalizeTimeControl(row.time_control);
   const spec = presetOf(tc);
   const whiteId = creatorWhite ? row.creator_id : joinerId;
@@ -694,21 +695,30 @@ async function startGame(row, joinerId) {
 }
 
 const parseTimeControl = (raw) => normalizeTimeControl(raw);
+const parsePreferredColor = (raw) => (raw === 'w' || raw === 'b' ? raw : null);
 
 // Online match-making: pair with someone who is waiting right now, otherwise wait
 api.post('/games/quick', wrap(async (req, res) => {
   const uid = req.user.id;
-  const timeControl = parseTimeControl(req.body && req.body.timeControl);
+  const body = req.body || {};
+  const timeControl = parseTimeControl(body.timeControl);
+  const preferredColor = parsePreferredColor(body.preferredColor);
   const waiting = (await db.prepare("SELECT * FROM games WHERE status = 'open' AND mode = 'online' AND time_control = ? AND creator_id != ? ORDER BY created_at LIMIT 20").all(timeControl, uid))
     .find((g) => realtime.isOnline(g.creator_id));
   if (waiting) return res.json({ game: await gameFor(await startGame(waiting, uid), uid) });
 
   const mine = await db.prepare("SELECT * FROM games WHERE status = 'open' AND mode = 'online' AND time_control = ? AND creator_id = ? LIMIT 1").get(timeControl, uid);
-  if (mine) return res.json({ game: await gameFor(mine, uid) });
+  if (mine) {
+    if (preferredColor && mine.preferred_color !== preferredColor) {
+      await db.prepare('UPDATE games SET preferred_color = ?, updated_at = now() WHERE id = ?').run(preferredColor, mine.id);
+      mine.preferred_color = preferredColor;
+    }
+    return res.json({ game: await gameFor(mine, uid) });
+  }
 
   await ensureRoom(uid);
   const id = gameId();
-  await db.prepare("INSERT INTO games (id, creator_id, status, mode, time_control) VALUES (?, ?, 'open', 'online', ?)").run(id, uid, timeControl);
+  await db.prepare("INSERT INTO games (id, creator_id, status, mode, time_control, preferred_color) VALUES (?, ?, 'open', 'online', ?, ?)").run(id, uid, timeControl, preferredColor);
   res.status(201).json({ game: await gameFor(await getGame.get(id), uid) });
 }));
 

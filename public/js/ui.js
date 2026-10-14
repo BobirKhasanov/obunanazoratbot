@@ -39,7 +39,7 @@ const P = {
   profile: '<circle cx="12" cy="8" r="4"/><path d="M4.5 21c.6-4.2 3.6-6.5 7.5-6.5s6.9 2.3 7.5 6.5"/>',
   rankings: '<path d="M4 19h16M6 16V9h3v7M11 16V4h3v12M16 16v-5h3v5"/><path d="M5 6l3-2 3 2 4-3 4 2"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
-  back: '<path d="M15 5l-7 7 7 7"/>',
+  back: '<path d="M16 5l-7 7 7 7"/>',
   arrow: '<path d="M7 17L17 7M8 7h9v9"/>',
   cpu: '<rect x="6" y="6" width="12" height="12" rx="2.5"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.8 5.6 3.8 9S14.6 18.4 12 21c-2.6-2.6-3.8-5.6-3.8-9S9.4 5.6 12 3z"/>',

@@ -75,7 +75,7 @@ export function openGame(opts, onClose) {
   const moveStrip = h('div.moves');
   const boardHost = h('div.board-host');
   const banner = h('div.gbanner'); banner.hidden = true;
-  const back = h('button.round', { 'aria-label': t('back'), onclick: () => closeGame() }, icon('back', 22));
+  const back = h('button.round.back', { 'aria-label': t('back'), onclick: () => closeGame() }, icon('back', 22));
   const title = h('div.gtitle');
   const act = (ic, label, fn) => h('button.act', { onclick: fn, 'aria-label': label }, icon(ic, 22), h('span', label));
   const actions = h('div.actions');

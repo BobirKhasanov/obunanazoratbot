@@ -12,6 +12,7 @@ import { restyleOpenGame } from './game.js';
 import { renderProfilePage } from './profile.js';
 import { closeScreen } from './screen.js';
 import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel } from './announcements.js';
+import { createPlayFlow } from './playflow.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
 let selectedTime = 'any';
@@ -20,6 +21,36 @@ const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const gameMeta = () => ({ me: { id: state.me.id, name: state.me.firstName }, botUsername: state.meta.botUsername, reactions: state.meta.REACTIONS });
 /** Exact home-screen preset sent to the server (Any → untimed classic). */
 const selectedPreset = () => normalizeTimeControl(selectedTime === 'any' ? 'classic' : selectedTime);
+
+let playFlow;
+function ensurePlayFlow() {
+  if (playFlow) return playFlow;
+  playFlow = createPlayFlow({
+    getState: () => state,
+    openOnline,
+    startFriendGame,
+    aiSheet,
+    goTab: (name) => go(TABS.indexOf(name), true),
+    setSelectedTime: (id) => { selectedTime = id; playSnap = ''; },
+    getSelectedTime: () => selectedTime,
+  });
+  return playFlow;
+}
+
+function setPlaySticky(show) {
+  let el = $('#play-sticky');
+  if (!el) {
+    el = h('div#play-sticky', h('button.cta', {
+      type: 'button',
+      onclick: () => { ensurePlayFlow().open(); },
+    }, t('play_btn')));
+    $('#app')?.append(el);
+  } else {
+    const btn = el.querySelector('.cta');
+    if (btn) btn.textContent = t('play_btn');
+  }
+  el.classList.toggle('show', !!show);
+}
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
@@ -246,12 +277,10 @@ refreshers.play = async function renderPlay() {
     banner('violet', '🧩', t('home_puzzle'), t('puzzles_sub'), () => go(TABS.indexOf('puzzles'), true)),
     h('div.time-heading', t('choose_time')),
     modes,
-    banner('azure', '🏆', t('home_rank'), t('home_rank_sub'), () => go(TABS.indexOf('rankings'), true)),
     h('div.pcards',
       card('🌐', t('play_card_online'), onlineSheet),
       card('🤝', t('play_card_friend'), startFriendGame),
       card('🤖', t('play_card_ai'), aiSheet)),
-    h('div.play-cta', h('button.cta', { onclick: () => { haptic('medium'); startQuick(); } }, t('play_btn'))),
     l.games.invites.length ? [h('div.h2', t('invites')), h('div.list', l.games.invites.map((g) => h('div.row.invite',
       avatar(g.opponent.name, g.opponent.id), h('div.grow', h('div.t', g.opponent.name), h('div.s', t('challenge'))),
       h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
@@ -268,6 +297,7 @@ refreshers.play = async function renderPlay() {
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
   ];
   mount('play', nodes);
+  setPlaySticky(state.tab === 'play');
   if (state.tab === 'play') {
     await mountAnnouncementsCarousel(annHost, anns, {
       botUsername: state.meta?.botUsername,
@@ -463,6 +493,7 @@ function initPager() {
       if (prev === TABS.indexOf('play')) { stopAnnouncementsCarousel(); playSnap = ''; }
       if (state.tab === 'play') playSnap = '';
     }
+    setPlaySticky(state.tab === 'play');
     track.classList.toggle('settle', !!animate); ind.classList.remove('drag');
     setX(-state.index * W);
     ind.style.transform = `translateX(${state.index * 100}%)`;

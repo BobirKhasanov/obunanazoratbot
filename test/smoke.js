@@ -456,6 +456,19 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.notStrictEqual(second.you, (await ok('C', 'GET', `/games/${first.id}`)).game.you);
     });
 
+    await step('quick match honours preferred colour and new time presets', async () => {
+      const open = (await ok('C', 'POST', '/games/quick', { timeControl: '2+1', preferredColor: 'w' })).game;
+      assert.strictEqual(open.status, 'open');
+      assert.strictEqual(open.timeControl, '2+1');
+      const joined = (await ok('D', 'POST', '/games/quick', { timeControl: '2+1' })).game;
+      assert.strictEqual(joined.id, open.id);
+      assert.strictEqual(joined.status, 'active');
+      const creator = (await ok('C', 'GET', `/games/${open.id}`)).game;
+      assert.strictEqual(creator.you, 'w', 'creator asked for white');
+      assert.strictEqual(joined.you, 'b');
+      await ok('C', 'POST', `/games/${open.id}/resign`);
+    });
+
     await step('an open game can be cancelled; a cancelled game cannot be joined', async () => {
       const g = (await ok('E', 'POST', '/games/quick')).game; // nobody else waiting -> open
       assert.strictEqual(g.status, 'open');
