@@ -1095,14 +1095,14 @@ api.get('/lobby', wrap(async (req, res) => {
   if (ids.length) {
     const cap = ids.slice(0, 500);
     const rows = await db.prepare(`SELECT id, first_name, discoverable, premium, premium_until FROM users WHERE blocked = 0 AND id != ? AND id IN (${cap.map(() => '?').join(',')})`).all(uid, ...cap);
+    // List everyone who is actually online (home + Online sheet). Discoverable still gates challenges.
     online = rows
-      .filter((r) => r.discoverable || friendIds.has(r.id))
       .map((r) => ({
         id: r.id, name: r.first_name || 'Player', inGame: busy.has(r.id), friend: friendIds.has(r.id),
-        premium: isPremiumActive(r),
+        premium: isPremiumActive(r), discoverable: !!r.discoverable || friendIds.has(r.id),
         invited: inviteGameByUser.has(r.id), inviteGameId: inviteGameByUser.get(r.id) || null,
       }))
-      .sort((a, b) => (b.friend - a.friend) || a.name.localeCompare(b.name))
+      .sort((a, b) => (b.friend - a.friend) || (a.inGame - b.inGame) || a.name.localeCompare(b.name))
       .slice(0, 40);
   }
 

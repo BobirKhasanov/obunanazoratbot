@@ -520,7 +520,7 @@ async function playMoves(game, players, moves, startPly = 0) {
     });
 
     // ---------------------------------------------------------------- lobby + presence
-    await step('lobby lists online players, hides people who opted out, counts everyone', async () => {
+    await step('lobby lists online players; opted-out stay visible but unchallengeable', async () => {
       await ok('B', 'PATCH', '/me', { discoverable: false });
       await ok('E', 'PATCH', '/me', { discoverable: true });
       const wsC = await connect('C'); sockets.push(wsC);
@@ -529,11 +529,11 @@ async function playMoves(game, players, moves, startPly = 0) {
       const names = lobby.online.map((o) => o.name);
       assert.ok(names.includes('Alice') && names.includes('Cara'), `online: ${names}`);
       assert.ok(!names.includes('Dan'), 'not listed to yourself');
-      assert.ok(!names.includes('Bob'), 'Bob opted out and is not Dan\'s friend');
+      assert.ok(names.includes('Bob'), 'opted-out players still appear in the live list');
+      assert.strictEqual(lobby.online.find((o) => o.name === 'Bob').discoverable, false);
       assert.ok(lobby.onlineCount >= 4);
-      const asAlice = (await ok('A', 'GET', '/lobby')).online.map((o) => o.name);
-      assert.ok(asAlice.includes('Bob'), 'friends are listed even when not discoverable');
-      assert.strictEqual((await ok('A', 'GET', '/lobby')).online.find((o) => o.name === 'Bob').friend, true);
+      const asAlice = (await ok('A', 'GET', '/lobby')).online.find((o) => o.name === 'Bob');
+      assert.ok(asAlice && asAlice.friend, 'friends are marked in the list');
       await err('D', 'POST', '/games', { opponentId: USERS.B.id }, 404, 'user_unavailable'); // hidden players cannot be challenged
     });
 

@@ -129,7 +129,8 @@ function challengeAction(u) {
   if (u.invited && u.inviteGameId) {
     return h('button.mini', { onclick: () => cancelChallenge(u.inviteGameId) }, t('cancel'));
   }
-  return h('button.mini.ok', { disabled: !!u.inGame || u.online === false, onclick: () => challenge(u.id) }, t('challenge'));
+  const blocked = !!u.inGame || u.online === false || u.discoverable === false;
+  return h('button.mini.ok', { disabled: blocked, onclick: () => challenge(u.id) }, t('challenge'));
 }
 async function openById(id) {
   try {
@@ -179,7 +180,10 @@ const playerRow = (u, close) => h('div.row',
     h('div.s', u.inGame ? t('in_game') : t('online'))),
   u.invited && u.inviteGameId
     ? h('button.mini', { onclick: () => cancelChallenge(u.inviteGameId) }, t('cancel'))
-    : h('button.mini.ok', { disabled: u.inGame, onclick: () => { close(); challenge(u.id); } }, t('challenge')));
+    : h('button.mini.ok', {
+      disabled: !!u.inGame || u.discoverable === false,
+      onclick: () => { close(); challenge(u.id); },
+    }, t('challenge')));
 
 /** "Play online": choose any online player to challenge, or get a random opponent */
 function onlineSheet() {
@@ -190,7 +194,9 @@ function onlineSheet() {
       try {
         const l = await api('GET', '/lobby');
         if (!alive) return;
-        list.replaceChildren(...(l.online.length ? l.online.map((u) => playerRow(u, close)) : [empty(t('nobody'), '🛰️')]));
+        list.replaceChildren(...(l.online.length
+          ? l.online.map((u) => playerRow(u, close))
+          : [empty(t('nobody'), '🛰️')]));
       } catch (e) { /* keep the old list */ }
     };
     load(); timer = setInterval(load, 4000);
@@ -274,6 +280,17 @@ refreshers.play = async function renderPlay() {
     h('div.home-banner-text', h('b', title), h('small', sub)), h('span.home-banner-art', emoji));
   const card = (emoji, label, fn) => h('button.pcard', { onclick: () => { haptic('light'); fn(); } }, h('span.pcard-art', emoji), h('b', label));
   const annHost = h('div.ann-carousel', { hidden: true, 'data-noswipe': '' });
+  const onlineBlock = [
+    h('div.h2.online-heading', t('online_players'), h('span.count-pill', String(onlinePlayers.length))),
+    onlinePlayers.length
+      ? h('div.list.home-online', ...onlinePlayers.map((u) => h('div.row',
+        avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true }),
+        h('div.grow',
+          h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
+          h('div.s', u.invited ? t('challenge_sent') : (u.inGame ? t('in_game') : t('online')))),
+        challengeAction(u))))
+      : empty(t('nobody'), '🛰️'),
+  ];
   const nodes = [
     h('div.top', h('h1', '♟ ' + t('app')), h('div.pills', h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount })))),
     annHost,
@@ -284,19 +301,11 @@ refreshers.play = async function renderPlay() {
       card('🌐', t('play_card_online'), onlineSheet),
       card('🤝', t('play_card_friend'), startFriendGame),
       card('🤖', t('play_card_ai'), aiSheet)),
+    ...onlineBlock,
     l.games.invites.length ? [h('div.h2', t('invites')), h('div.list', l.games.invites.map((g) => h('div.row.invite',
       avatar(g.opponent.name, g.opponent.id), h('div.grow', h('div.t', g.opponent.name), h('div.s', t('challenge'))),
       h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
       h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } playSnap = ''; refresh(); } }, icon('x', 18)))))] : null,
-    h('div.h2.online-heading', t('online_players'), h('span.count-pill', String(onlinePlayers.length))),
-    onlinePlayers.length
-      ? h('div.list.home-online', onlinePlayers.map((u) => h('div.row',
-        avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true }),
-        h('div.grow',
-          h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
-          h('div.s', u.invited ? t('challenge_sent') : (u.inGame ? t('in_game') : t('online')))),
-        challengeAction(u))))
-      : empty(t('nobody'), '🛰️'),
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
       saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('cpu', 22)), h('div.grow', h('div.t', t('computer') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
