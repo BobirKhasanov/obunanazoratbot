@@ -715,8 +715,21 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .pz-status.ok { color: #34c759; }
 .pz-status.bad { color: #ff453a; }
 .pz-actions { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
-.mini.back svg { transform: rotate(180deg); }
-.top .mini.back + h1 { margin-right: auto; margin-left: 10px; font-size: 24px; }
+/* Live nested headers — same circular back control as in-game */
+.top .round.back { flex: none; }
+.top .round.back + h1 {
+  flex: 1; min-width: 0; margin: 0 10px; font-size: 22px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.live-watch {
+  display: flex; flex-direction: column; gap: 8px;
+  padding-bottom: 12px; min-height: min-content;
+}
+.live-watch .board-host { flex: none; }
+.live-watch .moves { margin: 4px 0; }
+.live-pbar .pav.avatar, .live-pbar .avatar {
+  width: 36px; height: 36px; border-radius: 50% !important; font-size: 15px; flex: none;
+}
 
 /* ---------- chessboard backdrop ---------- */
 :root { --sq: rgba(255, 255, 255, 0.09); }
@@ -831,9 +844,9 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 
 /* Circular avatars (Online / Friends) + rotating gold Premium ring */
 @keyframes prem-spin { to { transform: rotate(360deg); } }
-.avwrap.round,
-.avwrap.round .avatar { border-radius: 50%; }
-.avwrap.round .prem-ring { border-radius: 50%; }
+.avwrap.circ,
+.avwrap.circ .avatar { border-radius: 50%; }
+.avwrap.circ .prem-ring { border-radius: 50%; }
 .avwrap.prem {
   width: 48px; height: 48px;
   overflow: visible;
@@ -858,5 +871,6 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
   box-shadow: 0 0 0 3px #f5c542, 0 0 14px rgba(245, 158, 11, 0.4);
 }
 .avwrap.prem .dot.on { z-index: 2; }
-.avwrap.round .dot.on { right: 1px; bottom: 1px; }
+.avwrap.circ .dot.on { right: 1px; bottom: 1px; }
+.live-mini-board, .live-mini-board .board { pointer-events: none; }
 .row, .list { overflow: visible; }

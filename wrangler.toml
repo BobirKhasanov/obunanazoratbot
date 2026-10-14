@@ -11,6 +11,6 @@ binding = "ASSETS"
 # Proxy these before static matching (so /api never 404s as a missing file)
 run_worker_first = ["/api", "/api/*", "/ws", "/healthz"]
 
-# Placeholder — override in Cloudflare dashboard (Settings → Variables)
+# Keep in sync with Cloudflare dashboard Variables (so Git deploys don't wipe it)
 [vars]
-API_ORIGIN = ""
+API_ORIGIN = "https://chess-uz-bot.onrender.com"

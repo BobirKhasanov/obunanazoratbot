@@ -1,9 +1,31 @@
 // Online tab: bot live spectate + Lichess international broadcasts.
 import { Chess } from '/vendor/chess.js';
-import { h, icon, haptic, api, fail, avatar } from './ui.js';
+import { h, icon, haptic, api, fail, avatar, tg } from './ui.js';
 import { t } from './i18n.js';
 import { Board } from './board.js';
 import { openGame } from './game.js';
+
+/** Same circular back control used on the in-game screen. */
+function backBtn(onClick) {
+  return h('button.round.back', { type: 'button', 'aria-label': t('back'), onclick: onClick }, icon('back', 22));
+}
+
+function syncTgBack(show, onClick) {
+  try {
+    const bb = tg && tg.BackButton;
+    if (!bb) return;
+    if (show && onClick) {
+      bb.offClick(syncTgBack._fn);
+      syncTgBack._fn = onClick;
+      bb.onClick(onClick);
+      bb.show();
+    } else {
+      if (syncTgBack._fn) bb.offClick(syncTgBack._fn);
+      syncTgBack._fn = null;
+      bb.hide();
+    }
+  } catch { /* old Telegram client */ }
+}
 
 /** @typedef {'bot'|'intl'} LiveSection */
 /** @type {LiveSection} */
@@ -238,7 +260,7 @@ function broadcastRow(item, onOpen) {
     info.location || '',
     info.tc ? String(info.tc).split('+')[0].trim() : '',
   ].filter(Boolean).join(' · ');
-  return h('button.row.live-tour', { onclick: () => onOpen(item) },
+  return h('button.row.live-tour', { type: 'button', onclick: () => onOpen(item) },
     thumb,
     h('div.grow',
       badge,
@@ -272,9 +294,10 @@ async function renderIntlList(mount, onRefresh) {
       haptic('light');
       const round = it.round || {};
       const tour = it.tour || {};
-      // Jump straight into the live/current round when Lichess gives one
+      if (!tour.id) { fail({ code: 'notfound' }); return; }
+      const m = String(round.url || '').match(/\/broadcast\/([^/]+)\/([^/]+)\/([a-zA-Z0-9]{8})\b/);
+      // Prefer opening the live round directly; fall back to tour page if id missing
       if (round.id && /^[a-zA-Z0-9]{8}$/.test(round.id)) {
-        const m = String(round.url || '').match(/\/broadcast\/([^/]+)\/([^/]+)\/([a-zA-Z0-9]{8})\b/);
         openRoundNav({
           tourId: tour.id,
           tourName: tourTitle(it),
@@ -286,7 +309,10 @@ async function renderIntlList(mount, onRefresh) {
           filter: 'all',
         });
       } else {
-        nav = { view: 'tour', tourId: tour.id, tourName: tourTitle(it), preferRound: round.id };
+        nav = {
+          view: 'tour', tourId: tour.id, tourName: tourTitle(it),
+          tourSlug: tour.slug, preferRound: round.id,
+        };
       }
       onRefresh();
     }))) : empty(t('live_no_tours'), '🌐'),
@@ -302,9 +328,27 @@ async function renderTour(mount, onRefresh) {
   const ongoing = rounds.find((r) => r.ongoing) || rounds.filter((r) => !r.finished).slice(-1)[0] || rounds[rounds.length - 1];
   const prefer = nav.preferRound && rounds.find((r) => r.id === nav.preferRound);
   const pick = prefer || ongoing;
+  const goBack = () => { syncTgBack(false); backIntl(); onRefresh(); };
+  syncTgBack(true, goBack);
+  const openRound = (r) => {
+    haptic('light');
+    if (!r || !r.id || !/^[a-zA-Z0-9]{8}$/.test(r.id)) { fail({ code: 'notfound' }); return; }
+    const m = String(r.url || '').match(/\/broadcast\/([^/]+)\/([^/]+)\/([a-zA-Z0-9]{8})\b/);
+    openRoundNav({
+      tourId: nav.tourId,
+      tourName: nav.tourName || tour.name,
+      tourSlug: (m && m[1]) || tour.slug || nav.tourSlug,
+      roundId: r.id,
+      roundName: r.name,
+      roundSlug: (m && m[2]) || r.slug,
+      roundUrl: r.url,
+      filter: 'all',
+    });
+    onRefresh();
+  };
   mount([
     h('div.top',
-      h('button.mini.back', { 'aria-label': t('back'), onclick: () => { backIntl(); onRefresh(); } }, icon('back', 18)),
+      backBtn(goBack),
       h('h1', nav.tourName || tour.name || t('live_tab_intl'))),
     tabsEl(onRefresh),
     h('div.card.live-tour-head',
@@ -313,42 +357,16 @@ async function renderTour(mount, onRefresh) {
       tour.info && tour.info.players ? h('div.muted', tour.info.players) : null),
     h('div.h2', t('rounds')),
     rounds.length ? h('div.list', rounds.slice().reverse().map((r) => h('button.row', {
-      onclick: () => {
-        haptic('light');
-        const m = String(r.url || '').match(/\/broadcast\/([^/]+)\/([^/]+)\/([a-zA-Z0-9]{8})\b/);
-        openRoundNav({
-          tourId: nav.tourId,
-          tourName: nav.tourName || tour.name,
-          tourSlug: (m && m[1]) || tour.slug || nav.tourSlug,
-          roundId: r.id,
-          roundName: r.name,
-          roundSlug: (m && m[2]) || r.slug,
-          roundUrl: r.url,
-          filter: 'all',
-        });
-        onRefresh();
-      },
+      type: 'button',
+      onclick: () => openRound(r),
     },
       h('div.grow',
-        h('div.t', r.name),
+        h('div.t', h('span.name', r.name)),
         h('div.s', r.ongoing ? t('jonli') : r.finished ? t('finished') : startsLabel(r.startsAt))),
       icon('arrow', 18)))) : empty(t('live_no_rounds'), '📅'),
     pick ? h('button.btn', {
-      onclick: () => {
-        haptic('medium');
-        const m = String(pick.url || '').match(/\/broadcast\/([^/]+)\/([^/]+)\/([a-zA-Z0-9]{8})\b/);
-        openRoundNav({
-          tourId: nav.tourId,
-          tourName: nav.tourName || tour.name,
-          tourSlug: (m && m[1]) || tour.slug || nav.tourSlug,
-          roundId: pick.id,
-          roundName: pick.name,
-          roundSlug: (m && m[2]) || pick.slug,
-          roundUrl: pick.url,
-          filter: 'all',
-        });
-        onRefresh();
-      },
+      type: 'button',
+      onclick: () => { haptic('medium'); openRound(pick); },
     }, pick.ongoing ? t('open_live_round', { n: pick.name }) : t('open_round', { n: pick.name })) : null,
   ]);
 }
@@ -369,7 +387,12 @@ function gameCard(g, onOpen) {
   const done = g.status && g.status !== '*';
   const ck = makeClockState(g);
   const status = done ? String(g.status) : t('moves_n', { n: fenPly(g.fen) });
-  return h('button.live-game-card', { onclick: () => onOpen(g), 'data-gid': g.id },
+  // Use a real button; mini-board has pointer-events:none so taps always open the game
+  return h('button.live-game-card', {
+    type: 'button',
+    'data-gid': g.id,
+    onclick: (e) => { e.preventDefault(); onOpen(g); },
+  },
     h('div.live-gc-player',
       h('span.fed', white.fed || ''),
       h('span.name', playerLabel(white)),
@@ -399,20 +422,19 @@ async function renderRound(mount, onRefresh) {
   // Prefer cache — only force-fresh on explicit retry (nav._freshRound)
   const wantFresh = !!nav._freshRound;
   nav._freshRound = false;
+  const goBack = () => { clearPoll(); syncTgBack(false); backIntl(); onRefresh(); };
   try { data = await api('GET', roundApi('', { fresh: wantFresh })); }
   catch (e) {
     fail(e);
-    if (e.code === 'notfound' || e.code === 'bad_request' || e.status === 404) {
-      nav = { view: 'tour', tourId: nav.tourId, tourName: nav.tourName, tourSlug: nav.tourSlug };
-      return onRefresh();
-    }
-    // Transient upstream/network: show retry, do not loop onRefresh
+    syncTgBack(true, goBack);
+    // Stay on this screen with retry — don't silently bounce to list
     return mount([
       h('div.top',
-        h('button.mini.back', { 'aria-label': t('back'), onclick: () => { backIntl(); onRefresh(); } }, icon('back', 18)),
+        backBtn(goBack),
         h('h1', nav.tourName || t('live_tab_intl'))),
       empty(t('live_load_fail'), '🌐'),
       h('button.btn', {
+        type: 'button',
         onclick: () => { nav._freshRound = true; onRefresh(); },
       }, t('retry_live')),
     ]);
@@ -441,8 +463,10 @@ async function renderRound(mount, onRefresh) {
     haptic('light');
     clearPoll();
     nav = {
-      view: 'game', tourId: nav.tourId, tourName: nav.tourName || tour.name,
+      view: 'game',
+      tourId: nav.tourId, tourName: nav.tourName || tour.name, tourSlug: nav.tourSlug,
       roundId: nav.roundId, roundName: round.name || nav.roundName,
+      roundSlug: nav.roundSlug, roundUrl: nav.roundUrl,
       gameId: game.id, filter, snap: game,
     };
     onRefresh();
@@ -452,9 +476,10 @@ async function renderRound(mount, onRefresh) {
     ? h('div.live-game-grid', shown.map((g) => gameCard(g, openGameCard)))
     : empty(filter === 'uz' ? t('live_no_uz') : t('live_no_games'), '♟');
 
+  syncTgBack(true, goBack);
   mount([
     h('div.top',
-      h('button.mini.back', { 'aria-label': t('back'), onclick: () => { clearPoll(); backIntl(); onRefresh(); } }, icon('back', 18)),
+      backBtn(goBack),
       h('h1', tour.name || nav.tourName || t('live_tab_intl'))),
     tabsEl(() => { clearPoll(); onRefresh(); }),
     h('div.card.live-tour-head',
@@ -466,9 +491,11 @@ async function renderRound(mount, onRefresh) {
       ].filter(Boolean).join(''))),
     h('div.live-filters',
       h('button.live-filter' + (filter === 'all' ? '.on' : ''), {
+        type: 'button',
         onclick: () => { nav = { ...nav, filter: 'all' }; haptic('select'); onRefresh(); },
       }, t('filter_all', { n: games.length })),
       h('button.live-filter' + (filter === 'uz' ? '.on' : ''), {
+        type: 'button',
         onclick: () => { nav = { ...nav, filter: 'uz' }; haptic('select'); onRefresh(); },
       }, t('filter_uz', { n: uzGames.length }))),
     grid,
@@ -575,6 +602,11 @@ async function renderGame(mount, onRefresh) {
   const botName = h('b', playerLabel(snap.players[0]));
   const topFed = h('span.live-fed', snap.players[1].fed || '');
   const botFed = h('span.live-fed', snap.players[0].fed || '');
+  const nameHue = (n) => [...String(n || '?')].reduce((a, c) => a + c.charCodeAt(0), 0);
+  const topAv = avatar(snap.players[1].name || '?', nameHue(snap.players[1].name), '');
+  const botAv = avatar(snap.players[0].name || '?', nameHue(snap.players[0].name), '');
+  topAv.classList.add('pav');
+  botAv.classList.add('pav');
   const topClk = h('span.live-clk', fmtClockMs(liveSideMs(clockState, 'b')));
   const botClk = h('span.live-clk', fmtClockMs(liveSideMs(clockState, 'w')));
   const board = new Board(host, {});
@@ -667,18 +699,21 @@ async function renderGame(mount, onRefresh) {
   paintStatus();
 
   const topBar = h('div.pbar.top.live-pbar',
+    topAv,
     h('div.pinfo', topName, h('small', topFed)),
     topClk);
   const botBar = h('div.pbar.bot.live-pbar',
+    botAv,
     h('div.pinfo', botName, h('small', botFed)),
     botClk);
 
   const navBtns = h('div.pz-actions.live-move-nav',
-    h('button.mini', { onclick: () => { haptic('select'); showAt(0); } }, '⏮'),
-    h('button.mini', { onclick: () => { haptic('select'); showAt(cursor.i - 1); } }, '◀'),
-    h('button.mini', { onclick: () => { haptic('select'); showAt(cursor.i + 1); } }, '▶'),
-    h('button.mini', { onclick: () => { haptic('select'); showAt(moves.length); } }, '⏭'),
+    h('button.mini', { type: 'button', onclick: () => { haptic('select'); showAt(0); } }, '⏮'),
+    h('button.mini', { type: 'button', onclick: () => { haptic('select'); showAt(cursor.i - 1); } }, '◀'),
+    h('button.mini', { type: 'button', onclick: () => { haptic('select'); showAt(cursor.i + 1); } }, '▶'),
+    h('button.mini', { type: 'button', onclick: () => { haptic('select'); showAt(moves.length); } }, '⏭'),
     h('button.btn.sm', {
+      type: 'button',
       onclick: () => {
         board.orientation = board.orientation === 'w' ? 'b' : 'w';
         haptic('light');
@@ -686,12 +721,18 @@ async function renderGame(mount, onRefresh) {
       },
     }, icon('flip', 18), t('flip')));
 
+  const goBack = () => {
+    clearPoll(); destroyBoards(); syncTgBack(false); backIntl(); onRefresh();
+  };
+  syncTgBack(true, goBack);
+
   mount([
-    h('div.top',
-      h('button.mini.back', { 'aria-label': t('back'), onclick: () => { clearPoll(); destroyBoards(); backIntl(); onRefresh(); } }, icon('back', 18)),
-      h('h1', `${(snap.players[0].name || '').split(',')[0] || '…'} – ${(snap.players[1].name || '').split(',')[0] || '…'}`),
-      nav.roundName ? h('span.count-pill', nav.roundName) : null),
-    status, topBar, host, botBar, moveStrip, navBtns,
+    h('div.live-watch',
+      h('div.top',
+        backBtn(goBack),
+        h('h1', `${(snap.players[0].name || '').split(',')[0] || '…'} – ${(snap.players[1].name || '').split(',')[0] || '…'}`),
+        nav.roundName ? h('span.count-pill', nav.roundName) : null),
+      status, topBar, host, botBar, moveStrip, navBtns),
   ]);
 
   // Smooth local clock drain (like Lichess / reference app)
@@ -726,17 +767,20 @@ export async function renderLivePage(mount, meta, onCloseGame, onRefresh) {
   destroyBoards();
   if (section === 'bot') {
     clearPoll();
+    syncTgBack(false);
     return renderBot(mount, meta, onCloseGame, onRefresh);
   }
   if (nav.view === 'tour') return renderTour(mount, onRefresh);
   if (nav.view === 'round') return renderRound(mount, onRefresh);
   if (nav.view === 'game') return renderGame(mount, onRefresh);
+  syncTgBack(false);
   return renderIntlList(mount, onRefresh);
 }
 
 export function resetLiveNav() {
   clearPoll();
   destroyBoards();
+  syncTgBack(false);
   section = 'bot';
   nav = { view: 'list' };
 }

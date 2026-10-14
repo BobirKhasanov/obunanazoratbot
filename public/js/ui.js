@@ -262,15 +262,16 @@ export function premIc(size = 18) {
  * @param {string} name
  * @param {number|string} id
  * @param {{ premium?: boolean, online?: boolean, size?: string, round?: boolean }} [opts]
+ * Note: circular shape uses class `circ` (not `round`) so it never clashes with `.round` icon buttons.
  */
 export function avBlock(name, id, opts = {}) {
   const size = opts.size || '';
-  const round = !!opts.round || size === 'xl';
+  const circ = !!opts.round || size === 'xl';
   const wrap = h(
     'div.avwrap'
     + (opts.premium ? '.prem' : '')
     + (size === 'xl' ? '.xl' : '')
-    + (round ? '.round' : ''),
+    + (circ ? '.circ' : ''),
   );
   if (opts.premium) wrap.append(h('span.prem-ring', { 'aria-hidden': 'true' }));
   wrap.append(avatar(name, id, size));
