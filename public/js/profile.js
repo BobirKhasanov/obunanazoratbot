@@ -565,11 +565,11 @@ export function renderProfilePage(ctx) {
         h('div.prof-meta',
           h('h2', h('span.name', shownName), me.premium ? premIc() : null),
           me.username ? h('div.prof-user', me.username) : h('div.prof-user', t('profile_title'))),
-        h('button.prof-star', {
+        h('button.prof-gem', {
           type: 'button',
           title: t('diamonds'),
           onclick: () => { haptic('select'); openDiamonds(); },
-        }, h('span.prof-star-ic', '★'), h('b', String(me.diamonds || 0))))),
+        }, h('span.prof-gem-ic', '💎'), h('b', String(me.diamonds || 0))))),
 
     h('div.prof-body',
       sec(t('sec_rating')),

@@ -304,7 +304,7 @@ export function premIc(size = 18) {
  * Avatar wrap with optional online dot and rotating gold Premium ring.
  * @param {string} name
  * @param {number|string} id
- * @param {{ premium?: boolean, online?: boolean, size?: string, round?: boolean }} [opts]
+ * @param {{ premium?: boolean, online?: boolean, size?: string, round?: boolean, sparkles?: boolean }} [opts]
  * Note: circular shape uses class `circ` (not `round`) so it never clashes with `.round` icon buttons.
  */
 export function avBlock(name, id, opts = {}) {
@@ -316,7 +316,18 @@ export function avBlock(name, id, opts = {}) {
     + (size === 'xl' ? '.xl' : '')
     + (circ ? '.circ' : ''),
   );
-  if (opts.premium) wrap.append(h('span.prem-ring', { 'aria-hidden': 'true' }));
+  if (opts.premium) {
+    wrap.append(h('span.prem-ring', { 'aria-hidden': 'true' }));
+    // Extra orbiting sparkles on large profile avatars (CSS ::before/::after alone get clipped)
+    if (opts.sparkles || size === 'xl') {
+      wrap.append(
+        h('span.prem-spark', { 'aria-hidden': 'true', style: { '--i': '0' } }, '✦'),
+        h('span.prem-spark', { 'aria-hidden': 'true', style: { '--i': '1' } }, '✧'),
+        h('span.prem-spark', { 'aria-hidden': 'true', style: { '--i': '2' } }, '✦'),
+        h('span.prem-spark', { 'aria-hidden': 'true', style: { '--i': '3' } }, '✧'),
+      );
+    }
+  }
   wrap.append(avatar(name, id, size, opts.avatarKey || null));
   if (opts.online) wrap.append(h('i.dot.on'));
   return wrap;
