@@ -814,34 +814,39 @@ button.rating-tile:active { transform: scale(0.98); }
   border-radius: 99px; padding: 4px 11px; font-size: 12px; font-weight: 800;
 }
 .prem-badge .prem-ic { width: 22px; height: 22px; margin: 0; }
-.prem-ic {
+button.prem-ic, .prem-ic {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; margin-left: 8px; vertical-align: -5px;
+  width: 30px; height: 30px; margin-left: 8px; vertical-align: -6px;
+  border: none; padding: 0; cursor: pointer;
   border-radius: 50%; background: linear-gradient(135deg, #f5c542, #f59e0b);
   color: #3b2a00; flex: none;
-  box-shadow: 0 1px 4px rgba(245, 158, 11, 0.45);
+  box-shadow: 0 1px 5px rgba(245, 158, 11, 0.5);
 }
+button.prem-ic:active { transform: scale(0.92); }
 .prem-ic .ic { display: grid; place-items: center; color: #3b2a00; line-height: 0; }
-.prem-ic .ic svg { width: 15px; height: 15px; }
-h2 .prem-ic { width: 26px; height: 26px; vertical-align: middle; }
-h2 .prem-ic .ic svg { width: 16px; height: 16px; }
+.prem-ic .ic svg { width: 18px; height: 18px; }
+h2 .prem-ic { width: 32px; height: 32px; vertical-align: middle; }
+h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 .row .t .prem-ic { margin-left: 8px; flex: none; }
 
-/* Gold rotating Premium ring — solid gold border + spinning conic behind avatar */
+/* Circular avatars (Online / Friends) + rotating gold Premium ring */
 @keyframes prem-spin { to { transform: rotate(360deg); } }
+.avwrap.round,
+.avwrap.round .avatar { border-radius: 50%; }
+.avwrap.round .prem-ring { border-radius: 50%; }
 .avwrap.prem {
   width: 48px; height: 48px;
   overflow: visible;
 }
 .avwrap .prem-ring {
-  position: absolute; inset: 0; border-radius: 16px; z-index: 0;
+  position: absolute; inset: 0; border-radius: 50%; z-index: 0;
   background: conic-gradient(from 0deg, #b45309, #fde68a, #fbbf24, #f59e0b, #d97706, #fde68a, #b45309);
   animation: prem-spin 2s linear infinite;
   pointer-events: none;
 }
 .avwrap.prem .avatar {
   position: relative; z-index: 1;
-  width: 40px; height: 40px; border-radius: 13px;
+  width: 40px; height: 40px; border-radius: 50%;
   box-shadow: 0 0 0 2.5px #f5c542, 0 0 10px rgba(245, 158, 11, 0.35);
 }
 .avwrap.prem.xl {
@@ -853,4 +858,5 @@ h2 .prem-ic .ic svg { width: 16px; height: 16px; }
   box-shadow: 0 0 0 3px #f5c542, 0 0 14px rgba(245, 158, 11, 0.4);
 }
 .avwrap.prem .dot.on { z-index: 2; }
+.avwrap.round .dot.on { right: 1px; bottom: 1px; }
 .row, .list { overflow: visible; }

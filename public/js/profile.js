@@ -175,7 +175,7 @@ export function renderProfilePage(ctx) {
         h('button.btn', { onclick: () => state.meta.botUsername ? shareUrl(link, t('share_text')) : toast(t('e_server'), true) }, icon('share', 20), t('invite_btn'))),
       h('div.h2', t('your_friends')),
       list.length ? h('div.list', list.map((f) => h('div.row',
-        avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online }),
+        avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online, round: true }),
         h('div.grow',
           h('div.t', h('span.name', f.name), f.premium ? premIc() : null),
           h('div.s', f.inGame ? t('in_game') : f.online ? t('online') : t('offline'))),

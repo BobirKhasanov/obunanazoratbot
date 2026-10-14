@@ -139,7 +139,7 @@ function aiSheet() {
 }
 
 const playerRow = (u, close) => h('div.row',
-  avBlock(u.name, u.id, { premium: !!u.premium, online: true }),
+  avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true }),
   h('div.grow',
     h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
     h('div.s', u.inGame ? t('in_game') : t('online'))),
@@ -257,7 +257,7 @@ refreshers.play = async function renderPlay() {
       h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } playSnap = ''; refresh(); } }, icon('x', 18)))))] : null,
     onlinePlayers.length ? [h('div.h2.online-heading', t('online_players'), h('span.count-pill', String(onlinePlayers.length))),
       h('div.list', onlinePlayers.map((u) => h('div.row',
-        avBlock(u.name, u.id, { premium: !!u.premium, online: true }),
+        avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true }),
         h('div.grow',
           h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
           h('div.s', u.invited ? t('challenge_sent') : t('online'))),
@@ -543,6 +543,15 @@ async function boot() {
     if (['live', 'play', 'rankings', 'profile'].includes(state.tab)) refresh();
   }, 12_000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  // Premium crown taps → Premium shop (works from Online list, profile, sheets)
+  document.addEventListener('open-premium', () => {
+    $$('#sheet-root .backdrop').forEach((el) => el.click());
+    const idx = TABS.indexOf('profile');
+    const already = state.index === idx;
+    if (!already) go(idx, true);
+    else closeScreen(true);
+    setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: 'premium' })), already ? 60 : 520);
+  });
   await refresh();
   await handleDeepLink();
 }

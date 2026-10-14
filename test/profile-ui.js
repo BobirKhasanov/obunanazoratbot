@@ -39,9 +39,14 @@ assert.ok(!admin.includes('admin_grant_premium_prompt'), 'diamond grant must not
 assert.ok(admin.includes('menu-card') || admin.includes('menuCard'));
 assert.ok(app.includes('avBlock') && app.includes('premIc'), 'online list premium badge + ring');
 assert.ok(app.includes('!!u.premium') || app.includes('u.premium ? premIc'), 'online row shows premIc when premium');
+assert.ok(app.includes('open-premium') && app.includes("detail: 'premium'"), 'premIc opens Premium shop');
+assert.ok(app.includes('round: true'), 'online avatars are circular');
+const ui = read('public/js/ui.js');
+assert.ok(ui.includes("CustomEvent('open-premium')") && ui.includes('button.prem-ic'), 'premIc is a tappable button');
 assert.ok(css.includes('prem-ring') && css.includes('prem-spin'), 'rotating premium avatar ring');
+assert.ok(css.includes('border-radius: 50%') && css.includes('.avwrap.round'), 'circular avatar + ring');
 assert.ok(css.includes('box-shadow: 0 0 0 2.5px #f5c542') || css.includes('box-shadow: 0 0 0 2px #f5c542'), 'gold avatar border for premium');
-assert.ok(/\.prem-ic[\s\S]{0,120}width:\s*2[4-9]px/.test(css), 'premIc badge at least 24px');
+assert.ok(/\.prem-ic[\s\S]{0,160}width:\s*(2[8-9]|3[0-9])px/.test(css), 'premIc badge at least 28px');
 assert.ok(profile.includes('/shop/order') || profile.includes('shop/order'));
 assert.ok(profile.includes('premiumPlans') || profile.includes('premium_plans'));
 assert.ok(app.includes("t === 'wallet'") || app.includes('m.t === \'wallet\''));

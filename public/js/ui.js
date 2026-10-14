@@ -242,20 +242,36 @@ export const initial = (name) => ([...String(name || '?').trim()][0] || '?').toU
 export const hue = (id) => (Number(id) * 47) % 360;
 export const avatar = (name, id, cls = '') => h('div.avatar' + (cls ? '.' + cls : ''), { style: { background: `hsl(${hue(id)} 45% 42%)`, color: '#fff' } }, initial(name));
 
-/** Premium crown mark next to names (larger gold badge). */
-export function premIc(size = 16) {
-  return h('span.prem-ic', { title: 'Premium', 'aria-label': 'Premium' }, icon('crown', size));
+/** Premium crown — tap opens Premium shop (via `open-premium` event). */
+export function premIc(size = 18) {
+  return h('button.prem-ic', {
+    type: 'button',
+    title: 'Premium',
+    'aria-label': 'Premium',
+    onclick: (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      haptic('select');
+      document.dispatchEvent(new CustomEvent('open-premium'));
+    },
+  }, icon('crown', size));
 }
 
 /**
  * Avatar wrap with optional online dot and rotating gold Premium ring.
  * @param {string} name
  * @param {number|string} id
- * @param {{ premium?: boolean, online?: boolean, size?: string }} [opts]
+ * @param {{ premium?: boolean, online?: boolean, size?: string, round?: boolean }} [opts]
  */
 export function avBlock(name, id, opts = {}) {
   const size = opts.size || '';
-  const wrap = h('div.avwrap' + (opts.premium ? '.prem' : '') + (size === 'xl' ? '.xl' : ''));
+  const round = !!opts.round || size === 'xl';
+  const wrap = h(
+    'div.avwrap'
+    + (opts.premium ? '.prem' : '')
+    + (size === 'xl' ? '.xl' : '')
+    + (round ? '.round' : ''),
+  );
   if (opts.premium) wrap.append(h('span.prem-ring', { 'aria-hidden': 'true' }));
   wrap.append(avatar(name, id, size));
   if (opts.online) wrap.append(h('i.dot.on'));
