@@ -184,7 +184,14 @@ async function openSpectate(game, meta, onClose) {
 async function renderBot(mount, meta, onClose, onRefresh) {
   let data;
   try { data = await api('GET', '/live/games'); }
-  catch (e) { fail(e); return mount([tabsEl(onRefresh), empty(t('live_load_fail'), '🛰️')]); }
+  catch (e) {
+    fail(e);
+    return mount([
+      tabsEl(onRefresh),
+      empty(t('live_load_fail'), '🛰️'),
+      h('button.btn', { onclick: () => onRefresh() }, t('retry_live')),
+    ]);
+  }
   const games = data.games || [];
   const nodes = [
     h('div.top', h('h1', t('live_title')), h('div.livepill', h('i.dot'), t('live_games_count', { n: games.length }))),
@@ -245,11 +252,15 @@ function broadcastRow(item, onOpen) {
 async function renderIntlList(mount, onRefresh) {
   let data;
   try { data = await api('GET', '/lichess/broadcasts'); }
-  catch (e) { fail(e); return mount([
-    h('div.top', h('h1', t('live_title'))),
-    tabsEl(onRefresh),
-    empty(t('live_load_fail'), '🌐'),
-  ]); }
+  catch (e) {
+    fail(e);
+    return mount([
+      h('div.top', h('h1', t('live_title'))),
+      tabsEl(onRefresh),
+      empty(t('live_load_fail'), '🌐'),
+      h('button.btn', { onclick: () => onRefresh() }, t('retry_live')),
+    ]);
+  }
   const active = data.active || [];
   const upcoming = data.upcoming || [];
   const all = [...active, ...upcoming];
@@ -385,7 +396,10 @@ async function renderRound(mount, onRefresh) {
   destroyBoards();
   clearPoll();
   let data;
-  try { data = await api('GET', roundApi('', { fresh: true })); }
+  // Prefer cache — only force-fresh on explicit retry (nav._freshRound)
+  const wantFresh = !!nav._freshRound;
+  nav._freshRound = false;
+  try { data = await api('GET', roundApi('', { fresh: wantFresh })); }
   catch (e) {
     fail(e);
     if (e.code === 'notfound' || e.code === 'bad_request' || e.status === 404) {
@@ -398,7 +412,9 @@ async function renderRound(mount, onRefresh) {
         h('button.mini.back', { 'aria-label': t('back'), onclick: () => { backIntl(); onRefresh(); } }, icon('back', 18)),
         h('h1', nav.tourName || t('live_tab_intl'))),
       empty(t('live_load_fail'), '🌐'),
-      h('button.btn', { onclick: () => onRefresh() }, t('retry_live')),
+      h('button.btn', {
+        onclick: () => { nav._freshRound = true; onRefresh(); },
+      }, t('retry_live')),
     ]);
   }
   // Keep slugs in sync from the payload for subsequent polls
@@ -473,11 +489,35 @@ async function renderRound(mount, onRefresh) {
     }
   }, 250);
 
-  // Fresh round snapshot often; remount to refresh boards/FENs
-  pollTimer = setInterval(() => {
+  // Soft poll: update clocks/status in place (cached API). Full remount ~every 24s for FEN boards.
+  let softPolls = 0;
+  pollTimer = setInterval(async () => {
     if (section !== 'intl' || nav.view !== 'round') return clearPoll();
-    onRefresh();
-  }, 3500);
+    softPolls += 1;
+    if (softPolls % 3 === 0) {
+      // Remount from cache (no fresh=1) so mini-boards catch up without hammering Lichess
+      return onRefresh();
+    }
+    try {
+      const next = await api('GET', roundApi('', { fresh: false }));
+      for (const g of next.games || []) {
+        const st = makeClockState(g);
+        clockMap.set(g.id, st);
+        const card = grid.querySelector && grid.querySelector(`[data-gid="${g.id}"]`);
+        if (!card) continue;
+        const w = card.querySelector('.clk.w');
+        const b = card.querySelector('.clk.b');
+        if (w) w.textContent = fmtClockMs(liveSideMs(st, 'w'));
+        if (b) b.textContent = fmtClockMs(liveSideMs(st, 'b'));
+        const statusEl = card.querySelector('.live-gc-status');
+        if (statusEl) {
+          const done = g.status && g.status !== '*';
+          statusEl.textContent = done ? String(g.status) : t('moves_n', { n: fenPly(g.fen) });
+          statusEl.classList.toggle('done', !!done);
+        }
+      }
+    } catch { /* ignore transient poll errors — keep last good UI */ }
+  }, 8000);
 }
 
 function parsePgnMoves(pgn) {
@@ -498,7 +538,7 @@ async function renderGame(mount, onRefresh) {
   clearPoll();
   let snap = nav.snap;
   try {
-    const round = await api('GET', roundApi('', { fresh: true }));
+    const round = await api('GET', roundApi('', { fresh: false }));
     snap = (round.games || []).find((g) => g.id === nav.gameId) || snap;
     nav.snap = snap;
     if (round.round) {
@@ -519,7 +559,7 @@ async function renderGame(mount, onRefresh) {
 
   let moves = [];
   try {
-    const p = await api('GET', roundApi('/pgn', { fresh: true, game: nav.gameId }));
+    const p = await api('GET', roundApi('/pgn', { fresh: false, game: nav.gameId }));
     if (p.game && p.game.pgn) moves = parsePgnMoves(p.game.pgn);
   } catch { /* fen-only fallback — board still works from FEN */ }
 
@@ -597,11 +637,11 @@ async function renderGame(mount, onRefresh) {
     paintStatus();
     if (!changed) return;
     if (atLiveTip()) {
-      // Jump board to live FEN immediately, then refresh PGN for the move list
+      // Jump board to live FEN immediately, then refresh PGN for the move list (cached)
       const c = new Chess();
       try { c.load(g.fen); } catch { return; }
       board.set(c, { lastMove: lastMoveObj(g.lastMove), mine: null, orientation: board.orientation, animate });
-      refreshPgn(true);
+      refreshPgn(false);
     }
   };
 
@@ -660,18 +700,19 @@ async function renderGame(mount, onRefresh) {
     paintClocks();
   }, 200);
 
-  // Fresh board/clock snapshots from Lichess (never toast/navigate away on poll errors)
+  // Board/clock snapshots via cached API (never toast/navigate away on poll errors)
   let polls = 0;
   pollTimer = setInterval(async () => {
     if (section !== 'intl' || nav.view !== 'game') return clearPoll();
     polls += 1;
     try {
-      const round = await api('GET', roundApi('', { fresh: true }));
+      const round = await api('GET', roundApi('', { fresh: false }));
       const g = (round.games || []).find((x) => x.id === nav.gameId);
       if (g) applySnap(g);
-      if (polls % 3 === 0) refreshPgn(true);
+      // PGN less often, and without fresh=1 (cache ~5s)
+      if (polls % 4 === 0) refreshPgn(false);
     } catch { /* ignore transient errors */ }
-  }, 2500);
+  }, 5000);
 }
 
 /**
@@ -700,7 +741,7 @@ export function resetLiveNav() {
   nav = { view: 'list' };
 }
 
-/** Round/game pages poll themselves — skip the global 8s remount. */
+/** Intl pages poll/refresh themselves — skip the global 8s remount (avoids request storms). */
 export function liveBlocksAutoRefresh() {
-  return section === 'intl' && (nav.view === 'round' || nav.view === 'game');
+  return section === 'intl';
 }

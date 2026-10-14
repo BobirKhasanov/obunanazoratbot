@@ -535,7 +535,7 @@ async function boot() {
     if (document.hidden || openGameId()) return;
     if (state.tab === 'live' && liveBlocksAutoRefresh()) return;
     if (['live', 'play', 'rankings', 'profile'].includes(state.tab)) refresh();
-  }, 8000);
+  }, 12_000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   await refresh();
   await handleDeepLink();

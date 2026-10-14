@@ -279,7 +279,8 @@ async function auth(req, res, next) {
 
   const n = (hits.get(tg.id) || 0) + 1;
   hits.set(tg.id, n);
-  if (n > 300) return res.status(429).json({ error: 'Too many requests', code: 'limit' });
+  // Live spectate polls a few endpoints; keep headroom above normal play traffic
+  if (n > 600) return res.status(429).json({ error: 'Too many requests', code: 'limit' });
 
   await upsertUser.run(tg.id, tg.first_name || '', tg.username || '', fromTelegram(tg.language_code));
   let user = await getUser.get(tg.id);

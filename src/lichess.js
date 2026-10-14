@@ -66,8 +66,9 @@ async function lichessGet(path, { accept = 'application/json', maxAge = 8_000, f
         return data;
       } catch (e) {
         lastErr = e;
-        if (e.status === 400 || e.status === 404) throw e;
-        if (attempt < 2) await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+        // Never retry 429 — retries make Lichess throttle harder and surface as "Too many requests"
+        if (e.status === 400 || e.status === 404 || e.status === 429) throw e;
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
       }
     }
     throw lastErr;
@@ -79,13 +80,13 @@ async function lichessGet(path, { accept = 'application/json', maxAge = 8_000, f
 
 /** Top live / upcoming broadcasts. */
 async function topBroadcasts() {
-  return lichessGet('/api/broadcast/top', { maxAge: 12_000 });
+  return lichessGet('/api/broadcast/top', { maxAge: 20_000 });
 }
 
 /** Tournament with rounds list. */
 async function broadcastTour(tourId) {
   const id = lichessId(tourId, 'tour id');
-  return lichessGet(`/api/broadcast/${id}`, { maxAge: 15_000 });
+  return lichessGet(`/api/broadcast/${id}`, { maxAge: 20_000 });
 }
 
 /**
@@ -105,10 +106,11 @@ async function broadcastRound(roundId, { fresh = false, tourSlug, roundSlug, rou
   let lastErr;
   for (const path of paths) {
     try {
-      return await lichessGet(path, { maxAge: fresh ? 0 : 1_500, fresh });
+      // Cache ~5s so the Mini App can poll without hammering Lichess
+      return await lichessGet(path, { maxAge: fresh ? 0 : 5_000, fresh });
     } catch (e) {
       lastErr = e;
-      if (e.status === 400) throw e;
+      if (e.status === 400 || e.status === 429) throw e;
       if (e.status !== 404) throw e;
     }
   }
@@ -144,7 +146,7 @@ async function broadcastRoundPgn(roundId, { fresh = false } = {}) {
   const id = lichessId(roundId, 'round id');
   const text = await lichessGet(`/api/broadcast/round/${id}.pgn`, {
     accept: 'application/x-chess-pgn',
-    maxAge: 2_500,
+    maxAge: 5_000,
     fresh,
   });
   const games = parseMultiPgn(text);
