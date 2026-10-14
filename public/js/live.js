@@ -5,26 +5,13 @@ import { t } from './i18n.js';
 import { Board } from './board.js';
 import { openGame } from './game.js';
 
-/** Same circular back control used on the in-game screen. */
+/** In-app circular back only (do not also show Telegram.BackButton — that doubles the control). */
 function backBtn(onClick) {
   return h('button.round.back', { type: 'button', 'aria-label': t('back'), onclick: onClick }, icon('back', 22));
 }
 
-function syncTgBack(show, onClick) {
-  try {
-    const bb = tg && tg.BackButton;
-    if (!bb) return;
-    if (show && onClick) {
-      bb.offClick(syncTgBack._fn);
-      syncTgBack._fn = onClick;
-      bb.onClick(onClick);
-      bb.show();
-    } else {
-      if (syncTgBack._fn) bb.offClick(syncTgBack._fn);
-      syncTgBack._fn = null;
-      bb.hide();
-    }
-  } catch { /* old Telegram client */ }
+function hideTgBack() {
+  try { if (tg && tg.BackButton) tg.BackButton.hide(); } catch { /* ignore */ }
 }
 
 /** @typedef {'bot'|'intl'} LiveSection */
@@ -204,6 +191,7 @@ async function openSpectate(game, meta, onClose) {
 }
 
 async function renderBot(mount, meta, onClose, onRefresh) {
+  hideTgBack();
   let data;
   try { data = await api('GET', '/live/games'); }
   catch (e) {
@@ -272,6 +260,7 @@ function broadcastRow(item, onOpen) {
 }
 
 async function renderIntlList(mount, onRefresh) {
+  hideTgBack();
   let data;
   try { data = await api('GET', '/lichess/broadcasts'); }
   catch (e) {
@@ -328,8 +317,7 @@ async function renderTour(mount, onRefresh) {
   const ongoing = rounds.find((r) => r.ongoing) || rounds.filter((r) => !r.finished).slice(-1)[0] || rounds[rounds.length - 1];
   const prefer = nav.preferRound && rounds.find((r) => r.id === nav.preferRound);
   const pick = prefer || ongoing;
-  const goBack = () => { syncTgBack(false); backIntl(); onRefresh(); };
-  syncTgBack(true, goBack);
+  const goBack = () => { backIntl(); onRefresh(); };
   const openRound = (r) => {
     haptic('light');
     if (!r || !r.id || !/^[a-zA-Z0-9]{8}$/.test(r.id)) { fail({ code: 'notfound' }); return; }
@@ -372,7 +360,8 @@ async function renderTour(mount, onRefresh) {
 }
 
 function miniBoard(fen, lastMove) {
-  const host = h('div.live-mini-board', { 'data-noswipe': '' });
+  // No data-noswipe — vertical page scroll must work when dragging over boards
+  const host = h('div.live-mini-board');
   const chess = new Chess();
   try { chess.load(fen); } catch { /* keep start */ }
   const board = new Board(host, {});
@@ -387,11 +376,12 @@ function gameCard(g, onOpen) {
   const done = g.status && g.status !== '*';
   const ck = makeClockState(g);
   const status = done ? String(g.status) : t('moves_n', { n: fenPly(g.fen) });
-  // Use a real button; mini-board has pointer-events:none so taps always open the game
-  return h('button.live-game-card', {
-    type: 'button',
+  // div (not <button>) so iOS can scroll the page when dragging over the mini-board
+  return h('div.live-game-card', {
+    role: 'button',
+    tabindex: '0',
     'data-gid': g.id,
-    onclick: (e) => { e.preventDefault(); onOpen(g); },
+    onclick: () => onOpen(g),
   },
     h('div.live-gc-player',
       h('span.fed', white.fed || ''),
@@ -422,11 +412,10 @@ async function renderRound(mount, onRefresh) {
   // Prefer cache — only force-fresh on explicit retry (nav._freshRound)
   const wantFresh = !!nav._freshRound;
   nav._freshRound = false;
-  const goBack = () => { clearPoll(); syncTgBack(false); backIntl(); onRefresh(); };
+  const goBack = () => { clearPoll(); backIntl(); onRefresh(); };
   try { data = await api('GET', roundApi('', { fresh: wantFresh })); }
   catch (e) {
     fail(e);
-    syncTgBack(true, goBack);
     // Stay on this screen with retry — don't silently bounce to list
     return mount([
       h('div.top',
@@ -476,7 +465,6 @@ async function renderRound(mount, onRefresh) {
     ? h('div.live-game-grid', shown.map((g) => gameCard(g, openGameCard)))
     : empty(filter === 'uz' ? t('live_no_uz') : t('live_no_games'), '♟');
 
-  syncTgBack(true, goBack);
   mount([
     h('div.top',
       backBtn(goBack),
@@ -595,7 +583,7 @@ async function renderGame(mount, onRefresh) {
   let lastKey = `${snap.fen}|${snap.lastMove}|${snap.status}`;
   let pgnBusy = false;
 
-  const host = h('div.board-host.live-full-board', { 'data-noswipe': '' });
+  const host = h('div.board-host.live-full-board');
   const status = h('div.pz-status.live-turn', '');
   const moveStrip = h('div.moves');
   const topName = h('b', playerLabel(snap.players[1]));
@@ -722,9 +710,8 @@ async function renderGame(mount, onRefresh) {
     }, icon('flip', 18), t('flip')));
 
   const goBack = () => {
-    clearPoll(); destroyBoards(); syncTgBack(false); backIntl(); onRefresh();
+    clearPoll(); destroyBoards(); backIntl(); onRefresh();
   };
-  syncTgBack(true, goBack);
 
   mount([
     h('div.live-watch',
@@ -767,20 +754,17 @@ export async function renderLivePage(mount, meta, onCloseGame, onRefresh) {
   destroyBoards();
   if (section === 'bot') {
     clearPoll();
-    syncTgBack(false);
     return renderBot(mount, meta, onCloseGame, onRefresh);
   }
   if (nav.view === 'tour') return renderTour(mount, onRefresh);
   if (nav.view === 'round') return renderRound(mount, onRefresh);
   if (nav.view === 'game') return renderGame(mount, onRefresh);
-  syncTgBack(false);
   return renderIntlList(mount, onRefresh);
 }
 
 export function resetLiveNav() {
   clearPoll();
   destroyBoards();
-  syncTgBack(false);
   section = 'bot';
   nav = { view: 'list' };
 }
