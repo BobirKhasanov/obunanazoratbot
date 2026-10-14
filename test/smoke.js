@@ -279,12 +279,19 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.deepStrictEqual([lose.w, lose.l], [0, 1]);
     });
 
-    await step('live rankings: all categories load and finished bullet games are ranked separately', async () => {
+    await step('live rankings: Elo + monthly boards after bullet resign', async () => {
       for (const category of ['bullet', 'blitz', 'rapid', 'classic']) {
-        const response = await ok('A', 'GET', `/rankings?category=${category}`);
+        const response = await ok('A', 'GET', `/rankings?board=elo&category=${category}`);
+        assert.strictEqual(response.board, 'elo');
         assert.strictEqual(response.category, category);
         assert.ok(Array.isArray(response.rankings));
       }
+      const monthlyEmpty = await ok('A', 'GET', '/rankings?board=monthly&category=all');
+      assert.strictEqual(monthlyEmpty.board, 'monthly');
+      assert.ok(monthlyEmpty.month);
+
+      const beforeMonth = (await ok('A', 'GET', '/rankings?board=monthly&category=all')).rankings;
+      const pts = (rows, id) => (rows.find((p) => p.id === id) || { points: 0 }).points;
 
       const challenge = (await ok('A', 'POST', '/games', {
         opponentId: USERS.B.id, timeControl: '1+0',
@@ -294,16 +301,61 @@ async function playMoves(game, players, moves, startPly = 0) {
       const joined = (await ok('B', 'POST', `/games/${challenge.id}/join`)).game;
       assert.strictEqual(joined.status, 'active');
       assert.ok(joined.clock && joined.clock.whiteMs === 60_000 && joined.clock.blackMs === 60_000, 'bullet clocks start at 1:00');
-      await ok('A', 'POST', `/games/${challenge.id}/resign`);
+      await ok('A', 'POST', `/games/${challenge.id}/resign`); // A resigns → B wins (+2 monthly)
 
-      const leaderboard = (await ok('A', 'GET', '/rankings?category=bullet')).rankings;
-      const alice = leaderboard.find((p) => p.id === USERS.A.id);
-      const bob = leaderboard.find((p) => p.id === USERS.B.id);
-      assert.ok(alice && bob, 'both players should appear after a completed bullet game');
-      assert.strictEqual(alice.games, 1);
-      assert.strictEqual(bob.games, 1);
-      assert.strictEqual(alice.points + bob.points, 2, 'one win awards two points total');
-      assert.ok(leaderboard.every((p, i) => p.rank === i + 1), 'ranks should be sequential');
+      const eloBoard = (await ok('A', 'GET', '/rankings?board=elo&category=bullet')).rankings;
+      const aliceElo = eloBoard.find((p) => p.id === USERS.A.id);
+      const bobElo = eloBoard.find((p) => p.id === USERS.B.id);
+      assert.ok(aliceElo && bobElo, 'both players on Elo board after bullet game');
+      assert.strictEqual(aliceElo.games, 1);
+      assert.strictEqual(bobElo.games, 1);
+      assert.ok(bobElo.elo > aliceElo.elo, 'winner Elo rises, loser falls');
+      assert.ok(eloBoard.every((p, i) => p.rank === i + 1), 'ranks should be sequential');
+
+      const monthBoard = (await ok('A', 'GET', '/rankings?board=monthly&category=all')).rankings;
+      assert.strictEqual(pts(monthBoard, USERS.B.id) - pts(beforeMonth, USERS.B.id), 2, 'win = +2 monthly');
+      assert.strictEqual(pts(monthBoard, USERS.A.id) - pts(beforeMonth, USERS.A.id), 0, 'resign loser gains 0');
+
+      const meA = (await ok('A', 'GET', '/me')).user;
+      const meB = (await ok('B', 'GET', '/me')).user;
+      assert.ok(meB.eloBullet > meA.eloBullet);
+    });
+
+    await step('medal generator: admin preview, award, avatar select', async () => {
+      const cfg = await ok('ADMIN', 'GET', '/admin/medals');
+      assert.ok(cfg.config && cfg.config.botHandle);
+      const preview = await ok('ADMIN', 'POST', '/admin/medals/preview', {
+        place: 1, name: 'Bob', username: 'bob', userId: USERS.B.id,
+        config: { ...cfg.config, botHandle: '@Chess_uz_bot' },
+      });
+      assert.ok(preview.svg.includes('Top 1') || preview.title.includes('Top 1'));
+      assert.ok(preview.svg.includes('@Chess_uz_bot'));
+
+      // Seed previous month scores so award works
+      const prev = cfg.previousMonth;
+      await pg.q(
+        `INSERT INTO monthly_scores (user_id, month, points, wins, draws, losses) VALUES
+           ($1, $2, 10, 5, 0, 0), ($3, $2, 6, 3, 0, 0), ($4, $2, 4, 2, 0, 0)
+         ON CONFLICT (user_id, month) DO UPDATE SET points = EXCLUDED.points, wins = EXCLUDED.wins`,
+        USERS.B.id, prev, USERS.A.id, USERS.C.id,
+      );
+      const awarded = await ok('ADMIN', 'POST', '/admin/medals/award', { month: prev });
+      assert.ok(awarded.awarded.length >= 1);
+      const top1 = awarded.awarded.find((m) => m.place === 1);
+      assert.ok(top1 && top1.userId === USERS.B.id);
+
+      const svgRes = await fetch(`${BASE}/api/medals/${top1.id}.svg`, {
+        headers: { 'X-Init-Data': init('B') },
+      });
+      assert.strictEqual(svgRes.status, 200);
+      const svgText = await svgRes.text();
+      assert.ok(svgText.includes('<svg'));
+
+      const mine = await ok('B', 'GET', '/medals/mine');
+      assert.ok(mine.medals.some((m) => m.id === top1.id));
+      const patched = await ok('B', 'PATCH', '/me', { avatarKey: `medal:${top1.id}` });
+      assert.strictEqual(patched.user.avatarKey, `medal:${top1.id}`);
+      await err('A', 'PATCH', '/me', { avatarKey: `medal:${top1.id}` }, 400);
     });
 
     // ---------------------------------------------------------------- promotion, draw, resign

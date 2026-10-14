@@ -571,8 +571,18 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .count-pill { background: var(--card); color: var(--muted); padding: 3px 9px; border-radius: 20px; font-size: 12px; }
 
 /* Live rankings */
+.rank-board-bar {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px;
+  padding: 4px; background: var(--nav-bg); border: 1px solid var(--line); border-radius: 18px;
+}
+.rank-board {
+  padding: 12px 8px; border-radius: 14px; color: var(--muted); font-size: 13px; font-weight: 800;
+  transition: background .25s ease, color .25s ease, transform .2s ease;
+}
+.rank-board.on { color: var(--text); background: var(--blue); box-shadow: 0 5px 15px rgba(84,164,247,.2); transform: translateY(-1px); }
 .rank-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 5px; background: var(--nav-bg); border: 1px solid var(--line); border-radius: 20px; }
-.rank-tab { min-width: 0; padding: 11px 3px; border-radius: 15px; color: var(--muted); font-size: 13px; font-weight: 750; }
+.rank-tabs.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.rank-tab { min-width: 0; padding: 11px 3px; border-radius: 15px; color: var(--muted); font-size: 13px; font-weight: 750; transition: background .2s ease, color .2s ease; }
 .rank-tab.on { color: var(--text); background: var(--blue); box-shadow: 0 5px 15px rgba(84,164,247,.2); }
 .rank-summary { margin-top: 16px; }
 .rank-summary-title { font-size: 18px; font-weight: 800; }
@@ -583,6 +593,19 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .rank-points b { display: block; font-size: 20px; font-weight: 850; }
 .rank-points small { display: block; color: var(--muted); font-size: 11px; }
 .rank-footnote { margin: 16px 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.avatar.medal { padding: 0; overflow: hidden; background: transparent !important; }
+.avatar-medal, .medal-preview { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
+.medal-preview { width: 88px; height: 88px; border-radius: 20px; margin: 0 auto 8px; }
+.prof-av { background: none; border: 0; padding: 0; }
+.avatar-pick {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  width: 100%; padding: 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--card);
+}
+.avatar-pick.on, .medal-card.on { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(84,164,247,.25); }
+.medal-grid { display: grid; gap: 12px; }
+.medal-card { padding: 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); }
+.medal-actions { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+.medal-admin-preview { width: 160px; height: 160px; border-radius: 24px; margin: 12px auto; display: block; }
 
 /* Online live tabs + Halqaro broadcasts (reuse rank-tab look) */
 .live-tabs { grid-template-columns: 1fr 1fr; margin-bottom: 4px; }

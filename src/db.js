@@ -194,8 +194,35 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS black_ms BIGINT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS turn_started_at TIMESTAMPTZ;
 ALTER TABLE media ADD COLUMN IF NOT EXISTS storage_path TEXT;
 ALTER TABLE media ALTER COLUMN data DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS elo INTEGER NOT NULL DEFAULT 1200;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_bullet INTEGER NOT NULL DEFAULT 1200;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_blitz INTEGER NOT NULL DEFAULT 1200;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_rapid INTEGER NOT NULL DEFAULT 1200;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_classic INTEGER NOT NULL DEFAULT 1200;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key TEXT; -- null = letter; medal:<id> = monthly medal
 -- Allow home-screen presets (and keep legacy category values already stored)
 ALTER TABLE games DROP CONSTRAINT IF EXISTS games_time_control_check;
+CREATE TABLE IF NOT EXISTS monthly_scores (
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  month TEXT NOT NULL,
+  points INTEGER NOT NULL DEFAULT 0,
+  wins INTEGER NOT NULL DEFAULT 0,
+  draws INTEGER NOT NULL DEFAULT 0,
+  losses INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, month)
+);
+CREATE INDEX IF NOT EXISTS idx_monthly_scores_month_pts ON monthly_scores(month, points DESC);
+CREATE TABLE IF NOT EXISTS medals (
+  id TEXT PRIMARY KEY,
+  month TEXT NOT NULL,
+  place INTEGER NOT NULL,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  svg TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (month, place)
+);
+CREATE INDEX IF NOT EXISTS idx_medals_user ON medals(user_id);
 -- one reward payout per invited person, ever (inviter + invitee; PK blocks farming)
 CREATE TABLE IF NOT EXISTS referrals (
   invitee_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -217,6 +244,8 @@ ALTER TABLE media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE broadcasts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE monthly_scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE medals ENABLE ROW LEVEL SECURITY;
 `;
 
 const DEFAULT_DIAMOND_PACKS = JSON.stringify([
@@ -247,9 +276,18 @@ db.ready = (async () => {
          ('premium_price_diamonds', '200'),
          ('premium_plans', $1),
          ('diamond_packs', $2),
-         ('pay_username', 'hasanovbobur')
+         ('pay_username', 'hasanovbobur'),
+         ('medal_gen_config', $3)
        ON CONFLICT (key) DO NOTHING`,
-      [DEFAULT_PREMIUM_PLANS, DEFAULT_DIAMOND_PACKS],
+      [DEFAULT_PREMIUM_PLANS, DEFAULT_DIAMOND_PACKS, JSON.stringify({
+        botHandle: '@Chess_uz_bot',
+        titleTemplate: 'Top {place} Chess player of {month}',
+        primary: '#f5c542',
+        secondary: '#0f172a',
+        accent: '#38bdf8',
+        text: '#ffffff',
+        muted: '#94a3b8',
+      })],
     );
   } finally {
     await c.query('SELECT pg_advisory_unlock(7301)').catch(() => {});

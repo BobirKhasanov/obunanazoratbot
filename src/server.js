@@ -21,6 +21,10 @@ const {
 const lichess = require('./lichess');
 const { cacheGet, cacheSet, cacheDel, cacheEnabled, incr } = require('./cache');
 const { saveMedia, loadMediaBytes, storageEnabled } = require('./storage');
+const { DEFAULT_ELO, pairUpdate, scoresForResult, eloColumn } = require('./elo');
+const {
+  monthKey, monthLabelEn, previousMonthKey, normalizeConfig, generateMedalSvg, titleFor, DEFAULT_CONFIG,
+} = require('./medals');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
@@ -137,8 +141,115 @@ const publicUser = (u, admin) => {
     premiumUntilTashkent: until && !Number.isNaN(until.getTime()) ? formatTashkent(until) : null,
     pieceSet: PIECE_SETS.includes(u.piece_set) ? u.piece_set : 'outline',
     boardTheme: BOARD_THEMES.includes(u.board_theme) ? u.board_theme : 'classic',
+    elo: Number(u.elo || DEFAULT_ELO),
+    eloBullet: Number(u.elo_bullet || DEFAULT_ELO),
+    eloBlitz: Number(u.elo_blitz || DEFAULT_ELO),
+    eloRapid: Number(u.elo_rapid || DEFAULT_ELO),
+    eloClassic: Number(u.elo_classic || DEFAULT_ELO),
+    avatarKey: u.avatar_key || null,
   };
 };
+
+const ELO_COLS = new Set(['elo', 'elo_bullet', 'elo_blitz', 'elo_rapid', 'elo_classic']);
+
+async function applyRatingFinish(row, result) {
+  if (!row.white_id || !row.black_id) return;
+  if (!['1-0', '0-1', '1/2-1/2'].includes(result)) return;
+  const cat = categoryOf(row.time_control || 'classic');
+  const col = eloColumn(cat);
+  if (!ELO_COLS.has(col)) return;
+  const white = await getUser.get(row.white_id);
+  const black = await getUser.get(row.black_id);
+  if (!white || !black) return;
+  const scores = scoresForResult(result);
+  const wCat = Number(white[col] || DEFAULT_ELO);
+  const bCat = Number(black[col] || DEFAULT_ELO);
+  const updCat = pairUpdate(wCat, bCat, scores.white);
+  const updAll = pairUpdate(Number(white.elo || DEFAULT_ELO), Number(black.elo || DEFAULT_ELO), scores.white);
+  await db.prepare(`UPDATE users SET ${col} = ?, elo = ? WHERE id = ?`).run(updCat.a, updAll.a, white.id);
+  await db.prepare(`UPDATE users SET ${col} = ?, elo = ? WHERE id = ?`).run(updCat.b, updAll.b, black.id);
+
+  const month = monthKey();
+  const bump = async (uid, pts, w, d, l) => {
+    await db.prepare(`
+      INSERT INTO monthly_scores (user_id, month, points, wins, draws, losses)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT (user_id, month) DO UPDATE SET
+        points = monthly_scores.points + EXCLUDED.points,
+        wins = monthly_scores.wins + EXCLUDED.wins,
+        draws = monthly_scores.draws + EXCLUDED.draws,
+        losses = monthly_scores.losses + EXCLUDED.losses
+    `).run(uid, month, pts, w, d, l);
+  };
+  if (result === '1-0') {
+    await bump(white.id, 2, 1, 0, 0);
+    await bump(black.id, 0, 0, 0, 1);
+  } else if (result === '0-1') {
+    await bump(black.id, 2, 1, 0, 0);
+    await bump(white.id, 0, 0, 0, 1);
+  } else {
+    await bump(white.id, 1, 0, 1, 0);
+    await bump(black.id, 1, 0, 1, 0);
+  }
+  const mk = monthKey();
+  await Promise.all([
+    ...['bullet', 'blitz', 'rapid', 'classic', 'all'].flatMap((c) => [
+      cacheDel(`rankings:elo:${c}:${mk}`),
+      cacheDel(`rankings:monthly:${c}:${mk}`),
+    ]),
+  ]);
+}
+
+async function getMedalConfig() {
+  return normalizeConfig(await getSetting('medal_gen_config', JSON.stringify(DEFAULT_CONFIG)));
+}
+
+async function awardMonthMedals(month) {
+  const m = month || previousMonthKey();
+  const cfg = await getMedalConfig();
+  const top = await db.prepare(`
+    SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, m.points
+    FROM monthly_scores m JOIN users u ON u.id = m.user_id
+    WHERE m.month = ? AND u.blocked = 0 AND m.points > 0
+    ORDER BY m.points DESC, m.wins DESC, lower(COALESCE(u.first_name, '')) ASC
+    LIMIT 3
+  `).all(m);
+  const awarded = [];
+  for (let i = 0; i < top.length; i++) {
+    const place = i + 1;
+    const u = top[i];
+    const id = `m-${m}-p${place}`;
+    const title = titleFor(cfg, place, m);
+    const svg = generateMedalSvg({
+      place, month: m, name: u.name, username: u.username, userId: u.id, config: cfg,
+    });
+    await db.prepare(`
+      INSERT INTO medals (id, month, place, user_id, title, svg)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT (month, place) DO UPDATE SET
+        user_id = EXCLUDED.user_id, title = EXCLUDED.title, svg = EXCLUDED.svg
+    `).run(id, m, place, u.id, title, svg);
+    const saved = await db.prepare('SELECT id FROM medals WHERE month = ? AND place = ?').get(m, place);
+    const mid = saved?.id || id;
+    awarded.push({ id: mid, place, userId: u.id, name: u.name, title, month: m });
+  }
+  return { month: m, monthLabel: monthLabelEn(m), awarded };
+}
+
+/** Lazy: if previous month has scores but no medals yet, mint them. */
+async function ensurePreviousMonthMedals() {
+  const prev = previousMonthKey();
+  const hasScores = await db.prepare(
+    'SELECT 1 AS ok FROM monthly_scores WHERE month = ? AND points > 0 LIMIT 1',
+  ).get(prev);
+  if (!hasScores) return null;
+  const hasMedals = await db.prepare('SELECT 1 AS ok FROM medals WHERE month = ? LIMIT 1').get(prev);
+  if (hasMedals) return null;
+  try { return await awardMonthMedals(prev); } catch (e) {
+    console.error('[medals]', e.message || e);
+    return null;
+  }
+}
 
 async function getSetting(key, fallback) {
   const row = await db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key);
@@ -369,9 +480,23 @@ api.patch('/me', wrap(async (req, res) => {
     }
   }
 
+  let avatarKey = u.avatar_key || null;
+  if (b.avatarKey !== undefined) {
+    if (b.avatarKey === null || b.avatarKey === '' || b.avatarKey === 'default') {
+      avatarKey = null;
+    } else {
+      const key = String(b.avatarKey);
+      const m = /^medal:(.+)$/.exec(key);
+      if (!m) throw bad('Invalid avatar', 'bad_request');
+      const medal = await db.prepare('SELECT id FROM medals WHERE id = ? AND user_id = ?').get(m[1], u.id);
+      if (!medal) throw bad('Medal not owned', 'forbidden');
+      avatarKey = `medal:${medal.id}`;
+    }
+  }
+
   await db.prepare(`UPDATE users SET lang = ?, theme = ?, notify_enabled = ?, discoverable = ?, lang_set = ?,
-    piece_set = ?, board_theme = ? WHERE id = ?`)
-    .run(lang, theme, notifyEnabled, discoverable, b.lang !== undefined ? 1 : u.lang_set, pieceSet, boardTheme, u.id);
+    piece_set = ?, board_theme = ?, avatar_key = ? WHERE id = ?`)
+    .run(lang, theme, notifyEnabled, discoverable, b.lang !== undefined ? 1 : u.lang_set, pieceSet, boardTheme, avatarKey, u.id);
   res.json({ user: publicUser(await getUser.get(u.id), req.isAdmin) });
 }));
 
@@ -624,6 +749,7 @@ api.delete('/games/:id', wrap(async (req, res) => {
 async function finish(row, result, reason) {
   await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = ?, draw_by = NULL, updated_at = now() WHERE id = ?")
     .run(result, reason, row.id);
+  try { await applyRatingFinish(row, result); } catch (e) { console.error('[rating]', e.message || e); }
   // Rankings / busy-set caches must not serve pre-finish data
   await Promise.all(['bullet', 'blitz', 'rapid', 'classic'].map((c) => cacheDel(`rankings:${c}`)));
   await cacheDel('lobby:busy');
@@ -763,36 +889,122 @@ api.post('/results', wrap(async (req, res) => {
   res.json({ stats: await statsFor(req.user.id) });
 }));
 
-// ---------- live competitive rankings ----------
+const TC_CASE = `CASE COALESCE(g.time_control, 'classic')
+  WHEN '1+0' THEN 'bullet' WHEN 'bullet' THEN 'bullet'
+  WHEN '3+2' THEN 'blitz' WHEN '5+0' THEN 'blitz' WHEN 'blitz' THEN 'blitz'
+  WHEN '10+0' THEN 'rapid' WHEN '15+10' THEN 'rapid' WHEN 'rapid' THEN 'rapid'
+  ELSE 'classic' END`;
+
+// ---------- live competitive rankings (Elo lifetime + monthly points) ----------
 api.get('/rankings', wrap(async (req, res) => {
-  const category = ['bullet', 'blitz', 'rapid', 'classic'].includes(req.query.category) ? req.query.category : 'bullet';
-  const cacheKey = `rankings:${category}`;
+  ensurePreviousMonthMedals().catch(() => {});
+  const board = req.query.board === 'monthly' ? 'monthly' : 'elo';
+  const category = ['bullet', 'blitz', 'rapid', 'classic', 'all'].includes(req.query.category)
+    ? req.query.category
+    : (board === 'monthly' ? 'all' : 'bullet');
+  const month = monthKey();
+  const cacheKey = `rankings:${board}:${category}:${month}`;
   const cached = await cacheGet(cacheKey, 5_000);
   if (cached) return res.json(cached);
-  const rows = (await db.prepare(`
-    SELECT * FROM (
-      SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name,
-        COUNT(*) AS games,
-        SUM(CASE WHEN (g.white_id = u.id AND g.result = '1-0') OR (g.black_id = u.id AND g.result = '0-1') THEN 1 ELSE 0 END) AS wins,
-        SUM(CASE WHEN g.result = '1/2-1/2' THEN 1 ELSE 0 END) AS draws,
-        SUM(CASE WHEN (g.white_id = u.id AND g.result = '0-1') OR (g.black_id = u.id AND g.result = '1-0') THEN 1 ELSE 0 END) AS losses
-      FROM games g JOIN users u ON u.id = g.white_id OR u.id = g.black_id
-      WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online', 'friend')
-        AND CASE COALESCE(g.time_control, 'classic')
-          WHEN '1+0' THEN 'bullet' WHEN 'bullet' THEN 'bullet'
-          WHEN '3+2' THEN 'blitz' WHEN '5+0' THEN 'blitz' WHEN 'blitz' THEN 'blitz'
-          WHEN '10+0' THEN 'rapid' WHEN '15+10' THEN 'rapid' WHEN 'rapid' THEN 'rapid'
-          ELSE 'classic'
-        END = ?
-        AND u.blocked = 0
-      GROUP BY u.id, u.first_name
-    ) r
-    ORDER BY (wins * 2 + draws) DESC, wins DESC, games DESC, lower(name) ASC
-    LIMIT 100
-  `).all(category)).map((r, i) => ({ rank: i + 1, ...r, points: r.wins * 2 + r.draws }));
-  const payload = { category, rankings: rows, updatedAt: new Date().toISOString() };
+
+  let rows;
+  if (board === 'elo') {
+    const col = category === 'all' ? 'elo' : eloColumn(category);
+    if (!ELO_COLS.has(col)) throw bad('Bad category', 'bad_request');
+    const catClause = category === 'all' ? '' : ` AND (${TC_CASE}) = ?`;
+    const params = category === 'all' ? [] : [category];
+    rows = (await db.prepare(`
+      SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, u.avatar_key,
+        u.${col} AS elo,
+        COALESCE((
+          SELECT COUNT(*) FROM games g
+          WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online','friend')
+            AND (g.white_id = u.id OR g.black_id = u.id)${catClause}
+        ), 0) AS games
+      FROM users u
+      WHERE u.blocked = 0
+        AND EXISTS (
+          SELECT 1 FROM games g
+          WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online','friend')
+            AND (g.white_id = u.id OR g.black_id = u.id)${catClause}
+        )
+      ORDER BY u.${col} DESC, lower(COALESCE(u.first_name, '')) ASC
+      LIMIT 100
+    `).all(...params, ...params)).map((r, i) => ({
+      rank: i + 1, id: r.id, name: r.name, username: r.username || '',
+      elo: Number(r.elo), games: Number(r.games), points: Number(r.elo),
+      avatarKey: r.avatar_key || null,
+    }));
+  } else if (category === 'all') {
+    rows = (await db.prepare(`
+      SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, u.avatar_key,
+        m.points, m.wins, m.draws, m.losses,
+        (m.wins + m.draws + m.losses) AS games
+      FROM monthly_scores m
+      JOIN users u ON u.id = m.user_id
+      WHERE m.month = ? AND u.blocked = 0 AND m.points > 0
+      ORDER BY m.points DESC, m.wins DESC, lower(COALESCE(u.first_name, '')) ASC
+      LIMIT 100
+    `).all(month)).map((r, i) => ({
+      rank: i + 1, id: r.id, name: r.name, username: r.username || '',
+      points: Number(r.points), wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
+      games: Number(r.games), avatarKey: r.avatar_key || null,
+    }));
+  } else {
+    rows = (await db.prepare(`
+      SELECT * FROM (
+        SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, u.avatar_key,
+          COUNT(*) AS games,
+          SUM(CASE WHEN (g.white_id = u.id AND g.result = '1-0') OR (g.black_id = u.id AND g.result = '0-1') THEN 1 ELSE 0 END) AS wins,
+          SUM(CASE WHEN g.result = '1/2-1/2' THEN 1 ELSE 0 END) AS draws,
+          SUM(CASE WHEN (g.white_id = u.id AND g.result = '0-1') OR (g.black_id = u.id AND g.result = '1-0') THEN 1 ELSE 0 END) AS losses
+        FROM games g JOIN users u ON u.id = g.white_id OR u.id = g.black_id
+        WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online', 'friend')
+          AND (timezone('Asia/Tashkent', g.updated_at))::text LIKE ?
+          AND (${TC_CASE}) = ?
+          AND u.blocked = 0
+        GROUP BY u.id, u.first_name, u.username, u.avatar_key
+      ) r
+      ORDER BY (wins * 2 + draws) DESC, wins DESC, games DESC, lower(name) ASC
+      LIMIT 100
+    `).all(`${month}%`, category)).map((r, i) => ({
+      rank: i + 1, id: r.id, name: r.name, username: r.username || '',
+      wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
+      games: Number(r.games), points: Number(r.wins) * 2 + Number(r.draws),
+      avatarKey: r.avatar_key || null,
+    }));
+  }
+
+  const payload = {
+    board, category, month, monthLabel: monthLabelEn(month),
+    rankings: rows, updatedAt: new Date().toISOString(),
+  };
   await cacheSet(cacheKey, payload, 5_000);
   res.json(payload);
+}));
+
+// ---------- medals / avatar ----------
+api.get('/medals/mine', wrap(async (req, res) => {
+  ensurePreviousMonthMedals().catch(() => {});
+  const rows = await db.prepare(`
+    SELECT id, month, place, title, created_at FROM medals WHERE user_id = ? ORDER BY month DESC, place ASC
+  `).all(req.user.id);
+  res.json({
+    avatarKey: req.user.avatar_key || null,
+    medals: rows.map((r) => ({
+      id: r.id, month: r.month, monthLabel: monthLabelEn(r.month), place: r.place,
+      title: r.title, url: `/api/medals/${r.id}.svg`, key: `medal:${r.id}`,
+    })),
+  });
+}));
+
+api.get('/medals/:id.svg', wrap(async (req, res) => {
+  const id = String(req.params.id || '').replace(/\.svg$/i, '');
+  const row = await db.prepare('SELECT svg FROM medals WHERE id = ?').get(id);
+  if (!row) throw new HttpError(404, 'Not found', 'notfound');
+  res.set('Content-Type', 'image/svg+xml; charset=utf-8');
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.send(row.svg);
 }));
 
 // ---------- lobby: who is online and what games do I have ----------
@@ -1333,6 +1545,66 @@ admin.patch('/shop', wrap(async (req, res) => {
     await setSetting('pay_username', name);
   }
   res.json({ shop: await getShopSettings() });
+}));
+
+admin.get('/medals', wrap(async (req, res) => {
+  const cfg = await getMedalConfig();
+  const month = String(req.query.month || monthKey());
+  const medals = await db.prepare(`
+    SELECT m.id, m.month, m.place, m.user_id, m.title, u.first_name, u.username
+    FROM medals m LEFT JOIN users u ON u.id = m.user_id
+    ORDER BY m.month DESC, m.place ASC LIMIT 60
+  `).all();
+  const top = await db.prepare(`
+    SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, s.points
+    FROM monthly_scores s JOIN users u ON u.id = s.user_id
+    WHERE s.month = ? AND u.blocked = 0 AND s.points > 0
+    ORDER BY s.points DESC, s.wins DESC LIMIT 3
+  `).all(month);
+  res.json({
+    config: cfg,
+    month,
+    monthLabel: monthLabelEn(month),
+    previousMonth: previousMonthKey(month),
+    top,
+    medals: medals.map((r) => ({
+      id: r.id, month: r.month, place: r.place, userId: r.user_id,
+      title: r.title, name: r.first_name || '', username: r.username || '',
+      url: `/api/medals/${r.id}.svg`,
+    })),
+  });
+}));
+
+admin.patch('/medals/config', wrap(async (req, res) => {
+  const cfg = normalizeConfig({ ...(await getMedalConfig()), ...(req.body || {}) });
+  await setSetting('medal_gen_config', JSON.stringify(cfg));
+  res.json({ config: cfg });
+}));
+
+admin.post('/medals/preview', wrap(async (req, res) => {
+  const b = req.body || {};
+  const cfg = normalizeConfig(b.config || await getMedalConfig());
+  const place = Math.min(3, Math.max(1, Math.floor(Number(b.place) || 1)));
+  const month = String(b.month || monthKey());
+  const svg = generateMedalSvg({
+    place, month,
+    name: b.name || 'Player',
+    username: b.username || '',
+    userId: b.userId || 0,
+    config: cfg,
+  });
+  res.json({
+    svg,
+    title: titleFor(cfg, place, month),
+    dataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+  });
+}));
+
+admin.post('/medals/award', wrap(async (req, res) => {
+  const month = String((req.body && req.body.month) || previousMonthKey());
+  if (!/^\d{4}-\d{2}$/.test(month)) throw bad('month must be YYYY-MM', 'bad_request');
+  const result = await awardMonthMedals(month);
+  res.json(result);
 }));
 
 // ----- post composer: media upload -----

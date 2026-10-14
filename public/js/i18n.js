@@ -267,10 +267,82 @@ Object.assign(uz, { challenge_from: "{name} sizni o'yinga chorlamoqda", challeng
 Object.assign(uzc, { challenge_from: '{name} сизни ўйинга чорламоқда', challenge_to: '{name} га таклиф юборилди', pick_player: 'Ўйинчини танланг', random_opp: 'Тасодифий рақиб', e_user_offline: 'Ўйинчи ҳозиргина офлайн бўлди', sec_left: '{n}с', challenge_expired: 'Жавоб йўқ, таклиф муддати тугади' });
 
 
-Object.assign(en, { nav_rankings: 'Ranking', rankings_title: 'Live rankings', rankings_live: 'Live leaderboard', rankings_points_hint: 'Standings update automatically', rankings_empty: 'No ranked games yet. Finish a game to appear here.', rankings_scoring: 'Points: 2 for a win, 1 for a draw. Only finished player-vs-player games count.', rank_record: '{w}W · {d}D · {l}L', points: 'points', you: 'you' });
-Object.assign(ru, { nav_rankings: 'Рейтинг', rankings_title: 'Рейтинг в реальном времени', rankings_live: 'Таблица обновляется онлайн', rankings_points_hint: 'Рейтинг обновляется автоматически', rankings_empty: 'Пока нет рейтинговых партий. Завершите партию, чтобы появиться здесь.', rankings_scoring: 'Очки: 2 за победу, 1 за ничью. Учитываются только завершённые игры между игроками.', rank_record: '{w}П · {d}Н · {l}П', points: 'очков', you: 'вы' });
-Object.assign(uz, { nav_rankings: 'Reyting', rankings_title: 'Jonli reyting', rankings_live: 'Reyting yangilanib turadi', rankings_points_hint: 'Jadval avtomatik yangilanadi', rankings_empty: 'Hozircha reytingli o‘yinlar yo‘q. Ro‘yxatga kirish uchun o‘yinni yakunlang.', rankings_scoring: 'Ochko: g‘alaba uchun 2, durang uchun 1. Faqat yakunlangan ikki o‘yinchi partiyalari hisoblanadi.', rank_record: '{w}G · {d}D · {l}M', points: 'ochko', you: 'siz' });
-Object.assign(uzc, { nav_rankings: 'Рейтинг', rankings_title: 'Жонли рейтинг', rankings_live: 'Рейтинг автоматик янгиланади', rankings_points_hint: 'Жадвал автоматик янгиланади', rankings_empty: 'Ҳозирча рейтингли ўйинлар йўқ. Рўйхатга кириш учун ўйинни якунланг.', rankings_scoring: 'Очко: ғалаба учун 2, дуранг учун 1. Фақат якунланган икки ўйинчи партиялари ҳисобланади.', rank_record: '{w}Ғ · {d}Д · {l}М', points: 'очко', you: 'сиз' });
+Object.assign(en, {
+  nav_rankings: 'Ranking', rankings_title: 'Live rankings', rankings_live: 'Live leaderboard',
+  rankings_points_hint: 'Standings update automatically',
+  rankings_empty: 'No ranked games yet. Finish a game to appear here.',
+  rankings_scoring: 'Monthly points: 2 for a win, 1 for a draw. Resets each calendar month (Tashkent).',
+  rankings_elo_hint: 'Lifetime Elo rating — points accumulate forever.',
+  rankings_elo_scoring: 'Elo starts at 1200. Wins raise your rating, losses lower it. Separate boards per time control.',
+  rankings_monthly_hint: 'Monthly mini-app points · {month}',
+  rank_board_elo: 'Elo', rank_board_monthly: 'Monthly',
+  rank_record: '{w}W · {d}D · {l}L', rank_games: '{n} games', points: 'points', elo: 'Elo', you: 'you',
+  avatar_title: 'Avatar', avatar_menu_sub: 'Medals & letter', avatar_sub: 'Choose a letter avatar or a monthly podium medal you earned.',
+  avatar_default: 'Default', avatar_letter: 'Letter', avatar_medals: 'Your medals',
+  avatar_medals_empty: 'Finish in top 3 of a monthly ranking to unlock a unique medal.',
+  avatar_download: 'Download', avatar_share: 'Share', avatar_saved: 'Avatar updated',
+  admin_medals: 'Medal generator', admin_medals_sub: 'Monthly top-3 SVG medals',
+  admin_medals_award: 'Award previous month', admin_medals_award_ok: 'Medals awarded',
+  admin_medals_preview: 'Preview', admin_medals_saved: 'Medal style saved',
+  admin_medals_bot: 'Bot handle', admin_medals_title_tpl: 'Title template',
+});
+Object.assign(ru, {
+  nav_rankings: 'Рейтинг', rankings_title: 'Рейтинг в реальном времени', rankings_live: 'Таблица обновляется онлайн',
+  rankings_points_hint: 'Рейтинг обновляется автоматически',
+  rankings_empty: 'Пока нет рейтинговых партий. Завершите партию, чтобы появиться здесь.',
+  rankings_scoring: 'Месячные очки: 2 за победу, 1 за ничью. Обнуляются каждый календарный месяц (Ташкент).',
+  rankings_elo_hint: 'Пожизненный Elo — очки накапливаются всегда.',
+  rankings_elo_scoring: 'Elo начинается с 1200. Победы повышают рейтинг, поражения снижают. Отдельные доски по контролю времени.',
+  rankings_monthly_hint: 'Месячные очки мини-приложения · {month}',
+  rank_board_elo: 'Elo', rank_board_monthly: 'Месяц',
+  rank_record: '{w}П · {d}Н · {l}П', rank_games: '{n} партий', points: 'очков', elo: 'Elo', you: 'вы',
+  avatar_title: 'Аватар', avatar_menu_sub: 'Медали и буква', avatar_sub: 'Выберите букву или месячную медаль с подиума.',
+  avatar_default: 'По умолчанию', avatar_letter: 'Буква', avatar_medals: 'Ваши медали',
+  avatar_medals_empty: 'Войдите в топ-3 месячного рейтинга, чтобы получить уникальную медаль.',
+  avatar_download: 'Скачать', avatar_share: 'Поделиться', avatar_saved: 'Аватар обновлён',
+  admin_medals: 'Генератор медалей', admin_medals_sub: 'SVG медали топ-3 месяца',
+  admin_medals_award: 'Выдать прошлый месяц', admin_medals_award_ok: 'Медали выданы',
+  admin_medals_preview: 'Превью', admin_medals_saved: 'Стиль сохранён',
+  admin_medals_bot: 'Ник бота', admin_medals_title_tpl: 'Шаблон заголовка',
+});
+Object.assign(uz, {
+  nav_rankings: 'Reyting', rankings_title: 'Jonli reyting', rankings_live: 'Reyting yangilanib turadi',
+  rankings_points_hint: 'Jadval avtomatik yangilanadi',
+  rankings_empty: 'Hozircha reytingli o‘yinlar yo‘q. Ro‘yxatga kirish uchun o‘yinni yakunlang.',
+  rankings_scoring: 'Oylik ochko: g‘alaba 2, durang 1. Har oy (Toshkent) yangilanadi.',
+  rankings_elo_hint: 'Umrbod Elo — ochkolar doim yig‘iladi.',
+  rankings_elo_scoring: 'Elo 1200 dan boshlanadi. G‘alaba oshiradi, mag‘lubiyat kamaytiradi. Har vaqt nazorati alohida.',
+  rankings_monthly_hint: 'Oylik mini app ochkolari · {month}',
+  rank_board_elo: 'Elo', rank_board_monthly: 'Oylik',
+  rank_record: '{w}G · {d}D · {l}M', rank_games: '{n} o‘yin', points: 'ochko', elo: 'Elo', you: 'siz',
+  avatar_title: 'Avatar', avatar_menu_sub: 'Medallar va harf', avatar_sub: 'Harf yoki oylik podium medalini tanlang.',
+  avatar_default: 'Standart', avatar_letter: 'Harf', avatar_medals: 'Medallaringiz',
+  avatar_medals_empty: 'Oylik reytingda top 3 ga kirsangiz, noyob medal olasiz.',
+  avatar_download: 'Yuklab olish', avatar_share: 'Ulashish', avatar_saved: 'Avatar yangilandi',
+  admin_medals: 'Medal generator', admin_medals_sub: 'Oylik top-3 SVG medallar',
+  admin_medals_award: 'O‘tgan oyini berish', admin_medals_award_ok: 'Medallar berildi',
+  admin_medals_preview: 'Ko‘rish', admin_medals_saved: 'Stil saqlandi',
+  admin_medals_bot: 'Bot nomi', admin_medals_title_tpl: 'Sarlavha andozasi',
+});
+Object.assign(uzc, {
+  nav_rankings: 'Рейтинг', rankings_title: 'Жонли рейтинг', rankings_live: 'Рейтинг автоматик янгиланади',
+  rankings_points_hint: 'Жадвал автоматик янгиланади',
+  rankings_empty: 'Ҳозирча рейтингли ўйинлар йўқ. Рўйхатга кириш учун ўйинни якунланг.',
+  rankings_scoring: 'Ойлик очко: ғалаба 2, дуранг 1. Ҳар ой (Тошкент) янгиланади.',
+  rankings_elo_hint: 'Умрбод Elo — очкolar доим йиғилади.',
+  rankings_elo_scoring: 'Elo 1200 дан бошланади. Ғалаба оширади, мағлубият камайтиради.',
+  rankings_monthly_hint: 'Ойлик мини апп очколари · {month}',
+  rank_board_elo: 'Elo', rank_board_monthly: 'Ойлик',
+  rank_record: '{w}Ғ · {d}Д · {l}М', rank_games: '{n} ўйин', points: 'очко', elo: 'Elo', you: 'сиз',
+  avatar_title: 'Аватар', avatar_menu_sub: 'Медаллар ва ҳарф', avatar_sub: 'Ҳарф ёки ойлик подиум медалини танланг.',
+  avatar_default: 'Стандарт', avatar_letter: 'Ҳарф', avatar_medals: 'Медалларингиз',
+  avatar_medals_empty: 'Ойлик рейтингда топ 3 га кирсангиз, ноёб медал оласиз.',
+  avatar_download: 'Юклаб олиш', avatar_share: 'Улашиш', avatar_saved: 'Аватар янгиланди',
+  admin_medals: 'Медал генератор', admin_medals_sub: 'Ойлик топ-3 SVG медаллар',
+  admin_medals_award: 'Ўтган ойни бериш', admin_medals_award_ok: 'Медаллар берилди',
+  admin_medals_preview: 'Кўриш', admin_medals_saved: 'Стил сақланди',
+  admin_medals_bot: 'Бот номи', admin_medals_title_tpl: 'Сарлавҳа андозаси',
+});
 
 const DICT = { en, ru, uz, uzc };
 let current = 'en';

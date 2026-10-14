@@ -240,7 +240,21 @@ export function rain(list = ['🎉', '♟', '✨', '🏆', '👏']) {
 
 export const initial = (name) => ([...String(name || '?').trim()][0] || '?').toUpperCase();
 export const hue = (id) => (Number(id) * 47) % 360;
-export const avatar = (name, id, cls = '') => h('div.avatar' + (cls ? '.' + cls : ''), { style: { background: `hsl(${hue(id)} 45% 42%)`, color: '#fff' } }, initial(name));
+/** Letter avatar, or medal SVG when avatarKey is `medal:<id>`. */
+export const avatar = (name, id, cls = '', avatarKey = null) => {
+  const el = h('div.avatar' + (cls ? '.' + cls : ''), { style: { background: `hsl(${hue(id)} 45% 42%)`, color: '#fff' } }, initial(name));
+  const m = avatarKey && /^medal:(.+)$/.exec(String(avatarKey));
+  if (m) {
+    el.classList.add('medal');
+    el.style.background = 'transparent';
+    el.replaceChildren(h('img.avatar-medal', {
+      src: `/api/medals/${encodeURIComponent(m[1])}.svg`,
+      alt: '',
+      draggable: 'false',
+    }));
+  }
+  return el;
+};
 
 /** Premium crown — tap opens Premium shop (via `open-premium` event). */
 export function premIc(size = 18) {
@@ -274,7 +288,7 @@ export function avBlock(name, id, opts = {}) {
     + (circ ? '.circ' : ''),
   );
   if (opts.premium) wrap.append(h('span.prem-ring', { 'aria-hidden': 'true' }));
-  wrap.append(avatar(name, id, size));
+  wrap.append(avatar(name, id, size, opts.avatarKey || null));
   if (opts.online) wrap.append(h('i.dot.on'));
   return wrap;
 }

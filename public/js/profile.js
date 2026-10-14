@@ -298,6 +298,64 @@ export function renderProfilePage(ctx) {
     ];
   });
 
+  const downloadMedal = (url, name) => {
+    const a = h('a', { href: url, download: name || 'medal.svg', target: '_blank', rel: 'noopener' });
+    document.body.append(a); a.click(); a.remove();
+  };
+
+  const openAvatar = () => openScreen((close) => {
+    const host = h('div');
+    const draw = async () => {
+      let medals = [];
+      try {
+        const r = await api('GET', '/medals/mine');
+        medals = r.medals || [];
+        if (r.avatarKey != null) state.me.avatarKey = r.avatarKey;
+      } catch (e) { fail(e); }
+      const cur = state.me.avatarKey || null;
+      const pick = async (key) => {
+        try {
+          state.me = await save({ avatarKey: key });
+          toast(t('avatar_saved')); haptic('success');
+          draw(); refresh();
+        } catch (e) { fail(e); }
+      };
+      host.replaceChildren(
+        h('p.muted', t('avatar_sub')),
+        h('div.h2', t('avatar_default')),
+        h('button.avatar-pick' + (!cur ? '.on' : ''), {
+          type: 'button',
+          onclick: () => pick(null),
+        }, avBlock(me.firstName, me.id, { size: 'xl', round: true }), h('span', t('avatar_letter'))),
+        h('div.h2', t('avatar_medals')),
+        medals.length
+          ? h('div.medal-grid', medals.map((m) => h('div.medal-card' + (cur === m.key ? '.on' : ''),
+            h('button.avatar-pick', {
+              type: 'button',
+              onclick: () => pick(m.key),
+            },
+              h('img.medal-preview', { src: m.url, alt: m.title }),
+              h('div.t', m.title),
+              h('div.s', m.monthLabel + ' · #' + m.place)),
+            h('div.medal-actions',
+              h('button.mini', {
+                type: 'button',
+                onclick: () => { haptic('select'); downloadMedal(m.url, `medal-${m.month}-top${m.place}.svg`); },
+              }, t('avatar_download')),
+              h('button.mini', {
+                type: 'button',
+                onclick: () => {
+                  haptic('select');
+                  shareUrl(m.url, `${m.title} · @${state.meta.botUsername || 'Chess_uz_bot'}`);
+                },
+              }, t('avatar_share')))))
+          : h('div.empty', h('div.empty-ic', '🏅'), t('avatar_medals_empty')),
+      );
+    };
+    draw();
+    return [...subTop(t('avatar_title'), close), host];
+  });
+
   const openHelp = () => openScreen((close) => [
     ...subTop(t('help'), close),
     h('div.card.prose',
@@ -320,10 +378,15 @@ export function renderProfilePage(ctx) {
   return [
     h('div.prof-head',
       h('div.prof-me',
-        avBlock(me.firstName, me.id, { premium: !!me.premium, size: 'xl' }),
+        h('button.prof-av', {
+          type: 'button',
+          title: t('avatar_title'),
+          onclick: () => { haptic('select'); openAvatar(); },
+        }, avBlock(me.firstName, me.id, { premium: !!me.premium, size: 'xl', avatarKey: me.avatarKey })),
         h('div.prof-meta',
           h('h2', h('span.name', me.firstName), me.premium ? premIc() : null),
-          me.username ? h('div.muted', '@' + me.username) : h('div.muted', t('profile_title'))),
+          me.username ? h('div.muted', '@' + me.username) : h('div.muted', t('profile_title')),
+          me.elo != null ? h('div.s', t('elo') + ' ' + me.elo) : null),
         h('button.prof-gem', {
           type: 'button',
           onclick: () => { haptic('select'); openDiamonds(); },
@@ -344,6 +407,7 @@ export function renderProfilePage(ctx) {
     menuCard(
       menuRow({ ic: 'chart', title: t('stats'), sub: `${s.w}W · ${s.d}D · ${s.l}L`, onClick: openStats }),
       menuRow({ ic: 'rankings', title: t('nav_rankings'), onClick: () => goTab('rankings') }),
+      menuRow({ ic: 'profile', title: t('avatar_title'), sub: t('avatar_menu_sub'), onClick: openAvatar }),
       menuRow({ ic: 'handshake', title: t('friends_title'), sub: friends.length ? String(friends.length) : t('no_friends').split('\n')[0], onClick: openFriends }),
       menuRow({ ic: 'gem', title: t('diamonds'), sub: String(me.diamonds || 0) + ' 💎', onClick: openDiamonds }),
       menuRow({

@@ -426,6 +426,90 @@ export function openAdmin(onClose) {
     } catch (e) { fail(e); drawShop(); }
   }
 
+  // ----- medal generator -----
+  let medalState = { config: {}, month: '', top: [], medals: [], previewUrl: '' };
+  const medalHost = h('div');
+
+  function drawMedals() {
+    const cfg = medalState.config || {};
+    const color = (key, label) => h('div.ann-color',
+      h('span', label),
+      h('input', {
+        type: 'color', value: cfg[key] || '#ffffff',
+        oninput: (e) => { cfg[key] = e.target.value; },
+      }));
+    const botIn = h('input.input', {
+      value: cfg.botHandle || '@Chess_uz_bot', maxlength: 64,
+      oninput: (e) => { cfg.botHandle = e.target.value; },
+    });
+    const tplIn = h('input.input', {
+      value: cfg.titleTemplate || 'Top {place} Chess player of {month}', maxlength: 120,
+      oninput: (e) => { cfg.titleTemplate = e.target.value; },
+    });
+    const preview = h('div');
+    if (medalState.previewUrl) {
+      preview.append(h('img.medal-admin-preview', { src: medalState.previewUrl, alt: 'preview' }));
+    }
+    const list = (medalState.medals || []).length
+      ? h('div.list', medalState.medals.map((m) => h('div.row',
+        h('img', { src: m.url, alt: '', style: { width: '40px', height: '40px', borderRadius: '10px' } }),
+        h('div.grow', h('div.t', m.title), h('div.s', `${m.month} · #${m.place} · ${m.name || m.userId}`)))))
+      : h('div.muted', '—');
+    medalHost.replaceChildren(
+      h('div.card',
+        h('p.muted', t('admin_medals_sub')),
+        h('div.label', t('admin_medals_bot')), botIn,
+        h('div.label', t('admin_medals_title_tpl')), tplIn,
+        h('div.label', t('ann_colors')),
+        h('div.ann-colors',
+          color('primary', 'Primary'), color('secondary', 'Secondary'),
+          color('accent', 'Accent'), color('text', 'Text')),
+        h('button.btn.ghost.sm', {
+          onclick: async () => {
+            try {
+              const r = await api('POST', '/admin/medals/preview', {
+                config: cfg, place: 1, month: medalState.month,
+                name: (medalState.top[0] && medalState.top[0].name) || 'Player',
+                username: (medalState.top[0] && medalState.top[0].username) || '',
+                userId: (medalState.top[0] && medalState.top[0].id) || 0,
+              });
+              medalState.previewUrl = r.dataUrl;
+              drawMedals();
+            } catch (e) { fail(e); }
+          },
+        }, t('admin_medals_preview')),
+        preview,
+        h('button.btn', {
+          onclick: async () => {
+            try {
+              const r = await api('PATCH', '/admin/medals/config', cfg);
+              medalState.config = r.config;
+              toast(t('admin_medals_saved')); haptic('success');
+              drawMedals();
+            } catch (e) { fail(e); }
+          },
+        }, icon('check', 18), t('save')),
+        h('button.btn.ghost', {
+          onclick: async () => {
+            try {
+              await api('POST', '/admin/medals/award', { month: medalState.previousMonth || undefined });
+              toast(t('admin_medals_award_ok')); haptic('success');
+              loadMedals();
+            } catch (e) { fail(e); }
+          },
+        }, t('admin_medals_award'))),
+      h('div.h2', t('admin_medals')), list,
+    );
+  }
+
+  async function loadMedals() {
+    try {
+      const r = await api('GET', '/admin/medals');
+      medalState = { ...medalState, ...r, previewUrl: medalState.previewUrl || '' };
+      drawMedals();
+    } catch (e) { fail(e); drawMedals(); }
+  }
+
   // ----- section screens -----
   const openLive = () => openScreen((close) => {
     loadLive();
@@ -481,6 +565,14 @@ export function openAdmin(onClose) {
     ];
   });
 
+  const openMedals = () => openScreen((close) => {
+    loadMedals();
+    return [
+      ...subTop(t('admin_medals'), close),
+      medalHost,
+    ];
+  });
+
   openScreen((close) => [
     h('button.back', { type: 'button', onclick: () => close() }, icon('back', 20), t('back')),
     h('div.top', h('h1', t('admin_title'))),
@@ -498,6 +590,7 @@ export function openAdmin(onClose) {
     menuCard(
       menuRow({ ic: 'send', title: t('composer'), sub: t('admin_sec_broadcast_sub'), onClick: openBroadcast }),
       menuRow({ ic: 'gear', title: t('admin_style'), sub: t('admin_style_sub'), onClick: openStyle }),
+      menuRow({ ic: 'rankings', title: t('admin_medals'), sub: t('admin_medals_sub'), onClick: openMedals }),
     ),
   ], {
     onClose: () => {

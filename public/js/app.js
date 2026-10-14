@@ -70,7 +70,8 @@ async function refresh(which = state.tab) {
 
 // ---------- actions ----------
 const openOnline = (g) => openGame({ kind: 'online', game: g, meta: gameMeta() }, () => refresh());
-const rankingCategory = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapid', classic: 'Classic' };
+const rankingCategory = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapid', classic: 'Classic', all: 'All' };
+let selectedRankingBoard = 'elo';
 let selectedRanking = 'bullet';
 async function startQuick() {
   try { const r = await api('POST', '/games/quick', { timeControl: selectedPreset() }); openOnline(r.game); } catch (e) { fail(e); }
@@ -291,24 +292,48 @@ refreshers.live = async function renderLive() {
 };
 
 refreshers.rankings = async function renderRankings() {
-  const categories = ['bullet', 'blitz', 'rapid', 'classic'];
+  const isElo = selectedRankingBoard === 'elo';
+  const categories = isElo
+    ? ['bullet', 'blitz', 'rapid', 'classic']
+    : ['all', 'bullet', 'blitz', 'rapid', 'classic'];
+  if (!categories.includes(selectedRanking)) selectedRanking = isElo ? 'bullet' : 'all';
   let data;
-  try { data = await api('GET', '/rankings?category=' + selectedRanking); }
-  catch (e) { fail(e); return; }
-  const tabs = h('div.rank-tabs', categories.map((category) => h('button.rank-tab' + (category === selectedRanking ? '.on' : ''), {
+  try {
+    data = await api('GET', `/rankings?board=${selectedRankingBoard}&category=${selectedRanking}`);
+  } catch (e) { fail(e); return; }
+  const boardBar = h('div.rank-board-bar',
+    [['elo', t('rank_board_elo')], ['monthly', t('rank_board_monthly')]].map(([id, label]) =>
+      h('button.rank-board' + (selectedRankingBoard === id ? '.on' : ''), {
+        type: 'button',
+        onclick: () => {
+          selectedRankingBoard = id;
+          selectedRanking = id === 'elo' ? 'bullet' : 'all';
+          haptic('select');
+          refresh('rankings');
+        },
+      }, label)));
+  const tabs = h('div.rank-tabs' + (isElo ? '' : '.five'), categories.map((category) => h('button.rank-tab' + (category === selectedRanking ? '.on' : ''), {
     onclick: () => { selectedRanking = category; haptic('select'); refresh('rankings'); }
   }, rankingCategory[category])));
   const rows = data.rankings || [];
+  const unit = isElo ? t('elo') : t('points');
+  const hint = isElo ? t('rankings_elo_hint') : t('rankings_monthly_hint', { month: data.monthLabel || '' });
+  const foot = isElo ? t('rankings_elo_scoring') : t('rankings_scoring');
   mount('rankings',
     h('div.top', h('h1', '♜ ' + t('rankings_title')), h('div.livepill', h('i.dot'), t('rankings_live'))),
+    boardBar,
     tabs,
-    h('div.card.rank-summary', h('div.rank-summary-title', rankingCategory[selectedRanking] + ' · ' + t('rankings_title')), h('div.muted', t('rankings_points_hint'))),
+    h('div.card.rank-summary',
+      h('div.rank-summary-title', rankingCategory[selectedRanking] + ' · ' + (isElo ? t('rank_board_elo') : t('rank_board_monthly'))),
+      h('div.muted', hint)),
     rows.length ? h('div.list.rank-list', rows.map((p) => h('div.row.rank-row',
       h('div.rank-place' + (p.rank <= 3 ? '.podium-' + p.rank : ''), p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : String(p.rank)),
       h('div.grow', h('div.t', p.name, p.id === state.me.id ? h('span.star', ' · ' + t('you')) : null),
-        h('div.s', t('rank_record', { w: p.wins, d: p.draws, l: p.losses }))),
-      h('div.rank-points', h('b', String(p.points)), h('small', t('points')))))) : empty(t('rankings_empty'), '♟'),
-    h('div.rank-footnote', t('rankings_scoring'))
+        h('div.s', isElo
+          ? t('rank_games', { n: p.games || 0 })
+          : t('rank_record', { w: p.wins || 0, d: p.draws || 0, l: p.losses || 0 }))),
+      h('div.rank-points', h('b', String(isElo ? (p.elo ?? p.points) : p.points)), h('small', unit))))) : empty(t('rankings_empty'), '♟'),
+    h('div.rank-footnote', foot)
   );
 };
 
