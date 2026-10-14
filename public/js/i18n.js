@@ -50,6 +50,7 @@ const en = {
   e_notfound: 'Not found', e_illegal_move: 'That move is not allowed', e_not_your_turn: "It's not your turn",
   e_game_unavailable: 'This game is no longer available', e_game_over: 'The game is over', e_too_many_games: 'You have too many games open',
   e_user_unavailable: 'This player is not available', e_bad_request: 'Something is wrong with the request', e_server: 'Something went wrong', e_net: 'No connection',
+  e_upstream: 'Lichess is temporarily unavailable',
   // admin
   admin_title: 'Admin', live_users: 'Live users', k_users: 'Users', k_new: 'New today', k_active: 'Active 7d', k_games_live: 'Games now',
   k_games_played: 'Games played', k_unreachable: 'Blocked the bot', signups: 'Sign-ups, 14 days', nobody_live: 'Nobody online',
@@ -113,6 +114,7 @@ const ru = {
   e_notfound: 'Не найдено', e_illegal_move: 'Такой ход невозможен', e_not_your_turn: 'Сейчас не ваш ход',
   e_game_unavailable: 'Эта партия больше недоступна', e_game_over: 'Партия окончена', e_too_many_games: 'Слишком много открытых партий',
   e_user_unavailable: 'Игрок недоступен', e_bad_request: 'Неверный запрос', e_server: 'Что-то пошло не так', e_net: 'Нет соединения',
+  e_upstream: 'Lichess временно недоступен',
   admin_title: 'Админ', live_users: 'Сейчас онлайн', k_users: 'Пользователи', k_new: 'Новые сегодня', k_active: 'Активные 7д', k_games_live: 'Партий сейчас',
   k_games_played: 'Сыграно партий', k_unreachable: 'Заблокировали бота', signups: 'Регистрации, 14 дней', nobody_live: 'Никого онлайн',
   composer: 'Новый пост', post_text: 'Текст сообщения', add_media: 'Добавить фото, видео или GIF', remove: 'Убрать', buttons: 'Кнопки',
@@ -175,6 +177,7 @@ const uz = {
   e_notfound: 'Topilmadi', e_illegal_move: "Bunday yurish mumkin emas", e_not_your_turn: 'Hozir sizning navbatingiz emas',
   e_game_unavailable: "Bu o'yin endi mavjud emas", e_game_over: "O'yin tugagan", e_too_many_games: "Ochiq o'yinlar juda ko'p",
   e_user_unavailable: "O'yinchi mavjud emas", e_bad_request: "So'rov noto'g'ri", e_server: "Nimadir xato ketdi", e_net: 'Aloqa yo\'q',
+  e_upstream: 'Lichess vaqtincha ishlamayapti',
   admin_title: 'Admin', live_users: 'Hozir onlayn', k_users: 'Foydalanuvchilar', k_new: 'Bugun yangi', k_active: '7 kun faol', k_games_live: "Hozir o'yinlar",
   k_games_played: "O'ynalgan o'yinlar", k_unreachable: 'Botni bloklagan', signups: "Ro'yxatdan o'tish, 14 kun", nobody_live: 'Hech kim onlayn emas',
   composer: 'Yangi post', post_text: 'Xabar matni', add_media: "Rasm, video yoki GIF qo'shish", remove: "Olib tashlash", buttons: 'Tugmalar',
@@ -237,6 +240,7 @@ const uzc = {
   e_notfound: 'Топилмади', e_illegal_move: 'Бундай юриш мумкин эмас', e_not_your_turn: 'Ҳозир сизнинг навбатингиз эмас',
   e_game_unavailable: 'Бу ўйин энди мавжуд эмас', e_game_over: 'Ўйин тугаган', e_too_many_games: 'Очиқ ўйинлар жуда кўп',
   e_user_unavailable: 'Ўйинчи мавжуд эмас', e_bad_request: 'Сўров нотўғри', e_server: 'Нимадир хато кетди', e_net: 'Алоқа йўқ',
+  e_upstream: 'Lichess вақтинча ишламаяпти',
   admin_title: 'Админ', live_users: 'Ҳозир онлайн', k_users: 'Фойдаланувчилар', k_new: 'Бугун янги', k_active: '7 кун фаол', k_games_live: 'Ҳозир ўйинлар',
   k_games_played: 'Ўйналган ўйинлар', k_unreachable: 'Ботни блоклаган', signups: 'Рўйхатдан ўтиш, 14 кун', nobody_live: 'Ҳеч ким онлайн эмас',
   composer: 'Янги пост', post_text: 'Хабар матни', add_media: 'Расм, видео ёки GIF қўшиш', remove: 'Олиб ташлаш', buttons: 'Тугмалар',
@@ -323,7 +327,7 @@ Object.assign(en, {
   filter_all: 'All ({n})', filter_uz: '🇺🇿 Uzbekistan ({n})', live_no_tours: 'No broadcasts right now.',
   live_no_rounds: 'No rounds yet.', live_no_games: 'No games in this round.', live_no_uz: 'No Uzbekistan players in this round.',
   live_load_fail: 'Could not load. Try again.', moves_n: '{n} moves',
-  turn_white: "White's turn", turn_black: "Black's turn",
+  turn_white: "White's turn", turn_black: "Black's turn", retry_live: 'Try again',
 });
 Object.assign(ru, {
   live_tab_bot: 'Живые партии', live_tab_intl: 'Мировые турниры', live_games_count: '{n} live',
@@ -334,7 +338,7 @@ Object.assign(ru, {
   filter_all: 'Все ({n})', filter_uz: '🇺🇿 Узбекистан ({n})', live_no_tours: 'Сейчас нет трансляций.',
   live_no_rounds: 'Туров пока нет.', live_no_games: 'В этом туре нет партий.', live_no_uz: 'В этом туре нет игроков из Узбекистана.',
   live_load_fail: 'Не удалось загрузить. Попробуйте ещё раз.', moves_n: '{n} ходов',
-  turn_white: 'Ход белых', turn_black: 'Ход чёрных',
+  turn_white: 'Ход белых', turn_black: 'Ход чёрных', retry_live: 'Ещё раз',
 });
 Object.assign(uz, {
   live_tab_bot: "Live o'yinlar", live_tab_intl: 'Halqaro Live turnirlar', live_games_count: '{n} ta jonli',
@@ -345,7 +349,7 @@ Object.assign(uz, {
   filter_all: 'Hammasi ({n})', filter_uz: "🇺🇿 O'zbekiston ({n})", live_no_tours: "Hozircha turnirlar yo'q.",
   live_no_rounds: "Raundlar yo'q.", live_no_games: "Bu raundda o'yin yo'q.", live_no_uz: "Bu raundda O'zbekiston o'yinchilari yo'q.",
   live_load_fail: "Yuklanmadi. Qayta urinib ko'ring.", moves_n: '{n}-yurish',
-  turn_white: 'Oq navbati', turn_black: 'Qora navbati',
+  turn_white: 'Oq navbati', turn_black: 'Qora navbati', retry_live: 'Qayta urinish',
 });
 Object.assign(uzc, {
   live_tab_bot: 'Live ўйинлар', live_tab_intl: 'Халқаро Live турнирлар', live_games_count: '{n} та жонли',
@@ -356,5 +360,5 @@ Object.assign(uzc, {
   filter_all: 'Ҳаммаси ({n})', filter_uz: '🇺🇿 Ўзбекистон ({n})', live_no_tours: 'Ҳозирча турнирлар йўқ.',
   live_no_rounds: 'Раундлар йўқ.', live_no_games: 'Бу раундда ўйин йўқ.', live_no_uz: 'Бу раундда Ўзбекистон ўйинчилари йўқ.',
   live_load_fail: 'Юкланмади. Қайта уриниб кўринг.', moves_n: '{n}-юриш',
-  turn_white: 'Оқ навбати', turn_black: 'Қора навбати',
+  turn_white: 'Оқ навбати', turn_black: 'Қора навбати', retry_live: 'Қайта уриниш',
 });

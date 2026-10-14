@@ -33,9 +33,15 @@ function setSection(s) {
 
 function backIntl() {
   haptic('light');
-  if (nav.view === 'game') nav = { view: 'round', tourId: nav.tourId, roundId: nav.roundId, roundName: nav.roundName, tourName: nav.tourName, filter: nav.filter };
-  else if (nav.view === 'round') nav = { view: 'tour', tourId: nav.tourId, tourName: nav.tourName };
-  else nav = { view: 'list' };
+  if (nav.view === 'game') {
+    openRoundNav({
+      tourId: nav.tourId, tourName: nav.tourName, tourSlug: nav.tourSlug,
+      roundId: nav.roundId, roundName: nav.roundName, roundSlug: nav.roundSlug, roundUrl: nav.roundUrl,
+      filter: nav.filter,
+    });
+  } else if (nav.view === 'round') {
+    nav = { view: 'tour', tourId: nav.tourId, tourName: nav.tourName, tourSlug: nav.tourSlug };
+  } else nav = { view: 'list' };
 }
 
 /** Lichess broadcast player.clock is centiseconds. */
@@ -126,6 +132,39 @@ function tabsEl(onRefresh) {
 
 function empty(text, ic) {
   return h('div.empty', ic ? h('div.empty-ic', ic) : null, text);
+}
+
+/** Build /lichess/rounds/:id URL with optional slug hints for Lichess. */
+function roundApi(pathExtra = '', { fresh = false, game } = {}) {
+  const id = nav.roundId;
+  if (!id || !/^[a-zA-Z0-9]{8}$/.test(id)) {
+    const err = new Error('Round not found');
+    err.code = 'notfound';
+    err.status = 404;
+    throw err;
+  }
+  const q = new URLSearchParams();
+  if (fresh) q.set('fresh', '1');
+  if (nav.tourSlug) q.set('tourSlug', nav.tourSlug);
+  if (nav.roundSlug) q.set('roundSlug', nav.roundSlug);
+  if (nav.roundUrl) q.set('url', nav.roundUrl);
+  if (game) q.set('game', game);
+  const qs = q.toString();
+  return `/lichess/rounds/${id}${pathExtra}${qs ? `?${qs}` : ''}`;
+}
+
+function openRoundNav(partial) {
+  nav = {
+    view: 'round',
+    tourId: partial.tourId || nav.tourId,
+    tourName: partial.tourName || nav.tourName,
+    tourSlug: partial.tourSlug || nav.tourSlug,
+    roundId: partial.roundId,
+    roundName: partial.roundName || nav.roundName,
+    roundSlug: partial.roundSlug || nav.roundSlug,
+    roundUrl: partial.roundUrl || nav.roundUrl,
+    filter: partial.filter || nav.filter || 'all',
+  };
 }
 
 // ---------- Bot live games ----------
@@ -220,7 +259,24 @@ async function renderIntlList(mount, onRefresh) {
     h('div.h2', t('tournaments'), h('span.count-pill', t('count_ta', { n: all.length }))),
     all.length ? h('div.list', all.map((item) => broadcastRow(item, (it) => {
       haptic('light');
-      nav = { view: 'tour', tourId: it.tour.id, tourName: tourTitle(it), preferRound: it.round && it.round.id };
+      const round = it.round || {};
+      const tour = it.tour || {};
+      // Jump straight into the live/current round when Lichess gives one
+      if (round.id && /^[a-zA-Z0-9]{8}$/.test(round.id)) {
+        const m = String(round.url || '').match(/\/broadcast\/([^/]+)\/([^/]+)\/([a-zA-Z0-9]{8})\b/);
+        openRoundNav({
+          tourId: tour.id,
+          tourName: tourTitle(it),
+          tourSlug: (m && m[1]) || tour.slug,
+          roundId: round.id,
+          roundName: round.name,
+          roundSlug: (m && m[2]) || round.slug,
+          roundUrl: round.url,
+          filter: 'all',
+        });
+      } else {
+        nav = { view: 'tour', tourId: tour.id, tourName: tourTitle(it), preferRound: round.id };
+      }
       onRefresh();
     }))) : empty(t('live_no_tours'), '🌐'),
   ]);
@@ -248,7 +304,17 @@ async function renderTour(mount, onRefresh) {
     rounds.length ? h('div.list', rounds.slice().reverse().map((r) => h('button.row', {
       onclick: () => {
         haptic('light');
-        nav = { view: 'round', tourId: nav.tourId, tourName: nav.tourName || tour.name, roundId: r.id, roundName: r.name, filter: 'all' };
+        const m = String(r.url || '').match(/\/broadcast\/([^/]+)\/([^/]+)\/([a-zA-Z0-9]{8})\b/);
+        openRoundNav({
+          tourId: nav.tourId,
+          tourName: nav.tourName || tour.name,
+          tourSlug: (m && m[1]) || tour.slug || nav.tourSlug,
+          roundId: r.id,
+          roundName: r.name,
+          roundSlug: (m && m[2]) || r.slug,
+          roundUrl: r.url,
+          filter: 'all',
+        });
         onRefresh();
       },
     },
@@ -259,7 +325,17 @@ async function renderTour(mount, onRefresh) {
     pick ? h('button.btn', {
       onclick: () => {
         haptic('medium');
-        nav = { view: 'round', tourId: nav.tourId, tourName: nav.tourName || tour.name, roundId: pick.id, roundName: pick.name, filter: 'all' };
+        const m = String(pick.url || '').match(/\/broadcast\/([^/]+)\/([^/]+)\/([a-zA-Z0-9]{8})\b/);
+        openRoundNav({
+          tourId: nav.tourId,
+          tourName: nav.tourName || tour.name,
+          tourSlug: (m && m[1]) || tour.slug || nav.tourSlug,
+          roundId: pick.id,
+          roundName: pick.name,
+          roundSlug: (m && m[2]) || pick.slug,
+          roundUrl: pick.url,
+          filter: 'all',
+        });
         onRefresh();
       },
     }, pick.ongoing ? t('open_live_round', { n: pick.name }) : t('open_round', { n: pick.name })) : null,
@@ -309,8 +385,33 @@ async function renderRound(mount, onRefresh) {
   destroyBoards();
   clearPoll();
   let data;
-  try { data = await api('GET', `/lichess/rounds/${nav.roundId}?fresh=1`); }
-  catch (e) { fail(e); nav = { view: 'tour', tourId: nav.tourId, tourName: nav.tourName }; return onRefresh(); }
+  try { data = await api('GET', roundApi('', { fresh: true })); }
+  catch (e) {
+    fail(e);
+    if (e.code === 'notfound' || e.code === 'bad_request' || e.status === 404) {
+      nav = { view: 'tour', tourId: nav.tourId, tourName: nav.tourName, tourSlug: nav.tourSlug };
+      return onRefresh();
+    }
+    // Transient upstream/network: show retry, do not loop onRefresh
+    return mount([
+      h('div.top',
+        h('button.mini.back', { 'aria-label': t('back'), onclick: () => { backIntl(); onRefresh(); } }, icon('back', 18)),
+        h('h1', nav.tourName || t('live_tab_intl'))),
+      empty(t('live_load_fail'), '🌐'),
+      h('button.btn', { onclick: () => onRefresh() }, t('retry_live')),
+    ]);
+  }
+  // Keep slugs in sync from the payload for subsequent polls
+  if (data.round) {
+    nav.roundName = data.round.name || nav.roundName;
+    nav.roundSlug = data.round.slug || nav.roundSlug;
+    nav.roundUrl = data.round.url || nav.roundUrl;
+  }
+  if (data.tour) {
+    nav.tourId = data.tour.id || nav.tourId;
+    nav.tourName = data.tour.name || nav.tourName;
+    nav.tourSlug = data.tour.slug || nav.tourSlug;
+  }
   const games = data.games || [];
   const round = data.round || {};
   const tour = data.tour || {};
@@ -397,21 +498,30 @@ async function renderGame(mount, onRefresh) {
   clearPoll();
   let snap = nav.snap;
   try {
-    const round = await api('GET', `/lichess/rounds/${nav.roundId}?fresh=1`);
+    const round = await api('GET', roundApi('', { fresh: true }));
     snap = (round.games || []).find((g) => g.id === nav.gameId) || snap;
     nav.snap = snap;
+    if (round.round) {
+      nav.roundName = round.round.name || nav.roundName;
+      nav.roundSlug = round.round.slug || nav.roundSlug;
+      nav.roundUrl = round.round.url || nav.roundUrl;
+    }
   } catch { /* keep snap */ }
   if (!snap) {
     fail({ code: 'notfound' });
-    nav = { view: 'round', tourId: nav.tourId, tourName: nav.tourName, roundId: nav.roundId, roundName: nav.roundName, filter: nav.filter };
+    openRoundNav({
+      tourId: nav.tourId, tourName: nav.tourName, tourSlug: nav.tourSlug,
+      roundId: nav.roundId, roundName: nav.roundName, roundSlug: nav.roundSlug, roundUrl: nav.roundUrl,
+      filter: nav.filter,
+    });
     return onRefresh();
   }
 
   let moves = [];
   try {
-    const p = await api('GET', `/lichess/rounds/${nav.roundId}/pgn?fresh=1&game=${encodeURIComponent(nav.gameId)}`);
+    const p = await api('GET', roundApi('/pgn', { fresh: true, game: nav.gameId }));
     if (p.game && p.game.pgn) moves = parsePgnMoves(p.game.pgn);
-  } catch { /* fen-only fallback */ }
+  } catch { /* fen-only fallback — board still works from FEN */ }
 
   const cursor = { i: moves.length }; // at live tip when i === moves.length
   let clockState = makeClockState(snap);
@@ -499,8 +609,7 @@ async function renderGame(mount, onRefresh) {
     if (pgnBusy) return;
     pgnBusy = true;
     try {
-      const q = force ? 'fresh=1&' : '';
-      const p = await api('GET', `/lichess/rounds/${nav.roundId}/pgn?${q}game=${encodeURIComponent(nav.gameId)}`);
+      const p = await api('GET', roundApi('/pgn', { fresh: !!force, game: nav.gameId }));
       if (p.game && p.game.pgn) {
         const next = parsePgnMoves(p.game.pgn);
         if (next.length !== moves.length || force) {
@@ -551,19 +660,18 @@ async function renderGame(mount, onRefresh) {
     paintClocks();
   }, 200);
 
-  // Fresh board/clock snapshots from Lichess
+  // Fresh board/clock snapshots from Lichess (never toast/navigate away on poll errors)
   let polls = 0;
   pollTimer = setInterval(async () => {
     if (section !== 'intl' || nav.view !== 'game') return clearPoll();
     polls += 1;
     try {
-      const round = await api('GET', `/lichess/rounds/${nav.roundId}?fresh=1`);
+      const round = await api('GET', roundApi('', { fresh: true }));
       const g = (round.games || []).find((x) => x.id === nav.gameId);
       if (g) applySnap(g);
-      // Periodic PGN refresh even if fen key looked the same (new moves with same tip rare)
       if (polls % 3 === 0) refreshPgn(true);
     } catch { /* ignore transient errors */ }
-  }, 2000);
+  }, 2500);
 }
 
 /**

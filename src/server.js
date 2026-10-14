@@ -677,6 +677,13 @@ api.get('/live/games/:id', wrap(async (req, res) => {
   res.json({ game: g });
 }));
 
+const lichessFail = (e, notFoundMsg) => {
+  if (e.status === 400 || e.code === 'bad_request') throw bad(e.message || 'Invalid id', 'bad_request');
+  if (e.status === 404) throw new HttpError(404, notFoundMsg, 'notfound');
+  if (e.status === 429) throw new HttpError(429, 'Too many requests', 'limit');
+  throw new HttpError(502, 'Lichess is unavailable', 'upstream');
+};
+
 api.get('/lichess/broadcasts', wrap(async (req, res) => {
   try {
     const data = await lichess.topBroadcasts();
@@ -685,31 +692,28 @@ api.get('/lichess/broadcasts', wrap(async (req, res) => {
       upcoming: data.upcoming || [],
       updatedAt: new Date().toISOString(),
     });
-  } catch (e) {
-    throw new HttpError(e.status === 429 ? 429 : 502, 'Lichess is unavailable', e.status === 429 ? 'limit' : 'upstream');
-  }
+  } catch (e) { lichessFail(e, 'Broadcast not found'); }
 }));
 
 api.get('/lichess/broadcasts/:id', wrap(async (req, res) => {
   try {
     const data = await lichess.broadcastTour(req.params.id);
     res.json({ ...data, updatedAt: new Date().toISOString() });
-  } catch (e) {
-    if (e.status === 400) throw bad('Invalid id', 'bad_request');
-    throw new HttpError(e.status === 404 ? 404 : 502, 'Broadcast not found', e.status === 404 ? 'notfound' : 'upstream');
-  }
+  } catch (e) { lichessFail(e, 'Broadcast not found'); }
 }));
 
 api.get('/lichess/rounds/:id', wrap(async (req, res) => {
   try {
     const fresh = req.query.fresh === '1' || req.query.fresh === 'true';
-    const data = await lichess.broadcastRound(req.params.id, { fresh });
+    const data = await lichess.broadcastRound(req.params.id, {
+      fresh,
+      tourSlug: req.query.tourSlug,
+      roundSlug: req.query.roundSlug,
+      roundUrl: req.query.url,
+    });
     res.set('Cache-Control', 'no-store');
     res.json({ ...data, updatedAt: new Date().toISOString() });
-  } catch (e) {
-    if (e.status === 400) throw bad('Invalid id', 'bad_request');
-    throw new HttpError(e.status === 404 ? 404 : 502, 'Round not found', e.status === 404 ? 'notfound' : 'upstream');
-  }
+  } catch (e) { lichessFail(e, 'Round not found'); }
 }));
 
 api.get('/lichess/rounds/:id/pgn', wrap(async (req, res) => {
@@ -717,7 +721,9 @@ api.get('/lichess/rounds/:id/pgn', wrap(async (req, res) => {
     const fresh = req.query.fresh === '1' || req.query.fresh === 'true';
     if (fresh) lichess.bustPgn(req.params.id);
     const data = await lichess.broadcastRoundPgn(req.params.id, { fresh });
-    const gameId = req.query.game ? String(req.query.game).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16) : '';
+    let gameId = '';
+    try { gameId = req.query.game ? lichess.lichessId(req.query.game, 'game id') : ''; }
+    catch { gameId = ''; }
     res.set('Cache-Control', 'no-store');
     if (gameId) {
       const one = (data.games || []).find((g) => g.id === gameId);
@@ -727,8 +733,7 @@ api.get('/lichess/rounds/:id/pgn', wrap(async (req, res) => {
     res.json({ roundId: data.roundId, games: data.games || [], updatedAt: new Date().toISOString() });
   } catch (e) {
     if (e.code === 'notfound') throw e;
-    if (e.status === 400) throw bad('Invalid id', 'bad_request');
-    throw new HttpError(e.status === 404 ? 404 : 502, 'PGN unavailable', e.status === 404 ? 'notfound' : 'upstream');
+    lichessFail(e, 'Round not found');
   }
 }));
 

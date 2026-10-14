@@ -1,10 +1,12 @@
-// Public Lichess broadcast API proxy helpers (no OAuth needed for watching).
+// Public Lichess broadcast API helpers (watching needs no OAuth).
 // Docs: https://lichess.org/api#tag/Broadcasts
 
 const BASE = 'https://lichess.org';
 const UA = 'ObunaNazoratBot/1.0 (Telegram Mini App; broadcast spectator)';
 
 const cache = new Map(); // key -> { at, data }
+const inflight = new Map(); // path -> Promise
+
 const getCached = (key, maxAge) => {
   const hit = cache.get(key);
   if (!hit) return null;
@@ -13,47 +15,119 @@ const getCached = (key, maxAge) => {
 };
 const setCached = (key, data) => { cache.set(key, { at: Date.now(), data }); return data; };
 
+/** Lichess broadcast / game ids are exactly 8 URL-safe chars. */
+function lichessId(raw, label = 'id') {
+  const id = String(raw || '').trim();
+  if (!/^[a-zA-Z0-9]{8}$/.test(id)) {
+    const err = new Error(`Invalid Lichess ${label}`);
+    err.status = 400;
+    err.code = 'bad_request';
+    throw err;
+  }
+  return id;
+}
+
+function slugify(raw) {
+  const s = String(raw || '').trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+  return s || '-';
+}
+
+/** Parse tour/round slugs from a Lichess broadcast URL when present. */
+function slugsFromUrl(url) {
+  const m = String(url || '').match(/\/broadcast\/([^/]+)\/([^/]+)\/([a-zA-Z0-9]{8})\b/);
+  if (!m) return null;
+  return { tourSlug: m[1], roundSlug: m[2], roundId: m[3] };
+}
+
+async function fetchOnce(path, accept) {
+  const r = await fetch(`${BASE}${path}`, {
+    headers: { Accept: accept, 'User-Agent': UA },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!r.ok) {
+    let detail = '';
+    try { detail = (await r.json()).error || ''; } catch { /* ignore */ }
+    const err = new Error(detail || `Lichess ${r.status}`);
+    err.status = r.status;
+    throw err;
+  }
+  if (accept.includes('json')) return r.json();
+  return r.text();
+}
+
 async function lichessGet(path, { accept = 'application/json', maxAge = 8_000, fresh = false } = {}) {
   const key = `${accept}:${path}`;
   if (!fresh) {
     const hit = getCached(key, maxAge);
-    if (hit) return hit;
+    if (hit != null) return hit;
   }
-  const r = await fetch(`${BASE}${path}`, {
-    headers: { Accept: accept, 'User-Agent': UA },
-    signal: AbortSignal.timeout(12_000),
-  });
-  if (!r.ok) {
-    const err = new Error(`Lichess ${r.status}`);
-    err.status = r.status;
-    throw err;
-  }
-  const data = accept.includes('json') ? await r.json() : await r.text();
-  return setCached(key, data);
+  if (inflight.has(key)) return inflight.get(key);
+
+  const job = (async () => {
+    let lastErr;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const data = await fetchOnce(path, accept);
+        return setCached(key, data);
+      } catch (e) {
+        lastErr = e;
+        // Don't retry definitive client errors
+        if (e.status === 400 || e.status === 404) throw e;
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+      }
+    }
+    throw lastErr;
+  })().finally(() => inflight.delete(key));
+
+  inflight.set(key, job);
+  return job;
 }
 
 /** Top live / upcoming broadcasts. */
 async function topBroadcasts() {
-  return lichessGet('/api/broadcast/top', { maxAge: 15_000 });
+  return lichessGet('/api/broadcast/top', { maxAge: 12_000 });
 }
 
 /** Tournament with rounds list. */
 async function broadcastTour(tourId) {
-  const id = String(tourId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
-  if (!id) throw Object.assign(new Error('bad id'), { status: 400 });
-  return lichessGet(`/api/broadcast/${id}`, { maxAge: 20_000 });
+  const id = lichessId(tourId, 'tour id');
+  return lichessGet(`/api/broadcast/${id}`, { maxAge: 15_000 });
 }
 
-/** Round with live game snapshots (fen, clocks, lastMove). */
-async function broadcastRound(roundId, { fresh = false } = {}) {
-  const id = String(roundId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
-  if (!id) throw Object.assign(new Error('bad id'), { status: 400 });
-  // Live watch polls often — keep cache tiny unless fresh is requested
-  return lichessGet(`/api/broadcast/-/-/${id}`, { maxAge: fresh ? 0 : 1_200, fresh });
+/**
+ * Round with live game snapshots (fen, clocks, lastMove).
+ * Tries slug path first when provided, then the official /-/-/{id} form.
+ */
+async function broadcastRound(roundId, { fresh = false, tourSlug, roundSlug, roundUrl } = {}) {
+  const id = lichessId(roundId, 'round id');
+  const fromUrl = slugsFromUrl(roundUrl);
+  const tSlug = slugify(tourSlug || (fromUrl && fromUrl.tourSlug) || '-');
+  const rSlug = slugify(roundSlug || (fromUrl && fromUrl.roundSlug) || '-');
+
+  const paths = [];
+  if (tSlug !== '-' && rSlug !== '-') paths.push(`/api/broadcast/${tSlug}/${rSlug}/${id}`);
+  paths.push(`/api/broadcast/-/-/${id}`);
+
+  let lastErr;
+  for (const path of paths) {
+    try {
+      return await lichessGet(path, { maxAge: fresh ? 0 : 1_500, fresh });
+    } catch (e) {
+      lastErr = e;
+      if (e.status === 400) throw e;
+      // try next path on 404
+      if (e.status !== 404) throw e;
+    }
+  }
+  throw lastErr || Object.assign(new Error('Round not found'), { status: 404 });
 }
 
 function bustPgn(roundId) {
-  cache.delete(`pgn:${String(roundId)}`);
+  try {
+    const id = lichessId(roundId, 'round id');
+    cache.delete(`application/x-chess-pgn:/api/broadcast/round/${id}.pgn`);
+    cache.delete(`pgn:${id}`);
+  } catch { /* ignore */ }
 }
 
 /** Split a multi-game PGN into { id, pgn } entries using Site/GameURL tags. */
@@ -71,55 +145,21 @@ function parseMultiPgn(text) {
 }
 
 /**
- * Grab the current PGN dump for a round (stream sends full games, then keeps open).
- * We abort after a short window once we have content.
+ * Current PGN for a round via the non-streaming export endpoint
+ * (more reliable than the long-lived NDJSON/PGN stream).
  */
 async function broadcastRoundPgn(roundId, { fresh = false } = {}) {
-  const id = String(roundId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
-  if (!id) throw Object.assign(new Error('bad id'), { status: 400 });
-  const key = `pgn:${id}`;
-  if (!fresh) {
-    const hit = getCached(key, 3_000);
-    if (hit) return hit;
-  }
-
-  const ctrl = new AbortController();
-  const kill = setTimeout(() => ctrl.abort(), 4500);
-  let buf = '';
-  try {
-    const r = await fetch(`${BASE}/api/stream/broadcast/round/${id}.pgn`, {
-      headers: { Accept: 'application/x-chess-pgn', 'User-Agent': UA },
-      signal: ctrl.signal,
-    });
-    if (!r.ok) {
-      const err = new Error(`Lichess ${r.status}`);
-      err.status = r.status;
-      throw err;
-    }
-    const reader = r.body.getReader();
-    const dec = new TextDecoder();
-    const started = Date.now();
-    let quietSince = Date.now();
-    while (Date.now() - started < 4200) {
-      const read = reader.read();
-      const tick = new Promise((res) => setTimeout(() => res({ timeout: true }), 280));
-      const chunk = await Promise.race([read, tick]);
-      if (chunk.timeout) {
-        if ((buf.match(/\[Event /g) || []).length >= 1 && Date.now() - quietSince > 400) break;
-        continue;
-      }
-      if (chunk.done) break;
-      buf += dec.decode(chunk.value, { stream: true });
-      quietSince = Date.now();
-    }
-    try { ctrl.abort(); } catch { /* ignore */ }
-  } catch (e) {
-    if (e.name !== 'AbortError' && !buf) throw e;
-  } finally {
-    clearTimeout(kill);
-  }
-  const games = parseMultiPgn(buf);
-  return setCached(key, { roundId: id, games, raw: buf });
+  const id = lichessId(roundId, 'round id');
+  const text = await lichessGet(`/api/broadcast/round/${id}.pgn`, {
+    accept: 'application/x-chess-pgn',
+    maxAge: 2_500,
+    fresh,
+  });
+  const games = parseMultiPgn(text);
+  return { roundId: id, games, raw: text };
 }
 
-module.exports = { topBroadcasts, broadcastTour, broadcastRound, broadcastRoundPgn, parseMultiPgn, bustPgn };
+module.exports = {
+  topBroadcasts, broadcastTour, broadcastRound, broadcastRoundPgn,
+  parseMultiPgn, bustPgn, lichessId, slugsFromUrl,
+};
