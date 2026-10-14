@@ -207,13 +207,6 @@ function isPremiumActive(u) {
   return !!u.premium;
 }
 
-/** SQL: 1 when the joined users row currently has Premium. */
-const PREMIUM_SQL = `(CASE
-  WHEN u.premium_until IS NOT NULL AND u.premium_until > now() THEN 1
-  WHEN u.premium_until IS NULL AND COALESCE(u.premium, 0) = 1 THEN 1
-  ELSE 0
-END)`;
-
 const publicUser = (u, admin) => {
   const premium = isPremiumActive(u);
   const until = u.premium_until ? new Date(u.premium_until) : null;
@@ -685,17 +678,25 @@ api.patch('/me', wrap(async (req, res) => {
 api.delete('/me', wrap(async (req, res) => {
   if (req.isAdmin) throw bad('Admins cannot delete their account here', 'admin_delete');
   const uid = req.user.id;
-  // Close the games this user is part of so nobody is left waiting for them
+  // Notify opponents in active games, then wipe everything tied to this user
   for (const g of await db.prepare("SELECT * FROM games WHERE status = 'active' AND (white_id = ? OR black_id = ?)").all(uid, uid)) {
     const result = g.white_id === uid ? '0-1' : '1-0';
     await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = 'resign', updated_at = now() WHERE id = ?").run(result, g.id);
-    await Promise.all(['bullet', 'blitz', 'rapid', 'classic'].map((c) => cacheDel(`rankings:${c}`)));
-    await cacheDel('lobby:busy');
-    await pushGame(await getGame.get(g.id));
+    await pushGame(await getGame.get(g.id)).catch(() => {});
   }
   await db.prepare("UPDATE games SET status = 'cancelled' WHERE status IN ('open', 'invited') AND (creator_id = ? OR invited_id = ?)").run(uid, uid);
-  await db.prepare('DELETE FROM game_invites WHERE user_id = ?').run(uid);
-  await db.prepare('DELETE FROM users WHERE id = ?').run(uid); // friends and results cascade
+  await db.prepare('DELETE FROM game_invites WHERE user_id = ? OR game_id IN (SELECT id FROM games WHERE creator_id = ? OR white_id = ? OR black_id = ? OR invited_id = ?)').run(uid, uid, uid, uid, uid);
+  // games has no FK cascade — remove the user's games so no orphan rows remain
+  await db.prepare('DELETE FROM games WHERE creator_id = ? OR white_id = ? OR black_id = ? OR invited_id = ?').run(uid, uid, uid, uid);
+  await clearPresent.run(uid).catch(() => {});
+  await db.prepare('DELETE FROM users WHERE id = ?').run(uid); // friends, results, DMs, medals, referrals cascade
+  await Promise.all([
+    cacheDel('lobby:busy'),
+    ...['bullet', 'blitz', 'rapid', 'classic', 'all'].flatMap((c) => [
+      cacheDel(`rankings:v2:elo:${c}:${monthKey()}`),
+      cacheDel(`rankings:v2:monthly:${c}:${monthKey()}`),
+    ]),
+  ]);
   res.json({ ok: true });
 }));
 
@@ -1212,9 +1213,15 @@ api.get('/rankings', wrap(async (req, res) => {
     ? req.query.category
     : (board === 'monthly' ? 'all' : 'bullet');
   const month = monthKey();
-  const cacheKey = `rankings:${board}:${category}:${month}`;
+  // v2: includes premium flag (old cache entries without it must not be reused)
+  const cacheKey = `rankings:v2:${board}:${category}:${month}`;
   const cached = await cacheGet(cacheKey, 5_000);
   if (cached) return res.json(cached);
+
+  const mapPremium = (r) => isPremiumActive({
+    premium: r.premium_flag ?? r.premium,
+    premium_until: r.premium_until,
+  });
 
   let rows;
   if (board === 'elo') {
@@ -1224,7 +1231,7 @@ api.get('/rankings', wrap(async (req, res) => {
     const params = category === 'all' ? [] : [category];
     rows = (await db.prepare(`
       SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, u.avatar_key,
-        ${PREMIUM_SQL} AS premium,
+        u.premium AS premium_flag, u.premium_until,
         u.${col} AS elo,
         COALESCE((
           SELECT COUNT(*) FROM games g
@@ -1243,12 +1250,12 @@ api.get('/rankings', wrap(async (req, res) => {
     `).all(...params, ...params)).map((r, i) => ({
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       elo: Number(r.elo), games: Number(r.games), points: Number(r.elo),
-      avatarKey: r.avatar_key || null, premium: !!r.premium,
+      avatarKey: r.avatar_key || null, premium: mapPremium(r),
     }));
   } else if (category === 'all') {
     rows = (await db.prepare(`
       SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, u.avatar_key,
-        ${PREMIUM_SQL} AS premium,
+        u.premium AS premium_flag, u.premium_until,
         m.points, m.wins, m.draws, m.losses,
         (m.wins + m.draws + m.losses) AS games
       FROM monthly_scores m
@@ -1259,13 +1266,13 @@ api.get('/rankings', wrap(async (req, res) => {
     `).all(month)).map((r, i) => ({
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       points: Number(r.points), wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
-      games: Number(r.games), avatarKey: r.avatar_key || null, premium: !!r.premium,
+      games: Number(r.games), avatarKey: r.avatar_key || null, premium: mapPremium(r),
     }));
   } else {
     rows = (await db.prepare(`
       SELECT * FROM (
         SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, u.avatar_key,
-          ${PREMIUM_SQL} AS premium,
+          u.premium AS premium_flag, u.premium_until,
           COUNT(*) AS games,
           SUM(CASE WHEN (g.white_id = u.id AND g.result = '1-0') OR (g.black_id = u.id AND g.result = '0-1') THEN 1 ELSE 0 END) AS wins,
           SUM(CASE WHEN g.result = '1/2-1/2' THEN 1 ELSE 0 END) AS draws,
@@ -1283,7 +1290,7 @@ api.get('/rankings', wrap(async (req, res) => {
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
       games: Number(r.games), points: Number(r.wins) * 2 + Number(r.draws),
-      avatarKey: r.avatar_key || null, premium: !!r.premium,
+      avatarKey: r.avatar_key || null, premium: mapPremium(r),
     }));
   }
 

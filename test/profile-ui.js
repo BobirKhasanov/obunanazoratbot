@@ -71,8 +71,12 @@ assert.ok(css.includes('tg-star-twinkle') || css.includes('prem-spark'), 'Telegr
 assert.ok(/\.prem-ic[\s\S]{0,160}width:\s*(2[8-9]|3[0-9])px/.test(css), 'premIc badge at least 28px');
 assert.ok(app.includes('openRankProfile') || (app.includes('paintRankBody') && app.includes('openUserProfile') && app.includes('rank-row')), 'rankings row opens profile');
 assert.ok(app.includes('avBlock(p.name') || app.includes('avBlock(p.name,'), 'rankings show avatars');
+assert.ok(!/rankings_title[\s\S]{0,80}rankings_live/.test(app) && !app.includes("t('rankings_live')"), 'rankings live pill removed');
+assert.ok(app.includes('state.me.premium') || app.includes('p.premium'), 'rankings premium from API or self');
 assert.ok(read('public/js/userprofile.js').includes('filter(Boolean)'), 'user profile does not append null text nodes');
-assert.ok(read('src/server.js').includes('PREMIUM_SQL') || read('src/server.js').includes('premium: !!r.premium'), 'rankings API returns premium');
+assert.ok(read('src/server.js').includes('premium_flag') && read('src/server.js').includes('mapPremium'), 'rankings API maps premium');
+assert.ok(profile.includes("t('delete_account')") && profile.includes("DELETE', '/me'"), 'profile settings can delete account');
+assert.ok(read('src/server.js').includes("api.delete('/me'") && read('src/server.js').includes('DELETE FROM games WHERE'), 'account delete wipes user games + row');
 assert.ok(profile.includes('/shop/order') || profile.includes('shop/order'));
 assert.ok(profile.includes('premiumPlans') || profile.includes('premium_plans'));
 assert.ok(app.includes("t === 'wallet'") || app.includes('m.t === \'wallet\''));

@@ -621,6 +621,21 @@ export function renderProfilePage(ctx) {
             } catch (e) { fail(e); refresh(); }
           }),
         }),
+        !me.isAdmin
+          ? menuRow({
+            ic: 'trash',
+            title: t('delete_account'),
+            sub: t('delete_data'),
+            danger: true,
+            onClick: async () => {
+              if (!(await confirmSheet(t('delete_confirm'), t('delete_account'), true))) return;
+              try {
+                await api('DELETE', '/me');
+                try { tg.close(); } catch { /* ignore */ }
+              } catch (e) { fail(e); }
+            },
+          })
+          : null,
       ),
 
       h('div.app-ver', t('app_version', { v: APP_VERSION })),

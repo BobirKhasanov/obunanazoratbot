@@ -420,19 +420,21 @@ function paintRankBody(host, data, isElo) {
     h('div.card.rank-summary',
       h('div.rank-summary-title', rankingCategory[selectedRanking] + ' · ' + (isElo ? t('rank_board_elo') : t('rank_board_monthly'))),
       h('div.muted', hint),
-      rows.length ? h('div.list.rank-list', rows.map((p) => h('button.row.rank-row', {
-        type: 'button',
-        onclick: () => openRankProfile(p.id),
-      },
-        h('div.rank-place' + (p.rank <= 3 ? '.podium-' + p.rank : ''), p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : String(p.rank)),
-        avBlock(p.name, p.id, { premium: !!p.premium, round: true, avatarKey: p.avatarKey }),
-        h('div.grow',
-          h('div.t', h('span.name', p.name), p.premium ? premIc() : null, p.id === state.me.id ? h('span.star', ' · ' + t('you')) : null),
-          h('div.s', isElo
-            ? t('rank_games', { n: p.games || 0 })
-            : t('rank_record', { w: p.wins || 0, d: p.draws || 0, l: p.losses || 0 }))),
-        h('div.rank-points', h('b', String(isElo ? (p.elo ?? p.points) : p.points)), h('small', unit))))
-      ) : h('div.empty.rank-empty', t('rankings_empty'))),
+      rows.length ? h('div.list.rank-list', rows.map((p) => {
+        const prem = !!(p.premium || (state.me && p.id === state.me.id && state.me.premium));
+        return h('button.row.rank-row', {
+          type: 'button',
+          onclick: () => openRankProfile(p.id),
+        },
+          h('div.rank-place' + (p.rank <= 3 ? '.podium-' + p.rank : ''), p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : String(p.rank)),
+          avBlock(p.name, p.id, { premium: prem, round: true, avatarKey: p.avatarKey }),
+          h('div.grow',
+            h('div.t', h('span.name', p.name), prem ? premIc() : null, p.id === state.me.id ? h('span.star', ' · ' + t('you')) : null),
+            h('div.s', isElo
+              ? t('rank_games', { n: p.games || 0 })
+              : t('rank_record', { w: p.wins || 0, d: p.draws || 0, l: p.losses || 0 }))),
+          h('div.rank-points', h('b', String(isElo ? (p.elo ?? p.points) : p.points)), h('small', unit)));
+      })) : h('div.empty.rank-empty', t('rankings_empty'))),
     h('div.rank-footnote', foot),
   );
 }
@@ -479,7 +481,7 @@ refreshers.rankings = async function renderRankings() {
     { className: 'rank-tabs' + (isElo ? '' : ' five') },
   );
   const root = h('div.rank-root',
-    h('div.top', h('h1', '♜ ' + t('rankings_title')), h('div.livepill', h('i.dot'), t('rankings_live'))),
+    h('div.top', h('h1', '♜ ' + t('rankings_title'))),
     boardBar,
     tabs,
     body,

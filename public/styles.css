@@ -642,18 +642,23 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .page[data-page="rankings"] .livepill { flex: none; max-width: 42%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rank-summary { margin-top: 14px; padding-bottom: 4px; }
 .rank-summary-title { font-size: 18px; font-weight: 800; }
+.page[data-page="rankings"] { overflow-x: visible; }
+.rank-root, .rank-body { overflow: visible; }
 .rank-list { margin-top: 10px; overflow: visible; }
 .rank-row {
-  gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  gap: 10px; width: 100%; text-align: left; cursor: pointer;
   background: none; border: 0; color: inherit; font: inherit;
-  padding: 10px 4px; border-radius: 14px;
+  padding: 12px 6px; border-radius: 14px;
+  overflow: visible;
 }
-.rank-row:active { background: rgba(255, 255, 255, 0.04); }
+.rank-row:active { background: color-mix(in srgb, var(--text) 6%, transparent); }
 .rank-summary { overflow: visible; }
 .rank-place { width: 34px; flex: none; text-align: center; font-size: 16px; font-weight: 800; color: var(--muted); }
 .rank-place.podium-1, .rank-place.podium-2, .rank-place.podium-3 { font-size: 24px; }
-.rank-row .avwrap { flex: none; }
-.rank-row .t { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.rank-row .avwrap { flex: none; overflow: visible; }
+.rank-row .avwrap.prem { margin-inline: 2px; }
+.rank-row .t { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; overflow: visible; }
+.rank-row .t .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .rank-points { min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
 .rank-points b { display: block; font-size: 20px; font-weight: 850; }
 .rank-points small { display: block; color: var(--muted); font-size: 11px; }
@@ -976,6 +981,8 @@ button.grow.plain { flex: 1; display: block; }
   display: grid; place-items: center; background: rgba(84, 164, 247, 0.14); color: var(--blue);
 }
 .menu-ic.danger { background: rgba(248, 113, 113, 0.14); color: var(--red); }
+.menu-row.danger .grow .t { color: var(--red); }
+.menu-row.danger .grow .s { color: var(--red); opacity: 0.75; }
 .menu-row .grow .t { font-weight: 700; font-size: 15px; }
 .menu-row .ic { color: var(--muted); flex: none; }
 .btn.logout {
@@ -1373,3 +1380,59 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 /* Screens always match app chrome (no black flash on expand) */
 .screen, .game { background-color: var(--bg); }
 .gate { background: var(--bg); }
+
+/* ---------- light / day theme polish ---------- */
+:root[data-theme="light"] #nav {
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
+}
+:root[data-theme="light"] .input::placeholder { color: #94a3b8; }
+:root[data-theme="light"] .spark i { background: rgba(15, 23, 42, 0.12); }
+:root[data-theme="light"] .bar-track { background: rgba(15, 23, 42, 0.1); }
+:root[data-theme="light"] .slider .rail { background: rgba(15, 23, 42, 0.12); }
+:root[data-theme="light"] .time-option {
+  box-shadow: 0 4px 0 rgba(15, 23, 42, 0.12);
+  border-color: var(--line);
+}
+:root[data-theme="light"] .time-option.selected {
+  box-shadow: 0 4px 0 rgba(37, 99, 235, 0.45);
+}
+:root[data-theme="light"] .hdr-ic {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 3px 0 rgba(15, 23, 42, 0.12);
+}
+:root[data-theme="light"] .rank-footnote,
+:root[data-theme="light"] .app-ver { color: var(--muted); }
+:root[data-theme="light"] .prof-user { color: var(--muted); }
+:root[data-theme="light"] .uprof-hero {
+  background: radial-gradient(ellipse at 50% 0%, #ddd6fe 0%, #e0e7ff 40%, var(--card) 100%);
+  color: var(--text);
+}
+:root[data-theme="light"] .uprof-hero.prem {
+  box-shadow: inset 0 0 36px rgba(124, 58, 237, 0.12);
+}
+:root[data-theme="light"] .uprof-presence { color: #6d28d9; }
+:root[data-theme="light"] .uprof-bar {
+  background: rgba(255, 255, 255, 0.72); border-color: rgba(124, 58, 237, 0.25); color: var(--text);
+}
+:root[data-theme="light"] .uprof-like {
+  background: rgba(15, 23, 42, 0.05); border-color: rgba(15, 23, 42, 0.1); color: var(--text);
+}
+:root[data-theme="light"] .uprof-bio {
+  background: rgba(15, 23, 42, 0.04); color: var(--text);
+}
+:root[data-theme="light"] .menu-row:active { background: rgba(37, 99, 235, 0.08); }
+:root[data-theme="light"] .info-delete { color: #dc2626; }
+:root[data-theme="light"] .gempill,
+:root[data-theme="light"] .count-pill {
+  color: var(--text);
+}
+:root[data-theme="light"] .livepill {
+  background: var(--card); color: var(--text); border: 1px solid var(--line);
+}
+:root[data-theme="light"] .backdrop { background: rgba(15, 23, 42, 0.45); }
+:root[data-theme="light"] .pf-chip,
+:root[data-theme="light"] .cta.ghost,
+:root[data-theme="light"] button.btn.ghost {
+  color: var(--text);
+}
+:root[data-theme="light"] .rank-points b { color: var(--text); }
+:root[data-theme="light"] .rank-points small { color: var(--muted); }
