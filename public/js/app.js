@@ -251,7 +251,7 @@ refreshers.play = async function renderPlay() {
     l.games.invites.length ? [h('div.h2', t('invites')), h('div.list', l.games.invites.map((g) => h('div.row.invite',
       avatar(g.opponent.name, g.opponent.id), h('div.grow', h('div.t', g.opponent.name), h('div.s', t('challenge'))),
       h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
-      h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'; } catch (e) { fail(e); } playSnap = ''; refresh(); } }, icon('x', 18)))))] : null,
+      h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } playSnap = ''; refresh(); } }, icon('x', 18)))))] : null,
     onlinePlayers.length ? [h('div.h2.online-heading', t('online_players'), h('span.count-pill', String(onlinePlayers.length))),
       h('div.list', onlinePlayers.map((u) => h('div.row', h('div.avwrap', avatar(u.name, u.id), h('i.dot.on')),
         h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.invited ? t('challenge_sent') : t('online'))),
