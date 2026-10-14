@@ -17,7 +17,7 @@ const en = {
   lvl1_d: 'Makes many mistakes', lvl2_d: 'Simple tactics', lvl3_d: 'Thinks a few moves ahead', lvl4_d: 'Thinks deeper, hard to beat',
   play_as: 'Play as', white: 'White', black: 'Black', random: 'Random', start: 'Start',
   live_title: 'Live', online_now: '{n} online', find_opponent: 'Find an opponent', searching: 'Searching for an opponent…',
-  cancel: 'Cancel', challenge: 'Challenge', in_game: 'In game', challenge_sent: 'Challenge sent',
+  cancel: 'Cancel', challenge: 'Challenge', in_game: 'In game', challenge_sent: 'Sent', challenge_cancelled: 'Challenge cancelled',
   nobody: 'Nobody else is online right now.\nInvite a friend or play the computer.',
   friends_title: 'Friends', invite_friends: 'Invite friends',
   invite_sub: 'Send your invite link. A new friend who joins gets 10 💎 and you get 20 💎.',
@@ -78,7 +78,7 @@ const ru = {
   lvl1_d: 'Часто ошибается', lvl2_d: 'Простая тактика', lvl3_d: 'Считает на несколько ходов', lvl4_d: 'Считает глубже, трудно обыграть',
   play_as: 'Играть за', white: 'Белые', black: 'Чёрные', random: 'Случайно', start: 'Начать',
   live_title: 'Онлайн', online_now: 'Онлайн: {n}', find_opponent: 'Найти соперника', searching: 'Ищем соперника…',
-  cancel: 'Отмена', challenge: 'Вызвать', in_game: 'В игре', challenge_sent: 'Вызов отправлен',
+  cancel: 'Отмена', challenge: 'Вызвать', in_game: 'В игре', challenge_sent: 'Отправлено', challenge_cancelled: 'Вызов отменён',
   nobody: 'Сейчас больше никого нет онлайн.\nПригласите друга или сыграйте с компьютером.',
   friends_title: 'Друзья', invite_friends: 'Пригласить друзей',
   invite_sub: 'Отправьте ссылку-приглашение. Новый друг получит 10 💎, а вы — 20 💎.',
@@ -137,7 +137,7 @@ const uz = {
   lvl1_d: "Ko'p xato qiladi", lvl2_d: 'Oddiy taktika', lvl3_d: "Bir necha yurish oldinni ko'radi", lvl4_d: "Chuqur o'ylaydi, yutish qiyin",
   play_as: "Rangingiz", white: 'Oq', black: 'Qora', random: 'Tasodifiy', start: 'Boshlash',
   live_title: 'Onlayn', online_now: 'Onlayn: {n}', find_opponent: 'Raqib topish', searching: 'Raqib qidirilmoqda…',
-  cancel: 'Bekor qilish', challenge: 'Taklif qilish', in_game: "O'yinda", challenge_sent: 'Taklif yuborildi',
+  cancel: 'Bekor qilish', challenge: 'Taklif qilish', in_game: "O'yinda", challenge_sent: 'Yuborildi', challenge_cancelled: 'Taklif bekor qilindi',
   nobody: "Hozir boshqa onlayn o'yinchi yo'q.\nDo'stingizni taklif qiling yoki kompyuterga qarshi o'ynang.",
   friends_title: "Do'stlar", invite_friends: "Do'stlarni taklif qilish",
   invite_sub: "Taklif havolasini yuboring. Yangi do'stingiz 10 💎, siz esa 20 💎 olasiz.",
@@ -196,7 +196,7 @@ const uzc = {
   lvl1_d: 'Кўп хато қилади', lvl2_d: 'Оддий тактика', lvl3_d: 'Бир неча юриш олдинни кўради', lvl4_d: 'Чуқур ўйлайди, ютиш қийин',
   play_as: 'Рангингиз', white: 'Оқ', black: 'Қора', random: 'Тасодифий', start: 'Бошлаш',
   live_title: 'Онлайн', online_now: 'Онлайн: {n}', find_opponent: 'Рақиб топиш', searching: 'Рақиб қидирилмоқда…',
-  cancel: 'Бекор қилиш', challenge: 'Таклиф қилиш', in_game: 'Ўйинда', challenge_sent: 'Таклиф юборилди',
+  cancel: 'Бекор қилиш', challenge: 'Таклиф қилиш', in_game: 'Ўйинда', challenge_sent: 'Юборилди', challenge_cancelled: 'Таклиф бекор қилинди',
   nobody: 'Ҳозир бошқа онлайн ўйинчи йўқ.\nДўстингизни таклиф қилинг ёки компьютерга қарши ўйнанг.',
   friends_title: 'Дўстлар', invite_friends: 'Дўстларни таклиф қилиш',
   invite_sub: 'Таклиф ҳаволасини юборинг. Янги дўстингиз 10 💎, сиз эса 20 💎 оласиз.',
@@ -241,10 +241,10 @@ const uzc = {
   e_admin_delete: 'Админ бу ерда ҳисобини ўчира олмайди', status_done: 'тайёр', status_sending: 'юборилмоқда', status_interrupted: 'тўхтатилди',
 };
 
-Object.assign(en, { challenge_from: '{name} challenges you', pick_player: 'Choose a player', random_opp: 'Random opponent', e_user_offline: 'This player just went offline', sec_left: '{n}s', challenge_expired: 'No answer, the challenge expired' });
-Object.assign(ru, { challenge_from: '{name} вызывает вас на партию', pick_player: 'Выберите игрока', random_opp: 'Случайный соперник', e_user_offline: 'Игрок только что вышел из сети', sec_left: '{n}с', challenge_expired: 'Нет ответа, вызов истёк' });
-Object.assign(uz, { challenge_from: "{name} sizni o'yinga chorlamoqda", pick_player: "O'yinchini tanlang", random_opp: 'Tasodifiy raqib', e_user_offline: "O'yinchi hozirgina oflayn bo'ldi", sec_left: '{n}s', challenge_expired: 'Javob yo\'q, taklif muddati tugadi' });
-Object.assign(uzc, { challenge_from: '{name} сизни ўйинга чорламоқда', pick_player: 'Ўйинчини танланг', random_opp: 'Тасодифий рақиб', e_user_offline: 'Ўйинчи ҳозиргина офлайн бўлди', sec_left: '{n}с', challenge_expired: 'Жавоб йўқ, таклиф муддати тугади' });
+Object.assign(en, { challenge_from: '{name} challenges you', challenge_to: 'Challenge sent to {name}', pick_player: 'Choose a player', random_opp: 'Random opponent', e_user_offline: 'This player just went offline', sec_left: '{n}s', challenge_expired: 'No answer, the challenge expired' });
+Object.assign(ru, { challenge_from: '{name} вызывает вас на партию', challenge_to: 'Вызов отправлен: {name}', pick_player: 'Выберите игрока', random_opp: 'Случайный соперник', e_user_offline: 'Игрок только что вышел из сети', sec_left: '{n}с', challenge_expired: 'Нет ответа, вызов истёк' });
+Object.assign(uz, { challenge_from: "{name} sizni o'yinga chorlamoqda", challenge_to: '{name} ga taklif yuborildi', pick_player: "O'yinchini tanlang", random_opp: 'Tasodifiy raqib', e_user_offline: "O'yinchi hozirgina oflayn bo'ldi", sec_left: '{n}s', challenge_expired: 'Javob yo\'q, taklif muddati tugadi' });
+Object.assign(uzc, { challenge_from: '{name} сизни ўйинга чорламоқда', challenge_to: '{name} га таклиф юборилди', pick_player: 'Ўйинчини танланг', random_opp: 'Тасодифий рақиб', e_user_offline: 'Ўйинчи ҳозиргина офлайн бўлди', sec_left: '{n}с', challenge_expired: 'Жавоб йўқ, таклиф муддати тугади' });
 
 
 Object.assign(en, { nav_rankings: 'Ranking', rankings_title: 'Live rankings', rankings_live: 'Live leaderboard', rankings_points_hint: 'Standings update automatically', rankings_empty: 'No ranked games yet. Finish a game to appear here.', rankings_scoring: 'Points: 2 for a win, 1 for a draw. Only finished player-vs-player games count.', rank_record: '{w}W · {d}D · {l}L', points: 'points', you: 'you' });

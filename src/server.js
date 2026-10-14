@@ -522,13 +522,21 @@ api.get('/lobby', wrap(async (req, res) => {
   `).all({ u: uid });
   const busy = new Set((await db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all()).flatMap((g) => [g.white_id, g.black_id]));
 
+  const pendingInvites = await db.prepare(
+    "SELECT i.user_id, i.game_id FROM game_invites i JOIN games g ON g.id = i.game_id WHERE g.status = 'invited' AND g.creator_id = ?"
+  ).all(uid);
+  const inviteGameByUser = new Map(pendingInvites.map((r) => [r.user_id, r.game_id]));
+
   let online = [];
   if (ids.length) {
     const cap = ids.slice(0, 500);
     const rows = await db.prepare(`SELECT id, first_name, discoverable FROM users WHERE blocked = 0 AND id != ? AND id IN (${cap.map(() => '?').join(',')})`).all(uid, ...cap);
     online = rows
       .filter((r) => r.discoverable || friendIds.has(r.id))
-      .map((r) => ({ id: r.id, name: r.first_name || 'Player', inGame: busy.has(r.id), friend: friendIds.has(r.id) }))
+      .map((r) => ({
+        id: r.id, name: r.first_name || 'Player', inGame: busy.has(r.id), friend: friendIds.has(r.id),
+        invited: inviteGameByUser.has(r.id), inviteGameId: inviteGameByUser.get(r.id) || null,
+      }))
       .sort((a, b) => (b.friend - a.friend) || a.name.localeCompare(b.name))
       .slice(0, 40);
   }
@@ -557,10 +565,14 @@ api.get('/friends', wrap(async (req, res) => {
     SELECT u.id, u.first_name FROM friends f JOIN users u ON u.id = f.friend_id WHERE f.user_id = ? ORDER BY u.first_name
   `).all(uid);
   const busy = new Set((await db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all()).flatMap((g) => [g.white_id, g.black_id]));
-  const pending = new Set((await db.prepare("SELECT i.user_id FROM game_invites i JOIN games g ON g.id = i.game_id WHERE g.status = 'invited' AND g.creator_id = ?").all(uid)).map((r) => r.user_id));
+  const pending = await db.prepare(
+    "SELECT i.user_id, i.game_id FROM game_invites i JOIN games g ON g.id = i.game_id WHERE g.status = 'invited' AND g.creator_id = ?"
+  ).all(uid);
+  const inviteGameByUser = new Map(pending.map((r) => [r.user_id, r.game_id]));
   res.json({
     friends: rows.map((r) => ({
-      id: r.id, name: r.first_name || 'Player', online: realtime.isOnline(r.id), inGame: busy.has(r.id), invited: pending.has(r.id),
+      id: r.id, name: r.first_name || 'Player', online: realtime.isOnline(r.id), inGame: busy.has(r.id),
+      invited: inviteGameByUser.has(r.id), inviteGameId: inviteGameByUser.get(r.id) || null,
     })).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name)),
   });
 }));

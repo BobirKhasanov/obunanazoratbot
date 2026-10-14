@@ -62,9 +62,21 @@ async function startFriendGame() {
 async function challenge(id) {
   try {
     const r = await api('POST', '/games', { opponentId: id, timeControl: selectedControlCategory() });
-    toast(t('challenge_sent')); haptic('success');
-    openOnline(r.game);
+    haptic('success');
+    showChallengeSent(r.game, 10000);
+    refresh();
   } catch (e) { fail(e); }
+}
+async function cancelChallenge(gameId) {
+  try { await api('DELETE', `/games/${gameId}`); toast(t('challenge_cancelled')); } catch (e) { fail(e); }
+  refresh();
+}
+/** Challenge / Cancel button for an online (or friend) row */
+function challengeAction(u) {
+  if (u.invited && u.inviteGameId) {
+    return h('button.mini', { onclick: () => cancelChallenge(u.inviteGameId) }, t('cancel'));
+  }
+  return h('button.mini.ok', { disabled: !!u.inGame || u.online === false, onclick: () => challenge(u.id) }, t('challenge'));
 }
 async function openById(id) {
   try {
@@ -109,7 +121,9 @@ function aiSheet() {
 
 const playerRow = (u, close) => h('div.row', h('div.avwrap', avatar(u.name, u.id), h('i.dot.on')),
   h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.inGame ? t('in_game') : t('online'))),
-  h('button.mini.ok', { disabled: u.inGame, onclick: () => { close(); challenge(u.id); } }, t('challenge')));
+  u.invited && u.inviteGameId
+    ? h('button.mini', { onclick: () => cancelChallenge(u.inviteGameId) }, t('cancel'))
+    : h('button.mini.ok', { disabled: u.inGame, onclick: () => { close(); challenge(u.id); } }, t('challenge')));
 
 /** "Play online": choose any online player to challenge, or get a random opponent */
 function onlineSheet() {
@@ -196,8 +210,8 @@ refreshers.play = async function renderPlay() {
       h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } refresh(); } }, icon('x', 18)))))] : null,
     onlinePlayers.length ? [h('div.h2.online-heading', t('online_players'), h('span.count-pill', String(onlinePlayers.length))),
       h('div.list', onlinePlayers.map((u) => h('div.row', h('div.avwrap', avatar(u.name, u.id), h('i.dot.on')),
-        h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', t('online'))),
-        h('button.mini.ok', { onclick: () => challenge(u.id) }, t('challenge')))))] : null,
+        h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.invited ? t('challenge_sent') : t('online'))),
+        challengeAction(u))))] : null,
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
       saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('cpu', 22)), h('div.grow', h('div.t', t('computer') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
@@ -214,8 +228,8 @@ refreshers.live = async function renderLive() {
     h('div.top', h('h1', t('live_title')), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
     h('button.tile.hero', { onclick: startQuick }, h('b', t('find_opponent')), h('small', t('quick_sub')), icon('globe', 26)),
     h('div.h2', t('online')),
-    l.online.length ? h('div.list', l.online.map((u) => h('div.row', avatar(u.name, u.id), h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.inGame ? t('in_game') : t('online'))),
-      h('button.mini.ok', { disabled: u.inGame, onclick: () => challenge(u.id) }, t('challenge'))))) : empty(t('nobody'), '🛰️'));
+    l.online.length ? h('div.list', l.online.map((u) => h('div.row', avatar(u.name, u.id), h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.inGame ? t('in_game') : u.invited ? t('challenge_sent') : t('online'))),
+      challengeAction(u)))) : empty(t('nobody'), '🛰️'));
 };
 
 refreshers.rankings = async function renderRankings() {
@@ -268,7 +282,7 @@ function friendsSection(list) {
     h('div.h2', t('your_friends')),
     list.length ? h('div.list', list.map((f) => h('div.row', h('div.avwrap', avatar(f.name, f.id), f.online ? h('i.dot.on') : null),
       h('div.grow', h('div.t', f.name), h('div.s', f.inGame ? t('in_game') : f.online ? t('online') : t('offline'))),
-      h('button.mini.ok', { disabled: !f.online || f.inGame || f.invited, onclick: () => challenge(f.id) }, f.invited ? icon('check', 18) : t('challenge')),
+      challengeAction({ ...f, online: f.online }),
       h('button.mini', { 'aria-label': t('remove_friend'), onclick: async () => { if (await confirmSheet(`${t('remove_friend')}: ${f.name}?`, t('remove_friend'), true)) { try { await api('DELETE', `/friends/${f.id}`); } catch (e) { fail(e); } refresh(); } } }, icon('x', 18))))) : empty(t('no_friends'), '👋'),
   ];
 }
@@ -354,10 +368,14 @@ refreshers.profile = async function renderProfile() {
     !me.isAdmin ? h('button.btn.danger', { onclick: async () => { if (await confirmSheet(t('delete_confirm'), t('delete_data'), true)) { try { await api('DELETE', '/me'); tg.close(); } catch (e) { fail(e); } } } }, icon('trash', 18), t('delete_data')) : null);
 };
 
-// Incoming challenge: a popup inside the app for 10 seconds (no chat message is sent)
+// Incoming / outgoing challenge banners (in-app only, ~10 s)
 let popTimer = null;
+function clearInvitePop() {
+  const old = $('.invite-pop'); if (old) { old.classList.remove('show'); setTimeout(() => old.remove(), 400); }
+  clearTimeout(popTimer);
+}
 function showInvite(g, ttl) {
-  const old = $('.invite-pop'); if (old) old.remove(); clearTimeout(popTimer);
+  clearInvitePop();
   const o = g.opponent || {};
   const done = () => { pop.classList.remove('show'); setTimeout(() => pop.remove(), 400); clearTimeout(popTimer); };
   const bar = h('i.pbar-fill'); bar.style.animationDuration = `${ttl}ms`;
@@ -367,6 +385,20 @@ function showInvite(g, ttl) {
     h('button.mini', { 'aria-label': t('decline'), onclick: async () => { done(); try { await api('POST', `/games/${g.id}/decline`); } catch { /* expired */ } refresh(); } }, icon('x', 20)),
     h('div.pbar-track', bar));
   document.body.append(pop); haptic('success');
+  requestAnimationFrame(() => requestAnimationFrame(() => pop.classList.add('show')));
+  popTimer = setTimeout(done, ttl);
+}
+/** Same style as the invitee banner: confirm the challenge was sent, allow cancel */
+function showChallengeSent(g, ttl) {
+  clearInvitePop();
+  const o = g.opponent || {};
+  const done = () => { pop.classList.remove('show'); setTimeout(() => pop.remove(), 400); clearTimeout(popTimer); };
+  const bar = h('i.pbar-fill'); bar.style.animationDuration = `${ttl}ms`;
+  const pop = h('div.invite-pop', avatar(o.name || '?', o.id || 0),
+    h('div.grow', h('b', t('challenge_to', { name: o.name || '' }))),
+    h('button.mini', { 'aria-label': t('cancel'), onclick: async () => { done(); await cancelChallenge(g.id); } }, t('cancel')),
+    h('div.pbar-track', bar));
+  document.body.append(pop);
   requestAnimationFrame(() => requestAnimationFrame(() => pop.classList.add('show')));
   popTimer = setTimeout(done, ttl);
 }
@@ -460,7 +492,11 @@ async function boot() {
   onWs((m) => {
     if (m.t === 'invite') { showInvite(m.game, m.ttl || 10000); refresh('play'); }
     else if (m.t === 'friend') { haptic('success'); if (m.reward) { state.me.diamonds = (state.me.diamonds || 0) + m.reward; toast(t('friend_reward', { n: m.reward })); } refresh(); }
-    else if (m.t === 'game' && m.game.id !== openGameId()) refresh();
+    else if (m.t === 'game') {
+      // Opponent accepted while we stayed on the list — open the board only when the game starts
+      if (m.game.status === 'active' && m.game.id !== openGameId()) { clearInvitePop(); openOnline(m.game); }
+      else if (m.game.id !== openGameId()) refresh();
+    } else if (m.t === 'invite_gone') { clearInvitePop(); refresh(); }
   });
   setInterval(() => { if (!document.hidden && !openGameId() && ['live', 'play', 'rankings', 'profile'].includes(state.tab)) refresh(); }, 8000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
