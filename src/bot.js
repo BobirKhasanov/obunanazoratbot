@@ -46,12 +46,26 @@ function createBot(token, webAppUrl) {
       reply_markup: langKeyboard(payload),
     });
 
+  /** Remember invite payload so Mini App can pay diamonds even if Menu Button opens without ?p= */
+  const rememberInvite = async (fromId, payload) => {
+    const m = /^i(\d{1,15})$/.exec(String(payload || ''));
+    if (!m) return;
+    const inviterId = Number(m[1]);
+    if (!inviterId || inviterId === fromId) return;
+    await db.prepare(`
+      UPDATE users SET pending_inviter_id = COALESCE(pending_inviter_id, ?)
+      WHERE id = ? AND id <> ?
+    `).run(inviterId, fromId, inviterId);
+  };
+
   // /start always begins with the language picker; the welcome message comes after the choice
   bot.command('start', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     await touch(ctx.from);
     const p = String(ctx.match || '').trim();
-    await askLanguage(ctx, PAYLOAD.test(p) ? p : '');
+    const payload = PAYLOAD.test(p) ? p : '';
+    if (payload) await rememberInvite(ctx.from.id, payload);
+    await askLanguage(ctx, payload);
   });
 
   bot.command('lang', async (ctx) => {
@@ -64,6 +78,7 @@ function createBot(token, webAppUrl) {
     const code = ctx.match[1];
     const payload = ctx.match[2] || '';
     await touch(ctx.from);
+    if (payload) await rememberInvite(ctx.from.id, payload);
     await db.prepare('UPDATE users SET lang = ?, lang_set = 1 WHERE id = ?').run(code, ctx.from.id);
     await ctx.answerCallbackQuery({ text: LANG_BUTTONS.find((b) => b.code === code).label }).catch(() => {});
     await ctx.deleteMessage().catch(() => {});

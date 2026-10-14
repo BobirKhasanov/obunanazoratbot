@@ -4,7 +4,7 @@ import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatE
 import { t, getLang } from './i18n.js';
 import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
-import { formatClock, remainingMs, isTimed } from './time.js';
+import { formatClock, remainingMs, isTimed, formatTashkentWhen } from './time.js';
 
 const AI_KEY = 'chess-ai-game';
 const EMOTES = ['🤔', '😎', '😮', '👏', '🙈', '😀'];
@@ -358,11 +358,13 @@ export function openGame(opts, onClose) {
   }
 
   function showResult(outcome, reason) {
+    const when = formatTashkentWhen((S.game && S.game.updatedAt) || new Date().toISOString());
+    const whenEl = when ? h('p.result-when', when) : null;
     if (S.kind === 'spectate') {
       haptic('light');
       const res = (S.game && S.game.result) || '½-½';
       sheet((close) => [
-        h('div.result', h('div.result-emoji', '♟'), h('h2', t('result_label', { r: res })), h('p.muted', t(reasonKey(reason)))),
+        h('div.result', h('div.result-emoji', '♟'), h('h2', t('result_label', { r: res })), h('p.muted', t(reasonKey(reason))), whenEl),
         h('button.btn.ghost', { onclick: () => { close(); closeGame(); } }, t('close')),
       ]);
       return;
@@ -371,7 +373,7 @@ export function openGame(opts, onClose) {
     const ttl = outcome === 'win' ? t('you_won') : outcome === 'loss' ? t('you_lost') : t('draw_title');
     const emo = outcome === 'win' ? '🏆' : outcome === 'loss' ? '🤝' : '🤝';
     sheet((close) => [
-      h('div.result', h('div.result-emoji', emo), h('h2', ttl), h('p.muted', t(reasonKey(reason)))),
+      h('div.result', h('div.result-emoji', emo), h('h2', ttl), h('p.muted', t(reasonKey(reason))), whenEl),
       S.kind === 'ai' ? h('button.btn', { onclick: () => { close(); const o = { kind: 'ai', level: S.level, colour: S.colour === 'w' ? 'b' : 'w', meta: S.meta }; const cb = S.onClose, st = S.onStats; openGame(o, cb); ctx.onStats = st; } }, t('play_again')) : null,
       S.kind === 'online' && S.game.opponent ? h('button.btn', { onclick: async () => { close(); try { const r = await api('POST', '/games', { opponentId: S.game.opponent.id, timeControl: S.game.timeControl || 'classic' }); closeNow(); openGame({ kind: 'online', game: r.game, meta: S.meta }, S.onClose); } catch (e) { fail(e); } } }, t('rematch')) : null,
       h('button.btn.ghost', { onclick: () => { close(); closeGame(); } }, t('close')),

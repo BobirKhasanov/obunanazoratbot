@@ -41,6 +41,20 @@ export function formatClock(ms) {
     : `${m}:${String(s).padStart(2, '0')}`;
 }
 
+/** Finished-game wall clock in Asia/Tashkent (no zone label in UI). */
+export function formatTashkentWhen(iso) {
+  if (!iso) return '';
+  const d = iso instanceof Date ? iso : new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Tashkent',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const g = (t) => (parts.find((p) => p.type === t) || {}).value || '';
+  return `${g('day')}.${g('month')}.${g('year')} · ${g('hour')}:${g('minute')}`;
+}
+
 /** Live remaining for one side from a game.clock snapshot. */
 export function remainingMs(clock, side, turn, status, now = Date.now()) {
   if (!clock) return null;

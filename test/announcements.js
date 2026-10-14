@@ -33,12 +33,15 @@ assert.ok(admin.includes('ann_publish') || admin.includes('/admin/announcements'
 assert.ok(ann.includes('translate3d'));
 assert.ok(ann.includes("linkType === 'invite'") || ann.includes('linkType === "invite"') || ann.includes("a.linkType === 'invite'"));
 assert.ok(server.includes("b.linkType === 'invite'"));
-assert.ok(ann.includes('?start=i'));
+assert.ok(ann.includes('startapp=i') || ann.includes('?start=i'));
 assert.ok(ann.includes('replaceChildren(track)'), 'must not append null dots');
 assert.ok(!ann.includes('host.append(track, dots)'));
-assert.ok(ann.includes('DWELL_MS') && /DWELL_MS\s*=\s*6000\b/.test(ann), 'dwell = 6s');
+assert.ok(ann.includes('DWELL_MS') && /DWELL_MS\s*=\s*2000\b/.test(ann), 'dwell = 2s');
 assert.ok(ann.includes('bindSwipe') || ann.includes('pointermove'), 'swipe handlers');
 assert.ok(ann.includes('dragging'), 'live drag class');
+assert.ok(ann.includes('stopAuto'), 'swipe pauses auto-advance');
+assert.ok(i18n.includes("1- E'lonlar taxtasi") || i18n.includes('1- E\'lonlar taxtasi') || i18n.includes('ann_board_home: "1-'));
+assert.ok(i18n.includes("2- E'lonlar taxtasi") || i18n.includes('2- E\'lonlar taxtasi') || i18n.includes('ann_board_puzzle: "2-'));
 assert.ok(css.includes('0.72s') || css.includes('ann-track.dragging'));
 assert.ok(css.includes('.ann-carousel'));
 assert.ok(css.includes('.ann-track'));

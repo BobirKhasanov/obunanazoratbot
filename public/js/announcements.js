@@ -10,8 +10,8 @@ const FONT_CSS = {
 };
 
 /** How long each slide stays before auto-advance (ms). */
-const DWELL_MS = 6000;
-const SWIPE_PX = 48;
+const DWELL_MS = 2000;
+const SWIPE_PX = 40;
 
 /** @type {Array<() => void>} */
 const cleanups = [];
@@ -43,7 +43,8 @@ async function resolveMedia(items) {
 
 function referralLink(botUsername, userId) {
   if (!botUsername || !userId) return null;
-  return `https://t.me/${botUsername}?start=i${userId}`;
+  // startapp opens Mini App with start_param; start keeps bot deep-link as fallback path
+  return `https://t.me/${botUsername}?startapp=i${userId}`;
 }
 
 function openLink(a, { onPage, botUsername, userId } = {}) {
@@ -85,11 +86,11 @@ function slide(a, opts) {
     a._src ? h('div.ann-media', h('img', { src: a._src, alt: '', draggable: 'false' })) : h('div.ann-media.emoji', '♛'));
 }
 
-function bindSwipe(host, track, n, go, armAuto) {
+function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {
   let drag = null;
   const onDown = (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    clearInterval(timer); timer = null;
+    stopAuto && stopAuto();
     host._annSwiped = false;
     drag = {
       x0: e.clientX,
@@ -108,18 +109,17 @@ function bindSwipe(host, track, n, go, armAuto) {
     const dy = e.clientY - drag.y0;
     if (!drag.axis) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-      drag.axis = Math.abs(dx) > Math.abs(dy) * 1.15 ? 'h' : 'v';
+      drag.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'h' : 'v';
       if (drag.axis === 'v') {
         track.classList.remove('dragging');
         drag = null;
-        armAuto();
+        armAuto && armAuto();
         return;
       }
     }
     if (drag.axis !== 'h') return;
     e.preventDefault();
     drag.dx = dx;
-    const w = host.clientWidth || 1;
     // rubber-band at ends
     let offset = drag.base + dx;
     if (go.idx === 0 && dx > 0) offset = drag.base + dx * 0.35;
@@ -140,7 +140,7 @@ function bindSwipe(host, track, n, go, armAuto) {
     } else {
       go(go.idx); // snap back
     }
-    armAuto();
+    armAuto && armAuto();
   };
   host.addEventListener('pointerdown', onDown);
   host.addEventListener('pointermove', onMove);
@@ -182,12 +182,13 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
   };
   go.idx = 0;
 
+  const stopAuto = () => { clearInterval(timer); timer = null; };
   const armAuto = () => {
-    clearInterval(timer);
+    stopAuto();
     timer = setInterval(() => go(go.idx + 1), DWELL_MS);
   };
 
-  const unbindSwipe = bindSwipe(host, track, n, go, armAuto);
+  const unbindSwipe = bindSwipe(host, track, n, go, { armAuto, stopAuto });
   armAuto();
 
   const onResize = () => go(go.idx);

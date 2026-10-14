@@ -24,7 +24,7 @@ import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
 import { Board, restyleBoards } from './board.js';
 import { PUZZLES, goodMoves, mateIn } from './puzzles.js';
-import { normalizeTimeControl } from './time.js';
+import { normalizeTimeControl, formatTashkentWhen } from './time.js';
 import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
 import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleOpenGame } from './game.js';
@@ -278,7 +278,8 @@ const gameRow = (g, kind) => {
 const resultText = (g) => {
   if (g.status !== 'finished') return '';
   const r = g.result === '1/2-1/2' ? t('draw_title') : (g.result === '1-0') === (g.you === 'w') ? t('you_won') : t('you_lost');
-  return r;
+  const when = formatTashkentWhen(g.updatedAt);
+  return when ? `${r} · ${when}` : r;
 };
 
 let playSnap = '';
@@ -746,6 +747,11 @@ async function boot() {
   // Reveal shell BEFORE data refresh so the user never sits on a black void
   showApp();
   initPager();
+
+  if (me.referralClaim && me.referralClaim.inviteeReward) {
+    toast(t('invitee_reward', { n: me.referralClaim.inviteeReward, name: (me.referralClaim.friend && me.referralClaim.friend.name) || '…' }));
+    haptic('success');
+  }
 
   connectWs((up) => { if (up) refresh(); });
   onWs((m) => {
