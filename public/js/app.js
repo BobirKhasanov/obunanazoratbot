@@ -163,12 +163,12 @@ refreshers.play = async function renderPlay() {
   const saved = savedAiGame();
   const s = sumStats(l.stats);
   const controls = [
-    ['any', 'Istalgan', 'Tezroq topiladi'],
     ['1+0', '1+0', 'Bullet'],
     ['3+2', '3+2', 'Blitz'],
     ['5+0', '5+0', 'Blitz'],
     ['10+0', '10+0', 'Rapid'],
     ['15+10', '15+10', 'Rapid'],
+    ['any', t('any_time'), t('any_time_sub')],
   ];
   const modes = h('div.time-grid', controls.map(([id, label, sub]) =>
     h('button.time-option' + (selectedTime === id ? '.selected' : ''), {
@@ -176,21 +176,28 @@ refreshers.play = async function renderPlay() {
     }, h('b', label), h('small', sub))
   ));
   const onlinePlayers = l.online.filter((u) => !u.inGame);
+  const banner = (cls, emoji, title, sub, fn) => h('button.banner.' + cls, { onclick: () => { haptic('light'); fn(); } },
+    h('div.banner-text', h('b', title), h('small', sub)), h('span.banner-art', emoji));
+  const card = (emoji, label, fn) => h('button.pcard', { onclick: () => { haptic('light'); fn(); } }, h('span.pcard-art', emoji), h('b', label));
   const nodes = [
     h('div.top', h('h1', '♟ ' + t('app')), h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
-    h('div.h2', 'Shaxmat · Online'),
-    h('div.time-heading', 'O‘yin vaqtini tanlang'),
+    banner('violet', '🧩', t('home_puzzle'), t('puzzles_sub'), () => go(TABS.indexOf('puzzles'), true)),
+    h('div.time-heading', t('choose_time')),
     modes,
-    tile(t('vs_computer'), t('vs_computer_sub'), 'cpu', aiSheet, true),
-    h('button.tile', { onclick: onlineSheet }, h('b', 'Online o‘ynash'), h('small', 'Jonli o‘yinchini tanlang'), icon('globe', 26)),
-    h('div.h2.online-heading', 'Online o‘yinchilar', h('span.count-pill', String(onlinePlayers.length))),
-    onlinePlayers.length ? h('div.list', onlinePlayers.map((u) => h('div.row', h('div.avwrap', avatar(u.name, u.id), h('i.dot.on')),
-      h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.inGame ? t('in_game') : t('online'))),
-      h('button.mini.ok', { disabled: u.inGame, onclick: () => challenge(u.id) }, 'O‘ynash · ' + selectedTime)))) : empty(t('nobody'), '🛰️'),
+    banner('azure', '🏆', t('home_rank'), t('home_rank_sub'), () => go(TABS.indexOf('rankings'), true)),
+    h('div.pcards',
+      card('🌐', t('play_card_online'), onlineSheet),
+      card('🤝', t('play_card_friend'), startFriendGame),
+      card('🤖', t('play_card_ai'), aiSheet)),
+    h('div.play-cta', h('button.cta', { onclick: () => { haptic('medium'); startQuick(); } }, t('play_btn'))),
     l.games.invites.length ? [h('div.h2', t('invites')), h('div.list', l.games.invites.map((g) => h('div.row.invite',
       avatar(g.opponent.name, g.opponent.id), h('div.grow', h('div.t', g.opponent.name), h('div.s', t('challenge'))),
       h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
       h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } refresh(); } }, icon('x', 18)))))] : null,
+    onlinePlayers.length ? [h('div.h2.online-heading', t('online_players'), h('span.count-pill', String(onlinePlayers.length))),
+      h('div.list', onlinePlayers.map((u) => h('div.row', h('div.avwrap', avatar(u.name, u.id), h('i.dot.on')),
+        h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', t('online'))),
+        h('button.mini.ok', { onclick: () => challenge(u.id) }, t('challenge')))))] : null,
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
       saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('cpu', 22)), h('div.grow', h('div.t', t('computer') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
