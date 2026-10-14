@@ -153,10 +153,10 @@ const gameId = () => crypto.randomBytes(6).toString('base64url'); // 8 chars, sa
 
 // ---------- users ----------
 const getUser = db.prepare('SELECT * FROM users WHERE id = ?');
+// Username always follows Telegram. first_name/last_name only seed on insert (editable in-app later).
 const upsertUser = db.prepare(`
-  INSERT INTO users (id, first_name, username, lang) VALUES (?, ?, ?, ?)
-  ON CONFLICT(id) DO UPDATE SET first_name = excluded.first_name, username = excluded.username,
-    last_seen = now()
+  INSERT INTO users (id, first_name, last_name, username, lang) VALUES (?, ?, ?, ?, ?)
+  ON CONFLICT(id) DO UPDATE SET username = excluded.username, last_seen = now()
 `);
 const touchUser = db.prepare('UPDATE users SET last_seen = now() WHERE id = ?');
 const touchPresent = db.prepare(`
@@ -165,7 +165,13 @@ const touchPresent = db.prepare(`
   WHERE id = ?
 `);
 const clearPresent = db.prepare('UPDATE users SET present_until = NULL WHERE id = ?');
-const nameOf = db.prepare('SELECT first_name, username, present_until FROM users WHERE id = ?');
+const nameOf = db.prepare('SELECT first_name, last_name, username, present_until FROM users WHERE id = ?');
+
+function displayName(u) {
+  if (!u) return 'Player';
+  const full = [u.first_name || u.firstName, u.last_name || u.lastName].filter(Boolean).join(' ').trim();
+  return full || 'Player';
+}
 
 function stillPresent(presentUntil) {
   if (!presentUntil) return false;
@@ -190,7 +196,7 @@ async function refreshPresence(id) {
 async function person(id) {
   if (!id) return null;
   const u = (await nameOf.get(id)) || {};
-  return { id, name: u.first_name || 'Player', username: u.username || '', online: isUserOnline(id, u.present_until) };
+  return { id, name: displayName(u), username: u.username || '', online: isUserOnline(id, u.present_until) };
 }
 
 /** Active Premium: unexpired premium_until, or legacy premium=1 with no expiry. */
@@ -204,7 +210,14 @@ const publicUser = (u, admin) => {
   const premium = isPremiumActive(u);
   const until = u.premium_until ? new Date(u.premium_until) : null;
   return {
-    id: u.id, firstName: u.first_name, username: u.username, lang: u.lang, theme: u.theme,
+    id: u.id,
+    firstName: u.first_name || '',
+    lastName: u.last_name || '',
+    displayName: displayName(u),
+    username: u.username || '',
+    country: u.country || '',
+    region: u.region || '',
+    lang: u.lang, theme: u.theme,
     langSet: !!u.lang_set, notifyEnabled: !!u.notify_enabled, discoverable: !!u.discoverable, isAdmin: admin,
     diamonds: Number(u.diamonds || 0), premium,
     premiumUntil: until && !Number.isNaN(until.getTime()) ? until.toISOString() : null,
@@ -514,7 +527,13 @@ async function auth(req, res, next) {
   // Live spectate polls a few endpoints; keep headroom above normal play traffic
   if (n > 600) return res.status(429).json({ error: 'Too many requests', code: 'limit' });
 
-  await upsertUser.run(tg.id, tg.first_name || '', tg.username || '', fromTelegram(tg.language_code));
+  await upsertUser.run(
+    tg.id,
+    tg.first_name || '',
+    tg.last_name || '',
+    tg.username || '',
+    fromTelegram(tg.language_code),
+  );
   let user = await getUser.get(tg.id);
   if (user.blocked) return res.status(403).json({ error: 'Your access has been disabled', code: 'blocked' });
   user = await syncPremiumExpiry(user);
@@ -578,12 +597,21 @@ api.get('/me', wrap(async (req, res) => {
 api.patch('/me', wrap(async (req, res) => {
   const b = req.body || {};
   const u = req.user;
+  // Username is Telegram-owned — never accept client edits
+  if (b.username !== undefined) throw bad('Username comes from Telegram', 'username_readonly');
+
   const lang = b.lang === undefined ? u.lang : b.lang;
   if (!LANGS.includes(lang)) throw bad('Unsupported language', 'bad_request');
   const theme = b.theme === undefined ? u.theme : b.theme;
   if (!THEMES.includes(theme)) throw bad('Unsupported theme', 'bad_request');
   const notifyEnabled = b.notifyEnabled === undefined ? u.notify_enabled : b.notifyEnabled ? 1 : 0;
   const discoverable = b.discoverable === undefined ? u.discoverable : b.discoverable ? 1 : 0;
+
+  const firstName = b.firstName === undefined ? u.first_name : cleanText(b.firstName, 64, 'bad_request');
+  const lastName = b.lastName === undefined ? (u.last_name || '') : cleanText(b.lastName, 64, 'bad_request');
+  const country = b.country === undefined ? (u.country || '') : cleanText(b.country, 64, 'bad_request');
+  const region = b.region === undefined ? (u.region || '') : cleanText(b.region, 64, 'bad_request');
+  if (b.firstName !== undefined && !firstName) throw bad('Name is required', 'bad_request');
 
   let pieceSet = u.piece_set || 'outline';
   let boardTheme = u.board_theme || 'classic';
@@ -615,8 +643,12 @@ api.patch('/me', wrap(async (req, res) => {
   }
 
   await db.prepare(`UPDATE users SET lang = ?, theme = ?, notify_enabled = ?, discoverable = ?, lang_set = ?,
-    piece_set = ?, board_theme = ?, avatar_key = ? WHERE id = ?`)
-    .run(lang, theme, notifyEnabled, discoverable, b.lang !== undefined ? 1 : u.lang_set, pieceSet, boardTheme, avatarKey, u.id);
+    piece_set = ?, board_theme = ?, avatar_key = ?, first_name = ?, last_name = ?, country = ?, region = ?
+    WHERE id = ?`)
+    .run(
+      lang, theme, notifyEnabled, discoverable, b.lang !== undefined ? 1 : u.lang_set,
+      pieceSet, boardTheme, avatarKey, firstName, lastName, country, region, u.id,
+    );
   res.json({ user: publicUser(await getUser.get(u.id), req.isAdmin) });
 }));
 
@@ -1236,7 +1268,7 @@ api.get('/lobby', wrap(async (req, res) => {
 
   // Shared presence: present_until is refreshed on every API call and cleared on Mini App close / WS leave.
   const rows = await db.prepare(`
-    SELECT id, first_name, discoverable, premium, premium_until
+    SELECT id, first_name, last_name, discoverable, premium, premium_until
     FROM users
     WHERE blocked = 0 AND id != ?
       AND present_until > now()
@@ -1245,7 +1277,7 @@ api.get('/lobby', wrap(async (req, res) => {
   `).all(uid);
   const online = rows
     .map((r) => ({
-      id: r.id, name: r.first_name || 'Player', inGame: busy.has(r.id), friend: friendIds.has(r.id),
+      id: r.id, name: displayName(r), inGame: busy.has(r.id), friend: friendIds.has(r.id),
       premium: isPremiumActive(r), discoverable: !!r.discoverable || friendIds.has(r.id),
       invited: inviteGameByUser.has(r.id), inviteGameId: inviteGameByUser.get(r.id) || null,
     }))

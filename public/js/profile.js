@@ -1,5 +1,5 @@
 // Profile hub: sectioned menu + slide-in subpages (friends, premium, settings, …).
-import { h, icon, haptic, toast, api, fail, avBlock, premIc, shareUrl, confirmSheet, toggle, tg } from './ui.js';
+import { h, icon, haptic, toast, api, fail, avBlock, premIc, shareUrl, confirmSheet, toggle, tg, sheet } from './ui.js';
 import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
 import { openScreen } from './screen.js';
 import { openAdmin } from './admin.js';
@@ -303,6 +303,110 @@ export function renderProfilePage(ctx) {
     document.body.append(a); a.click(); a.remove();
   };
 
+  const dash = (v) => (v && String(v).trim()) || '—';
+
+  const editPersonalSheet = (onSaved) => {
+    const u = state.me;
+    const first = h('input.input', { value: u.firstName || '', maxlength: 64, placeholder: t('info_first') });
+    const last = h('input.input', { value: u.lastName || '', maxlength: 64, placeholder: t('info_last') });
+    sheet((close) => [
+      h('h2', t('info_personal')),
+      h('div.label', t('info_first')), first,
+      h('div.label', t('info_last')), last,
+      h('p.muted', t('info_username_locked', { u: u.username ? '@' + u.username : '—' })),
+      h('button.cta', {
+        type: 'button',
+        onclick: async () => {
+          try {
+            state.me = await save({ firstName: first.value, lastName: last.value });
+            toast(t('info_saved')); haptic('success');
+            close(); onSaved && onSaved(); refresh();
+          } catch (e) { fail(e); }
+        },
+      }, t('save')),
+    ]);
+  };
+
+  const editAddressSheet = (onSaved) => {
+    const u = state.me;
+    const country = h('input.input', { value: u.country || '', maxlength: 64, placeholder: t('info_country') });
+    const region = h('input.input', { value: u.region || '', maxlength: 64, placeholder: t('info_region') });
+    sheet((close) => [
+      h('h2', t('info_address')),
+      h('div.label', t('info_country')), country,
+      h('div.label', t('info_region')), region,
+      h('button.cta', {
+        type: 'button',
+        onclick: async () => {
+          try {
+            state.me = await save({ country: country.value, region: region.value });
+            toast(t('info_saved')); haptic('success');
+            close(); onSaved && onSaved(); refresh();
+          } catch (e) { fail(e); }
+        },
+      }, t('save')),
+    ]);
+  };
+
+  const openMyInfo = () => openScreen((close) => {
+    const host = h('div.myinfo');
+    const draw = () => {
+      const u = state.me;
+      host.replaceChildren(
+        h('button.myinfo-av', {
+          type: 'button',
+          onclick: () => { haptic('select'); openAvatar(); },
+        }, avBlock(u.displayName || u.firstName, u.id, {
+          premium: !!u.premium, size: 'xl', round: true, avatarKey: u.avatarKey,
+        })),
+        h('div.info-sec',
+          h('div.info-sec-h',
+            h('span', t('info_personal')),
+            h('button.info-edit', {
+              type: 'button', 'aria-label': t('profile_edit'),
+              onclick: () => { haptic('select'); editPersonalSheet(draw); },
+            }, icon('pencil', 16))),
+          h('div.info-card',
+            h('div.info-row', h('span', t('info_first')), h('b', dash(u.firstName))),
+            h('div.info-row', h('span', t('info_last')), h('b', dash(u.lastName))),
+            h('div.info-row', h('span', t('info_username')), h('b.locked', u.username ? '@' + u.username : '—')))),
+        h('div.info-sec',
+          h('div.info-sec-h',
+            h('span', t('info_address')),
+            h('button.info-edit', {
+              type: 'button', 'aria-label': t('profile_edit'),
+              onclick: () => { haptic('select'); editAddressSheet(draw); },
+            }, icon('pencil', 16))),
+          h('div.info-card',
+            h('div.info-row', h('span', t('info_country')), h('b', dash(u.country))),
+            h('div.info-row', h('span', t('info_region')), h('b', dash(u.region))))),
+        u.isAdmin
+          ? h('button.btn.ghost', {
+            type: 'button',
+            onclick: () => { try { tg.close(); } catch { /* ignore */ } },
+          }, t('close_app'))
+          : h('button.info-delete', {
+            type: 'button',
+            onclick: async () => {
+              haptic('light');
+              if (!(await confirmSheet(t('delete_confirm'), t('delete_data'), true))) return;
+              try { await api('DELETE', '/me'); tg.close(); } catch (e) { fail(e); }
+            },
+          }, t('delete_account')),
+      );
+    };
+    draw();
+    return [
+      h('div.top.myinfo-top',
+        h('button.round.back', {
+          type: 'button', 'aria-label': t('back'),
+          onclick: () => { haptic('light'); close(); },
+        }, icon('back', 22)),
+        h('h1', t('my_info'))),
+      host,
+    ];
+  });
+
   const openAvatar = () => openScreen((close) => {
     const host = h('div');
     const draw = async () => {
@@ -376,24 +480,23 @@ export function renderProfilePage(ctx) {
   const pzDone = solvedCount();
 
   const bannerUrl = (state.meta && state.meta.profileBannerUrl) || '/img/profile-banner.png';
+  const shownName = me.displayName || [me.firstName, me.lastName].filter(Boolean).join(' ') || 'Player';
 
   return [
     h('div.prof-cover',
-      h('div.prof-banner', {
-        style: { backgroundImage: `url("${bannerUrl}")` },
-      },
+      h('div.prof-banner', { style: { backgroundImage: `url("${bannerUrl}")` } },
         h('button.prof-edit', {
           type: 'button',
-          onclick: () => { haptic('select'); openAvatar(); },
+          onclick: () => { haptic('select'); openMyInfo(); },
         }, icon('pencil', 16), t('profile_edit'))),
       h('div.prof-band',
         h('button.prof-av', {
           type: 'button',
           title: t('avatar_title'),
           onclick: () => { haptic('select'); openAvatar(); },
-        }, avBlock(me.firstName, me.id, { premium: !!me.premium, size: 'xl', round: true, avatarKey: me.avatarKey })),
+        }, avBlock(shownName, me.id, { premium: !!me.premium, size: 'xl', round: true, avatarKey: me.avatarKey })),
         h('div.prof-meta',
-          h('h2', h('span.name', me.firstName || 'Player'), me.premium ? premIc() : null),
+          h('h2', h('span.name', shownName), me.premium ? premIc() : null),
           me.username ? h('div.prof-user', me.username) : h('div.prof-user', t('profile_title'))),
         h('button.prof-star', {
           type: 'button',
@@ -433,6 +536,7 @@ export function renderProfilePage(ctx) {
 
       sec(t('sec_settings')),
       menuCard(
+        menuRow({ ic: 'profile', title: t('my_info'), sub: t('my_info_sub'), onClick: openMyInfo }),
         menuRow({ ic: 'globe', title: t('language'), sub: LANG_NAMES[getLang()], onClick: openLanguage }),
         menuRow({ ic: 'gear', title: t('settings'), onClick: openSettings }),
         menuRow({ ic: 'help', title: t('help'), onClick: openHelp }),
@@ -452,15 +556,12 @@ export function renderProfilePage(ctx) {
         }),
       ),
 
-      h('button.btn.logout', {
-        type: 'button',
-        onclick: async () => {
-          if (me.isAdmin) { try { tg.close(); } catch { /* ignore */ } return; }
-          if (await confirmSheet(t('delete_confirm'), t('delete_data'), true)) {
-            try { await api('DELETE', '/me'); tg.close(); } catch (e) { fail(e); }
-          }
-        },
-      }, icon('logout', 20), me.isAdmin ? t('close_app') : t('delete_data')),
+      me.isAdmin
+        ? h('button.btn.logout', {
+          type: 'button',
+          onclick: () => { try { tg.close(); } catch { /* ignore */ } },
+        }, icon('logout', 20), t('close_app'))
+        : null,
       h('div.app-ver', t('app_version', { v: APP_VERSION })),
     ),
   ];

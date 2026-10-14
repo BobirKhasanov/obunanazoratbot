@@ -13,12 +13,14 @@ function createBot(token, webAppUrl) {
   const bot = new Bot(token, process.env.TG_API_ROOT ? { client: { apiRoot: process.env.TG_API_ROOT } } : {});
 
   const upsert = db.prepare(`
-    INSERT INTO users (id, first_name, username, lang) VALUES (?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET first_name = excluded.first_name, username = excluded.username,
+    INSERT INTO users (id, first_name, last_name, username, lang) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET username = excluded.username,
       bot_blocked = 0, last_seen = now()
   `);
   const getUser = db.prepare('SELECT lang, blocked FROM users WHERE id = ?');
-  const touch = (from) => upsert.run(from.id, from.first_name || '', from.username || '', fromTelegram(from.language_code));
+  const touch = (from) => upsert.run(
+    from.id, from.first_name || '', from.last_name || '', from.username || '', fromTelegram(from.language_code),
+  );
 
   const isHttps = (webAppUrl || '').startsWith('https://');
   const openUrl = (payload) => {

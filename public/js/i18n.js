@@ -654,6 +654,12 @@ Object.assign(en, {
   admin_banner_default: 'Use default',
   admin_banner_saved: 'Profile banner updated',
   admin_banner_reset: 'Default banner restored',
+  my_info: 'My information', my_info_sub: 'Name, address, account',
+  info_personal: 'Personal information', info_address: 'Address',
+  info_first: 'First name', info_last: 'Last name', info_username: 'Username',
+  info_country: 'Country', info_region: 'Region',
+  info_username_locked: 'Username {u} comes from Telegram and cannot be changed here.',
+  info_saved: 'Saved', delete_account: 'Delete account',
 });
 Object.assign(ru, {
   profile_edit: 'Изменить',
@@ -664,6 +670,12 @@ Object.assign(ru, {
   admin_banner_default: 'По умолчанию',
   admin_banner_saved: 'Баннер профиля обновлён',
   admin_banner_reset: 'Стандартный баннер восстановлен',
+  my_info: 'Мои данные', my_info_sub: 'Имя, адрес, аккаунт',
+  info_personal: 'Личные данные', info_address: 'Адрес',
+  info_first: 'Имя', info_last: 'Фамилия', info_username: 'Username',
+  info_country: 'Страна', info_region: 'Регион',
+  info_username_locked: 'Username {u} берётся из Telegram и здесь не меняется.',
+  info_saved: 'Сохранено', delete_account: 'Удалить аккаунт',
 });
 Object.assign(uz, {
   profile_edit: 'Tahrirlash',
@@ -674,6 +686,12 @@ Object.assign(uz, {
   admin_banner_default: 'Standart',
   admin_banner_saved: 'Profil banneri yangilandi',
   admin_banner_reset: 'Standart banner qaytarildi',
+  my_info: "Mening ma'lumotlarim", my_info_sub: 'Ism, manzil, akkaunt',
+  info_personal: 'Shaxsiy ma\'lumotlar', info_address: 'Manzil',
+  info_first: 'Ism', info_last: 'Familya', info_username: 'Username',
+  info_country: 'Mamlakat', info_region: 'Hudud',
+  info_username_locked: 'Username {u} Telegramdan olinadi, bu yerda o‘zgartirib bo‘lmaydi.',
+  info_saved: 'Saqlandi', delete_account: "Akkauntni o'chirish",
 });
 Object.assign(uzc, {
   profile_edit: 'Таҳрирлаш',
@@ -684,4 +702,10 @@ Object.assign(uzc, {
   admin_banner_default: 'Стандарт',
   admin_banner_saved: 'Профил баннери янгиланди',
   admin_banner_reset: 'Стандарт баннер қайтарилди',
+  my_info: 'Менинг маълумотларим', my_info_sub: 'Исм, манзил, аккаунт',
+  info_personal: 'Шахсий маълумотлар', info_address: 'Манзил',
+  info_first: 'Исм', info_last: 'Фамилия', info_username: 'Username',
+  info_country: 'Мамлакат', info_region: 'Ҳудуд',
+  info_username_locked: 'Username {u} Telegramдан олинади, бу ерда ўзгартириб бўлмайди.',
+  info_saved: 'Сақланди', delete_account: 'Аккаунтни ўчириш',
 });
