@@ -118,6 +118,8 @@ assert.ok(html.includes('id="play-sticky"') && html.includes('id="dock"'), 'Play
 assert.ok(html.includes('id="boot"'), 'boot splash in HTML');
 assert.ok(css.includes('pill-thumb') && ui.includes('pillBar'), 'sliding pill bars for section selection');
 assert.ok((app.includes('headerInboxBtns') || app.includes('headerInboxBtnsSafe')) && app.includes('rank-board-bar'), 'home inbox + ranking bars');
+assert.ok(app.includes("online-heading") && app.includes("t('online_now'") && !/gempill[\s\S]{0,180}livepill/.test(app), 'online count sits by Online players, not in gem header');
+assert.ok(app.includes('hdr-ic') && app.includes("t('messages')") && app.includes("t('xabarnoma')"), 'header shows mail + notifications');
 assert.ok(app.includes("import('./inbox.js") || app.includes('loadInbox'), 'inbox loaded lazily so a missing asset cannot blank the app');
 assert.ok(app.includes('showApp') && app.includes('showGate') && app.includes('#boot'), 'boot never leaves a blank black screen');
 const inbox = read('public/js/inbox.js');

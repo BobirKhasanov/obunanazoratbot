@@ -6,16 +6,29 @@ import { t, setLang } from './i18n.js';
 let inboxMod = null;
 async function loadInbox() {
   if (inboxMod) return inboxMod;
-  try { inboxMod = await import('./inbox.js?v=20261014p'); } catch (e) { console.warn('[inbox]', e); inboxMod = null; }
+  try { inboxMod = await import('./inbox.js?v=20261015a'); } catch (e) { console.warn('[inbox]', e); inboxMod = null; }
   return inboxMod;
 }
 function headerInboxBtnsSafe() {
-  const slot = h('div.hdr-inbox');
-  loadInbox().then((m) => {
-    if (!m || !slot.isConnected) return;
-    try { slot.replaceWith(m.headerInboxBtns()); } catch (e) { console.warn('[inbox]', e); }
-  });
-  return slot;
+  const open = async (fn) => {
+    haptic('light');
+    const m = await loadInbox();
+    if (!m) return;
+    try { fn(m); } catch (e) { console.warn('[inbox]', e); }
+  };
+  const mail = h('button.hdr-ic', {
+    type: 'button',
+    'aria-label': t('messages'),
+    onclick: () => open((m) => m.openMessages()),
+  }, icon('mail', 20), h('span.hdr-badge-slot'));
+  const bell = h('button.hdr-ic', {
+    type: 'button',
+    'aria-label': t('xabarnoma'),
+    onclick: () => open((m) => m.openNotifications()),
+  }, icon('bell', 20), h('span.hdr-badge-slot'));
+  const wrap = h('div.hdr-inbox', mail, bell);
+  refreshInboxBadgesSafe(wrap);
+  return wrap;
 }
 function refreshInboxBadgesSafe(root) {
   loadInbox().then((m) => { try { m && m.refreshInboxBadges(root); } catch { /* ignore */ } });
@@ -307,7 +320,7 @@ refreshers.play = async function renderPlay() {
   });
   const playEl = page('play');
   if (snap === playSnap && playEl && playEl.classList.contains('seen') && playEl.childElementCount) {
-    const pill = playEl.querySelector('.livepill');
+    const pill = playEl.querySelector('.online-heading .livepill');
     if (pill) pill.replaceChildren(h('i.dot'), t('online_now', { n: l.onlineCount }));
     const gem = playEl.querySelector('.gempill');
     if (gem) gem.textContent = '💎 ' + (state.me.diamonds || 0);
@@ -340,7 +353,8 @@ refreshers.play = async function renderPlay() {
     refreshHome: () => { playSnap = ''; refresh('play'); },
   });
   const onlineBlock = [
-    h('div.h2.online-heading', t('online_players'), h('span.count-pill', String(onlinePlayers.length))),
+    h('div.h2.online-heading', t('online_players'),
+      h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
     onlinePlayers.length
       ? h('div.list.home-online', ...onlinePlayers.map((u) => h('div.row',
         h('button.plain', { type: 'button', onclick: () => openProfile(u.id) },
@@ -357,7 +371,6 @@ refreshers.play = async function renderPlay() {
       h('h1', '♟ ' + t('app')),
       h('div.pills',
         h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)),
-        h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount })),
         headerInboxBtnsSafe())),
     annHost,
     puzzleAnns && puzzleAnns.length ? puzzleHost : puzzleFallback,

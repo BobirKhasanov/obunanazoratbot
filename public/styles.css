@@ -611,7 +611,12 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .time-option small { color: var(--muted); font-size: 11px; }
 .time-option.selected { background: var(--card); border-color: transparent; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
 .time-option:active { transform: scale(.97); }
-.online-heading { display: flex; align-items: center; justify-content: space-between; }
+.online-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.online-heading .livepill {
+  flex: none; padding: 5px 10px; font-size: 12px; gap: 6px;
+  white-space: nowrap; max-width: 55%;
+  overflow: hidden; text-overflow: ellipsis;
+}
 .home-online { margin-bottom: 8px; }
 .home-online .row { margin-bottom: 2px; }
 .count-pill { background: var(--card); color: var(--muted); padding: 3px 9px; border-radius: 20px; font-size: 12px; }
