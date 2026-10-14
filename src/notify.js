@@ -1,5 +1,6 @@
 // Telegram chat notifications. Every message carries a web_app button that opens the Mini App
 // (straight into a specific game when a gameId is given).
+const { InputFile } = require('grammy');
 const db = require('./db');
 const { tr } = require('./i18n');
 
@@ -54,4 +55,42 @@ async function toUser(userId, build, { gameId, effect, force } = {}) {
   }
 }
 
-module.exports = { init, toUser, appUrl, EFFECT };
+/**
+ * Deliver a monthly podium medal: SVG document + caption + Open app button.
+ * @param {number} userId
+ * @param {{ svg: string, filename?: string, caption: string }} opts
+ */
+async function sendMedal(userId, opts) {
+  if (!bot) return false;
+  const u = await getUser.get(userId);
+  if (!u || u.blocked || u.bot_blocked) return false;
+  const T = tr(u.lang);
+  const url = appUrl();
+  const extra = url ? { reply_markup: { inline_keyboard: [[{ text: T.open, web_app: { url } }]] } } : {};
+  const makeFile = () => new InputFile(Buffer.from(opts.svg, 'utf8'), opts.filename || 'medal.svg');
+  try {
+    await bot.api.sendDocument(userId, makeFile(), {
+      caption: opts.caption,
+      ...extra,
+      message_effect_id: EFFECT.party,
+    });
+    return true;
+  } catch (e) {
+    if (e.error_code === 400 && e.description && /effect/i.test(e.description)) {
+      try {
+        await bot.api.sendDocument(userId, makeFile(), { caption: opts.caption, ...extra });
+        return true;
+      } catch (e2) {
+        console.error('[notify] medal send failed:', e2.description || e2.message);
+      }
+    } else if (e.error_code === 403) {
+      await db.prepare('UPDATE users SET bot_blocked = 1 WHERE id = ?').run(userId).catch(() => {});
+    } else {
+      console.error('[notify] medal send failed:', e.description || e.message);
+      return toUser(userId, () => opts.caption, { force: true, effect: 'party' });
+    }
+    return false;
+  }
+}
+
+module.exports = { init, toUser, sendMedal, appUrl, EFFECT };

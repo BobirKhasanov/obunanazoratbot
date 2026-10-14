@@ -462,27 +462,42 @@ export function openAdmin(onClose) {
       value: cfg.titleTemplate || 'Top {place} Chess player of {month}', maxlength: 120,
       oninput: (e) => { cfg.titleTemplate = e.target.value; },
     });
-    const shieldIn = h('input.input', {
-      value: cfg.shieldText != null ? cfg.shieldText : 'CHESS', maxlength: 16,
-      placeholder: 'CHESS',
-      oninput: (e) => { cfg.shieldText = e.target.value; },
-    });
-    const monthIn = h('input.input', {
-      value: medalState.previewMonth || medalState.month || '',
-      placeholder: 'YYYY-MM',
-      maxlength: 7,
-      oninput: (e) => { medalState.previewMonth = e.target.value.trim(); },
-    });
+    const curMonth = medalState.previewMonth || medalState.month || '';
+    const year = medalState.previewYear || medalState.year || Number(String(curMonth).slice(0, 4)) || new Date().getFullYear();
+    const months = medalState.months || [];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const placeSeg = seg([['1', '#1'], ['2', '#2'], ['3', '#3']], String(medalState.previewPlace || 1), (v) => {
       medalState.previewPlace = Number(v);
     });
+    const yearRow = h('div.medal-year-row',
+      h('button.mini', {
+        type: 'button',
+        onclick: () => { medalState.previewYear = year - 1; loadMedalsForYear(year - 1); },
+      }, '‹'),
+      h('b', String(year)),
+      h('button.mini', {
+        type: 'button',
+        onclick: () => { medalState.previewYear = year + 1; loadMedalsForYear(year + 1); },
+      }, '›'));
+    const monthChips = h('div.chips.medal-months',
+      (months.length ? months : Array.from({ length: 12 }, (_, i) => ({
+        key: `${year}-${String(i + 1).padStart(2, '0')}`,
+        short: String(i + 1).padStart(2, '0'),
+      }))).map((m, i) => h('button.chip' + (curMonth === m.key ? '.on' : ''), {
+        type: 'button',
+        onclick: () => {
+          medalState.previewMonth = m.key;
+          haptic('select');
+          loadMedals(m.key);
+        },
+      }, monthNames[i] || m.short)));
     const preview = h('div');
     if (medalState.previewUrl) {
       preview.append(h('img.medal-admin-preview', { src: medalState.previewUrl, alt: 'preview' }));
     }
     const list = (medalState.medals || []).length
       ? h('div.list', medalState.medals.map((m) => h('div.row',
-        h('img', { src: m.url, alt: '', style: { width: '40px', height: '40px', borderRadius: '10px' } }),
+        h('img', { src: m.url, alt: '', style: { width: '40px', height: '48px', borderRadius: '8px', objectFit: 'cover' } }),
         h('div.grow', h('div.t', m.title), h('div.s', `${m.month} · #${m.place} · ${m.name || m.userId}`)))))
       : h('div.muted', '—');
     medalHost.replaceChildren(
@@ -491,8 +506,6 @@ export function openAdmin(onClose) {
         h('div.label', t('admin_medals_bot')), botIn,
         h('div.label', t('admin_medals_title_tpl')), tplIn,
         h('p.muted', t('admin_medals_tpl_hint')),
-        h('div.label', t('admin_medals_shield')), shieldIn,
-        h('p.muted', t('admin_medals_shield_hint')),
         h('div.label', t('ann_colors')),
         h('div.ann-colors',
           color('primary', 'Primary'), color('secondary', 'Secondary'),
@@ -505,13 +518,12 @@ export function openAdmin(onClose) {
         fontSeg('fontFamily', t('admin_medals_font_body')),
         h('div.label', t('admin_medals_sizes')),
         h('div.medal-sizes',
-          sizeIn('sizePlace', t('admin_medals_sz_place'), 16, 48),
-          sizeIn('sizeName', t('admin_medals_sz_name'), 12, 36),
-          sizeIn('sizeHandle', t('admin_medals_sz_handle'), 10, 28),
-          sizeIn('sizeTitle', t('admin_medals_sz_title'), 9, 22),
+          sizeIn('sizePlace', t('admin_medals_sz_place'), 12, 40),
+          sizeIn('sizeName', t('admin_medals_sz_name'), 14, 40),
+          sizeIn('sizeTitle', t('admin_medals_sz_title'), 12, 28),
           sizeIn('sizeBot', t('admin_medals_sz_bot'), 10, 24)),
         h('p.muted', t('admin_medals_pattern_hint')),
-        h('div.label', t('admin_medals_preview_month')), monthIn,
+        h('div.label', t('admin_medals_pick_month')), yearRow, monthChips,
         h('div.label', t('admin_medals_preview_place')), placeSeg,
         h('button.btn.ghost.sm', {
           onclick: async () => {
@@ -544,22 +556,38 @@ export function openAdmin(onClose) {
         h('button.btn.ghost', {
           onclick: async () => {
             try {
-              await api('POST', '/admin/medals/award', { month: medalState.previousMonth || undefined });
+              const month = medalState.previewMonth || medalState.previousMonth;
+              await api('POST', '/admin/medals/award', { month, notify: true });
               toast(t('admin_medals_award_ok')); haptic('success');
-              loadMedals();
+              loadMedals(month);
             } catch (e) { fail(e); }
           },
-        }, t('admin_medals_award'))),
+        }, t('admin_medals_award')),
+        h('p.muted', t('admin_medals_auto_hint'))),
       h('div.h2', t('admin_medals')), list,
     );
   }
 
-  async function loadMedals() {
+  async function loadMedals(month) {
     try {
-      const r = await api('GET', '/admin/medals');
-      medalState = { ...medalState, ...r, previewUrl: medalState.previewUrl || '' };
+      const q = month ? `?month=${encodeURIComponent(month)}` : '';
+      const r = await api('GET', '/admin/medals' + q);
+      medalState = {
+        ...medalState,
+        ...r,
+        previewMonth: month || r.month || medalState.previewMonth,
+        previewYear: r.year || medalState.previewYear,
+        previewUrl: medalState.previewUrl || '',
+      };
       drawMedals();
     } catch (e) { fail(e); drawMedals(); }
+  }
+
+  async function loadMedalsForYear(y) {
+    const m = `${y}-01`;
+    medalState.previewYear = y;
+    medalState.previewMonth = m;
+    await loadMedals(m);
   }
 
   // ----- section screens -----

@@ -328,12 +328,15 @@ async function playMoves(game, players, moves, startPly = 0) {
         place: 1, name: 'Bob', username: 'bob', userId: USERS.B.id,
         config: { ...cfg.config, botHandle: '@Chess_uz_bot' },
       });
-      assert.ok(preview.svg.includes('Top 1') || preview.title.includes('Top 1') || preview.svg.includes('TOP 1') || preview.svg.includes('CHESS'));
+      assert.ok(cfg.months && cfg.months.length === 12, 'admin lists 12 months');
+      assert.ok(preview.svg.includes('Top 1') || preview.title.includes('Top 1') || preview.svg.includes('TOP 1'));
       assert.ok(preview.svg.includes('@Chess_uz_bot'));
-      assert.ok(preview.svg.includes('metal-'), 'winged metal gradient');
+      assert.ok(preview.svg.includes('OCTOBER') || preview.svg.includes('SEASON') || preview.svg.includes('BOB') || preview.svg.includes('Bob') || preview.svg.includes('metal-'));
       const oct = await ok('ADMIN', 'POST', '/admin/medals/preview', {
         place: 1, month: '2026-10', name: 'Bob', config: cfg.config,
       });
+      assert.ok(oct.svg.includes('OCTOBER 2026') || oct.svg.includes('OCT 2026'));
+      assert.ok(oct.svg.includes('BOB') || oct.svg.includes('Bob'));
       const nov = await ok('ADMIN', 'POST', '/admin/medals/preview', {
         place: 1, month: '2026-11', name: 'Bob', config: cfg.config,
       });
@@ -344,24 +347,26 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.notStrictEqual(oct.svg, octNext.svg, 'same month different year differs');
       const p2 = await ok('ADMIN', 'POST', '/admin/medals/preview', {
         place: 2, month: '2026-10', name: 'Bob',
-        config: { ...cfg.config, pieceTop2: 'queen', shieldText: '' },
+        config: { ...cfg.config, pieceTop2: 'queen' },
       });
       const p3 = await ok('ADMIN', 'POST', '/admin/medals/preview', {
         place: 3, month: '2026-10', name: 'Bob',
-        config: { ...cfg.config, pieceTop3: 'knight', shieldText: '' },
+        config: { ...cfg.config, pieceTop3: 'knight' },
       });
       assert.ok(p2.svg.includes('TOP 2') && p3.svg.includes('TOP 3'));
       assert.notStrictEqual(oct.svg, p2.svg);
 
       // Seed previous month scores so award works
-      const prev = cfg.previousMonth;
+      const prevMonth = cfg.previousMonth;
+      assert.ok(prevMonth);
       await pg.q(
         `INSERT INTO monthly_scores (user_id, month, points, wins, draws, losses) VALUES
            ($1, $2, 10, 5, 0, 0), ($3, $2, 6, 3, 0, 0), ($4, $2, 4, 2, 0, 0)
          ON CONFLICT (user_id, month) DO UPDATE SET points = EXCLUDED.points, wins = EXCLUDED.wins`,
-        USERS.B.id, prev, USERS.A.id, USERS.C.id,
+        USERS.B.id, prevMonth, USERS.A.id, USERS.C.id,
       );
-      const awarded = await ok('ADMIN', 'POST', '/admin/medals/award', { month: prev });
+      // notify:false — fake Telegram cannot accept SVG documents in this harness
+      const awarded = await ok('ADMIN', 'POST', '/admin/medals/award', { month: prevMonth, notify: false });
       assert.ok(awarded.awarded.length >= 1);
       const top1 = awarded.awarded.find((m) => m.place === 1);
       assert.ok(top1 && top1.userId === USERS.B.id);

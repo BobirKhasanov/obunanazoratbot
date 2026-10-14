@@ -59,7 +59,11 @@ async function housekeeping(onGameChanged) {
   if (old.length) await db.prepare("DELETE FROM media WHERE created_at < now() - interval '7 days'").run();
 }
 
-function startScheduler(onGameChanged) {
+/**
+ * @param {(id: string) => Promise<void>} onGameChanged
+ * @param {() => Promise<unknown>} [onMonthlyMedals]  run on 1st of month (Tashkent)
+ */
+function startScheduler(onGameChanged, onMonthlyMedals) {
   let running = false;
   const tick = async () => {
     if (running) return; // a slow run must not overlap the next one
@@ -67,6 +71,7 @@ function startScheduler(onGameChanged) {
     try {
       await housekeeping(onGameChanged);
       await remindMoves();
+      if (typeof onMonthlyMedals === 'function') await onMonthlyMedals();
     } catch (e) {
       console.error('[scheduler] error:', e);
     } finally { running = false; }

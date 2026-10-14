@@ -23,7 +23,8 @@ const { cacheGet, cacheSet, cacheDel, cacheEnabled, incr } = require('./cache');
 const { saveMedia, loadMediaBytes, storageEnabled } = require('./storage');
 const { DEFAULT_ELO, pairUpdate, scoresForResult, eloColumn } = require('./elo');
 const {
-  monthKey, monthLabelEn, previousMonthKey, normalizeConfig, generateMedalSvg, titleFor, DEFAULT_CONFIG, FONT_KEYS, PIECE_KEYS,
+  monthKey, monthLabelEn, seasonLabel, previousMonthKey, tashkentDay, monthsForYear,
+  normalizeConfig, generateMedalSvg, titleFor, DEFAULT_CONFIG, FONT_KEYS, PIECE_KEYS,
 } = require('./medals');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -215,7 +216,7 @@ async function getMedalConfig() {
   return normalizeConfig(await getSetting('medal_gen_config', JSON.stringify(DEFAULT_CONFIG)));
 }
 
-async function awardMonthMedals(month) {
+async function awardMonthMedals(month, { notifyWinners = false } = {}) {
   const m = month || previousMonthKey();
   const cfg = await getMedalConfig();
   const top = await db.prepare(`
@@ -242,12 +243,32 @@ async function awardMonthMedals(month) {
     `).run(id, m, place, u.id, title, svg);
     const saved = await db.prepare('SELECT id FROM medals WHERE month = ? AND place = ?').get(m, place);
     const mid = saved?.id || id;
-    awarded.push({ id: mid, place, userId: u.id, name: u.name, title, month: m });
+    awarded.push({ id: mid, place, userId: u.id, name: u.name, title, month: m, svg });
   }
-  return { month: m, monthLabel: monthLabelEn(m), awarded };
+
+  if (notifyWinners && awarded.length) {
+    const season = seasonLabel(m);
+    for (const a of awarded) {
+      const u = await getUser.get(a.userId);
+      const T = require('./i18n').tr(u?.lang || 'en');
+      const caption = T.medalAward({ place: a.place, season, bot: cfg.botHandle });
+      try {
+        await notify.sendMedal(a.userId, {
+          svg: a.svg,
+          filename: `medal-${m}-top${a.place}.svg`,
+          caption,
+        });
+      } catch (e) {
+        console.error('[medals] notify', a.userId, e.message || e);
+      }
+      await new Promise((r) => setTimeout(r, 80));
+    }
+    await setSetting(`medals_notified_${m}`, '1');
+  }
+  return { month: m, monthLabel: monthLabelEn(m), awarded: awarded.map(({ svg, ...rest }) => rest) };
 }
 
-/** Lazy: if previous month has scores but no medals yet, mint them. */
+/** Lazy mint previous month medals (no DM) if scores exist and medals missing. */
 async function ensurePreviousMonthMedals() {
   const prev = previousMonthKey();
   const hasScores = await db.prepare(
@@ -256,8 +277,32 @@ async function ensurePreviousMonthMedals() {
   if (!hasScores) return null;
   const hasMedals = await db.prepare('SELECT 1 AS ok FROM medals WHERE month = ? LIMIT 1').get(prev);
   if (hasMedals) return null;
-  try { return await awardMonthMedals(prev); } catch (e) {
+  try { return await awardMonthMedals(prev, { notifyWinners: false }); } catch (e) {
     console.error('[medals]', e.message || e);
+    return null;
+  }
+}
+
+/**
+ * On the 1st of each Tashkent month, award previous month's top 3 and DM them.
+ * Idempotent via medals_notified_YYYY-MM setting.
+ */
+async function runMonthlyMedalAwards() {
+  if (tashkentDay() !== 1) return null;
+  const prev = previousMonthKey();
+  const already = await getSetting(`medals_notified_${prev}`, '');
+  if (already === '1') return null;
+  const hasScores = await db.prepare(
+    'SELECT 1 AS ok FROM monthly_scores WHERE month = ? AND points > 0 LIMIT 1',
+  ).get(prev);
+  if (!hasScores) {
+    await setSetting(`medals_notified_${prev}`, '1'); // nothing to award; don't retry forever
+    return null;
+  }
+  try {
+    return await awardMonthMedals(prev, { notifyWinners: true });
+  } catch (e) {
+    console.error('[medals] monthly award', e.message || e);
     return null;
   }
 }
@@ -1552,6 +1597,7 @@ admin.patch('/shop', wrap(async (req, res) => {
 admin.get('/medals', wrap(async (req, res) => {
   const cfg = await getMedalConfig();
   const month = String(req.query.month || monthKey());
+  const year = Number(String(month).slice(0, 4)) || Number(monthKey().slice(0, 4));
   const medals = await db.prepare(`
     SELECT m.id, m.month, m.place, m.user_id, m.title, u.first_name, u.username
     FROM medals m LEFT JOIN users u ON u.id = m.user_id
@@ -1568,6 +1614,8 @@ admin.get('/medals', wrap(async (req, res) => {
     fonts: FONT_KEYS,
     pieces: PIECE_KEYS,
     month,
+    year,
+    months: monthsForYear(year).map((k) => ({ key: k, label: monthLabelEn(k), short: k.slice(5) })),
     monthLabel: monthLabelEn(month),
     previousMonth: previousMonthKey(month),
     top,
@@ -1607,7 +1655,9 @@ admin.post('/medals/preview', wrap(async (req, res) => {
 admin.post('/medals/award', wrap(async (req, res) => {
   const month = String((req.body && req.body.month) || previousMonthKey());
   if (!/^\d{4}-\d{2}$/.test(month)) throw bad('month must be YYYY-MM', 'bad_request');
-  const result = await awardMonthMedals(month);
+  // Default: notify winners (bot DM + SVG). Pass notify:false to mint only.
+  const notifyWinners = !(req.body && req.body.notify === false);
+  const result = await awardMonthMedals(month, { notifyWinners });
   res.json(result);
 }));
 
@@ -1845,7 +1895,10 @@ async function boot() {
       },
     }).catch((e) => console.error('[bot] failed to start:', e.message));
   }
-  startScheduler(async (id) => pushGame(await getGame.get(id)));
+  startScheduler(
+    async (id) => pushGame(await getGame.get(id)),
+    () => runMonthlyMedalAwards(),
+  );
 
   // Expire unanswered challenges and claim live-clock flags
   let sweeping = false;

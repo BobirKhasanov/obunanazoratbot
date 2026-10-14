@@ -605,9 +605,11 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .medal-grid { display: grid; gap: 12px; }
 .medal-card { padding: 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); }
 .medal-actions { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
-.medal-admin-preview { width: 200px; height: 200px; border-radius: 28px; margin: 12px auto; display: block; box-shadow: 0 12px 32px rgba(0,0,0,.35); }
+.medal-admin-preview { width: 180px; height: 225px; border-radius: 20px; margin: 12px auto; display: block; box-shadow: 0 12px 32px rgba(0,0,0,.35); object-fit: cover; }
 .medal-sizes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-bottom: 8px; }
 .medal-size-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+.medal-year-row { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 8px 0; }
+.medal-months { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 
 /* Online live tabs + Halqaro broadcasts (reuse rank-tab look) */
 .live-tabs { grid-template-columns: 1fr 1fr; margin-bottom: 4px; }
