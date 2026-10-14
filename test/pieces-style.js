@@ -17,12 +17,16 @@ assert.ok(pieces.includes("export const PIECE_SETS = ['outline', 'classic', 'neo
 for (const set of PIECE_SETS) {
   assert.ok(pieces.includes(set), `pieces.js mentions ${set}`);
 }
-for (const b of BOARD_THEMES.filter((x) => x !== 'classic')) {
+for (const b of BOARD_THEMES) {
   assert.ok(css.includes(`data-board="${b}"`), `css board ${b}`);
 }
-for (const set of ['classic', 'neo', 'staunton']) {
+for (const set of PIECE_SETS) {
   assert.ok(css.includes(`data-pieces="${set}"`), `css pieces ${set}`);
 }
+assert.ok(pieces.includes('BOARD_THEMES'));
+assert.ok(pieces.includes('BOARD_SWATCH'));
+assert.ok(css.includes('style-sw.board'));
+assert.ok(css.includes('.sw-pc'));
 
 assert.ok(pieces.includes('function pieceSvg'));
 assert.ok(pieces.includes('STAUNTON'));

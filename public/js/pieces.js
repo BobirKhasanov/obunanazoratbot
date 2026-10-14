@@ -1,5 +1,13 @@
 // Chess piece SVGs. Style set is chosen via <html data-pieces="…"> (outline | classic | neo | staunton).
 export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton'];
+export const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown'];
+export const BOARD_SWATCH = {
+  classic: { lt: '#b9c4d6', dk: '#5f7391' },
+  green: { lt: '#eedfbb', dk: '#769656' },
+  wood: { lt: '#f0d9b5', dk: '#b58863' },
+  blue: { lt: '#cdd7e8', dk: '#5b7fa6' },
+  brown: { lt: '#d8c3a5', dk: '#8b5e3c' },
+};
 export const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 
 const OUTLINE = {
@@ -34,7 +42,7 @@ const STAUNTON = {
 
 const SETS = { outline: OUTLINE, classic: CLASSIC, neo: NEO, staunton: STAUNTON };
 const STROKE = {
-  outline: '1.6',
+  outline: '2.35',
   classic: '1.7',
   neo: '2.05',
   staunton: '1.55',
@@ -51,9 +59,9 @@ export function clearPieceCache() {
   for (const k of Object.keys(cache)) delete cache[k];
 }
 
-/** SVG markup for a piece: colour 'w'|'b', type 'pnbrqk' */
-export function pieceSvg(colour, type) {
-  const set = currentPieceSet();
+/** SVG markup for a piece: colour 'w'|'b', type 'pnbrqk'. Optional setOverride for style pickers. */
+export function pieceSvg(colour, type, setOverride) {
+  const set = PIECE_SETS.includes(setOverride) ? setOverride : currentPieceSet();
   const shapes = SETS[set] || OUTLINE;
   const key = `${set}:${colour}${type}`;
   if (cache[key]) return cache[key];

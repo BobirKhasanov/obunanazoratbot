@@ -8,7 +8,7 @@ import { Board, restyleBoards } from './board.js';
 import { PUZZLES, goodMoves, mateIn } from './puzzles.js';
 import { normalizeTimeControl } from './time.js';
 import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
-import { PIECE_SETS } from './pieces.js';
+import { PIECE_SETS, BOARD_THEMES, BOARD_SWATCH, pieceSvg } from './pieces.js';
 import { restyleOpenGame } from './game.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
@@ -18,15 +18,6 @@ const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const gameMeta = () => ({ me: { id: state.me.id, name: state.me.firstName }, botUsername: state.meta.botUsername, reactions: state.meta.REACTIONS });
 /** Exact home-screen preset sent to the server (Any → untimed classic). */
 const selectedPreset = () => normalizeTimeControl(selectedTime === 'any' ? 'classic' : selectedTime);
-
-const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown'];
-const BOARD_SWATCH = {
-  classic: { lt: '#b9c4d6', dk: '#5f7391' },
-  green: { lt: '#eedfbb', dk: '#769656' },
-  wood: { lt: '#f0d9b5', dk: '#b58863' },
-  blue: { lt: '#cdd7e8', dk: '#5b7fa6' },
-  brown: { lt: '#d8c3a5', dk: '#8b5e3c' },
-};
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
@@ -47,39 +38,62 @@ function canStyleChess(me) {
   return !!(me && (me.premium || me.isAdmin));
 }
 
-function stylePickers(me, save) {
+function stylePickers(me) {
   const locked = !canStyleChess(me);
   const piece = me.pieceSet || 'outline';
   const board = me.boardTheme || 'classic';
   const pickPiece = async (v) => {
     if (locked) return toast(t('style_premium_only'), true);
-    applyChessStyle(v, me.boardTheme || 'classic');
+    const prev = { pieceSet: me.pieceSet || 'outline', boardTheme: me.boardTheme || 'classic' };
+    applyChessStyle(v, prev.boardTheme);
     haptic('select');
-    try { await save({ pieceSet: v }); refresh('profile'); } catch (e) { fail(e); }
+    try {
+      state.me = (await api('PATCH', '/me', { pieceSet: v })).user;
+      applyChessStyle(state.me.pieceSet, state.me.boardTheme);
+      refresh('profile');
+    } catch (e) {
+      applyChessStyle(prev.pieceSet, prev.boardTheme);
+      fail(e);
+    }
   };
   const pickBoard = async (v) => {
     if (locked) return toast(t('style_premium_only'), true);
-    applyChessStyle(me.pieceSet || 'outline', v);
+    const prev = { pieceSet: me.pieceSet || 'outline', boardTheme: me.boardTheme || 'classic' };
+    applyChessStyle(prev.pieceSet, v);
     haptic('select');
-    try { await save({ boardTheme: v }); refresh('profile'); } catch (e) { fail(e); }
+    try {
+      state.me = (await api('PATCH', '/me', { boardTheme: v })).user;
+      applyChessStyle(state.me.pieceSet, state.me.boardTheme);
+      refresh('profile');
+    } catch (e) {
+      applyChessStyle(prev.pieceSet, prev.boardTheme);
+      fail(e);
+    }
   };
   return [
     h('div.h2', t('piece_set'), locked ? h('span.count-pill', '★ Premium') : null),
-    locked ? h('p.muted.style-lock', t('style_premium_hint')) : null,
+    locked ? h('p.muted', t('style_premium_hint')) : null,
     h('div.style-swatches' + (locked ? '.style-lock' : ''),
       PIECE_SETS.map((id) => h('button.style-sw' + (piece === id ? '.on' : ''), {
-        type: 'button', 'aria-label': t('piece_' + id),
+        type: 'button',
+        'data-pieces': id,
+        'aria-label': t('piece_' + id),
         onclick: () => pickPiece(id),
-      }, t('piece_' + id).slice(0, 3)))),
+      }, h('span.sw-pc', { html: pieceSvg('w', 'n', id) }), h('span.sw-lab', t('piece_' + id))))),
     h('div.h2', t('board_theme'), locked ? h('span.count-pill', '★ Premium') : null),
     h('div.style-swatches' + (locked ? '.style-lock' : ''),
       BOARD_THEMES.map((id) => {
         const sw = BOARD_SWATCH[id];
         return h('button.style-sw.board' + (board === id ? '.on' : ''), {
-          type: 'button', 'aria-label': t('board_' + id),
-          style: { '--sw-lt': sw.lt, '--sw-dk': sw.dk },
+          type: 'button',
+          'aria-label': t('board_' + id),
+          title: t('board_' + id),
           onclick: () => pickBoard(id),
-        });
+        },
+          h('i', { style: { background: sw.lt } }),
+          h('i', { style: { background: sw.dk } }),
+          h('i', { style: { background: sw.dk } }),
+          h('i', { style: { background: sw.lt } }));
       })),
   ];
 }
@@ -423,7 +437,7 @@ refreshers.profile = async function renderProfile() {
     h('div.h2', t('language')), langChips,
     h('div.h2', t('theme')),
     seg([['dark', '🌙 ' + t('dark')], ['light', '☀️ ' + t('light')]], me.theme, async (v) => { applyTheme(v); await save({ theme: v }); }),
-    ...stylePickers(me, save),
+    ...stylePickers(me),
     h('div.card.settings',
       h('div.setting', h('div', h('b', t('notifications')), h('small', t('notifications_sub'))), toggle(me.notifyEnabled, (v) => save({ notifyEnabled: v }))),
       h('div.setting', h('div', h('b', t('discoverable')), h('small', t('discoverable_sub'))), toggle(me.discoverable, (v) => save({ discoverable: v })))),

@@ -1,18 +1,9 @@
 // Admin panel: live users, KPIs, post composer (media, button text + colours), users list.
 import { h, $, icon, haptic, toast, api, fail, getInitData, avatar, confirmSheet, seg } from './ui.js';
 import { t, LANGS, LANG_NAMES } from './i18n.js';
-import { PIECE_SETS } from './pieces.js';
+import { PIECE_SETS, BOARD_THEMES, BOARD_SWATCH, pieceSvg } from './pieces.js';
 import { restyleBoards } from './board.js';
 import { restyleOpenGame } from './game.js';
-
-const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown'];
-const BOARD_SWATCH = {
-  classic: { lt: '#b9c4d6', dk: '#5f7391' },
-  green: { lt: '#eedfbb', dk: '#769656' },
-  wood: { lt: '#f0d9b5', dk: '#b58863' },
-  blue: { lt: '#cdd7e8', dk: '#5b7fa6' },
-  brown: { lt: '#d8c3a5', dk: '#8b5e3c' },
-};
 
 let timer = null;
 const COLOR_KEYS = ['default', 'primary', 'success', 'danger'];
@@ -122,18 +113,23 @@ export function openAdmin(onClose) {
   };
   const drawStyle = () => {
     pieceBox.replaceChildren(...PIECE_SETS.map((id) => h('button.style-sw' + (styleUser.pieceSet === id ? '.on' : ''), {
-      type: 'button', onclick: async () => {
+      type: 'button',
+      'data-pieces': id,
+      'aria-label': t('piece_' + id),
+      onclick: async () => {
         try {
           styleUser = (await api('PATCH', '/me', { pieceSet: id })).user;
           applyLocal(styleUser.pieceSet, styleUser.boardTheme);
           drawStyle(); haptic('select'); toast(t('piece_' + id));
         } catch (e) { fail(e); }
       },
-    }, t('piece_' + id).slice(0, 3))));
+    }, h('span.sw-pc', { html: pieceSvg('w', 'n', id) }), h('span.sw-lab', t('piece_' + id)))));
     boardBox.replaceChildren(...BOARD_THEMES.map((id) => {
       const sw = BOARD_SWATCH[id];
       return h('button.style-sw.board' + (styleUser.boardTheme === id ? '.on' : ''), {
-        type: 'button', style: { '--sw-lt': sw.lt, '--sw-dk': sw.dk },
+        type: 'button',
+        'aria-label': t('board_' + id),
+        title: t('board_' + id),
         onclick: async () => {
           try {
             styleUser = (await api('PATCH', '/me', { boardTheme: id })).user;
@@ -141,7 +137,11 @@ export function openAdmin(onClose) {
             drawStyle(); haptic('select'); toast(t('board_' + id));
           } catch (e) { fail(e); }
         },
-      });
+      },
+        h('i', { style: { background: sw.lt } }),
+        h('i', { style: { background: sw.dk } }),
+        h('i', { style: { background: sw.dk } }),
+        h('i', { style: { background: sw.lt } }));
     }));
   };
   api('GET', '/me').then((r) => {
