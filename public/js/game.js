@@ -184,6 +184,7 @@ export function openGame(opts, onClose) {
 
   function renderBanner() {
     banner.hidden = true; banner.replaceChildren();
+    banner.classList.remove('wait', 'draw');
     const g = S.game;
     if (S.kind === 'online' && g) {
       if (g.status === 'open' || g.status === 'invited') {
