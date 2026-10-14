@@ -23,7 +23,7 @@ const { cacheGet, cacheSet, cacheDel, cacheEnabled, incr } = require('./cache');
 const { saveMedia, loadMediaBytes, storageEnabled } = require('./storage');
 const { DEFAULT_ELO, pairUpdate, scoresForResult, eloColumn } = require('./elo');
 const {
-  monthKey, monthLabelEn, previousMonthKey, normalizeConfig, generateMedalSvg, titleFor, DEFAULT_CONFIG,
+  monthKey, monthLabelEn, previousMonthKey, normalizeConfig, generateMedalSvg, titleFor, DEFAULT_CONFIG, FONT_KEYS, PIECE_KEYS,
 } = require('./medals');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -1565,6 +1565,8 @@ admin.get('/medals', wrap(async (req, res) => {
   `).all(month);
   res.json({
     config: cfg,
+    fonts: FONT_KEYS,
+    pieces: PIECE_KEYS,
     month,
     monthLabel: monthLabelEn(month),
     previousMonth: previousMonthKey(month),

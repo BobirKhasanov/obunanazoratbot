@@ -328,8 +328,28 @@ async function playMoves(game, players, moves, startPly = 0) {
         place: 1, name: 'Bob', username: 'bob', userId: USERS.B.id,
         config: { ...cfg.config, botHandle: '@Chess_uz_bot' },
       });
-      assert.ok(preview.svg.includes('Top 1') || preview.title.includes('Top 1'));
+      assert.ok(preview.svg.includes('Top 1') || preview.title.includes('Top 1') || preview.svg.includes('TOP 1'));
       assert.ok(preview.svg.includes('@Chess_uz_bot'));
+      assert.ok(preview.svg.includes('metal-'), 'winged metal gradient');
+      const oct = await ok('ADMIN', 'POST', '/admin/medals/preview', {
+        place: 1, month: '2026-10', name: 'Bob', config: cfg.config,
+      });
+      const nov = await ok('ADMIN', 'POST', '/admin/medals/preview', {
+        place: 1, month: '2026-11', name: 'Bob', config: cfg.config,
+      });
+      const octNext = await ok('ADMIN', 'POST', '/admin/medals/preview', {
+        place: 1, month: '2027-10', name: 'Bob', config: cfg.config,
+      });
+      assert.notStrictEqual(oct.svg, nov.svg, 'months use different patterns');
+      assert.notStrictEqual(oct.svg, octNext.svg, 'same month different year differs');
+      const p2 = await ok('ADMIN', 'POST', '/admin/medals/preview', {
+        place: 2, month: '2026-10', name: 'Bob', config: { ...cfg.config, pieceTop2: 'queen' },
+      });
+      const p3 = await ok('ADMIN', 'POST', '/admin/medals/preview', {
+        place: 3, month: '2026-10', name: 'Bob', config: { ...cfg.config, pieceTop3: 'knight' },
+      });
+      assert.ok(p2.svg.includes('TOP 2') && p3.svg.includes('TOP 3'));
+      assert.notStrictEqual(oct.svg, p2.svg);
 
       // Seed previous month scores so award works
       const prev = cfg.previousMonth;

@@ -432,12 +432,28 @@ export function openAdmin(onClose) {
 
   function drawMedals() {
     const cfg = medalState.config || {};
+    const fonts = medalState.fonts || ['display', 'serif', 'sans', 'mono', 'rounded'];
+    const pieces = medalState.pieces || ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn'];
     const color = (key, label) => h('div.ann-color',
       h('span', label),
       h('input', {
         type: 'color', value: cfg[key] || '#ffffff',
         oninput: (e) => { cfg[key] = e.target.value; },
       }));
+    const sizeIn = (key, label, min, max) => h('div.medal-size-row',
+      h('span', label),
+      h('input.input', {
+        type: 'number', min: String(min), max: String(max), step: '1',
+        value: String(cfg[key] ?? ''),
+        style: { maxWidth: '88px' },
+        oninput: (e) => { cfg[key] = Math.floor(Number(e.target.value) || 0); },
+      }));
+    const fontSeg = (key, label) => h('div',
+      h('div.label', label),
+      seg(fonts.map((f) => [f, f]), cfg[key] || fonts[0], (v) => { cfg[key] = v; }));
+    const pieceSeg = (key, label) => h('div',
+      h('div.label', label),
+      seg(pieces.map((p) => [p, p]), cfg[key] || pieces[0], (v) => { cfg[key] = v; }));
     const botIn = h('input.input', {
       value: cfg.botHandle || '@Chess_uz_bot', maxlength: 64,
       oninput: (e) => { cfg.botHandle = e.target.value; },
@@ -445,6 +461,15 @@ export function openAdmin(onClose) {
     const tplIn = h('input.input', {
       value: cfg.titleTemplate || 'Top {place} Chess player of {month}', maxlength: 120,
       oninput: (e) => { cfg.titleTemplate = e.target.value; },
+    });
+    const monthIn = h('input.input', {
+      value: medalState.previewMonth || medalState.month || '',
+      placeholder: 'YYYY-MM',
+      maxlength: 7,
+      oninput: (e) => { medalState.previewMonth = e.target.value.trim(); },
+    });
+    const placeSeg = seg([['1', '#1'], ['2', '#2'], ['3', '#3']], String(medalState.previewPlace || 1), (v) => {
+      medalState.previewPlace = Number(v);
     });
     const preview = h('div');
     if (medalState.previewUrl) {
@@ -460,15 +485,35 @@ export function openAdmin(onClose) {
         h('p.muted', t('admin_medals_sub')),
         h('div.label', t('admin_medals_bot')), botIn,
         h('div.label', t('admin_medals_title_tpl')), tplIn,
+        h('p.muted', t('admin_medals_tpl_hint')),
         h('div.label', t('ann_colors')),
         h('div.ann-colors',
           color('primary', 'Primary'), color('secondary', 'Secondary'),
-          color('accent', 'Accent'), color('text', 'Text')),
+          color('accent', 'Accent'), color('text', 'Text'), color('muted', 'Muted')),
+        h('div.label', t('admin_medals_pieces')),
+        pieceSeg('pieceTop1', t('admin_medals_piece_1')),
+        pieceSeg('pieceTop2', t('admin_medals_piece_2')),
+        pieceSeg('pieceTop3', t('admin_medals_piece_3')),
+        fontSeg('fontTitle', t('admin_medals_font_title')),
+        fontSeg('fontFamily', t('admin_medals_font_body')),
+        h('div.label', t('admin_medals_sizes')),
+        h('div.medal-sizes',
+          sizeIn('sizePlace', t('admin_medals_sz_place'), 16, 48),
+          sizeIn('sizeName', t('admin_medals_sz_name'), 12, 36),
+          sizeIn('sizeHandle', t('admin_medals_sz_handle'), 10, 28),
+          sizeIn('sizeTitle', t('admin_medals_sz_title'), 9, 22),
+          sizeIn('sizeBot', t('admin_medals_sz_bot'), 10, 24)),
+        h('p.muted', t('admin_medals_pattern_hint')),
+        h('div.label', t('admin_medals_preview_month')), monthIn,
+        h('div.label', t('admin_medals_preview_place')), placeSeg,
         h('button.btn.ghost.sm', {
           onclick: async () => {
             try {
+              const month = medalState.previewMonth || medalState.month;
               const r = await api('POST', '/admin/medals/preview', {
-                config: cfg, place: 1, month: medalState.month,
+                config: cfg,
+                place: medalState.previewPlace || 1,
+                month,
                 name: (medalState.top[0] && medalState.top[0].name) || 'Player',
                 username: (medalState.top[0] && medalState.top[0].username) || '',
                 userId: (medalState.top[0] && medalState.top[0].id) || 0,
