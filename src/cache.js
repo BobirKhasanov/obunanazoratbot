@@ -96,4 +96,18 @@ function cacheEnabled() {
   return enabled();
 }
 
-module.exports = { cacheGet, cacheSet, cacheDel, cacheEnabled };
+/** Redis INCR with TTL (memory fallback). Used for per-user rate limits. */
+async function incr(key, ttlSec = 60) {
+  const full = PREFIX + key;
+  if (enabled()) {
+    const n = await redisCommand(['INCR', full]);
+    if (n === 1 || n === '1') await redisCommand(['EXPIRE', full, String(Math.max(1, ttlSec))]);
+    const num = Number(n);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  const cur = (memGet(full, ttlSec * 1000) || 0) + 1;
+  memSet(full, cur, ttlSec * 1000);
+  return cur;
+}
+
+module.exports = { cacheGet, cacheSet, cacheDel, cacheEnabled, incr };

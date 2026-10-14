@@ -1,0 +1,16 @@
+# Cloudflare Workers: static Mini App + proxy /api + /ws → Render
+# Dashboard: set variable API_ORIGIN = https://<your-render-service>.onrender.com
+name = "obunanazoratbot"
+main = "workers/proxy.js"
+compatibility_date = "2026-10-14"
+workers_dev = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+# Proxy these before static matching (so /api never 404s as a missing file)
+run_worker_first = ["/api", "/api/*", "/ws", "/healthz"]
+
+# Placeholder — override in Cloudflare dashboard (Settings → Variables)
+[vars]
+API_ORIGIN = ""

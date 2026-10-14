@@ -19,6 +19,8 @@ const {
   settleClocks, afterMoveClocks,
 } = require('./time');
 const lichess = require('./lichess');
+const { cacheGet, cacheSet, cacheDel, cacheEnabled, incr } = require('./cache');
+const { saveMedia, loadMediaBytes, storageEnabled } = require('./storage');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
@@ -268,8 +270,8 @@ async function getBotUsername() {
   return botUsername;
 }
 
-// ---------- auth + light rate limit ----------
-const hits = new Map(); // userId -> requests in the current minute
+// ---------- auth + light rate limit (Redis when configured, else in-memory) ----------
+const hits = new Map(); // userId -> requests in the current minute (memory fallback)
 setInterval(() => hits.clear(), 60_000).unref();
 
 async function auth(req, res, next) {
@@ -277,8 +279,13 @@ async function auth(req, res, next) {
   const tg = validateInitData(req.get('X-Init-Data'), BOT_TOKEN);
   if (!tg) return res.status(401).json({ error: 'Open this app from Telegram', code: 'auth' });
 
-  const n = (hits.get(tg.id) || 0) + 1;
-  hits.set(tg.id, n);
+  let n;
+  if (cacheEnabled()) {
+    n = await incr(`rl:${tg.id}:${Math.floor(Date.now() / 60_000)}`, 70);
+  } else {
+    n = (hits.get(tg.id) || 0) + 1;
+    hits.set(tg.id, n);
+  }
   // Live spectate polls a few endpoints; keep headroom above normal play traffic
   if (n > 600) return res.status(429).json({ error: 'Too many requests', code: 'limit' });
 
@@ -375,6 +382,8 @@ api.delete('/me', wrap(async (req, res) => {
   for (const g of await db.prepare("SELECT * FROM games WHERE status = 'active' AND (white_id = ? OR black_id = ?)").all(uid, uid)) {
     const result = g.white_id === uid ? '0-1' : '1-0';
     await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = 'resign', updated_at = now() WHERE id = ?").run(result, g.id);
+    await Promise.all(['bullet', 'blitz', 'rapid', 'classic'].map((c) => cacheDel(`rankings:${c}`)));
+    await cacheDel('lobby:busy');
     await pushGame(await getGame.get(g.id));
   }
   await db.prepare("UPDATE games SET status = 'cancelled' WHERE status IN ('open', 'invited') AND (creator_id = ? OR invited_id = ?)").run(uid, uid);
@@ -615,6 +624,9 @@ api.delete('/games/:id', wrap(async (req, res) => {
 async function finish(row, result, reason) {
   await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = ?, draw_by = NULL, updated_at = now() WHERE id = ?")
     .run(result, reason, row.id);
+  // Rankings / busy-set caches must not serve pre-finish data
+  await Promise.all(['bullet', 'blitz', 'rapid', 'classic'].map((c) => cacheDel(`rankings:${c}`)));
+  await cacheDel('lobby:busy');
   const next = await getGame.get(row.id);
   await pushGame(next);
 
@@ -754,6 +766,9 @@ api.post('/results', wrap(async (req, res) => {
 // ---------- live competitive rankings ----------
 api.get('/rankings', wrap(async (req, res) => {
   const category = ['bullet', 'blitz', 'rapid', 'classic'].includes(req.query.category) ? req.query.category : 'bullet';
+  const cacheKey = `rankings:${category}`;
+  const cached = await cacheGet(cacheKey, 5_000);
+  if (cached) return res.json(cached);
   const rows = (await db.prepare(`
     SELECT * FROM (
       SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name,
@@ -775,7 +790,9 @@ api.get('/rankings', wrap(async (req, res) => {
     ORDER BY (wins * 2 + draws) DESC, wins DESC, games DESC, lower(name) ASC
     LIMIT 100
   `).all(category)).map((r, i) => ({ rank: i + 1, ...r, points: r.wins * 2 + r.draws }));
-  res.json({ category, rankings: rows, updatedAt: new Date().toISOString() });
+  const payload = { category, rankings: rows, updatedAt: new Date().toISOString() };
+  await cacheSet(cacheKey, payload, 5_000);
+  res.json(payload);
 }));
 
 // ---------- lobby: who is online and what games do I have ----------
@@ -790,7 +807,15 @@ api.get('/lobby', wrap(async (req, res) => {
       AND (creator_id = :u OR white_id = :u OR black_id = :u OR invited_id = :u
         OR id IN (SELECT game_id FROM game_invites WHERE user_id = :u)) ORDER BY updated_at DESC LIMIT 30
   `).all({ u: uid });
-  const busy = new Set((await db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all()).flatMap((g) => [g.white_id, g.black_id]));
+  // Shared busy-set cache (not per-user) — safe across lobby polls
+  let busy;
+  const busyCached = await cacheGet('lobby:busy', 2_000);
+  if (busyCached) busy = new Set(busyCached);
+  else {
+    const pairs = (await db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all()).flatMap((g) => [g.white_id, g.black_id]);
+    busy = new Set(pairs);
+    await cacheSet('lobby:busy', pairs, 2_000);
+  }
 
   const pendingInvites = await db.prepare(
     "SELECT i.user_id, i.game_id FROM game_invites i JOIN games g ON g.id = i.game_id WHERE g.status = 'invited' AND g.creator_id = ?"
@@ -1127,14 +1152,16 @@ function parseAnnouncementBody(b, { requireFuture = true } = {}) {
 api.get('/media/:id', wrap(async (req, res) => {
   const id = String(req.params.id || '');
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw bad('Not found', 'notfound');
-  const row = await db.prepare('SELECT mime, data FROM media WHERE id = ?').get(id);
+  const row = await db.prepare('SELECT * FROM media WHERE id = ?').get(id);
   if (!row) throw bad('Not found', 'notfound');
+  const buf = await loadMediaBytes(row);
+  if (!buf) throw bad('Not found', 'notfound');
   res.set({
     'Content-Type': row.mime,
     'Cache-Control': 'private, max-age=3600',
-    'Content-Length': row.data.length,
+    'Content-Length': buf.length,
   });
-  res.end(row.data);
+  res.end(buf);
 }));
 
 api.get('/announcements', wrap(async (req, res) => {
@@ -1330,8 +1357,12 @@ admin.post('/upload', express.raw({ type: () => true, limit: '26mb' }), wrap(asy
   const kind = KIND[mime];
   if (buf.length > (kind === 'photo' ? MAX_PHOTO : MAX_VIDEO)) throw bad('File is too large', 'media_big');
   const id = crypto.randomUUID();
-  await db.prepare('INSERT INTO media (id, kind, mime, data, size, admin_id) VALUES (?, ?, ?, ?, ?, ?)').run(id, kind, mime, buf, buf.length, req.user.id);
-  res.status(201).json({ id, kind, size: buf.length });
+  try {
+    await saveMedia({ id, kind, mime, buf, adminId: req.user.id });
+  } catch (e) {
+    throw bad(e.message || 'Upload failed', 'media');
+  }
+  res.status(201).json({ id, kind, size: buf.length, storage: storageEnabled() });
 }));
 
 // ----- post composer: validate + send -----
@@ -1373,7 +1404,13 @@ admin.post('/broadcast', wrap(async (req, res) => {
   if (b.mediaId) {
     const row = await db.prepare('SELECT * FROM media WHERE id = ?').get(String(b.mediaId));
     if (!row) throw bad('Media not found, upload it again', 'media');
-    media = { id: row.id, kind: row.kind, data: row.data, filename: `${row.id}.${EXT[row.mime] || 'bin'}`, fileId: row.file_id || null };
+    const data = await loadMediaBytes(row);
+    if (!data && !row.file_id) throw bad('Media not found, upload it again', 'media');
+    media = {
+      id: row.id, kind: row.kind, data,
+      filename: `${row.id}.${EXT[row.mime] || 'bin'}`,
+      fileId: row.file_id || null,
+    };
   }
   if (!text && !media) throw bad('Write a message or add media', 'text');
   if (text.length > (media ? 1024 : 4096)) throw bad('Text is too long', 'text_long');

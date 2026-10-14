@@ -136,15 +136,16 @@ CREATE TABLE IF NOT EXISTS results (
 );
 CREATE INDEX IF NOT EXISTS idx_results_user ON results(user_id);
 
--- Media for admin posts. The bytes live in the database (kept 7 days; Telegram's file_id is cached after the first send).
+-- Media for admin posts. Prefer Supabase Storage (storage_path); BYTEA is legacy/fallback.
 CREATE TABLE IF NOT EXISTS media (
   id TEXT PRIMARY KEY,
   kind TEXT NOT NULL,                       -- photo | video | animation
   mime TEXT NOT NULL,
-  data BYTEA NOT NULL,
+  data BYTEA,                               -- nullable when stored in Supabase Storage
   size INTEGER NOT NULL,
   file_id TEXT,
   admin_id BIGINT NOT NULL,
+  storage_path TEXT,                        -- e.g. <uuid>.jpg in bucket media
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -191,6 +192,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS board_theme TEXT NOT NULL DEFAULT 'cl
 ALTER TABLE games ADD COLUMN IF NOT EXISTS white_ms BIGINT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS black_ms BIGINT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS turn_started_at TIMESTAMPTZ;
+ALTER TABLE media ADD COLUMN IF NOT EXISTS storage_path TEXT;
+ALTER TABLE media ALTER COLUMN data DROP NOT NULL;
 -- Allow home-screen presets (and keep legacy category values already stored)
 ALTER TABLE games DROP CONSTRAINT IF EXISTS games_time_control_check;
 -- one reward payout per invited person, ever (inviter + invitee; PK blocks farming)

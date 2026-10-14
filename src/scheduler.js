@@ -6,6 +6,7 @@ const db = require('./db');
 const notify = require('./notify');
 const realtime = require('./realtime');
 const { turnOf, parseMoves } = require('./game');
+const { deleteMediaObject } = require('./storage');
 
 const REMIND_AFTER_HOURS = Number(process.env.REMIND_AFTER_HOURS || 6); // env overrides are for tests
 const ABANDON_AFTER_DAYS = 7;
@@ -51,7 +52,11 @@ async function housekeeping(onGameChanged) {
   }
 
   // Uploaded post media is only needed for a few days
-  await db.prepare("DELETE FROM media WHERE created_at < now() - interval '7 days'").run();
+  const old = await db.prepare("SELECT id, storage_path FROM media WHERE created_at < now() - interval '7 days'").all();
+  for (const m of old) {
+    if (m.storage_path) await deleteMediaObject(m.storage_path);
+  }
+  if (old.length) await db.prepare("DELETE FROM media WHERE created_at < now() - interval '7 days'").run();
 }
 
 function startScheduler(onGameChanged) {
