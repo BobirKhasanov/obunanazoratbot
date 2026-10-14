@@ -323,6 +323,7 @@ Object.assign(en, {
   filter_all: 'All ({n})', filter_uz: '🇺🇿 Uzbekistan ({n})', live_no_tours: 'No broadcasts right now.',
   live_no_rounds: 'No rounds yet.', live_no_games: 'No games in this round.', live_no_uz: 'No Uzbekistan players in this round.',
   live_load_fail: 'Could not load. Try again.', moves_n: '{n} moves',
+  turn_white: "White's turn", turn_black: "Black's turn",
 });
 Object.assign(ru, {
   live_tab_bot: 'Живые партии', live_tab_intl: 'Мировые турниры', live_games_count: '{n} live',
@@ -333,6 +334,7 @@ Object.assign(ru, {
   filter_all: 'Все ({n})', filter_uz: '🇺🇿 Узбекистан ({n})', live_no_tours: 'Сейчас нет трансляций.',
   live_no_rounds: 'Туров пока нет.', live_no_games: 'В этом туре нет партий.', live_no_uz: 'В этом туре нет игроков из Узбекистана.',
   live_load_fail: 'Не удалось загрузить. Попробуйте ещё раз.', moves_n: '{n} ходов',
+  turn_white: 'Ход белых', turn_black: 'Ход чёрных',
 });
 Object.assign(uz, {
   live_tab_bot: "Live o'yinlar", live_tab_intl: 'Halqaro Live turnirlar', live_games_count: '{n} ta jonli',
@@ -343,6 +345,7 @@ Object.assign(uz, {
   filter_all: 'Hammasi ({n})', filter_uz: "🇺🇿 O'zbekiston ({n})", live_no_tours: "Hozircha turnirlar yo'q.",
   live_no_rounds: "Raundlar yo'q.", live_no_games: "Bu raundda o'yin yo'q.", live_no_uz: "Bu raundda O'zbekiston o'yinchilari yo'q.",
   live_load_fail: "Yuklanmadi. Qayta urinib ko'ring.", moves_n: '{n}-yurish',
+  turn_white: 'Oq navbati', turn_black: 'Qora navbati',
 });
 Object.assign(uzc, {
   live_tab_bot: 'Live ўйинлар', live_tab_intl: 'Халқаро Live турнирлар', live_games_count: '{n} та жонли',
@@ -353,4 +356,5 @@ Object.assign(uzc, {
   filter_all: 'Ҳаммаси ({n})', filter_uz: '🇺🇿 Ўзбекистон ({n})', live_no_tours: 'Ҳозирча турнирлар йўқ.',
   live_no_rounds: 'Раундлар йўқ.', live_no_games: 'Бу раундда ўйин йўқ.', live_no_uz: 'Бу раундда Ўзбекистон ўйинчилари йўқ.',
   live_load_fail: 'Юкланмади. Қайта уриниб кўринг.', moves_n: '{n}-юриш',
+  turn_white: 'Оқ навбати', turn_black: 'Қора навбати',
 });

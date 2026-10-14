@@ -424,7 +424,7 @@ export function openGame(opts, onClose) {
     S.poll = setInterval(() => {
       if (ctx !== S || S.over) return;
       api('GET', `/live/games/${S.id}`).then((r) => applyServer(r.game)).catch(() => {});
-    }, 2000);
+    }, 1500);
   } else { S.moves = opts.game.moves || []; S.chess = build(S.moves); S.colour = opts.game.you || 'w'; S.over = opts.game.status === 'finished'; render(false); }
 
   root.classList.add('show'); root.removeAttribute('aria-hidden');

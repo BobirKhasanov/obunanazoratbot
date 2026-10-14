@@ -520,8 +520,28 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .live-gc-status { text-align: center; font-size: 12px; font-weight: 750; color: var(--muted); }
 .live-gc-status.done { color: var(--amber, #f5c542); }
 .live-full-board { margin: 8px 0; }
-.live-move-nav { margin-top: 10px; flex-wrap: wrap; }
+.live-move-nav { margin-top: 10px; flex-wrap: wrap; align-items: center; }
 .live-dot { position: absolute; right: -2px; bottom: -2px; }
+.live-pbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.live-pbar .pinfo { flex: 1; min-width: 0; }
+.live-fed { color: var(--muted); font-weight: 700; }
+.live-clk {
+  flex: none; min-width: 72px; text-align: center; font-variant-numeric: tabular-nums;
+  font-weight: 800; font-size: 18px; padding: 8px 12px; border-radius: 12px;
+  background: var(--card-2, rgba(127,127,127,.15));
+}
+.live-clk.on { background: rgba(84, 164, 247, 0.22); color: var(--blue); }
+.live-clk.low { background: rgba(255, 69, 58, 0.18); color: #ff453a; }
+.live-turn {
+  display: inline-flex; align-items: center; gap: 8px; justify-content: center;
+  width: 100%; padding: 8px 12px; border-radius: 12px;
+  background: rgba(52, 199, 89, 0.14); color: #34c759; font-weight: 750;
+}
+.live-turn::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%; background: #ff3b30;
+  box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.2);
+}
+.live-turn.turn-b { background: rgba(84, 164, 247, 0.14); color: var(--blue); }
 .h2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
 /* puzzles */

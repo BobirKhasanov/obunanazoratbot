@@ -702,7 +702,9 @@ api.get('/lichess/broadcasts/:id', wrap(async (req, res) => {
 
 api.get('/lichess/rounds/:id', wrap(async (req, res) => {
   try {
-    const data = await lichess.broadcastRound(req.params.id);
+    const fresh = req.query.fresh === '1' || req.query.fresh === 'true';
+    const data = await lichess.broadcastRound(req.params.id, { fresh });
+    res.set('Cache-Control', 'no-store');
     res.json({ ...data, updatedAt: new Date().toISOString() });
   } catch (e) {
     if (e.status === 400) throw bad('Invalid id', 'bad_request');
@@ -712,8 +714,11 @@ api.get('/lichess/rounds/:id', wrap(async (req, res) => {
 
 api.get('/lichess/rounds/:id/pgn', wrap(async (req, res) => {
   try {
-    const data = await lichess.broadcastRoundPgn(req.params.id);
+    const fresh = req.query.fresh === '1' || req.query.fresh === 'true';
+    if (fresh) lichess.bustPgn(req.params.id);
+    const data = await lichess.broadcastRoundPgn(req.params.id, { fresh });
     const gameId = req.query.game ? String(req.query.game).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16) : '';
+    res.set('Cache-Control', 'no-store');
     if (gameId) {
       const one = (data.games || []).find((g) => g.id === gameId);
       if (!one) throw new HttpError(404, 'Game not found', 'notfound');

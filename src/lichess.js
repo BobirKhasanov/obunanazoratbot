@@ -13,10 +13,12 @@ const getCached = (key, maxAge) => {
 };
 const setCached = (key, data) => { cache.set(key, { at: Date.now(), data }); return data; };
 
-async function lichessGet(path, { accept = 'application/json', maxAge = 8_000 } = {}) {
+async function lichessGet(path, { accept = 'application/json', maxAge = 8_000, fresh = false } = {}) {
   const key = `${accept}:${path}`;
-  const hit = getCached(key, maxAge);
-  if (hit) return hit;
+  if (!fresh) {
+    const hit = getCached(key, maxAge);
+    if (hit) return hit;
+  }
   const r = await fetch(`${BASE}${path}`, {
     headers: { Accept: accept, 'User-Agent': UA },
     signal: AbortSignal.timeout(12_000),
@@ -43,10 +45,15 @@ async function broadcastTour(tourId) {
 }
 
 /** Round with live game snapshots (fen, clocks, lastMove). */
-async function broadcastRound(roundId) {
+async function broadcastRound(roundId, { fresh = false } = {}) {
   const id = String(roundId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
   if (!id) throw Object.assign(new Error('bad id'), { status: 400 });
-  return lichessGet(`/api/broadcast/-/-/${id}`, { maxAge: 5_000 });
+  // Live watch polls often — keep cache tiny unless fresh is requested
+  return lichessGet(`/api/broadcast/-/-/${id}`, { maxAge: fresh ? 0 : 1_200, fresh });
+}
+
+function bustPgn(roundId) {
+  cache.delete(`pgn:${String(roundId)}`);
 }
 
 /** Split a multi-game PGN into { id, pgn } entries using Site/GameURL tags. */
@@ -67,12 +74,14 @@ function parseMultiPgn(text) {
  * Grab the current PGN dump for a round (stream sends full games, then keeps open).
  * We abort after a short window once we have content.
  */
-async function broadcastRoundPgn(roundId) {
+async function broadcastRoundPgn(roundId, { fresh = false } = {}) {
   const id = String(roundId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
   if (!id) throw Object.assign(new Error('bad id'), { status: 400 });
   const key = `pgn:${id}`;
-  const hit = getCached(key, 8_000);
-  if (hit) return hit;
+  if (!fresh) {
+    const hit = getCached(key, 3_000);
+    if (hit) return hit;
+  }
 
   const ctrl = new AbortController();
   const kill = setTimeout(() => ctrl.abort(), 4500);
@@ -113,4 +122,4 @@ async function broadcastRoundPgn(roundId) {
   return setCached(key, { roundId: id, games, raw: buf });
 }
 
-module.exports = { topBroadcasts, broadcastTour, broadcastRound, broadcastRoundPgn, parseMultiPgn };
+module.exports = { topBroadcasts, broadcastTour, broadcastRound, broadcastRoundPgn, parseMultiPgn, bustPgn };

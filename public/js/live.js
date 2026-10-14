@@ -11,11 +11,15 @@ let section = 'bot';
 /** Navigation inside Halqaro: list → tour → round → game */
 let nav = { view: 'list' };
 let pollTimer = null;
+let clockTimer = null;
 let gameBoards = []; // mini boards to destroy on remount
 
 const UZ_FEDS = new Set(['UZB', 'UZ']);
 
-function clearPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+function clearPoll() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+}
 function destroyBoards() {
   for (const b of gameBoards) try { b.destroy(); } catch { /* ignore */ }
   gameBoards = [];
@@ -34,11 +38,47 @@ function backIntl() {
   else nav = { view: 'list' };
 }
 
+/** Lichess broadcast player.clock is centiseconds. */
+function clockMsFromPlayer(p, thinkingSec = 0) {
+  const cs = Number(p && p.clock);
+  if (!Number.isFinite(cs)) return null;
+  const think = Number(thinkingSec) || 0;
+  return Math.max(0, cs * 10 - think * 1000);
+}
+
 function fmtClockMs(ms) {
   if (ms == null || !Number.isFinite(ms)) return '–';
   const s = Math.max(0, Math.floor(ms / 1000));
-  const m = Math.floor(s / 60), r = s % 60;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
   return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+function fenTurn(fen) {
+  const t = String(fen || '').split(/\s+/)[1];
+  return t === 'b' ? 'b' : 'w';
+}
+
+function makeClockState(g) {
+  const turn = fenTurn(g && g.fen);
+  const think = g && g.status === '*' ? g.thinkTime : 0;
+  return {
+    whiteMs: clockMsFromPlayer(g && g.players && g.players[0], turn === 'w' ? think : 0),
+    blackMs: clockMsFromPlayer(g && g.players && g.players[1], turn === 'b' ? think : 0),
+    turn,
+    at: Date.now(),
+    active: !!(g && (!g.status || g.status === '*')),
+  };
+}
+
+function liveSideMs(state, side) {
+  if (!state) return null;
+  let ms = side === 'w' ? state.whiteMs : state.blackMs;
+  if (ms == null) return null;
+  if (state.active && state.turn === side) ms -= Date.now() - state.at;
+  return Math.max(0, ms);
 }
 
 function lastMoveObj(uci) {
@@ -240,17 +280,18 @@ function gameCard(g, onOpen) {
   const white = (g.players && g.players[0]) || {};
   const black = (g.players && g.players[1]) || {};
   const done = g.status && g.status !== '*';
+  const ck = makeClockState(g);
   const status = done ? String(g.status) : t('moves_n', { n: fenPly(g.fen) });
-  return h('button.live-game-card', { onclick: () => onOpen(g) },
+  return h('button.live-game-card', { onclick: () => onOpen(g), 'data-gid': g.id },
     h('div.live-gc-player',
       h('span.fed', white.fed || ''),
       h('span.name', playerLabel(white)),
-      h('span.clk', fmtClockMs(white.clock))),
+      h('span.clk.w', fmtClockMs(liveSideMs(ck, 'w')))),
     miniBoard(g.fen || 'start', g.lastMove),
     h('div.live-gc-player',
       h('span.fed', black.fed || ''),
       h('span.name', playerLabel(black)),
-      h('span.clk', fmtClockMs(black.clock))),
+      h('span.clk.b', fmtClockMs(liveSideMs(ck, 'b')))),
     h('div.live-gc-status' + (done ? '.done' : ''), status));
 }
 
@@ -266,8 +307,9 @@ function hasUz(g) {
 
 async function renderRound(mount, onRefresh) {
   destroyBoards();
+  clearPoll();
   let data;
-  try { data = await api('GET', `/lichess/rounds/${nav.roundId}`); }
+  try { data = await api('GET', `/lichess/rounds/${nav.roundId}?fresh=1`); }
   catch (e) { fail(e); nav = { view: 'tour', tourId: nav.tourId, tourName: nav.tourName }; return onRefresh(); }
   const games = data.games || [];
   const round = data.round || {};
@@ -276,15 +318,22 @@ async function renderRound(mount, onRefresh) {
   const uzGames = games.filter(hasUz);
   const shown = filter === 'uz' ? uzGames : games;
   const live = !!round.ongoing;
+  const clockMap = new Map(shown.map((g) => [g.id, makeClockState(g)]));
 
-  // Soft-poll while round page is open
-  clearPoll();
-  if (live) {
-    pollTimer = setInterval(() => {
-      if (section !== 'intl' || nav.view !== 'round') return clearPoll();
-      onRefresh();
-    }, 6000);
-  }
+  const openGameCard = (game) => {
+    haptic('light');
+    clearPoll();
+    nav = {
+      view: 'game', tourId: nav.tourId, tourName: nav.tourName || tour.name,
+      roundId: nav.roundId, roundName: round.name || nav.roundName,
+      gameId: game.id, filter, snap: game,
+    };
+    onRefresh();
+  };
+
+  const grid = shown.length
+    ? h('div.live-game-grid', shown.map((g) => gameCard(g, openGameCard)))
+    : empty(filter === 'uz' ? t('live_no_uz') : t('live_no_games'), '♟');
 
   mount([
     h('div.top',
@@ -305,19 +354,29 @@ async function renderRound(mount, onRefresh) {
       h('button.live-filter' + (filter === 'uz' ? '.on' : ''), {
         onclick: () => { nav = { ...nav, filter: 'uz' }; haptic('select'); onRefresh(); },
       }, t('filter_uz', { n: uzGames.length }))),
-    shown.length
-      ? h('div.live-game-grid', shown.map((g) => gameCard(g, (game) => {
-        haptic('light');
-        clearPoll();
-        nav = {
-          view: 'game', tourId: nav.tourId, tourName: nav.tourName || tour.name,
-          roundId: nav.roundId, roundName: round.name || nav.roundName,
-          gameId: game.id, filter, snap: game,
-        };
-        onRefresh();
-      })))
-      : empty(filter === 'uz' ? t('live_no_uz') : t('live_no_games'), '♟'),
+    grid,
   ]);
+
+  if (!live) return;
+
+  // Tick card clocks locally between polls
+  clockTimer = setInterval(() => {
+    if (section !== 'intl' || nav.view !== 'round') return clearPoll();
+    for (const [id, st] of clockMap) {
+      const card = grid.querySelector && grid.querySelector(`[data-gid="${id}"]`);
+      if (!card) continue;
+      const w = card.querySelector('.clk.w');
+      const b = card.querySelector('.clk.b');
+      if (w) w.textContent = fmtClockMs(liveSideMs(st, 'w'));
+      if (b) b.textContent = fmtClockMs(liveSideMs(st, 'b'));
+    }
+  }, 250);
+
+  // Fresh round snapshot often; remount to refresh boards/FENs
+  pollTimer = setInterval(() => {
+    if (section !== 'intl' || nav.view !== 'round') return clearPoll();
+    onRefresh();
+  }, 3500);
 }
 
 function parsePgnMoves(pgn) {
@@ -337,109 +396,174 @@ async function renderGame(mount, onRefresh) {
   destroyBoards();
   clearPoll();
   let snap = nav.snap;
-  // refresh snap from round
   try {
-    const round = await api('GET', `/lichess/rounds/${nav.roundId}`);
+    const round = await api('GET', `/lichess/rounds/${nav.roundId}?fresh=1`);
     snap = (round.games || []).find((g) => g.id === nav.gameId) || snap;
     nav.snap = snap;
   } catch { /* keep snap */ }
+  if (!snap) {
+    fail({ code: 'notfound' });
+    nav = { view: 'round', tourId: nav.tourId, tourName: nav.tourName, roundId: nav.roundId, roundName: nav.roundName, filter: nav.filter };
+    return onRefresh();
+  }
 
   let moves = [];
   try {
-    const p = await api('GET', `/lichess/rounds/${nav.roundId}/pgn?game=${encodeURIComponent(nav.gameId)}`);
+    const p = await api('GET', `/lichess/rounds/${nav.roundId}/pgn?fresh=1&game=${encodeURIComponent(nav.gameId)}`);
     if (p.game && p.game.pgn) moves = parsePgnMoves(p.game.pgn);
   } catch { /* fen-only fallback */ }
 
-  const white = (snap && snap.players && snap.players[0]) || {};
-  const black = (snap && snap.players && snap.players[1]) || {};
-  const cursor = { i: moves.length }; // at live position
+  const cursor = { i: moves.length }; // at live tip when i === moves.length
+  let clockState = makeClockState(snap);
+  let lastKey = `${snap.fen}|${snap.lastMove}|${snap.status}`;
+  let pgnBusy = false;
+
   const host = h('div.board-host.live-full-board', { 'data-noswipe': '' });
-  const status = h('div.pz-status', '');
+  const status = h('div.pz-status.live-turn', '');
   const moveStrip = h('div.moves');
-  const chess = new Chess();
-  if (moves.length) {
-    for (const m of moves) chess.move(m);
-  } else if (snap && snap.fen) {
-    try { chess.load(snap.fen); } catch { /* start */ }
-  }
+  const topName = h('b', playerLabel(snap.players[1]));
+  const botName = h('b', playerLabel(snap.players[0]));
+  const topFed = h('span.live-fed', snap.players[1].fed || '');
+  const botFed = h('span.live-fed', snap.players[0].fed || '');
+  const topClk = h('span.live-clk', fmtClockMs(liveSideMs(clockState, 'b')));
+  const botClk = h('span.live-clk', fmtClockMs(liveSideMs(clockState, 'w')));
   const board = new Board(host, {});
   gameBoards.push(board);
+
+  const atLiveTip = () => cursor.i >= moves.length;
+
+  const paintStatus = () => {
+    if (snap.status && snap.status !== '*') {
+      status.textContent = t('result_label', { r: snap.status });
+      status.classList.remove('turn-w', 'turn-b');
+      return;
+    }
+    const side = fenTurn(snap.fen);
+    status.textContent = side === 'w' ? t('turn_white') : t('turn_black');
+    status.classList.toggle('turn-w', side === 'w');
+    status.classList.toggle('turn-b', side === 'b');
+  };
+
+  const paintClocks = () => {
+    topClk.textContent = fmtClockMs(liveSideMs(clockState, 'b'));
+    botClk.textContent = fmtClockMs(liveSideMs(clockState, 'w'));
+    topClk.classList.toggle('low', (liveSideMs(clockState, 'b') || 0) <= 20_000);
+    botClk.classList.toggle('low', (liveSideMs(clockState, 'w') || 0) <= 20_000);
+    topClk.classList.toggle('on', clockState.active && clockState.turn === 'b');
+    botClk.classList.toggle('on', clockState.active && clockState.turn === 'w');
+  };
 
   const showAt = (i, animate = true) => {
     cursor.i = Math.max(0, Math.min(i, moves.length));
     const c = new Chess();
     let last = null;
-    for (let k = 0; k < cursor.i; k++) { last = c.move(moves[k]); }
-    if (!moves.length && snap && snap.fen) {
+    if (moves.length) {
+      for (let k = 0; k < cursor.i; k++) last = c.move(moves[k]);
+      last = last ? { from: last.from, to: last.to } : null;
+    } else if (snap.fen) {
       try { c.load(snap.fen); } catch { /* ignore */ }
       last = lastMoveObj(snap.lastMove);
-      last = last ? { from: last.from, to: last.to } : null;
-    } else if (last) last = { from: last.from, to: last.to };
+    }
     board.set(c, { lastMove: last, mine: null, orientation: board.orientation, animate });
     const san = c.history();
     moveStrip.replaceChildren(...san.map((m, idx) => h('span' + (idx === san.length - 1 ? '.cur' : ''), idx % 2 === 0 ? `${idx / 2 + 1}. ${m}` : m)));
     moveStrip.scrollLeft = moveStrip.scrollWidth;
-    const done = snap && snap.status && snap.status !== '*';
-    status.textContent = done ? t('result_label', { r: snap.status }) : t('watching');
+    paintStatus();
   };
-  showAt(moves.length, false);
 
-  const topBar = h('div.pbar.top',
-    h('div.pinfo', h('b', playerLabel(black)), h('small', [black.fed, fmtClockMs(black.clock)].filter(Boolean).join(' · '))));
-  const botBar = h('div.pbar.bot',
-    h('div.pinfo', h('b', playerLabel(white)), h('small', [white.fed, fmtClockMs(white.clock)].filter(Boolean).join(' · '))));
+  const applySnap = (g, { animate = true } = {}) => {
+    if (!g) return;
+    const key = `${g.fen}|${g.lastMove}|${g.status}`;
+    const changed = key !== lastKey;
+    snap = g;
+    nav.snap = g;
+    clockState = makeClockState(g);
+    lastKey = key;
+    topName.textContent = playerLabel(g.players[1]);
+    botName.textContent = playerLabel(g.players[0]);
+    topFed.textContent = g.players[1].fed || '';
+    botFed.textContent = g.players[0].fed || '';
+    paintClocks();
+    paintStatus();
+    if (!changed) return;
+    if (atLiveTip()) {
+      // Jump board to live FEN immediately, then refresh PGN for the move list
+      const c = new Chess();
+      try { c.load(g.fen); } catch { return; }
+      board.set(c, { lastMove: lastMoveObj(g.lastMove), mine: null, orientation: board.orientation, animate });
+      refreshPgn(true);
+    }
+  };
+
+  const refreshPgn = async (force) => {
+    if (pgnBusy) return;
+    pgnBusy = true;
+    try {
+      const q = force ? 'fresh=1&' : '';
+      const p = await api('GET', `/lichess/rounds/${nav.roundId}/pgn?${q}game=${encodeURIComponent(nav.gameId)}`);
+      if (p.game && p.game.pgn) {
+        const next = parsePgnMoves(p.game.pgn);
+        if (next.length !== moves.length || force) {
+          const follow = atLiveTip();
+          moves = next;
+          if (follow) showAt(moves.length, true);
+        }
+      }
+    } catch { /* ignore */ }
+    finally { pgnBusy = false; }
+  };
+
+  showAt(moves.length, false);
+  paintClocks();
+  paintStatus();
+
+  const topBar = h('div.pbar.top.live-pbar',
+    h('div.pinfo', topName, h('small', topFed)),
+    topClk);
+  const botBar = h('div.pbar.bot.live-pbar',
+    h('div.pinfo', botName, h('small', botFed)),
+    botClk);
 
   const navBtns = h('div.pz-actions.live-move-nav',
     h('button.mini', { onclick: () => { haptic('select'); showAt(0); } }, '⏮'),
     h('button.mini', { onclick: () => { haptic('select'); showAt(cursor.i - 1); } }, '◀'),
     h('button.mini', { onclick: () => { haptic('select'); showAt(cursor.i + 1); } }, '▶'),
     h('button.mini', { onclick: () => { haptic('select'); showAt(moves.length); } }, '⏭'),
-    h('button.mini', {
+    h('button.btn.sm', {
       onclick: () => {
         board.orientation = board.orientation === 'w' ? 'b' : 'w';
         haptic('light');
         showAt(cursor.i, false);
       },
-    }, t('flip')));
-
-  // poll live fen/clocks
-  pollTimer = setInterval(async () => {
-    if (section !== 'intl' || nav.view !== 'game') return clearPoll();
-    try {
-      const round = await api('GET', `/lichess/rounds/${nav.roundId}`);
-      const g = (round.games || []).find((x) => x.id === nav.gameId);
-      if (!g) return;
-      nav.snap = g;
-      topBar.querySelector('b').textContent = playerLabel(g.players[1]);
-      topBar.querySelector('small').textContent = [g.players[1].fed, fmtClockMs(g.players[1].clock)].filter(Boolean).join(' · ');
-      botBar.querySelector('b').textContent = playerLabel(g.players[0]);
-      botBar.querySelector('small').textContent = [g.players[0].fed, fmtClockMs(g.players[0].clock)].filter(Boolean).join(' · ');
-      if (cursor.i >= moves.length) {
-        // stay on live tip — reload pgn occasionally when at end
-        try {
-          const p = await api('GET', `/lichess/rounds/${nav.roundId}/pgn?game=${encodeURIComponent(nav.gameId)}`);
-          if (p.game && p.game.pgn) {
-            const next = parsePgnMoves(p.game.pgn);
-            if (next.length >= moves.length) { moves = next; showAt(moves.length); return; }
-          }
-        } catch { /* ignore */ }
-        if (g.fen) {
-          const c = new Chess();
-          try { c.load(g.fen); } catch { return; }
-          board.set(c, { lastMove: lastMoveObj(g.lastMove), mine: null, orientation: board.orientation, animate: true });
-        }
-      }
-      if (g.status && g.status !== '*') status.textContent = t('result_label', { r: g.status });
-    } catch { /* ignore */ }
-  }, 4000);
+    }, icon('flip', 18), t('flip')));
 
   mount([
     h('div.top',
       h('button.mini.back', { 'aria-label': t('back'), onclick: () => { clearPoll(); destroyBoards(); backIntl(); onRefresh(); } }, icon('back', 18)),
-      h('h1', `${(white.name || '').split(',')[0] || '…'} – ${(black.name || '').split(',')[0] || '…'}`),
+      h('h1', `${(snap.players[0].name || '').split(',')[0] || '…'} – ${(snap.players[1].name || '').split(',')[0] || '…'}`),
       nav.roundName ? h('span.count-pill', nav.roundName) : null),
     status, topBar, host, botBar, moveStrip, navBtns,
   ]);
+
+  // Smooth local clock drain (like Lichess / reference app)
+  clockTimer = setInterval(() => {
+    if (section !== 'intl' || nav.view !== 'game') return clearPoll();
+    paintClocks();
+  }, 200);
+
+  // Fresh board/clock snapshots from Lichess
+  let polls = 0;
+  pollTimer = setInterval(async () => {
+    if (section !== 'intl' || nav.view !== 'game') return clearPoll();
+    polls += 1;
+    try {
+      const round = await api('GET', `/lichess/rounds/${nav.roundId}?fresh=1`);
+      const g = (round.games || []).find((x) => x.id === nav.gameId);
+      if (g) applySnap(g);
+      // Periodic PGN refresh even if fen key looked the same (new moves with same tip rare)
+      if (polls % 3 === 0) refreshPgn(true);
+    } catch { /* ignore transient errors */ }
+  }, 2000);
 }
 
 /**
