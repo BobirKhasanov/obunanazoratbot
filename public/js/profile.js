@@ -631,6 +631,14 @@ export function renderProfilePage(ctx) {
 function applyThemeLocal(theme) {
   document.documentElement.dataset.theme = theme;
   const bg = theme === 'light' ? '#f3f5f9' : '#111827';
-  try { tg.setHeaderColor(bg); tg.setBackgroundColor(bg); tg.setBottomBarColor && tg.setBottomBarColor(bg); } catch { /* old */ }
+  try {
+    tg.setHeaderColor(bg);
+    tg.setBackgroundColor(bg);
+    if (tg.setBottomBarColor) tg.setBottomBarColor(bg);
+  } catch { /* old */ }
+  document.documentElement.style.background = bg;
+  document.body.style.background = bg;
+  const app = document.getElementById('app');
+  if (app) app.style.background = bg;
   const m = document.querySelector('meta[name=color-scheme]'); if (m) m.content = theme;
 }

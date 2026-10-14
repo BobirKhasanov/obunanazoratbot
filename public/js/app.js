@@ -55,10 +55,27 @@ function setPlaySticky(show) {
   el.setAttribute('aria-hidden', show ? 'false' : 'true');
 }
 
+function themeBg(theme) {
+  return theme === 'light' ? '#f3f5f9' : '#111827';
+}
+
+function syncTgChrome(theme = document.documentElement.dataset.theme || 'dark') {
+  const bg = themeBg(theme);
+  try {
+    tg.setHeaderColor(bg);
+    tg.setBackgroundColor(bg);
+    if (tg.setBottomBarColor) tg.setBottomBarColor(bg);
+  } catch { /* old client */ }
+  // Keep DOM shells in sync — Telegram expand otherwise flashes native black
+  document.documentElement.style.background = bg;
+  document.body.style.background = bg;
+  const app = $('#app');
+  if (app) app.style.background = bg;
+}
+
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  const bg = theme === 'light' ? '#f3f5f9' : '#111827';
-  try { tg.setHeaderColor(bg); tg.setBackgroundColor(bg); tg.setBottomBarColor && tg.setBottomBarColor(bg); } catch { /* old client */ }
+  syncTgChrome(theme);
   const m = $('meta[name=color-scheme]'); if (m) m.content = theme;
 }
 
@@ -651,8 +668,15 @@ async function handleDeepLink() {
 async function boot() {
   if (!tg || !tg.initData) { $('#gate').hidden = false; return; }
   setInitData(tg.initData);
-  tg.ready(); tg.expand();
+  tg.ready();
+  try { tg.expand(); } catch { /* ignore */ }
   try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch { /* old client */ }
+  // Re-paint Telegram chrome whenever the Mini App expands / safe area changes
+  try {
+    tg.onEvent && tg.onEvent('viewportChanged', () => syncTgChrome());
+    tg.onEvent && tg.onEvent('themeChanged', () => syncTgChrome());
+  } catch { /* ignore */ }
+  syncTgChrome();
   let me;
   try { me = await api('GET', '/me'); } catch (e) { $('#gate').hidden = false; $('#gate h1').textContent = (await import('./i18n.js')).errText(e); return; }
   state.me = me.user; state.stats = me.stats; state.meta = me.meta;

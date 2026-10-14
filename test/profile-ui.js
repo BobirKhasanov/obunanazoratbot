@@ -50,6 +50,9 @@ assert.ok(css.includes('border-radius: 50%') && (css.includes('.avwrap.circ') ||
 assert.ok(css.includes('.avwrap.xl'), 'profile xl avatar wrap sized correctly');
 assert.ok(profile.includes('prof-gem') && profile.includes('💎') && !profile.includes("prof-star-ic', '★'"), 'diamonds badge uses gem not star');
 assert.ok(!css.includes('.prof-cover') || /prof-cover[\s\S]{0,220}overflow:\s*visible/.test(css), 'profile cover does not clip sparkles');
+assert.ok(/\.page\[data-page="profile"\][\s\S]{0,120}background:\s*var\(--bg\)/.test(css), 'profile page solid bg (no black void)');
+assert.ok(/prof-banner[\s\S]{0,200}var\(--safe-t\)/.test(css), 'profile banner covers Telegram safe area');
+assert.ok(app.includes('viewportChanged') && app.includes('syncTgChrome'), 're-sync Telegram chrome on expand');
 assert.ok(!css.includes('.mini.back svg { transform: rotate(180deg)'), 'live back no longer flipped chevron');
 assert.ok(css.includes('.round.back .ic svg'), 'back chevron optically centered');
 assert.ok(css.includes('#play-sticky'), 'sticky Play CTA above dock');

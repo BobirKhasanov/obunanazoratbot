@@ -50,15 +50,19 @@
 :root[data-theme="light"][data-board="brown"] { --sq-lt: #e8d5bc; --sq-dk: #9a6b45; }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden; overscroll-behavior: none; }
+html, body {
+  margin: 0; height: 100%; min-height: 100%; min-height: 100dvh;
+  background: var(--bg); color: var(--text);
+  overflow: hidden; overscroll-behavior: none;
+}
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 input, select, textarea { font: inherit; color: inherit; }
 h1, h2, h3, p { margin: 0; }
 [hidden] { display: none !important; }
 
 /* ---------- pager ---------- */
-#app { position: fixed; inset: 0; }
-#pager { position: absolute; inset: 0; overflow: hidden; touch-action: pan-y; }
+#app { position: fixed; inset: 0; background: var(--bg); }
+#pager { position: absolute; inset: 0; overflow: hidden; touch-action: pan-y; background: transparent; }
 #track { display: flex; height: 100%; width: 100%; will-change: transform; transform: translate3d(0, 0, 0); }
 #track.settle { transition: transform 0.78s var(--ease-out); }
 .page {
@@ -69,6 +73,11 @@ h1, h2, h3, p { margin: 0; }
 }
 /* Extra room for dock + Play CTA stacked above the nav */
 .page[data-page="play"] { padding-bottom: calc(190px + var(--safe-b)); }
+/* Profile: solid page bg so expand gaps / chess backdrop never read as black void */
+.page[data-page="profile"] {
+  background: var(--bg);
+  background-image: none;
+}
 .page::-webkit-scrollbar { display: none; }
 .page > * { animation: rise 0.58s var(--ease) both; }
 .page > *:nth-child(2) { animation-delay: 0.04s; }
@@ -744,28 +753,31 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
   text-transform: uppercase; margin: 20px 0 8px 4px;
 }
 .prof-cover {
-  /* Leave a little top inset so the banner sits below Telegram chrome */
-  margin: calc(-1 * (var(--safe-t) + 14px) + 40px) -14px 0;
-  background: transparent;
+  /* Pull under page padding so banner fills Telegram expand / safe-area — no black strip */
+  margin: calc(-1 * (var(--safe-t) + 14px)) -14px 0;
+  background: var(--bg);
   border-radius: 0;
   overflow: visible; /* allow premium ring + sparkles around avatar */
   position: relative;
 }
 .prof-cover::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 36px;
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40px;
   background: linear-gradient(180deg, transparent, var(--bg));
   pointer-events: none; z-index: 2;
 }
 .prof-banner {
   position: relative;
-  height: clamp(156px, 34vw, 220px);
-  background: var(--card-soft) center / cover no-repeat;
+  /* Banner itself covers the safe-area so expand never exposes a black gap */
+  height: calc(var(--safe-t) + clamp(148px, 34vw, 210px));
+  background-color: var(--bg);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
   overflow: hidden;
-  border-radius: 0 0 4px 4px;
 }
 .prof-banner::after {
   content: ""; position: absolute; inset: 0;
-  background: linear-gradient(180deg, transparent 40%, color-mix(in srgb, var(--bg) 78%, transparent));
+  background: linear-gradient(180deg, transparent 35%, var(--bg) 100%);
   pointer-events: none;
 }
 .prof-edit {
@@ -782,7 +794,7 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
   position: relative; z-index: 3;
   display: flex; align-items: flex-end; gap: 12px;
   min-height: 72px; padding: 0 14px 18px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 35%, transparent) 0%, var(--bg) 72%);
+  background: var(--bg);
   overflow: visible;
 }
 button.plain {
@@ -1352,5 +1364,6 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 .prof-me .avwrap.xl { flex: none; }
 .prof-me .avatar.xl { width: 72px; height: 72px; border-radius: 50%; }
 
-/* Solid shell bg when Telegram expands; pages stay transparent so #bg chess pattern shows */
-#app, .screen, .game { background-color: var(--bg); }
+/* Screens always match app chrome (no black flash on expand) */
+.screen, .game { background-color: var(--bg); }
+.gate { background: var(--bg); }
