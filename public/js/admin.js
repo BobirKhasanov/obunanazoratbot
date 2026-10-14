@@ -179,13 +179,20 @@ export function openAdmin(onClose) {
   const bodyIn = h('input.input', { placeholder: t('ann_body'), maxlength: 160, oninput: (e) => { annForm.body = e.target.value; } });
   const endsIn = h('input.input', { type: 'datetime-local', oninput: (e) => { annForm.endsAtTashkent = e.target.value; } });
   const fontSeg = seg([['system', 'Aa'], ['rounded', 'Rd'], ['serif', 'Se'], ['mono', 'Mo']], 'system', (v) => { annForm.fontFamily = v; });
-  const linkSeg = seg([['none', t('ann_link_none')], ['url', t('ann_link_url')], ['page', t('ann_link_page')]], 'none', (v) => {
+  const linkSeg = seg([
+    ['none', t('ann_link_none')],
+    ['invite', t('ann_link_invite')],
+    ['url', t('ann_link_url')],
+    ['page', t('ann_link_page')],
+  ], 'none', (v) => {
     annForm.linkType = v; drawAnnLink();
   });
   const linkExtra = h('div');
   function drawAnnLink() {
     linkExtra.replaceChildren();
-    if (annForm.linkType === 'url') {
+    if (annForm.linkType === 'invite') {
+      linkExtra.append(h('p.muted', t('ann_link_invite_hint')));
+    } else if (annForm.linkType === 'url') {
       linkExtra.append(h('input.input', {
         placeholder: 'https://…', inputmode: 'url', value: annForm.linkUrl,
         oninput: (e) => { annForm.linkUrl = e.target.value; },

@@ -915,6 +915,9 @@ function parseAnnouncementBody(b, { requireFuture = true } = {}) {
     if (!ANN_PAGES.includes(b.linkPage)) throw bad('Unknown in-app page', 'link_page');
     linkType = 'page';
     linkPage = b.linkPage;
+  } else if (b.linkType === 'invite') {
+    // Tap → share the viewing user's personal referral link (t.me/<bot>?start=i<userId>)
+    linkType = 'invite';
   }
   const ends = parseTashkentEnd(b.endsAtTashkent || b.endsAt);
   if (requireFuture && ends.getTime() <= Date.now()) throw bad('End date must be in the future (Tashkent)', 'ends_at');

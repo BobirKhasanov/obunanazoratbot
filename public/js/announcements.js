@@ -1,5 +1,6 @@
 // Home announcement carousel (admin-managed banners).
-import { h, haptic, getInitData } from './ui.js';
+import { h, haptic, getInitData, shareUrl, toast } from './ui.js';
+import { t } from './i18n.js';
 
 const FONT_CSS = {
   system: 'inherit',
@@ -33,8 +34,19 @@ async function resolveMedia(items) {
   }));
 }
 
-function openLink(a, onPage) {
+function referralLink(botUsername, userId) {
+  if (!botUsername || !userId) return null;
+  return `https://t.me/${botUsername}?start=i${userId}`;
+}
+
+function openLink(a, { onPage, botUsername, userId } = {}) {
   haptic('light');
+  if (a.linkType === 'invite') {
+    const link = referralLink(botUsername, userId);
+    if (!link) return toast(t('e_server'), true);
+    shareUrl(link, t('share_text'));
+    return;
+  }
   if (a.linkType === 'url' && a.linkUrl) {
     try {
       const tg = window.Telegram && window.Telegram.WebApp;
@@ -46,16 +58,16 @@ function openLink(a, onPage) {
   if (a.linkType === 'page' && a.linkPage && onPage) onPage(a.linkPage);
 }
 
-function slide(a, onPage) {
+function slide(a, opts) {
   const font = FONT_CSS[a.fontFamily] || FONT_CSS.system;
-  const clickable = a.linkType === 'url' || a.linkType === 'page';
+  const clickable = a.linkType === 'url' || a.linkType === 'page' || a.linkType === 'invite';
   return h((clickable ? 'button' : 'div') + '.ann-slide', {
     type: clickable ? 'button' : undefined,
     style: {
       background: `linear-gradient(135deg, ${a.bgFrom}, ${a.bgTo})`,
       fontFamily: font,
     },
-    onclick: clickable ? () => openLink(a, onPage) : undefined,
+    onclick: clickable ? () => openLink(a, opts) : undefined,
   },
     h('div.ann-copy',
       a.title ? h('b.ann-title', { style: { color: a.titleColor, fontSize: `${a.fontSize}px` } }, a.title) : null,
@@ -64,7 +76,7 @@ function slide(a, onPage) {
 }
 
 /** Mount carousel into host. Returns host or null. */
-export async function mountAnnouncementsCarousel(host, items, { onPage } = {}) {
+export async function mountAnnouncementsCarousel(host, items, { onPage, botUsername, userId } = {}) {
   stopAnnouncementsCarousel();
   if (!host) return null;
   host.replaceChildren();
@@ -72,12 +84,13 @@ export async function mountAnnouncementsCarousel(host, items, { onPage } = {}) {
   const resolved = await resolveMedia(items);
   if (!host.isConnected) return null;
   host.hidden = false;
-  const track = h('div.ann-track', resolved.map((a) => slide(a, onPage)));
-  const dots = resolved.length > 1
-    ? h('div.ann-dots', resolved.map((_, i) => h('i' + (i === 0 ? '.on' : ''))))
-    : null;
-  host.append(track, dots);
+  const opts = { onPage, botUsername, userId };
+  const track = h('div.ann-track', resolved.map((a) => slide(a, opts)));
+  // Native Node.append(null) becomes the text "null" — only append real nodes.
+  host.replaceChildren(track);
   if (resolved.length < 2) return host;
+  const dots = h('div.ann-dots', resolved.map((_, i) => h('i' + (i === 0 ? '.on' : ''))));
+  host.append(dots);
 
   let idx = 0;
   const go = (n) => {

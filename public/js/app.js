@@ -191,9 +191,34 @@ const resultText = (g) => {
   return r;
 };
 
+let playSnap = '';
 refreshers.play = async function renderPlay() {
-  const l = await loadLobby();
+  const [l, anns] = await Promise.all([loadLobby(), loadAnnouncements(api)]);
   const saved = savedAiGame();
+  const onlinePlayers = l.online.filter((u) => !u.inGame);
+  // Skip full remount when nothing visible changed — stops home-page flicker every poll.
+  const snap = JSON.stringify({
+    t: selectedTime,
+    d: state.me.diamonds || 0,
+    o: l.onlineCount,
+    inv: (l.games.invites || []).map((g) => g.id),
+    act: (l.games.active || []).map((g) => [g.id, g.turn, g.you]),
+    wait: (l.games.waiting || []).map((g) => g.id),
+    on: onlinePlayers.map((u) => [u.id, !!u.invited, !!u.inGame, !!u.friend]),
+    sav: saved ? [saved.level, saved.fen] : null,
+    ann: (anns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
+  });
+  const playEl = page('play');
+  if (snap === playSnap && playEl && playEl.classList.contains('seen') && playEl.childElementCount) {
+    const pill = playEl.querySelector('.livepill');
+    if (pill) pill.replaceChildren(h('i.dot'), t('online_now', { n: l.onlineCount }));
+    const gem = playEl.querySelector('.gempill');
+    if (gem) gem.textContent = '💎 ' + (state.me.diamonds || 0);
+    return;
+  }
+  playSnap = snap;
+  stopAnnouncementsCarousel();
+
   const controls = [
     ['1+0', '1+0', 'Bullet'],
     ['3+2', '3+2', 'Blitz'],
@@ -204,10 +229,9 @@ refreshers.play = async function renderPlay() {
   ];
   const modes = h('div.time-grid', controls.map(([id, label, sub]) =>
     h('button.time-option' + (selectedTime === id ? '.selected' : ''), {
-      onclick: () => { selectedTime = id; haptic('select'); refresh('play'); }
+      onclick: () => { selectedTime = id; playSnap = ''; haptic('select'); refresh('play'); }
     }, h('b', label), h('small', sub))
   ));
-  const onlinePlayers = l.online.filter((u) => !u.inGame);
   const banner = (cls, emoji, title, sub, fn) => h('button.home-banner.' + cls, { onclick: () => { haptic('light'); fn(); } },
     h('div.home-banner-text', h('b', title), h('small', sub)), h('span.home-banner-art', emoji));
   const card = (emoji, label, fn) => h('button.pcard', { onclick: () => { haptic('light'); fn(); } }, h('span.pcard-art', emoji), h('b', label));
@@ -227,7 +251,7 @@ refreshers.play = async function renderPlay() {
     l.games.invites.length ? [h('div.h2', t('invites')), h('div.list', l.games.invites.map((g) => h('div.row.invite',
       avatar(g.opponent.name, g.opponent.id), h('div.grow', h('div.t', g.opponent.name), h('div.s', t('challenge'))),
       h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
-      h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } refresh(); } }, icon('x', 18)))))] : null,
+      h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'; } catch (e) { fail(e); } playSnap = ''; refresh(); } }, icon('x', 18)))))] : null,
     onlinePlayers.length ? [h('div.h2.online-heading', t('online_players'), h('span.count-pill', String(onlinePlayers.length))),
       h('div.list', onlinePlayers.map((u) => h('div.row', h('div.avwrap', avatar(u.name, u.id), h('i.dot.on')),
         h('div.grow', h('div.t', u.name, u.friend ? h('span.star', ' ★') : null), h('div.s', u.invited ? t('challenge_sent') : t('online'))),
@@ -237,9 +261,10 @@ refreshers.play = async function renderPlay() {
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
   ];
   mount('play', nodes);
-  const anns = await loadAnnouncements(api);
   if (state.tab === 'play') {
-    mountAnnouncementsCarousel(annHost, anns, {
+    await mountAnnouncementsCarousel(annHost, anns, {
+      botUsername: state.meta?.botUsername,
+      userId: state.me?.id,
       onPage: (page) => {
         if (['play', 'puzzles', 'rankings', 'live', 'profile'].includes(page)) go(TABS.indexOf(page), true);
         else if (page === 'premium' || page === 'friends' || page === 'settings') {
@@ -404,7 +429,8 @@ function initPager() {
     state.index = clamp(i, 0, TABS.length - 1); state.tab = TABS[state.index];
     if (state.index !== prev) {
       closeScreen(true);
-      if (prev === TABS.indexOf('play')) stopAnnouncementsCarousel();
+      if (prev === TABS.indexOf('play')) { stopAnnouncementsCarousel(); playSnap = ''; }
+      if (state.tab === 'play') playSnap = '';
     }
     track.classList.toggle('settle', !!animate); ind.classList.remove('drag');
     setX(-state.index * W);

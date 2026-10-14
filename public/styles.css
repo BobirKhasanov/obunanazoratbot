@@ -724,9 +724,9 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 70%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 70%, transparent 100%); }
 #bg::before { content: ''; position: absolute; left: -60%; right: -60%; top: 8%; bottom: -30%;
   background: conic-gradient(var(--sq) 25%, transparent 0 50%, var(--sq) 0 75%, transparent 0) 0 0 / 130px 130px;
-  filter: blur(1.6px); transform: perspective(700px) rotateX(52deg); transform-origin: 50% 0; animation: bgdrift 38s linear infinite; }
-@keyframes bgdrift { to { background-position: 0 260px; } }
-@media (prefers-reduced-motion: reduce) { #bg::before { animation: none; } }
+  filter: blur(2px); opacity: 0.7; transform: perspective(700px) rotateX(52deg); transform-origin: 50% 0;
+  /* static — animated drift made the home tab look jittery on mobile WebViews */
+}
 #pager, #dock { z-index: 1; }
 #dock { z-index: 20; }
 
@@ -734,17 +734,17 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 /* ---------- home announcements carousel ---------- */
 .ann-carousel {
   position: relative; width: 100%; margin: 0 0 14px; border-radius: 22px; overflow: hidden;
-  min-height: 110px; touch-action: pan-y;
+  min-height: 0; touch-action: pan-y; contain: layout paint;
 }
+.ann-carousel:not([hidden]) { min-height: 110px; }
 .ann-track {
-  display: flex; width: 100%; will-change: transform;
+  display: flex; width: 100%;
   transition: transform 0.55s var(--ease);
 }
 .ann-slide {
   flex: 0 0 100%; width: 100%; min-height: 110px; padding: 16px 18px;
   display: flex; align-items: center; gap: 12px; text-align: left; color: #fff;
-  position: relative; overflow: hidden;
-  background-image: repeating-conic-gradient(rgba(255,255,255,.06) 0% 25%, transparent 0% 50%) 0 0 / 18px 18px;
+  position: relative; overflow: hidden; border: 0;
 }
 .ann-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; z-index: 1; }
 .ann-title { font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
