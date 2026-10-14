@@ -10,7 +10,7 @@ const { HttpError, bad } = require('./errors');
 const { LANGS, fromTelegram } = require('./i18n');
 const realtime = require('./realtime');
 const notify = require('./notify');
-const { applyMove, turnOf } = require('./game');
+const { applyMove, turnOf, parseMoves, movesJson } = require('./game');
 const { sendPost, COLORS } = require('./posts');
 const { createBot, setupMenu } = require('./bot');
 const { startScheduler } = require('./scheduler');
@@ -206,7 +206,7 @@ api.post('/ping', wrap(async (req, res) => res.json({ ok: true })));
 const getGame = db.prepare('SELECT * FROM games WHERE id = ?');
 
 async function gameFor(row, uid, full = true) {
-  const moves = JSON.parse(row.moves);
+  const moves = parseMoves(row.moves);
   const you = row.white_id === uid ? 'w' : row.black_id === uid ? 'b' : null;
   const opponentId = [row.creator_id, row.invited_id, row.white_id, row.black_id].find((x) => x && x !== uid) || null;
   const g = {
@@ -408,13 +408,13 @@ api.post('/games/:id/move', wrap(async (req, res) => {
   const { row, colour } = await activeGame(req.params.id, uid);
   const { from, to, promotion } = req.body || {};
   if (!SQUARE.test(from) || !SQUARE.test(to)) throw bad('Illegal move', 'illegal_move');
-  const moves = JSON.parse(row.moves);
+  const moves = parseMoves(row.moves);
   if (turnOf(moves) !== colour) throw bad('Not your turn', 'not_your_turn');
 
   const r = applyMove(moves, from, to, promotion);
   const ply = r.moves.length;
   const upd = await db.prepare(`UPDATE games SET moves = ?, draw_by = NULL, updated_at = now(), last_move_at = now()
-    WHERE id = ? AND status = 'active' AND moves = ?`).run(JSON.stringify(r.moves), row.id, row.moves);
+    WHERE id = ? AND status = 'active' AND moves::text = ?`).run(movesJson(r.moves), row.id, movesJson(row.moves));
   if (!upd.changes) throw bad('Not your turn', 'not_your_turn'); // another move got in first
 
   let next;

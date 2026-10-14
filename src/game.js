@@ -40,4 +40,18 @@ function outcome(chess, mover) {
 
 const turnOf = (moves) => (moves.length % 2 === 0 ? 'w' : 'b');
 
-module.exports = { replay, applyMove, outcome, turnOf, PROMO };
+/**
+ * Postgres `jsonb` (Supabase) comes back as a JS array via `pg`; older TEXT columns
+ * come back as a string. Accept both so Play / lobby / moves never crash on parse.
+ */
+function parseMoves(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (raw == null || raw === '') return [];
+  if (typeof raw === 'object') return [];
+  return JSON.parse(String(raw));
+}
+
+/** Canonical JSON text for writing/comparing the moves column (works for TEXT and JSONB). */
+const movesJson = (raw) => JSON.stringify(parseMoves(raw));
+
+module.exports = { replay, applyMove, outcome, turnOf, parseMoves, movesJson, PROMO };

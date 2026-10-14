@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS games (
   time_control TEXT NOT NULL DEFAULT 'classic',
   result TEXT,                              -- 1-0 | 0-1 | 1/2-1/2
   reason TEXT,                              -- checkmate, resign, stalemate, agreement, ...
-  moves TEXT NOT NULL DEFAULT '[]',
+  moves JSONB NOT NULL DEFAULT '[]'::jsonb,
   draw_by TEXT,                             -- colour that currently offers a draw
   notified_ply INTEGER NOT NULL DEFAULT -1,
   reminded_ply INTEGER NOT NULL DEFAULT -1,

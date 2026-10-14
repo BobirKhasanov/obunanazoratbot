@@ -5,7 +5,7 @@
 const db = require('./db');
 const notify = require('./notify');
 const realtime = require('./realtime');
-const { turnOf } = require('./game');
+const { turnOf, parseMoves } = require('./game');
 
 const REMIND_AFTER_HOURS = Number(process.env.REMIND_AFTER_HOURS || 6); // env overrides are for tests
 const ABANDON_AFTER_DAYS = 7;
@@ -20,7 +20,7 @@ async function remindMoves() {
   `).all(REMIND_AFTER_HOURS);
 
   for (const g of rows) {
-    const moves = JSON.parse(g.moves);
+    const moves = parseMoves(g.moves);
     const ply = moves.length;
     if (g.reminded_ply === ply) continue; // already reminded for this move
     const waiting = turnOf(moves) === 'w' ? g.white_id : g.black_id;
@@ -42,7 +42,7 @@ async function housekeeping(onGameChanged) {
     SELECT * FROM games WHERE status = 'active' AND last_move_at < now() - (? * interval '1 day')
   `).all(ABANDON_AFTER_DAYS);
   for (const g of dead) {
-    const result = turnOf(JSON.parse(g.moves)) === 'w' ? '0-1' : '1-0';
+    const result = turnOf(parseMoves(g.moves)) === 'w' ? '0-1' : '1-0';
     await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = 'abandoned', updated_at = now() WHERE id = ?").run(result, g.id);
     if (onGameChanged) await onGameChanged(g.id);
   }
