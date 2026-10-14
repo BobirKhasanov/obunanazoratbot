@@ -719,7 +719,7 @@ api.get('/lichess/rounds/:id', wrap(async (req, res) => {
 api.get('/lichess/rounds/:id/pgn', wrap(async (req, res) => {
   try {
     const fresh = req.query.fresh === '1' || req.query.fresh === 'true';
-    if (fresh) lichess.bustPgn(req.params.id);
+    if (fresh) await lichess.bustPgn(req.params.id);
     const data = await lichess.broadcastRoundPgn(req.params.id, { fresh });
     let gameId = '';
     try { gameId = req.query.game ? lichess.lichessId(req.query.game, 'game id') : ''; }

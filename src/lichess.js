@@ -1,19 +1,13 @@
 // Public Lichess broadcast API helpers (watching needs no OAuth).
 // Docs: https://lichess.org/api#tag/Broadcasts
+// Optional shared cache: UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
+
+const { cacheGet, cacheSet, cacheDel } = require('./cache');
 
 const BASE = 'https://lichess.org';
 const UA = 'ObunaNazoratBot/1.0 (Telegram Mini App; broadcast spectator)';
 
-const cache = new Map(); // key -> { at, data }
 const inflight = new Map(); // path -> Promise
-
-const getCached = (key, maxAge) => {
-  const hit = cache.get(key);
-  if (!hit) return null;
-  if (Date.now() - hit.at > maxAge) { cache.delete(key); return null; }
-  return hit.data;
-};
-const setCached = (key, data) => { cache.set(key, { at: Date.now(), data }); return data; };
 
 /** Lichess broadcast / game ids are exactly 8 URL-safe chars. */
 function lichessId(raw, label = 'id') {
@@ -56,9 +50,9 @@ async function fetchOnce(path, accept) {
 }
 
 async function lichessGet(path, { accept = 'application/json', maxAge = 8_000, fresh = false } = {}) {
-  const key = `${accept}:${path}`;
-  if (!fresh) {
-    const hit = getCached(key, maxAge);
+  const key = `lichess:${accept}:${path}`;
+  if (!fresh && maxAge > 0) {
+    const hit = await cacheGet(key, maxAge);
     if (hit != null) return hit;
   }
   if (inflight.has(key)) return inflight.get(key);
@@ -68,10 +62,10 @@ async function lichessGet(path, { accept = 'application/json', maxAge = 8_000, f
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const data = await fetchOnce(path, accept);
-        return setCached(key, data);
+        if (maxAge > 0) await cacheSet(key, data, maxAge);
+        return data;
       } catch (e) {
         lastErr = e;
-        // Don't retry definitive client errors
         if (e.status === 400 || e.status === 404) throw e;
         if (attempt < 2) await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
       }
@@ -115,18 +109,16 @@ async function broadcastRound(roundId, { fresh = false, tourSlug, roundSlug, rou
     } catch (e) {
       lastErr = e;
       if (e.status === 400) throw e;
-      // try next path on 404
       if (e.status !== 404) throw e;
     }
   }
   throw lastErr || Object.assign(new Error('Round not found'), { status: 404 });
 }
 
-function bustPgn(roundId) {
+async function bustPgn(roundId) {
   try {
     const id = lichessId(roundId, 'round id');
-    cache.delete(`application/x-chess-pgn:/api/broadcast/round/${id}.pgn`);
-    cache.delete(`pgn:${id}`);
+    await cacheDel(`lichess:application/x-chess-pgn:/api/broadcast/round/${id}.pgn`);
   } catch { /* ignore */ }
 }
 
