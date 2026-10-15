@@ -22,6 +22,8 @@ let nav = { view: 'list' };
 let pollTimer = null;
 let clockTimer = null;
 let gameBoards = []; // mini boards to destroy on remount
+let boardById = new Map(); // gameId → Board (in-place FEN updates)
+let renderGen = 0; // abort stale async remounts after a tap opens another view
 
 const UZ_FEDS = new Set(['UZB', 'UZ']);
 
@@ -32,6 +34,30 @@ function clearPoll() {
 function destroyBoards() {
   for (const b of gameBoards) try { b.destroy(); } catch { /* ignore */ }
   gameBoards = [];
+  boardById.clear();
+}
+
+/** Reliable single-tap that ignores page swipe / scroll jitter (inbox pattern). */
+function bindTap(el, fn) {
+  let last = 0;
+  let sx = 0;
+  let sy = 0;
+  el.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    sx = e.clientX;
+    sy = e.clientY;
+  }, { passive: true });
+  const fire = (e) => {
+    if (Math.hypot((e.clientX || 0) - sx, (e.clientY || 0) - sy) > 14) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const now = Date.now();
+    if (now - last < 400) return;
+    last = now;
+    fn();
+  };
+  el.addEventListener('pointerup', fire);
+  el.addEventListener('click', fire);
 }
 
 function setSection(s) {
@@ -245,7 +271,7 @@ function broadcastRow(item, onOpen) {
     info.location || '',
     info.tc ? String(info.tc).split('+')[0].trim() : '',
   ].filter(Boolean).join(' · ');
-  return h('button.row.live-tour', { type: 'button', onclick: () => onOpen(item) },
+  const row = h('button.row.live-tour', { type: 'button', 'data-noswipe': '' },
     thumb,
     h('div.grow',
       badge,
@@ -254,6 +280,8 @@ function broadcastRow(item, onOpen) {
       detail ? h('div.s', detail) : null,
       info.players ? h('div.s.live-players', icon('rankings', 14), ' ', info.players) : null),
     icon('arrow', 18));
+  bindTap(row, () => onOpen(item));
+  return row;
 }
 
 async function renderIntlList(mount, onRefresh) {
@@ -356,15 +384,24 @@ async function renderTour(mount, onRefresh) {
   ]);
 }
 
-function miniBoard(fen, lastMove) {
-  // No data-noswipe — vertical page scroll must work when dragging over boards
+function miniBoard(fen, lastMove, gameId) {
+  // Mini-board itself ignores pointers so the card can scroll/tap; card has data-noswipe for pager
   const host = h('div.live-mini-board');
   const chess = new Chess();
   try { chess.load(fen); } catch { /* keep start */ }
   const board = new Board(host, {});
   board.set(chess, { lastMove: lastMoveObj(lastMove), mine: null, orientation: 'w', animate: false });
   gameBoards.push(board);
+  if (gameId) boardById.set(gameId, board);
   return host;
+}
+
+function paintMiniFen(gameId, fen, lastMove) {
+  const board = boardById.get(gameId);
+  if (!board || !fen) return;
+  const chess = new Chess();
+  try { chess.load(fen); } catch { return; }
+  board.set(chess, { lastMove: lastMoveObj(lastMove), mine: null, orientation: 'w', animate: true });
 }
 
 function gameCard(g, onOpen) {
@@ -373,23 +410,25 @@ function gameCard(g, onOpen) {
   const done = g.status && g.status !== '*';
   const ck = makeClockState(g);
   const status = done ? String(g.status) : t('moves_n', { n: fenPly(g.fen) });
-  // div (not <button>) so iOS can scroll the page when dragging over the mini-board
-  return h('div.live-game-card', {
+  // div (not <button>) so iOS can scroll; data-noswipe stops horizontal pager stealing the tap
+  const card = h('div.live-game-card', {
     role: 'button',
     tabindex: '0',
     'data-gid': g.id,
-    onclick: () => onOpen(g),
+    'data-noswipe': '',
   },
     h('div.live-gc-player',
       h('span.fed', white.fed || ''),
       h('span.name', playerLabel(white)),
       h('span.clk.w', fmtClockMs(liveSideMs(ck, 'w')))),
-    miniBoard(g.fen || 'start', g.lastMove),
+    miniBoard(g.fen || 'start', g.lastMove, g.id),
     h('div.live-gc-player',
       h('span.fed', black.fed || ''),
       h('span.name', playerLabel(black)),
       h('span.clk.b', fmtClockMs(liveSideMs(ck, 'b')))),
     h('div.live-gc-status' + (done ? '.done' : ''), status));
+  bindTap(card, () => onOpen(g));
+  return card;
 }
 
 function fenPly(fen) {
@@ -403,6 +442,7 @@ function hasUz(g) {
 }
 
 async function renderRound(mount, onRefresh) {
+  const gen = ++renderGen;
   destroyBoards();
   clearPoll();
   let data;
@@ -412,6 +452,7 @@ async function renderRound(mount, onRefresh) {
   const goBack = () => { clearPoll(); backIntl(); onRefresh(); };
   try { data = await api('GET', roundApi('', { fresh: wantFresh })); }
   catch (e) {
+    if (gen !== renderGen || nav.view !== 'round') return;
     fail(e);
     // Stay on this screen with retry — don't silently bounce to list
     return mount([
@@ -425,6 +466,9 @@ async function renderRound(mount, onRefresh) {
       }, t('retry_live')),
     ]);
   }
+  // User already opened a game (or left) while we were fetching — do not wipe that view
+  if (gen !== renderGen || section !== 'intl' || nav.view !== 'round') return;
+
   // Keep slugs in sync from the payload for subsequent polls
   if (data.round) {
     nav.roundName = data.round.name || nav.roundName;
@@ -444,10 +488,12 @@ async function renderRound(mount, onRefresh) {
   const shown = filter === 'uz' ? uzGames : games;
   const live = !!round.ongoing;
   const clockMap = new Map(shown.map((g) => [g.id, makeClockState(g)]));
+  const fenKey = new Map(shown.map((g) => [g.id, `${g.fen}|${g.lastMove}`]));
 
   const openGameCard = (game) => {
     haptic('light');
     clearPoll();
+    renderGen += 1; // cancel any in-flight round remount
     nav = {
       view: 'game',
       tourId: nav.tourId, tourName: nav.tourName || tour.name, tourSlug: nav.tourSlug,
@@ -498,15 +544,9 @@ async function renderRound(mount, onRefresh) {
     }
   }, 250);
 
-  // Soft poll: update clocks/status in place (cached API). Full remount ~every 24s for FEN boards.
-  let softPolls = 0;
+  // Soft poll: clocks + mini-board FEN in place (no full remount — that was killing taps)
   pollTimer = setInterval(async () => {
     if (section !== 'intl' || nav.view !== 'round') return clearPoll();
-    softPolls += 1;
-    if (softPolls % 3 === 0) {
-      // Remount from cache (no fresh=1) so mini-boards catch up without hammering Lichess
-      return onRefresh();
-    }
     try {
       const next = await api('GET', roundApi('', { fresh: false }));
       for (const g of next.games || []) {
@@ -524,9 +564,14 @@ async function renderRound(mount, onRefresh) {
           statusEl.textContent = done ? String(g.status) : t('moves_n', { n: fenPly(g.fen) });
           statusEl.classList.toggle('done', !!done);
         }
+        const key = `${g.fen}|${g.lastMove}`;
+        if (fenKey.get(g.id) !== key) {
+          fenKey.set(g.id, key);
+          paintMiniFen(g.id, g.fen, g.lastMove);
+        }
       }
     } catch { /* ignore transient poll errors — keep last good UI */ }
-  }, 8000);
+  }, 3000);
 }
 
 function parsePgnMoves(pgn) {
@@ -543,11 +588,13 @@ function parsePgnMoves(pgn) {
 }
 
 async function renderGame(mount, onRefresh) {
+  const gen = ++renderGen;
   destroyBoards();
   clearPoll();
   let snap = nav.snap;
   try {
     const round = await api('GET', roundApi('', { fresh: false }));
+    if (gen !== renderGen || nav.view !== 'game') return;
     snap = (round.games || []).find((g) => g.id === nav.gameId) || snap;
     nav.snap = snap;
     if (round.round) {
@@ -556,6 +603,7 @@ async function renderGame(mount, onRefresh) {
       nav.roundUrl = round.round.url || nav.roundUrl;
     }
   } catch { /* keep snap */ }
+  if (gen !== renderGen || nav.view !== 'game') return;
   if (!snap) {
     fail({ code: 'notfound' });
     openRoundNav({
@@ -569,13 +617,16 @@ async function renderGame(mount, onRefresh) {
   let moves = [];
   try {
     const p = await api('GET', roundApi('/pgn', { fresh: false, game: nav.gameId }));
+    if (gen !== renderGen || nav.view !== 'game') return;
     if (p.game && p.game.pgn) moves = parsePgnMoves(p.game.pgn);
   } catch { /* fen-only fallback — board still works from FEN */ }
+  if (gen !== renderGen || nav.view !== 'game') return;
 
   const cursor = { i: moves.length }; // at live tip when i === moves.length
   let clockState = makeClockState(snap);
   let lastKey = `${snap.fen}|${snap.lastMove}|${snap.status}`;
   let pgnBusy = false;
+  const ongoing = !(snap.status && snap.status !== '*');
 
   const host = h('div.board-host.live-full-board');
   const status = h('div.pz-status.live-turn', '');
@@ -693,48 +744,52 @@ async function renderGame(mount, onRefresh) {
     h('button.mini', { type: 'button', onclick: () => { haptic('select'); showAt(0); } }, '⏮'),
     h('button.mini', { type: 'button', onclick: () => { haptic('select'); showAt(cursor.i - 1); } }, '◀'),
     h('button.mini', { type: 'button', onclick: () => { haptic('select'); showAt(cursor.i + 1); } }, '▶'),
-    h('button.mini', { type: 'button', onclick: () => { haptic('select'); showAt(moves.length); } }, '⏭'),
-    h('button.btn.sm', {
-      type: 'button',
-      onclick: () => {
-        board.orientation = board.orientation === 'w' ? 'b' : 'w';
-        haptic('light');
-        showAt(cursor.i, false);
-      },
-    }, icon('flip', 18), t('flip')));
+    h('button.mini', { type: 'button', onclick: () => { haptic('select'); showAt(moves.length); } }, '⏭'));
+  const flipBtn = h('button.btn.ghost.sm.live-flip', {
+    type: 'button',
+    onclick: () => {
+      board.orientation = board.orientation === 'w' ? 'b' : 'w';
+      haptic('light');
+      showAt(cursor.i, false);
+    },
+  }, icon('flip', 18), t('flip'));
 
   const goBack = () => {
-    clearPoll(); destroyBoards(); backIntl(); onRefresh();
+    clearPoll(); destroyBoards(); renderGen += 1; backIntl(); onRefresh();
   };
 
+  const whiteShort = (snap.players[0].name || '').split(',')[0] || '…';
+  const blackShort = (snap.players[1].name || '').split(',')[0] || '…';
   mount([
     h('div.live-watch',
       h('div.top',
         backBtn(goBack),
-        h('h1', `${(snap.players[0].name || '').split(',')[0] || '…'} – ${(snap.players[1].name || '').split(',')[0] || '…'}`),
-        nav.roundName ? h('span.count-pill', nav.roundName) : null),
-      status, topBar, host, botBar, moveStrip, navBtns),
+        h('h1', `${whiteShort} – ${blackShort}`),
+        ongoing
+          ? h('span.live-badge', h('i.dot'), t('jonli'))
+          : (nav.roundName ? h('span.count-pill', nav.roundName) : null)),
+      topBar, host, botBar, status, moveStrip, navBtns, flipBtn),
   ]);
 
   // Smooth local clock drain (like Lichess / reference app)
   clockTimer = setInterval(() => {
-    if (section !== 'intl' || nav.view !== 'game') return clearPoll();
+    if (section !== 'intl' || nav.view !== 'game' || gen !== renderGen) return clearPoll();
     paintClocks();
   }, 200);
 
-  // Board/clock snapshots via cached API (never toast/navigate away on poll errors)
+  // Board/clock snapshots via short-cached API (~2.5s server cache)
   let polls = 0;
   pollTimer = setInterval(async () => {
-    if (section !== 'intl' || nav.view !== 'game') return clearPoll();
+    if (section !== 'intl' || nav.view !== 'game' || gen !== renderGen) return clearPoll();
     polls += 1;
     try {
       const round = await api('GET', roundApi('', { fresh: false }));
       const g = (round.games || []).find((x) => x.id === nav.gameId);
       if (g) applySnap(g);
-      // PGN less often, and without fresh=1 (cache ~5s)
-      if (polls % 4 === 0) refreshPgn(false);
+      // PGN every ~6s without fresh=1
+      if (polls % 3 === 0) refreshPgn(false);
     } catch { /* ignore transient errors */ }
-  }, 5000);
+  }, 2000);
 }
 
 /**

@@ -60,6 +60,8 @@ const P = {
   send: '<path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/>',
   undo: '<path d="M9 7L4 12l5 5M4 12h10a6 6 0 0 1 0 12"/>',
   chevron: '<path d="M9 6l6 6-6 6"/>',
+  chevronUp: '<path d="M6 14l6-6 6 6"/>',
+  chevronDown: '<path d="M6 10l6 6 6-6"/>',
   crown: '<path d="M3 18h18l-1.5-9-4.5 3L12 6l-3 6-4.5-3z"/><path d="M5 18h14v2H5z"/>',
   gem: '<path d="M6 9l6-6 6 6-6 12z"/><path d="M6 9h12M9.5 3.5L12 9l2.5-5.5"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M3 12h2.2M18.8 12H21M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/>',

@@ -476,6 +476,19 @@ async function playMoves(game, players, moves, startPly = 0) {
         diamondPacks: [{ diamonds: 250, sum: 250000 }, { diamonds: 100, sum: 100000 }],
       });
       assert.ok(okPack.shop.diamondPacks.some((p) => p.diamonds === 250 && p.sum === 250000));
+      // Order is preserved (admin ↑↓ reorder)
+      const reordered = await ok('ADMIN', 'PATCH', '/admin/shop', {
+        diamondPacks: [
+          { diamonds: 1000, sum: 1000000 },
+          { diamonds: 100, sum: 100000 },
+          { diamonds: 500, sum: 500000 },
+        ],
+      });
+      assert.deepStrictEqual(
+        reordered.shop.diamondPacks.map((p) => p.diamonds),
+        [1000, 100, 500],
+        'diamond pack order preserved',
+      );
       await ok('ADMIN', 'PATCH', '/admin/shop', {
         diamondPacks: [
           { diamonds: 100, sum: 100000 },

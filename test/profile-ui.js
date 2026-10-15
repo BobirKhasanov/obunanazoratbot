@@ -66,6 +66,9 @@ assert.ok(playflow.includes('preferredColor') && playflow.includes('TIME_GROUPS'
 const live = read('public/js/live.js');
 assert.ok(live.includes('backBtn') && !live.includes('syncTgBack'), 'single in-app back, no Telegram BackButton duplicate');
 assert.ok(live.includes("role: 'button'") && live.includes('live-game-card'), 'live game cards scroll-friendly');
+assert.ok(live.includes('bindTap') && live.includes('data-noswipe') && live.includes('paintMiniFen'), 'intl cards tap + in-place FEN');
+assert.ok(live.includes('renderGen') && live.includes(', 2000)'), 'live game poll ~2s with stale-render guard');
+assert.ok(admin.includes('movePack') && admin.includes('admin-pack-order') && admin.includes('chevronUp'), 'admin diamond pack reorder');
 assert.ok(css.includes('prem-ring') && css.includes('prem-spin'), 'single rotating gold prem-ring (no second static border)');
 assert.ok(css.includes('tg-star-twinkle') || css.includes('prem-spark'), 'Telegram Stars–style sparkles');
 assert.ok(/\.prem-ic[\s\S]{0,160}width:\s*(2[8-9]|3[0-9])px/.test(css), 'premIc badge at least 28px');
@@ -97,7 +100,7 @@ assert.ok(admin.includes('admin_pack_sum') || admin.includes('admin_pack_diamond
 assert.ok(read('src/server.js').includes('parseDiamondPacksStrict') && read('src/server.js').includes('/puzzles/claim-daily') && read('src/server.js').includes('/games/:id/chat'), 'server shop/chat/puzzle endpoints');
 assert.ok(read('src/server.js').includes('puzzle_daily_reward') && read('src/server.js').includes('puzzleDailyReward'), 'server stores puzzle daily reward setting');
 
-for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward']) {
+for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down']) {
   assert.ok(i18n.includes(k + ':'), `i18n ${k}`);
 }
 

@@ -106,8 +106,8 @@ async function broadcastRound(roundId, { fresh = false, tourSlug, roundSlug, rou
   let lastErr;
   for (const path of paths) {
     try {
-      // Cache ~5s so the Mini App can poll without hammering Lichess
-      return await lichessGet(path, { maxAge: fresh ? 0 : 5_000, fresh });
+      // Short cache so live boards feel near-real-time without hammering Lichess
+      return await lichessGet(path, { maxAge: fresh ? 0 : 2_500, fresh });
     } catch (e) {
       lastErr = e;
       if (e.status === 400 || e.status === 429) throw e;
@@ -146,7 +146,7 @@ async function broadcastRoundPgn(roundId, { fresh = false } = {}) {
   const id = lichessId(roundId, 'round id');
   const text = await lichessGet(`/api/broadcast/round/${id}.pgn`, {
     accept: 'application/x-chess-pgn',
-    maxAge: 5_000,
+    maxAge: 2_500,
     fresh,
   });
   const games = parseMultiPgn(text);

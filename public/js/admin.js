@@ -387,8 +387,32 @@ export function openAdmin(onClose) {
     };
     redrawPlans();
     const packsBox = h('div.list');
+    const movePack = (i, dir) => {
+      const packs = shop.diamondPacks || [];
+      const j = i + dir;
+      if (j < 0 || j >= packs.length) return;
+      const tmp = packs[i];
+      packs[i] = packs[j];
+      packs[j] = tmp;
+      haptic('select');
+      redrawPacks();
+    };
     const redrawPacks = () => {
-      packsBox.replaceChildren(...(shop.diamondPacks || []).map((p, i) => h('div.row',
+      const packs = shop.diamondPacks || [];
+      packsBox.replaceChildren(...packs.map((p, i) => h('div.row.admin-pack-row',
+        h('div.admin-pack-order',
+          h('button.mini', {
+            type: 'button',
+            disabled: i === 0,
+            title: t('admin_pack_up'),
+            onclick: () => movePack(i, -1),
+          }, icon('chevronUp', 16)),
+          h('button.mini', {
+            type: 'button',
+            disabled: i === packs.length - 1,
+            title: t('admin_pack_down'),
+            onclick: () => movePack(i, 1),
+          }, icon('chevronDown', 16))),
         h('input.input', {
           type: 'number', value: String(p.diamonds), style: { maxWidth: '90px' },
           oninput: (e) => { p.diamonds = Math.floor(Number(e.target.value) || 0); },
@@ -400,6 +424,7 @@ export function openAdmin(onClose) {
         }),
         h('span.muted', "so'm"),
         h('button.mini', {
+          type: 'button',
           onclick: () => { shop.diamondPacks.splice(i, 1); redrawPacks(); },
         }, icon('trash', 16)),
       )));

@@ -1059,9 +1059,15 @@ button.grow.plain { flex: 1; display: block; }
 }
 .live-watch .board-host { flex: none; }
 .live-watch .moves { margin: 4px 0; }
+.live-watch .top .live-badge { flex: none; margin-left: 4px; }
+.live-watch .live-turn { margin: 2px 0 0; }
+.live-flip { align-self: stretch; justify-content: center; margin-top: 4px; }
 .live-pbar .pav.avatar, .live-pbar .avatar {
   width: 36px; height: 36px; border-radius: 50% !important; font-size: 15px; flex: none;
 }
+.admin-pack-row { align-items: center; gap: 6px; }
+.admin-pack-order { display: flex; flex-direction: column; gap: 2px; flex: none; }
+.admin-pack-order .mini { padding: 4px; min-width: 28px; justify-content: center; }
 
 /* ---------- chessboard backdrop ---------- */
 :root { --sq: rgba(255, 255, 255, 0.09); }
