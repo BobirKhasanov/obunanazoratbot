@@ -211,6 +211,8 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS black_ms BIGINT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS turn_started_at TIMESTAMPTZ;
 ALTER TABLE media ADD COLUMN IF NOT EXISTS storage_path TEXT;
 ALTER TABLE media ADD COLUMN IF NOT EXISTS path TEXT;
+ALTER TABLE media ADD COLUMN IF NOT EXISTS data BYTEA;
+ALTER TABLE media ADD COLUMN IF NOT EXISTS mime TEXT;
 ALTER TABLE media ALTER COLUMN data DROP NOT NULL;
 -- Restored Supabase dumps keep path NOT NULL; BYTEA-only inserts must not require Storage keys
 DO $$ BEGIN
@@ -392,9 +394,12 @@ const DEFAULT_PREMIUM_PLANS = JSON.stringify([
 
 /** Creates the tables on first start and marks interrupted broadcasts. Await this before serving. */
 db.ready = (async () => {
-  const c = await pool.connect(); // lock and unlock must happen on the same connection
+  const c = await pool.connect();
   try {
-    await c.query('SELECT pg_advisory_lock(7301)'); // two instances starting together must not race on DDL
+    // Transaction-scoped lock is safe on Neon pooler (PgBouncer transaction mode);
+    // session pg_advisory_lock is not reliable across pooled backends.
+    await c.query('BEGIN');
+    await c.query('SELECT pg_advisory_xact_lock(7301)');
     await c.query(SCHEMA);
     await c.query("UPDATE broadcasts SET status = 'interrupted' WHERE status = 'sending'");
     await c.query(
@@ -415,8 +420,11 @@ db.ready = (async () => {
         muted: '#94a3b8',
       })],
     );
+    await c.query('COMMIT');
+  } catch (e) {
+    await c.query('ROLLBACK').catch(() => {});
+    throw e;
   } finally {
-    await c.query('SELECT pg_advisory_unlock(7301)').catch(() => {});
     c.release();
   }
 })();

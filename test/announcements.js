@@ -73,6 +73,11 @@ assert.ok(server.includes('SELECT id, mime, data, size FROM media'), 'media endp
 const storageSrc = read('src/storage.js');
 assert.ok(storageSrc.includes('path') && storageSrc.includes('INSERT INTO media'), 'saveMedia sets legacy path for Neon/Supabase dumps');
 assert.ok(db.includes('ALTER COLUMN path DROP NOT NULL') || db.includes("path TEXT DEFAULT ''"), 'schema relaxes legacy path NOT NULL');
+assert.ok(db.includes('pg_advisory_xact_lock'), 'boot DDL uses transaction advisory lock (Neon pooler-safe)');
+assert.ok(server.includes('likePattern') && server.includes("ESCAPE '\\\\'"), 'search escapes LIKE wildcards');
+assert.ok(admin.includes('loadAnnMediaPreview') && admin.includes('X-Init-Data'), 'edit ann media preview uses auth fetch');
+assert.ok(/accept:\s*'image\/jpeg,image\/png,image\/gif'/.test(admin), 'carousel upload is images-only');
+assert.ok(read('src/realtime.js').includes('clearRest'), 'bye clears REST presence');
 
 // Pure Tashkent parse/format mirrors (same rules as server)
 function parseTashkentEnd(s) {

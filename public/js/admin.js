@@ -234,7 +234,8 @@ export function openAdmin(onClose) {
   };
   const annMediaBox = h('div.media-box');
   const annFile = h('input', {
-    type: 'file', accept: 'image/jpeg,image/png,image/gif,video/mp4', hidden: true,
+    // Carousel renders <img> only — keep announcements to still images
+    type: 'file', accept: 'image/jpeg,image/png,image/gif', hidden: true,
     onchange: async (e) => {
       const f = e.target.files[0]; e.target.value = '';
       if (!f) return;
@@ -263,6 +264,15 @@ export function openAdmin(onClose) {
     } else annMediaBox.append(h('button.btn.ghost.sm', { onclick: () => annFile.click() }, icon('image', 18), t('add_media')));
   }
   drawAnnMedia();
+  async function loadAnnMediaPreview(mediaId) {
+    if (!mediaId) { annForm.mediaPreview = null; drawAnnMedia(); return; }
+    try {
+      const res = await fetch('/api/media/' + mediaId, { headers: { 'X-Init-Data': getInitData() } });
+      if (!res.ok) { annForm.mediaPreview = null; drawAnnMedia(); return; }
+      annForm.mediaPreview = URL.createObjectURL(await res.blob());
+    } catch { annForm.mediaPreview = null; }
+    drawAnnMedia();
+  }
 
   const titleIn = h('input.input', { placeholder: t('ann_title'), maxlength: 80, oninput: (e) => { annForm.title = e.target.value; } });
   const bodyIn = h('input.input', { placeholder: t('ann_body'), maxlength: 160, oninput: (e) => { annForm.body = e.target.value; } });
@@ -343,13 +353,14 @@ export function openAdmin(onClose) {
       fontFamily: a.fontFamily || 'system',
       fontSize: a.fontSize || 18,
       mediaId: a.mediaId || null,
-      mediaPreview: a.mediaUrl || null,
+      mediaPreview: null, // loaded via authenticated blob fetch (media URL needs X-Init-Data)
       linkType: a.linkType || 'none',
       linkUrl: a.linkUrl || '',
       linkPage: a.linkPage || 'play',
       endsAtTashkent: (a.endsAtTashkent || '').slice(0, 16),
     });
     syncAnnFormInputs();
+    loadAnnMediaPreview(a.mediaId || null);
     try { titleIn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* ignore */ }
   }
 

@@ -901,6 +901,11 @@ async function playMoves(game, players, moves, startPly = 0) {
       const asAlice = (await ok('A', 'GET', '/lobby')).online.find((o) => o.name === 'Bob Baker');
       assert.ok(asAlice && asAlice.friend, 'friends are marked in the list');
       await err('D', 'POST', '/games', { opponentId: USERS.B.id }, 404, 'user_unavailable'); // hidden players cannot be challenged
+      // /bye must drop REST presence immediately (not leave a 30s ghost online)
+      await ok('E', 'POST', '/bye');
+      const afterBye = await ok('D', 'GET', '/lobby');
+      assert.ok(!afterBye.online.some((o) => o.id === USERS.E.id), 'bye removes user from lobby online');
+      await ok('E', 'GET', '/me'); // back online for later tests
     });
 
     await step('computer results validated but never counted in stats/rating', async () => {

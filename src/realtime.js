@@ -35,8 +35,10 @@ function remove(id, ws, onLeave) {
 
 const connectionCount = () => socketCount;
 
-/** Called for every authenticated HTTP request. */
+/** Called for every authenticated HTTP request (except explicit leave). */
 const markRest = (id) => lastRest.set(id, Date.now());
+/** Mini App closed (/bye) — drop REST presence immediately. */
+const clearRest = (id) => lastRest.delete(id);
 
 const isOnline = (id) => sockets.has(id) || Date.now() - (lastRest.get(id) || 0) < REST_ONLINE_MS;
 
@@ -111,6 +113,6 @@ function attach(server, botToken, hooks) {
 }
 
 module.exports = {
-  attach, send, isOnline, onlineIds, markRest, presenceMs: REST_ONLINE_MS,
+  attach, send, isOnline, onlineIds, markRest, clearRest, presenceMs: REST_ONLINE_MS,
   connectionCount, maxConnections: MAX_WS,
 };

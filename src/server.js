@@ -225,6 +225,11 @@ function parseUserSearchQuery(raw) {
   }
   return { mode: 'name', q: s.toLowerCase() };
 }
+/** Escape `%` `_` `\` for LIKE … ESCAPE '\' so usernames like alice_chess match literally. */
+function likePattern(q) {
+  const s = String(q || '').replace(/[%_\\]/g, (ch) => `\\${ch}`);
+  return `%${s}%`;
+}
 const gameId = () => crypto.randomBytes(6).toString('base64url'); // 8 chars, safe inside a deep link
 
 // ---------- users ----------
@@ -802,10 +807,13 @@ async function auth(req, res, next) {
   user = await syncPremiumExpiry(user);
   memoUser(user);
 
-  realtime.markRest(user.id);
-  // /bye must not refresh presence (auth would race and put them back online)
+  // /bye must not refresh REST presence (would keep the user "online" for REST_ONLINE_MS)
   const leaving = req.method === 'POST' && String(req.path || '').replace(/\/$/, '') === '/bye';
-  if (!leaving) await refreshPresence(user.id);
+  if (leaving) realtime.clearRest(user.id);
+  else {
+    realtime.markRest(user.id);
+    await refreshPresence(user.id);
+  }
   req.user = user;
   req.isAdmin = isAdmin(user.id);
   req.startParam = tg.startParam || null;
@@ -2245,7 +2253,7 @@ api.get('/messages/search', wrap(async (req, res) => {
   const { mode, q } = parseUserSearchQuery(raw);
   if (!q) throw bad('Enter a name or @username', 'bad_request');
   const uid = req.user.id;
-  const like = `%${q}%`;
+  const like = likePattern(q);
   // @… → username only; otherwise first/last name (not username)
   const rows = mode === 'username'
     ? await db.prepare(`
@@ -2253,7 +2261,7 @@ api.get('/messages/search', wrap(async (req, res) => {
         FROM users u
         WHERE u.id <> ? AND u.blocked = 0
           AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.user_id = ? AND b.blocked_id = u.id) OR (b.user_id = u.id AND b.blocked_id = ?))
-          AND lower(coalesce(u.username,'')) LIKE ?
+          AND lower(coalesce(u.username,'')) LIKE ? ESCAPE '\\'
         ORDER BY u.first_name ASC
         LIMIT 20
       `).all(uid, uid, uid, like)
@@ -2263,9 +2271,9 @@ api.get('/messages/search', wrap(async (req, res) => {
         WHERE u.id <> ? AND u.blocked = 0
           AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.user_id = ? AND b.blocked_id = u.id) OR (b.user_id = u.id AND b.blocked_id = ?))
           AND (
-            lower(coalesce(u.first_name,'')) LIKE ?
-            OR lower(coalesce(u.last_name,'')) LIKE ?
-            OR lower(trim(both FROM coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,''))) LIKE ?
+            lower(coalesce(u.first_name,'')) LIKE ? ESCAPE '\\'
+            OR lower(coalesce(u.last_name,'')) LIKE ? ESCAPE '\\'
+            OR lower(trim(both FROM coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,''))) LIKE ? ESCAPE '\\'
           )
         ORDER BY u.first_name ASC
         LIMIT 20
@@ -2704,8 +2712,7 @@ admin.get('/live', wrap(async (req, res) => {
 admin.get('/users', wrap(async (req, res) => {
   const raw = String(req.query.q || '').trim().slice(0, 40);
   const { mode, q } = parseUserSearchQuery(raw);
-  // Escape LIKE wildcards; keep `_` in usernames (e.g. alice_chess)
-  const like = q ? `%${q.replace(/[%\\]/g, (ch) => `\\${ch}`)}%` : '';
+  const like = q ? likePattern(q) : '';
   const baseSelect = `
     SELECT u.id, u.first_name, u.last_name, u.username, u.lang, u.blocked, u.bot_blocked, u.created_at, u.last_seen,
       u.present_until, u.diamonds, u.premium, u.premium_until,
