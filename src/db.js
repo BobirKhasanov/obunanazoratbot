@@ -142,16 +142,16 @@ CREATE TABLE IF NOT EXISTS results (
 );
 CREATE INDEX IF NOT EXISTS idx_results_user ON results(user_id);
 
--- Media for admin posts. Prefer Supabase Storage (storage_path); BYTEA is legacy/fallback.
+-- Media for admin posts / avatars (BYTEA on Neon).
 CREATE TABLE IF NOT EXISTS media (
   id TEXT PRIMARY KEY,
   kind TEXT NOT NULL,                       -- photo | video | animation
   mime TEXT NOT NULL,
-  data BYTEA,                               -- nullable when stored in Supabase Storage
+  data BYTEA,                               -- file bytes
   size INTEGER NOT NULL,
   file_id TEXT,
   admin_id BIGINT NOT NULL,
-  storage_path TEXT,                        -- e.g. <uuid>.jpg in bucket media
+  storage_path TEXT,                        -- legacy; unused (was external object key)
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

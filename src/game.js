@@ -47,7 +47,7 @@ function outcome(chess, mover) {
 const turnOf = (moves) => (moves.length % 2 === 0 ? 'w' : 'b');
 
 /**
- * Postgres `jsonb` (Supabase) comes back as a JS array via `pg`; older TEXT columns
+ * Postgres `jsonb` comes back as a JS array via `pg`; older TEXT columns
  * come back as a string. Accept both so Play / lobby / moves never crash on parse.
  */
 function parseMoves(raw) {

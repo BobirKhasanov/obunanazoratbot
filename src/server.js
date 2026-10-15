@@ -20,7 +20,7 @@ const {
 } = require('./time');
 const lichess = require('./lichess');
 const { cacheGet, cacheSet, cacheDel, cacheEnabled, incr } = require('./cache');
-const { saveMedia, loadMediaBytes, storageEnabled, deleteMediaObject } = require('./storage');
+const { saveMedia, loadMediaBytes, storageEnabled } = require('./storage');
 const { DEFAULT_ELO, pairUpdate, scoresForResult, eloColumn, expandingEloDelta } = require('./elo');
 const {
   monthKey, monthLabelEn, seasonLabel, previousMonthKey, tashkentDay, tashkentParts,
@@ -990,8 +990,6 @@ async function releaseAvatarMedia(prevKey, nextKey) {
   const next = nextKey && /^img:([0-9a-f-]{36})$/i.exec(String(nextKey || ''));
   if (next && next[1] === prev[1]) return;
   const id = prev[1];
-  const row = await db.prepare('SELECT storage_path FROM media WHERE id = ?').get(id);
-  if (row && row.storage_path) await deleteMediaObject(row.storage_path);
   await db.prepare('DELETE FROM media WHERE id = ?').run(id).catch(() => {});
 }
 
@@ -1876,7 +1874,7 @@ api.get('/lobby', wrap(async (req, res) => {
   `).all({ u: uid });
   // Shared busy-set cache (not per-user) — safe across lobby polls
   let busy;
-  // Longer shared TTLs cut Render/Supabase load; WS still pushes game events live
+  // Longer shared TTLs cut Render/Neon load; WS still pushes game events live
   const busyCached = await cacheGet('lobby:busy', 5_000);
   if (busyCached) busy = new Set(busyCached);
   else {

@@ -6,8 +6,6 @@ const db = require('./db');
 const notify = require('./notify');
 const realtime = require('./realtime');
 const { turnOf, parseMoves } = require('./game');
-const { deleteMediaObject } = require('./storage');
-
 const REMIND_AFTER_HOURS = Number(process.env.REMIND_AFTER_HOURS || 6); // env overrides are for tests
 const ABANDON_AFTER_DAYS = 7;
 
@@ -53,7 +51,7 @@ async function housekeeping(onGameChanged) {
 
   // Uploaded post media is only needed for a few days (keep custom avatars + profile banner)
   const old = await db.prepare(`
-    SELECT id, storage_path FROM media
+    SELECT id FROM media
     WHERE created_at < now() - interval '7 days'
       AND id NOT IN (
         SELECT substring(avatar_key FROM 5)
@@ -64,9 +62,6 @@ async function housekeeping(onGameChanged) {
         SELECT NULLIF(trim(value), '') FROM app_settings WHERE key = 'profile_banner_media_id'
       )
   `).all();
-  for (const m of old) {
-    if (m.storage_path) await deleteMediaObject(m.storage_path);
-  }
   if (old.length) {
     await db.prepare(`
       DELETE FROM media

@@ -31,10 +31,9 @@ npm run test:engine # chess engine strength/sanity
 
 ## Deploy (Render + Cloudflare + Redis)
 
-1. **Render** (API / WebSocket / bot): `BOT_TOKEN`, `ADMIN_IDS`, `DATABASE_URL` (**Neon pooled** URL, hostname contains `-pooler`), optional Redis + Storage env vars below. Health check: `/healthz`. One instance only (long polling).
+1. **Render** (API / WebSocket / bot): `BOT_TOKEN`, `ADMIN_IDS`, `DATABASE_URL` (**Neon pooled** URL, hostname contains `-pooler`), optional Redis env vars below. Health check: `/healthz`. One instance only (long polling). Admin media/avatars are stored as BYTEA in Neon — no separate object store.
 2. **Cloudflare Worker** (`wrangler.toml`): serves `public/` and proxies `/api`, `/ws`, `/healthz` to Render. In Workers → Settings → Variables set `API_ORIGIN=https://<your-render>.onrender.com`. Set Render + BotFather `WEBAPP_URL` to the Worker URL (`https://obunanazoratbot.…workers.dev`).
 3. **Upstash Redis** (optional but recommended): `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` — Lichess cache, lobby/rankings cache, rate limits.
-4. **Supabase Storage** (optional, media files only): create private bucket `media`, set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on Render. Postgres itself lives on Neon.
 
 ## Configuration
 
