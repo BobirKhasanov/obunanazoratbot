@@ -225,6 +225,40 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok((await ok('A', 'GET', '/me')).meta.BOARD_THEMES.includes('blue'));
     });
 
+    await step('custom avatar photo: premium only; public image URL', async () => {
+      const png = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        'base64',
+      );
+      const denied = await fetch(`${BASE}/api/me/avatar`, {
+        method: 'POST',
+        headers: { 'X-Init-Data': init('B'), 'Content-Type': 'image/png' },
+        body: png,
+      });
+      assert.strictEqual(denied.status, 403);
+      const deniedBody = await denied.json();
+      assert.strictEqual(deniedBody.code, 'premium_required');
+
+      const up = await fetch(`${BASE}/api/me/avatar`, {
+        method: 'POST',
+        headers: { 'X-Init-Data': init('A'), 'Content-Type': 'image/png' },
+        body: png,
+      });
+      assert.strictEqual(up.status, 201, 'premium user can upload avatar');
+      const uploaded = await up.json();
+      assert.ok(uploaded.user.avatarKey && uploaded.user.avatarKey.startsWith('img:'));
+      const mediaId = uploaded.user.avatarKey.slice(4);
+      const img = await fetch(`${BASE}/api/avatars/${mediaId}`);
+      assert.strictEqual(img.status, 200);
+      assert.ok((img.headers.get('content-type') || '').includes('image/png'));
+      assert.strictEqual((await ok('A', 'GET', '/me')).user.avatarKey, uploaded.user.avatarKey);
+
+      await err('B', 'PATCH', '/me', { avatarKey: uploaded.user.avatarKey }, 403, 'premium_required');
+      const cleared = await ok('A', 'PATCH', '/me', { avatarKey: null });
+      assert.strictEqual(cleared.user.avatarKey, null);
+      assert.strictEqual((await fetch(`${BASE}/api/avatars/${mediaId}`)).status, 404, 'old photo no longer public');
+    });
+
     await step('challenge: in-app invitation only (no chat message), no duplicates', async () => {
       const wsB = await connect('B'); sockets.push(wsB);
       const c = await ok('A', 'POST', '/games', { opponentId: USERS.B.id });

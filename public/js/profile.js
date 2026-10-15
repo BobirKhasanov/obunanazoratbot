@@ -1,5 +1,5 @@
 // Profile hub: sectioned menu + slide-in subpages (friends, premium, settings, …).
-import { h, icon, haptic, toast, api, fail, avBlock, premIc, shareUrl, confirmSheet, toggle, tg, sheet } from './ui.js';
+import { h, icon, haptic, toast, api, fail, avBlock, premIc, shareUrl, confirmSheet, toggle, tg, sheet, getInitData, ApiError } from './ui.js';
 import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
 import { openScreen } from './screen.js';
 import { openAdmin } from './admin.js';
@@ -233,6 +233,12 @@ export function renderProfilePage(ctx) {
           openPremium();
         } catch (e) { fail(e); }
       };
+      const feats = [
+        t('premium_feat_avatar'),
+        t('premium_feat_style'),
+        t('premium_feat_bio'),
+        t('premium_feat_badge'),
+      ];
       return [
         ...subTop(t('premium'), close),
         h('div.card.gems',
@@ -240,6 +246,8 @@ export function renderProfilePage(ctx) {
           h('small.muted', t('gems_sub', { n: inviterReward, m: inviteeReward })),
           u.premium && untilLabel ? h('div.gems-ok', t('premium_until', { d: untilLabel })) : null,
           u.premium && !untilLabel ? h('div.gems-ok', t('premium_have')) : null),
+        h('div.h2', t('premium_unlocks')),
+        h('ul.prem-feats', feats.map((line) => h('li', line))),
         h('div.h2', t('premium_plans')),
         h('div.list', plans.map((p) => {
           const can = have >= p.diamonds;
@@ -473,7 +481,10 @@ export function renderProfilePage(ctx) {
         medals = r.medals || [];
         if (r.avatarKey != null) state.me.avatarKey = r.avatarKey;
       } catch (e) { fail(e); }
-      const cur = state.me.avatarKey || null;
+      const meNow = state.me;
+      const cur = meNow.avatarKey || null;
+      const canPhoto = !!(meNow.premium || meNow.isAdmin);
+      const isPhoto = !!(cur && /^img:/i.test(cur));
       const pick = async (key) => {
         try {
           state.me = await save({ avatarKey: key });
@@ -481,13 +492,58 @@ export function renderProfilePage(ctx) {
           draw(); refresh();
         } catch (e) { fail(e); }
       };
+      const fileInp = h('input', {
+        type: 'file', accept: 'image/jpeg,image/png,image/gif,.jpg,.jpeg,.png,.gif',
+        style: { display: 'none' },
+        onchange: async () => {
+          const file = fileInp.files && fileInp.files[0];
+          fileInp.value = '';
+          if (!file) return;
+          if (!canPhoto) {
+            toast(t('avatar_photo_premium'), true);
+            document.dispatchEvent(new CustomEvent('open-premium'));
+            return;
+          }
+          if (file.size > 2 * 1024 * 1024) return toast(t('e_media_big'), true);
+          try {
+            const res = await fetch('/api/me/avatar', {
+              method: 'POST',
+              headers: { 'X-Init-Data': getInitData() },
+              body: file,
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new ApiError(res.status, data);
+            state.me = data.user;
+            toast(t('avatar_saved')); haptic('success');
+            draw(); refresh();
+          } catch (e) { fail(e); }
+        },
+      });
       host.replaceChildren(
         h('p.muted', t('avatar_sub')),
+        h('div.h2', t('avatar_photo')),
+        canPhoto
+          ? h('button.avatar-pick' + (isPhoto ? '.on' : ''), {
+            type: 'button',
+            onclick: () => { haptic('select'); fileInp.click(); },
+          },
+            isPhoto
+              ? avBlock(meNow.firstName, meNow.id, { size: 'xl', round: true, avatarKey: cur })
+              : h('div.avatar.xl.photo-ph', icon('image', 28)),
+            h('span', isPhoto ? t('avatar_photo_change') : t('avatar_photo_pick')))
+          : h('button.avatar-pick.locked', {
+            type: 'button',
+            onclick: () => {
+              toast(t('avatar_photo_premium'), true);
+              document.dispatchEvent(new CustomEvent('open-premium'));
+            },
+          }, h('div.avatar.xl.photo-ph', icon('image', 28)), h('span', t('avatar_photo_premium'))),
+        fileInp,
         h('div.h2', t('avatar_default')),
         h('button.avatar-pick' + (!cur ? '.on' : ''), {
           type: 'button',
           onclick: () => pick(null),
-        }, avBlock(me.firstName, me.id, { size: 'xl', round: true }), h('span', t('avatar_letter'))),
+        }, avBlock(meNow.firstName, meNow.id, { size: 'xl', round: true }), h('span', t('avatar_letter'))),
         h('div.h2', t('avatar_medals')),
         medals.length
           ? h('div.medal-grid', medals.map((m) => h('div.medal-card' + (cur === m.key ? '.on' : ''),

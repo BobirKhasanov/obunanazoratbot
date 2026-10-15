@@ -37,6 +37,9 @@ assert.ok(!profile.includes('prof-brand'), 'profile brand badge removed');
 assert.ok(profile.includes('openDiamonds'));
 assert.ok(profile.includes('shop_pay_btn') || profile.includes('openPayContact'));
 assert.ok(profile.includes('premiumPlans') || profile.includes('premium_plans') || profile.includes('premium_plan_'));
+assert.ok(profile.includes('premium_unlocks') && profile.includes('premium_feat_avatar') && profile.includes('prem-feats'), 'premium page lists unlocks');
+assert.ok(profile.includes('/me/avatar') && profile.includes('avatar_photo') && profile.includes('getInitData'), 'premium custom avatar upload UI');
+assert.ok(read('src/server.js').includes("api.post('/me/avatar'") && read('src/server.js').includes('/api/avatars/'), 'avatar upload + public serve');
 
 assert.ok(screen.includes('export function openScreen'));
 assert.ok(screen.includes('export function closeScreen'));
@@ -55,6 +58,7 @@ assert.ok(app.includes('!!u.premium') || app.includes('u.premium ? premIc'), 'on
 assert.ok(app.includes('open-premium') && app.includes("detail: 'premium'"), 'premIc opens Premium shop');
 assert.ok(app.includes('round: true'), 'online avatars are circular');
 const ui = read('public/js/ui.js');
+assert.ok(ui.includes('img:') && ui.includes('/api/avatars/'), 'avatar renderer supports img: keys');
 assert.ok(ui.includes("CustomEvent('open-premium')") && ui.includes('button.prem-ic'), 'premIc is a tappable button');
 assert.ok(css.includes('prem-ring') && css.includes('prem-spin'), 'rotating premium avatar ring');
 assert.ok(css.includes('mask:') || css.includes('-webkit-mask:'), 'premium ring is rim-only (not solid gold disc)');
@@ -116,7 +120,7 @@ assert.ok(admin.includes('admin_pack_sum') || admin.includes('admin_pack_diamond
 assert.ok(read('src/server.js').includes('parseDiamondPacksStrict') && read('src/server.js').includes('/puzzles/claim-daily') && read('src/server.js').includes('/games/:id/chat'), 'server shop/chat/puzzle endpoints');
 assert.ok(read('src/server.js').includes('puzzle_daily_reward') && read('src/server.js').includes('puzzleDailyReward'), 'server stores puzzle daily reward setting');
 
-for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down', 'stats_online_only', 'admin_delete_user', 'admin_delete_confirm', 'admin_user_deleted']) {
+for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down', 'stats_online_only', 'admin_delete_user', 'admin_delete_confirm', 'admin_user_deleted', 'premium_unlocks', 'premium_feat_avatar', 'premium_feat_style', 'premium_feat_bio', 'premium_feat_badge', 'avatar_photo', 'avatar_photo_premium']) {
   assert.ok(i18n.includes(k + ':'), `i18n ${k}`);
 }
 

@@ -20,7 +20,7 @@ const {
 } = require('./time');
 const lichess = require('./lichess');
 const { cacheGet, cacheSet, cacheDel, cacheEnabled, incr } = require('./cache');
-const { saveMedia, loadMediaBytes, storageEnabled } = require('./storage');
+const { saveMedia, loadMediaBytes, storageEnabled, deleteMediaObject } = require('./storage');
 const { DEFAULT_ELO, pairUpdate, scoresForResult, eloColumn } = require('./elo');
 const {
   monthKey, monthLabelEn, seasonLabel, previousMonthKey, tashkentDay, monthsForYear,
@@ -116,6 +116,23 @@ app.get('/api/medals/:id.svg', wrap(async (req, res) => {
   res.set('Content-Type', 'image/svg+xml; charset=utf-8');
   res.set('Cache-Control', 'public, max-age=3600');
   res.send(row.svg);
+}));
+
+// Premium custom avatars — public so <img> tags can load without initData
+app.get('/api/avatars/:id', wrap(async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(404, 'Not found', 'notfound');
+  const used = await db.prepare('SELECT 1 AS ok FROM users WHERE avatar_key = ? LIMIT 1').get(`img:${id}`);
+  if (!used) throw new HttpError(404, 'Not found', 'notfound');
+  const row = await db.prepare('SELECT * FROM media WHERE id = ?').get(id);
+  const buf = row && await loadMediaBytes(row);
+  if (!buf) throw new HttpError(404, 'Not found', 'notfound');
+  res.set({
+    'Content-Type': row.mime || 'image/jpeg',
+    'Cache-Control': 'public, max-age=3600',
+    'Content-Length': buf.length,
+  });
+  res.end(buf);
 }));
 
 const DEFAULT_PROFILE_BANNER = path.join(__dirname, '..', 'public', 'img', 'profile-banner.png');
@@ -752,16 +769,26 @@ api.patch('/me', wrap(async (req, res) => {
   }
 
   let avatarKey = u.avatar_key || null;
+  const prevAvatarKey = u.avatar_key || null;
   if (b.avatarKey !== undefined) {
     if (b.avatarKey === null || b.avatarKey === '' || b.avatarKey === 'default') {
       avatarKey = null;
     } else {
       const key = String(b.avatarKey);
-      const m = /^medal:(.+)$/.exec(key);
-      if (!m) throw bad('Invalid avatar', 'bad_request');
-      const medal = await db.prepare('SELECT id FROM medals WHERE id = ? AND user_id = ?').get(m[1], u.id);
-      if (!medal) throw bad('Medal not owned', 'forbidden');
-      avatarKey = `medal:${medal.id}`;
+      const medalM = /^medal:(.+)$/.exec(key);
+      const imgM = /^img:([0-9a-f-]{36})$/i.exec(key);
+      if (medalM) {
+        const medal = await db.prepare('SELECT id FROM medals WHERE id = ? AND user_id = ?').get(medalM[1], u.id);
+        if (!medal) throw bad('Medal not owned', 'forbidden');
+        avatarKey = `medal:${medal.id}`;
+      } else if (imgM) {
+        if (!isPremiumActive(u) && !req.isAdmin) throw new HttpError(403, 'Premium required', 'premium_required');
+        const media = await db.prepare('SELECT id, kind FROM media WHERE id = ? AND admin_id = ?').get(imgM[1], u.id);
+        if (!media || media.kind === 'video') throw bad('Invalid avatar', 'bad_request');
+        avatarKey = `img:${media.id}`;
+      } else {
+        throw bad('Invalid avatar', 'bad_request');
+      }
     }
   }
 
@@ -772,10 +799,63 @@ api.patch('/me', wrap(async (req, res) => {
       lang, theme, notifyEnabled, discoverable, b.lang !== undefined ? 1 : u.lang_set,
       pieceSet, boardTheme, avatarKey, firstName, lastName, country, region, bio, u.id,
     );
+  if (b.avatarKey !== undefined) await releaseAvatarMedia(prevAvatarKey, avatarKey);
   invalidateUserCache(u.id);
   const next = await getUser.get(u.id);
   memoUser(next);
   res.json({ user: publicUser(next, req.isAdmin) });
+}));
+
+const MAX_AVATAR = 2 * 1024 * 1024;
+const AVATAR_MIME = {
+  'image/jpeg': 'photo',
+  'image/png': 'photo',
+  'image/gif': 'animation',
+};
+
+function sniffImage(buf) {
+  if (buf.length > 12 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf.length > 12 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (buf.length > 12 && buf.subarray(0, 4).toString('latin1') === 'GIF8') return 'image/gif';
+  return null;
+}
+
+/** Drop orphaned custom-avatar media when the user switches away from it. */
+async function releaseAvatarMedia(prevKey, nextKey) {
+  const prev = prevKey && /^img:([0-9a-f-]{36})$/i.exec(String(prevKey));
+  if (!prev) return;
+  const next = nextKey && /^img:([0-9a-f-]{36})$/i.exec(String(nextKey || ''));
+  if (next && next[1] === prev[1]) return;
+  const id = prev[1];
+  const row = await db.prepare('SELECT storage_path FROM media WHERE id = ?').get(id);
+  if (row && row.storage_path) await deleteMediaObject(row.storage_path);
+  await db.prepare('DELETE FROM media WHERE id = ?').run(id).catch(() => {});
+}
+
+/** Premium (or admin): upload a custom avatar photo (JPG/PNG/GIF ≤ 2 MB). */
+api.post('/me/avatar', express.raw({ type: () => true, limit: '3mb' }), wrap(async (req, res) => {
+  const u = req.user;
+  if (!isPremiumActive(u) && !req.isAdmin) throw new HttpError(403, 'Premium required', 'premium_required');
+  const buf = req.body;
+  if (!Buffer.isBuffer(buf) || !buf.length) throw bad('No file received', 'media');
+  const mime = sniffImage(buf);
+  if (!mime) throw bad('Use JPG, PNG or GIF', 'media_type');
+  if (buf.length > MAX_AVATAR) throw bad('File is too large', 'media_big');
+  const kind = AVATAR_MIME[mime];
+  const id = crypto.randomUUID();
+  const prevKey = u.avatar_key || null;
+  try {
+    await saveMedia({ id, kind, mime, buf, adminId: u.id });
+  } catch (e) {
+    throw bad(e.message || 'Upload failed', 'media');
+  }
+  const avatarKey = `img:${id}`;
+  await db.prepare('UPDATE users SET avatar_key = ? WHERE id = ?').run(avatarKey, u.id);
+  await releaseAvatarMedia(prevKey, avatarKey);
+  invalidateUserCache(u.id);
+  const next = await getUser.get(u.id);
+  memoUser(next);
+  res.status(201).json({ user: publicUser(next, req.isAdmin) });
 }));
 
 /**

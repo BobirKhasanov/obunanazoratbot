@@ -210,7 +210,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS region TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT ''; -- Premium profile quote
-ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key TEXT; -- null = letter; medal:<id> = monthly medal
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key TEXT; -- null = letter; medal:<id> = monthly medal; img:<uuid> = Premium photo
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_inviter_id BIGINT REFERENCES users(id) ON DELETE SET NULL; -- set on /start i<id>; claimed in Mini App
 ALTER TABLE announcements ADD COLUMN IF NOT EXISTS board TEXT NOT NULL DEFAULT 'home'; -- home | puzzle
 CREATE INDEX IF NOT EXISTS idx_announcements_board_ends ON announcements(board, ends_at);

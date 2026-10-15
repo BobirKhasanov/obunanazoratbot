@@ -51,12 +51,36 @@ async function housekeeping(onGameChanged) {
     if (onGameChanged) await onGameChanged(g.id);
   }
 
-  // Uploaded post media is only needed for a few days
-  const old = await db.prepare("SELECT id, storage_path FROM media WHERE created_at < now() - interval '7 days'").all();
+  // Uploaded post media is only needed for a few days (keep custom avatars + profile banner)
+  const old = await db.prepare(`
+    SELECT id, storage_path FROM media
+    WHERE created_at < now() - interval '7 days'
+      AND id NOT IN (
+        SELECT substring(avatar_key FROM 5)
+        FROM users
+        WHERE avatar_key LIKE 'img:%'
+      )
+      AND id IS DISTINCT FROM (
+        SELECT NULLIF(trim(value), '') FROM app_settings WHERE key = 'profile_banner_media_id'
+      )
+  `).all();
   for (const m of old) {
     if (m.storage_path) await deleteMediaObject(m.storage_path);
   }
-  if (old.length) await db.prepare("DELETE FROM media WHERE created_at < now() - interval '7 days'").run();
+  if (old.length) {
+    await db.prepare(`
+      DELETE FROM media
+      WHERE created_at < now() - interval '7 days'
+        AND id NOT IN (
+          SELECT substring(avatar_key FROM 5)
+          FROM users
+          WHERE avatar_key LIKE 'img:%'
+        )
+        AND id IS DISTINCT FROM (
+          SELECT NULLIF(trim(value), '') FROM app_settings WHERE key = 'profile_banner_media_id'
+        )
+    `).run();
+  }
 }
 
 /**
