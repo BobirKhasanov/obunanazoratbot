@@ -435,13 +435,22 @@ export function rain(list = ['🎉', '♟', '✨', '🏆', '👏']) {
 
 export const initial = (name) => ([...String(name || '?').trim()][0] || '?').toUpperCase();
 export const hue = (id) => (Number(id) * 47) % 360;
-/** Letter avatar, medal SVG (`medal:<id>`), or Premium photo (`img:<uuid>`). */
+/** Letter avatar, character (`char:<id>`), medal SVG (`medal:<id>`), or Premium photo (`img:<uuid>`). */
 export const avatar = (name, id, cls = '', avatarKey = null) => {
   const el = h('div.avatar' + (cls ? '.' + cls : ''), { style: { background: `hsl(${hue(id)} 45% 42%)`, color: '#fff' } }, initial(name));
   const key = avatarKey ? String(avatarKey) : '';
+  const char = /^char:([a-z0-9_-]+)$/i.exec(key);
   const medal = /^medal:(.+)$/.exec(key);
   const img = /^img:([0-9a-f-]{36})$/i.exec(key);
-  if (medal) {
+  if (char) {
+    el.classList.add('medal', 'char');
+    el.style.background = 'transparent';
+    el.replaceChildren(h('img.avatar-medal', {
+      src: `/api/char-avatars/${encodeURIComponent(char[1].toLowerCase())}.svg`,
+      alt: '',
+      draggable: 'false',
+    }));
+  } else if (medal) {
     el.classList.add('medal');
     el.style.background = 'transparent';
     el.replaceChildren(h('img.avatar-medal', {

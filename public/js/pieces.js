@@ -52,7 +52,7 @@ const cache = Object.create(null);
 
 export function currentPieceSet() {
   const v = typeof document !== 'undefined' ? document.documentElement.dataset.pieces : '';
-  return PIECE_SETS.includes(v) ? v : 'outline';
+  return PIECE_SETS.includes(v) ? v : 'neo';
 }
 
 export function clearPieceCache() {

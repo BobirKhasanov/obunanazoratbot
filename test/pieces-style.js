@@ -31,5 +31,9 @@ assert.ok(css.includes('.style-preview'));
 assert.ok(pieces.includes('function pieceSvg'));
 assert.ok(pieces.includes('STAUNTON'));
 assert.ok(pieces.includes('clearPieceCache'));
+assert.ok(server.includes("DEFAULT_PIECE_SET = 'neo'") && server.includes("DEFAULT_BOARD_THEME = 'green'"));
+const appJs = fs.readFileSync(path.join(__dirname, '../public/js/app.js'), 'utf8');
+assert.ok(appJs.includes("applyChessStyle('neo', 'green')"), 'non-premium boot uses neo+green');
+assert.ok(pieces.includes(": 'neo'") || pieces.includes(': "neo"'), 'currentPieceSet defaults to neo');
 
 console.log(`ok  pieces-style (${PIECE_SETS.length} sets, ${BOARD_THEMES.length} boards)`);

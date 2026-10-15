@@ -35,6 +35,7 @@ const {
   saveBootSplashLang,
   saveBootSplashConfig,
 } = require('./boot-splash');
+const { listCharAvatars, isCharAvatarKey, charAvatarSvg } = require('./char-avatars');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
@@ -48,6 +49,8 @@ if (!BOT_TOKEN) {
 const THEMES = ['dark', 'light'];
 const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton'];
 const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown'];
+const DEFAULT_PIECE_SET = 'neo';
+const DEFAULT_BOARD_THEME = 'green';
 const PREMIUM_PRICE_FALLBACK = Number(process.env.PREMIUM_PRICE || 200); // diamonds / month (DB may override)
 const REFERRAL_REWARD = Number(process.env.REFERRAL_REWARD || 20); // diamonds for the inviter
 const REFERRAL_INVITEE_REWARD = Number(process.env.REFERRAL_INVITEE_REWARD || 10); // diamonds for the invited friend
@@ -127,6 +130,20 @@ app.get('/api/medals/:id.svg', wrap(async (req, res) => {
   res.set('Content-Type', 'image/svg+xml; charset=utf-8');
   res.set('Cache-Control', 'public, max-age=3600');
   res.send(row.svg);
+}));
+
+// Free cartoon character avatars — public for <img> tags
+app.get('/api/char-avatars', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.json({ avatars: listCharAvatars() });
+});
+app.get('/api/char-avatars/:id.svg', wrap(async (req, res) => {
+  const id = String(req.params.id || '').replace(/\.svg$/i, '').toLowerCase();
+  const svg = charAvatarSvg(id);
+  if (!svg) throw new HttpError(404, 'Not found', 'notfound');
+  res.set('Content-Type', 'image/svg+xml; charset=utf-8');
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.send(svg);
 }));
 
 // Premium custom avatars — public so <img> tags can load without initData
@@ -330,8 +347,12 @@ const publicUser = (u, admin) => {
     diamonds: Number(u.diamonds || 0), premium,
     premiumUntil: until && !Number.isNaN(until.getTime()) ? until.toISOString() : null,
     premiumUntilTashkent: until && !Number.isNaN(until.getTime()) ? formatTashkent(until) : null,
-    pieceSet: PIECE_SETS.includes(u.piece_set) ? u.piece_set : 'outline',
-    boardTheme: BOARD_THEMES.includes(u.board_theme) ? u.board_theme : 'classic',
+    pieceSet: (premium || admin)
+      ? (PIECE_SETS.includes(u.piece_set) ? u.piece_set : DEFAULT_PIECE_SET)
+      : DEFAULT_PIECE_SET,
+    boardTheme: (premium || admin)
+      ? (BOARD_THEMES.includes(u.board_theme) ? u.board_theme : DEFAULT_BOARD_THEME)
+      : DEFAULT_BOARD_THEME,
     elo: Number(u.elo || DEFAULT_ELO),
     eloBullet: Number(u.elo_bullet || DEFAULT_ELO),
     eloBlitz: Number(u.elo_blitz || DEFAULT_ELO),
@@ -877,8 +898,8 @@ api.patch('/me', wrap(async (req, res) => {
     bio = cleanText(b.bio, 160, 'bad_request');
   }
 
-  let pieceSet = u.piece_set || 'outline';
-  let boardTheme = u.board_theme || 'classic';
+  let pieceSet = u.piece_set || DEFAULT_PIECE_SET;
+  let boardTheme = u.board_theme || DEFAULT_BOARD_THEME;
   const wantsStyle = b.pieceSet !== undefined || b.boardTheme !== undefined;
   if (wantsStyle) {
     if (!isPremiumActive(u) && !req.isAdmin) throw new HttpError(403, 'Premium required', 'premium_required');
@@ -899,9 +920,12 @@ api.patch('/me', wrap(async (req, res) => {
       avatarKey = null;
     } else {
       const key = String(b.avatarKey);
+      const charId = isCharAvatarKey(key);
       const medalM = /^medal:(.+)$/.exec(key);
       const imgM = /^img:([0-9a-f-]{36})$/i.exec(key);
-      if (medalM) {
+      if (charId) {
+        avatarKey = `char:${charId}`;
+      } else if (medalM) {
         const medal = await db.prepare('SELECT id FROM medals WHERE id = ? AND user_id = ?').get(medalM[1], u.id);
         if (!medal) throw bad('Medal not owned', 'forbidden');
         avatarKey = `medal:${medal.id}`;
@@ -2108,20 +2132,27 @@ function mapNotif(r) {
     meta,
     read: !!r.read_at,
     createdAt: r.created_at,
+    expiresAt: r.expires_at || null,
+    permanent: !r.expires_at,
   };
 }
 
+const NOTIF_ACTIVE = `(expires_at IS NULL OR expires_at > now())`;
+
 api.get('/notifications', wrap(async (req, res) => {
   const rows = await db.prepare(`
-    SELECT id, kind, title, body, meta, read_at, created_at
-    FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 100
+    SELECT id, kind, title, body, meta, read_at, created_at, expires_at
+    FROM notifications
+    WHERE user_id = ? AND ${NOTIF_ACTIVE}
+    ORDER BY created_at DESC LIMIT 100
   `).all(req.user.id);
   res.json({ notifications: rows.map(mapNotif) });
 }));
 
 api.get('/notifications/unread-count', wrap(async (req, res) => {
   const row = await db.prepare(`
-    SELECT COUNT(*)::int AS n FROM notifications WHERE user_id = ? AND read_at IS NULL
+    SELECT COUNT(*)::int AS n FROM notifications
+    WHERE user_id = ? AND read_at IS NULL AND ${NOTIF_ACTIVE}
   `).get(req.user.id);
   res.json({ count: row?.n || 0 });
 }));
@@ -2634,11 +2665,58 @@ admin.delete('/users/:id', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-/** In-app notification: one user or everyone (except blocked). Optional mediaId for image preview. */
+const NOTIF_TTL = {
+  permanent: null,
+  '1h': 1 * 60 * 60 * 1000,
+  '6h': 6 * 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+  '3d': 3 * 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+};
+
+function parseNotifExpiry(body) {
+  const b = body || {};
+  if (b.expiresAt) {
+    const d = new Date(b.expiresAt);
+    if (Number.isNaN(d.getTime())) throw bad('Invalid expiry', 'bad_request');
+    return d;
+  }
+  if (b.permanent === true) return null;
+  const ttl = b.ttl == null || b.ttl === '' ? 'permanent' : String(b.ttl);
+  if (!(ttl in NOTIF_TTL)) throw bad('Invalid TTL', 'bad_request');
+  const ms = NOTIF_TTL[ttl];
+  return ms == null ? null : new Date(Date.now() + ms);
+}
+
+function mapCampaign(r) {
+  return {
+    id: r.id,
+    title: r.title,
+    body: r.body || '',
+    mediaId: r.media_id || null,
+    mediaUrl: r.media_id ? `/api/media/${r.media_id}` : null,
+    expiresAt: r.expires_at || null,
+    permanent: !r.expires_at,
+    sentCount: Number(r.sent_count || 0),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+admin.get('/notifications', wrap(async (req, res) => {
+  const rows = await db.prepare(`
+    SELECT * FROM notification_campaigns ORDER BY created_at DESC LIMIT 50
+  `).all();
+  res.json({ campaigns: rows.map(mapCampaign), ttlOptions: Object.keys(NOTIF_TTL) });
+}));
+
+/** In-app notification: one user or everyone (except blocked). Optional mediaId + TTL/permanent. */
 admin.post('/notifications', wrap(async (req, res) => {
   const title = cleanText(req.body && req.body.title, 80, 'title', true);
   const body = cleanText(req.body && req.body.body, 1000, 'text', true);
   const one = req.body && req.body.userId != null ? intParam(req.body.userId) : null;
+  const expiresAt = parseNotifExpiry(req.body);
   let mediaId = null;
   if (req.body && req.body.mediaId) {
     mediaId = String(req.body.mediaId);
@@ -2655,18 +2733,80 @@ admin.post('/notifications', wrap(async (req, res) => {
   } else {
     targets = (await db.prepare('SELECT id FROM users WHERE blocked = 0').all()).map((r) => Number(r.id));
   }
-  if (!targets.length) return res.status(201).json({ ok: true, sent: 0 });
+  const campaignId = crypto.randomUUID();
+  if (!targets.length) {
+    await db.prepare(`
+      INSERT INTO notification_campaigns (id, title, body, media_id, expires_at, created_by, sent_count)
+      VALUES (?, ?, ?, ?, ?, ?, 0)
+    `).run(campaignId, title, body, mediaId, expiresAt, req.user.id);
+    return res.status(201).json({ ok: true, sent: 0, campaign: mapCampaign(await db.prepare('SELECT * FROM notification_campaigns WHERE id = ?').get(campaignId)) });
+  }
   const meta = {
     fromAdmin: req.user.id,
+    campaignId,
     ...(mediaId ? { mediaId } : {}),
   };
-  // One round-trip for everyone (avoids timeouts / partial sends on large user lists)
+  await db.prepare(`
+    INSERT INTO notification_campaigns (id, title, body, media_id, expires_at, created_by, sent_count)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(campaignId, title, body, mediaId, expiresAt, req.user.id, targets.length);
   const r = await db.prepare(`
-    INSERT INTO notifications (user_id, kind, title, body, meta)
-    SELECT x.id, 'admin', ?, ?, ?::jsonb
+    INSERT INTO notifications (user_id, kind, title, body, meta, expires_at, campaign_id)
+    SELECT x.id, 'admin', ?, ?, ?::jsonb, ?, ?::uuid
     FROM unnest(?::bigint[]) AS x(id)
-  `).run(title, body, JSON.stringify(meta), targets);
-  res.status(201).json({ ok: true, sent: r.changes || targets.length });
+  `).run(title, body, JSON.stringify(meta), expiresAt, campaignId, targets);
+  const campaign = await db.prepare('SELECT * FROM notification_campaigns WHERE id = ?').get(campaignId);
+  res.status(201).json({ ok: true, sent: r.changes || targets.length, campaign: mapCampaign(campaign) });
+}));
+
+admin.patch('/notifications/:id', wrap(async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw bad('Not found', 'notfound');
+  const cur = await db.prepare('SELECT * FROM notification_campaigns WHERE id = ?').get(id);
+  if (!cur) throw bad('Not found', 'notfound');
+  const b = req.body || {};
+  const title = b.title !== undefined ? cleanText(b.title, 80, 'title', true) : cur.title;
+  const body = b.body !== undefined ? cleanText(b.body, 1000, 'text', true) : cur.body;
+  let mediaId = cur.media_id;
+  if (b.mediaId !== undefined) {
+    if (b.mediaId === null || b.mediaId === '') mediaId = null;
+    else {
+      mediaId = String(b.mediaId);
+      if (!/^[0-9a-f-]{36}$/i.test(mediaId)) throw bad('Invalid media', 'media');
+      const row = await db.prepare('SELECT id, kind FROM media WHERE id = ?').get(mediaId);
+      if (!row) throw bad('Media not found, upload it again', 'media');
+      if (row.kind === 'video') throw bad('Use JPG, PNG or GIF', 'media_type');
+    }
+  }
+  let expiresAt = cur.expires_at;
+  if (b.ttl !== undefined || b.permanent !== undefined || b.expiresAt !== undefined) {
+    expiresAt = parseNotifExpiry(b);
+  }
+  await db.prepare(`
+    UPDATE notification_campaigns
+    SET title = ?, body = ?, media_id = ?, expires_at = ?, updated_at = now()
+    WHERE id = ?
+  `).run(title, body, mediaId, expiresAt, id);
+  const meta = {
+    fromAdmin: cur.created_by || req.user.id,
+    campaignId: id,
+    ...(mediaId ? { mediaId } : {}),
+  };
+  await db.prepare(`
+    UPDATE notifications
+    SET title = ?, body = ?, meta = ?::jsonb, expires_at = ?
+    WHERE campaign_id = ?::uuid
+  `).run(title, body, JSON.stringify(meta), expiresAt, id);
+  res.json({ campaign: mapCampaign(await db.prepare('SELECT * FROM notification_campaigns WHERE id = ?').get(id)) });
+}));
+
+admin.delete('/notifications/:id', wrap(async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw bad('Not found', 'notfound');
+  await db.prepare('DELETE FROM notifications WHERE campaign_id = ?::uuid').run(id);
+  const r = await db.prepare('DELETE FROM notification_campaigns WHERE id = ?').run(id);
+  if (!r.changes) throw bad('Not found', 'notfound');
+  res.json({ ok: true });
 }));
 
 /**

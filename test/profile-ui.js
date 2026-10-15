@@ -67,6 +67,13 @@ assert.ok(app.includes('open-premium') && app.includes("detail: 'premium'"), 'pr
 assert.ok(app.includes('round: true'), 'online avatars are circular');
 const ui = read('public/js/ui.js');
 assert.ok(ui.includes('img:') && ui.includes('/api/avatars/'), 'avatar renderer supports img: keys');
+assert.ok(ui.includes('char:') && ui.includes('/api/char-avatars/'), 'avatar renderer supports char: keys');
+assert.ok(profile.includes('char-grid') && profile.includes('/api/char-avatars'), 'avatar picker shows character grid');
+assert.ok(read('src/char-avatars.js').includes('jimmy') && read('src/server.js').includes('char-avatars'), 'char avatar catalog wired');
+assert.ok(admin.includes('admin_notif_ttl') && admin.includes('PATCH') && admin.includes('/admin/notifications/'), 'admin notif TTL + edit');
+assert.ok(admin.includes('admin_notif_delete') && admin.includes('DELETE'), 'admin can delete sent notifs');
+assert.ok(read('src/server.js').includes('notification_campaigns') && read('src/server.js').includes('expires_at'), 'notif campaigns + expiry');
+assert.ok(css.includes('.char-grid') && css.includes('.char-tile'), 'character avatar grid styles');
 assert.ok(ui.includes("CustomEvent('open-premium')") && ui.includes('button.prem-ic'), 'premIc is a tappable button');
 assert.ok(css.includes('prem-ring') && css.includes('prem-spin'), 'rotating premium avatar ring');
 assert.ok(css.includes('mask:') || css.includes('-webkit-mask:'), 'premium ring is rim-only (not solid gold disc)');

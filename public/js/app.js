@@ -90,8 +90,8 @@ function applyTheme(theme) {
 
 function applyChessStyle(pieceSet, boardTheme) {
   const root = document.documentElement;
-  root.dataset.pieces = PIECE_SETS.includes(pieceSet) ? pieceSet : 'outline';
-  root.dataset.board = BOARD_THEMES.includes(boardTheme) ? boardTheme : 'classic';
+  root.dataset.pieces = PIECE_SETS.includes(pieceSet) ? pieceSet : 'neo';
+  root.dataset.board = BOARD_THEMES.includes(boardTheme) ? boardTheme : 'green';
   restyleBoards();
   try { restyleOpenGame(); } catch { /* no open game */ }
 }
@@ -991,7 +991,7 @@ export async function start(me) {
     state.me = me.user; state.stats = me.stats; state.meta = me.meta;
     setLang(me.user.lang); applyTheme(me.user.theme);
     if (canStyleChess(me.user)) applyChessStyle(me.user.pieceSet, me.user.boardTheme);
-    else applyChessStyle('outline', 'classic');
+    else applyChessStyle('neo', 'green');
   } catch (e) {
     console.error('[boot] theme', e);
   }

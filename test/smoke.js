@@ -492,11 +492,55 @@ async function playMoves(game, players, moves, startPly = 0) {
     });
 
     await step('admin in-app notification to everyone', async () => {
-      const r = await ok('ADMIN', 'POST', '/admin/notifications', { title: 'Test', body: 'Test body' });
+      const r = await ok('ADMIN', 'POST', '/admin/notifications', { title: 'Test', body: 'Test body', ttl: 'permanent' });
       assert.ok(r.sent >= 1, 'sent to at least one user');
+      assert.ok(r.campaign && r.campaign.id, 'campaign id returned');
       const notifs = await ok('A', 'GET', '/notifications');
       assert.ok((notifs.notifications || []).some((n) => n.kind === 'admin' && n.title === 'Test'));
       await err('ADMIN', 'POST', '/admin/notifications', { title: '', body: 'x' }, 400, 'title');
+
+      const listed = await ok('ADMIN', 'GET', '/admin/notifications');
+      assert.ok((listed.campaigns || []).some((c) => c.id === r.campaign.id));
+
+      const ttlR = await ok('ADMIN', 'POST', '/admin/notifications', {
+        title: 'TTL test', body: 'Expires soon', ttl: '1h',
+      });
+      assert.ok(ttlR.campaign && ttlR.campaign.expiresAt, 'ttl sets expiresAt');
+      assert.strictEqual(ttlR.campaign.permanent, false);
+
+      const patched = await ok('ADMIN', 'PATCH', `/admin/notifications/${r.campaign.id}`, {
+        title: 'Test edited', body: 'Edited body', ttl: 'permanent',
+      });
+      assert.strictEqual(patched.campaign.title, 'Test edited');
+      const afterEdit = await ok('A', 'GET', '/notifications');
+      assert.ok((afterEdit.notifications || []).some((n) => n.title === 'Test edited'));
+
+      await ok('ADMIN', 'DELETE', `/admin/notifications/${r.campaign.id}`);
+      await ok('ADMIN', 'DELETE', `/admin/notifications/${ttlR.campaign.id}`);
+      const afterDel = await ok('A', 'GET', '/notifications');
+      assert.ok(!(afterDel.notifications || []).some((n) => n.title === 'Test edited' || n.title === 'TTL test'));
+    });
+
+    await step('char avatars free for everyone', async () => {
+      const list = await fetch(`${BASE}/api/char-avatars`);
+      assert.strictEqual(list.status, 200);
+      const body = await list.json();
+      assert.ok((body.avatars || []).length >= 8, 'char catalog');
+      const first = body.avatars[0];
+      const svg = await fetch(`${BASE}${first.url}`);
+      assert.strictEqual(svg.status, 200);
+      assert.ok((await svg.text()).includes('<svg'));
+      const saved = await ok('A', 'PATCH', '/me', { avatarKey: first.key });
+      assert.strictEqual(saved.user.avatarKey, first.key);
+      await ok('A', 'PATCH', '/me', { avatarKey: null });
+    });
+
+    await step('default chess style neo+green for non-premium', async () => {
+      const me = await ok('A', 'GET', '/me');
+      if (!me.user.premium) {
+        assert.strictEqual(me.user.pieceSet, 'neo');
+        assert.strictEqual(me.user.boardTheme, 'green');
+      }
     });
 
     await step('messages threads list never 500s', async () => {

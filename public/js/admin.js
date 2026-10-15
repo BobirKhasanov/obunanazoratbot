@@ -160,7 +160,7 @@ export function openAdmin(onClose) {
   const search = h('input.input.search', { placeholder: t('search'), oninput: (e) => { clearTimeout(search._t); search._t = setTimeout(() => loadUsers(e.target.value), 250); } });
 
   // Admin appearance
-  let styleUser = { pieceSet: 'outline', boardTheme: 'classic' };
+  let styleUser = { pieceSet: 'neo', boardTheme: 'green' };
   const styleHost = h('div');
   const applyLocal = (pieceSet, boardTheme) => {
     document.documentElement.dataset.pieces = pieceSet;
@@ -193,7 +193,7 @@ export function openAdmin(onClose) {
   };
   api('GET', '/me').then((r) => {
     styleUser = r.user;
-    applyLocal(styleUser.pieceSet || 'outline', styleUser.boardTheme || 'classic');
+    applyLocal(styleUser.pieceSet || 'neo', styleUser.boardTheme || 'green');
     drawStyle();
   }).catch(() => drawStyle());
 
@@ -1183,10 +1183,27 @@ export function openAdmin(onClose) {
   });
 
   const openInAppNotif = () => openScreen((close) => {
+    const TTL_OPTS = [
+      ['permanent', t('admin_notif_ttl_permanent')],
+      ['1h', t('admin_notif_ttl_1h')],
+      ['6h', t('admin_notif_ttl_6h')],
+      ['24h', t('admin_notif_ttl_24h')],
+      ['3d', t('admin_notif_ttl_3d')],
+      ['7d', t('admin_notif_ttl_7d')],
+      ['30d', t('admin_notif_ttl_30d')],
+    ];
     const title = h('input.input', { placeholder: t('admin_notif_title_ph'), maxlength: 80 });
     const body = h('textarea.input', { rows: 4, placeholder: t('admin_notif_body_ph'), maxlength: 1000 });
     let mediaId = null;
+    let ttl = 'permanent';
+    let editingId = null;
+    const ttlSelect = h('select.input', {
+      onchange: () => { ttl = ttlSelect.value; },
+    }, ...TTL_OPTS.map(([v, label]) => h('option', { value: v }, label)));
+    ttlSelect.value = ttl;
+    const listBox = h('div.list');
     const mediaBox = h('div.admin-notif-media');
+    const actionBtn = h('button.btn');
     const file = h('input', {
       type: 'file', accept: 'image/jpeg,image/png,image/gif', hidden: true,
       onchange: async (e) => {
@@ -1207,6 +1224,9 @@ export function openAdmin(onClose) {
         } catch (err) { fail(err); }
       },
     });
+    const drawTtl = () => {
+      ttlSelect.value = ttl;
+    };
     const drawMedia = () => {
       mediaBox.replaceChildren(
         mediaId
@@ -1223,36 +1243,127 @@ export function openAdmin(onClose) {
         file,
       );
     };
-    drawMedia();
-    const send = h('button.btn', {
-      type: 'button',
-      onclick: async () => {
-        const ttl = title.value.trim();
+    const resetForm = () => {
+      editingId = null;
+      title.value = '';
+      body.value = '';
+      mediaId = null;
+      ttl = 'permanent';
+      drawMedia();
+      drawTtl();
+      drawAction();
+    };
+    const drawAction = () => {
+      actionBtn.replaceChildren(
+        icon(editingId ? 'check' : 'bell', 18),
+        editingId ? t('admin_notif_save') : t('admin_notif_send'),
+      );
+      actionBtn.onclick = async () => {
+        const ttlTitle = title.value.trim();
         const txt = body.value.trim();
-        if (!ttl) return toast(t('e_title'), true);
+        if (!ttlTitle) return toast(t('e_title'), true);
         if (!txt) return toast(t('e_text'), true);
         try {
-          const r = await api('POST', '/admin/notifications', {
-            title: ttl,
-            body: txt,
-            mediaId: mediaId || undefined,
-          }, { timeoutMs: 60000 });
-          toast(t('admin_notif_sent', { n: r.sent || 0 }));
+          if (editingId) {
+            await api('PATCH', `/admin/notifications/${editingId}`, {
+              title: ttlTitle,
+              body: txt,
+              mediaId: mediaId || null,
+              ttl,
+            });
+            toast(t('admin_notif_updated'));
+          } else {
+            const r = await api('POST', '/admin/notifications', {
+              title: ttlTitle,
+              body: txt,
+              mediaId: mediaId || undefined,
+              ttl,
+            }, { timeoutMs: 60000 });
+            toast(t('admin_notif_sent', { n: r.sent || 0 }));
+          }
           haptic('success');
-          title.value = '';
-          body.value = '';
-          mediaId = null;
-          drawMedia();
+          resetForm();
+          loadList();
         } catch (e) { fail(e); }
-      },
-    }, icon('bell', 18), t('admin_notif_send'));
+      };
+    };
+    const ttlLabel = (c) => {
+      if (c.permanent || !c.expiresAt) return t('admin_notif_ttl_permanent');
+      try {
+        return new Date(c.expiresAt).toLocaleString();
+      } catch { return String(c.expiresAt); }
+    };
+    const loadList = async () => {
+      try {
+        const r = await api('GET', '/admin/notifications');
+        const campaigns = r.campaigns || [];
+        if (!campaigns.length) {
+          listBox.replaceChildren(h('div.empty', t('admin_notif_list_empty')));
+          return;
+        }
+        listBox.replaceChildren(...campaigns.map((c) => h('div.card',
+          h('div.t', c.title),
+          h('div.s', c.body),
+          h('div.s', t('admin_notif_meta', { n: c.sentCount || 0, ttl: ttlLabel(c) })),
+          h('div.row',
+            h('button.mini', {
+              type: 'button',
+              onclick: () => {
+                editingId = c.id;
+                title.value = c.title || '';
+                body.value = c.body || '';
+                mediaId = c.mediaId || null;
+                ttl = c.permanent ? 'permanent' : '24h';
+                if (!c.permanent && c.expiresAt) {
+                  const ms = new Date(c.expiresAt).getTime() - Date.now();
+                  if (ms > 20 * 24 * 3600 * 1000) ttl = '30d';
+                  else if (ms > 5 * 24 * 3600 * 1000) ttl = '7d';
+                  else if (ms > 2 * 24 * 3600 * 1000) ttl = '3d';
+                  else if (ms > 12 * 3600 * 1000) ttl = '24h';
+                  else if (ms > 3 * 3600 * 1000) ttl = '6h';
+                  else ttl = '1h';
+                }
+                drawMedia();
+                drawTtl();
+                drawAction();
+                haptic('select');
+                title.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              },
+            }, icon('pencil', 16), t('ann_edit')),
+            h('button.mini', {
+              type: 'button',
+              onclick: async () => {
+                if (!(await confirmSheet(t('admin_notif_delete_confirm'), t('admin_notif_delete'), true))) return;
+                try {
+                  await api('DELETE', `/admin/notifications/${c.id}`);
+                  toast(t('admin_notif_deleted'));
+                  haptic('success');
+                  if (editingId === c.id) resetForm();
+                  loadList();
+                } catch (e) { fail(e); }
+              },
+            }, icon('trash', 16), t('remove')),
+          ),
+        )));
+      } catch (e) { fail(e); }
+    };
+    drawMedia();
+    drawTtl();
+    drawAction();
+    loadList();
     return [
       ...subTop(t('admin_notif'), close),
       h('p.muted', t('admin_notif_sub')),
       h('div.field', h('label', t('admin_notif_title')), title),
       h('div.field', h('label', t('admin_notif_body')), body),
+      h('div.field', h('label', t('admin_notif_ttl')), ttlSelect),
       h('div.field', h('label', t('admin_notif_media')), mediaBox),
-      send,
+      actionBtn,
+      editingId
+        ? h('button.btn.ghost', { type: 'button', onclick: () => resetForm() }, t('cancel'))
+        : null,
+      h('div.h2', t('admin_notif_list')),
+      listBox,
     ];
   });
 

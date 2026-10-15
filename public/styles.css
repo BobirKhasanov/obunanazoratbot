@@ -767,8 +767,31 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   width: 100%; padding: 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--card);
 }
-.avatar-pick.on, .medal-card.on { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(84,164,247,.25); }
+.avatar-pick.on, .medal-card.on, .char-tile.on { border-color: var(--green, #3dd68c); box-shadow: 0 0 0 2px rgba(61,214,140,.28); }
 .medal-grid { display: grid; gap: 12px; }
+.char-preview {
+  display: flex; align-items: center; gap: 14px;
+  margin: 0 0 16px; padding: 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--card);
+}
+.char-preview .avatar.xl { width: 88px; height: 88px; border-radius: 20px; }
+.char-preview-meta { flex: 1; min-width: 0; }
+.char-name-badge {
+  display: grid; gap: 2px; padding: 10px 14px; border-radius: 14px;
+  background: var(--card-2); border: 1px solid var(--line);
+}
+.char-name-badge .t { font-weight: 800; font-size: 16px; }
+.char-name-badge .s { color: var(--muted); font-size: 13px; }
+.char-grid {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px;
+}
+.char-tile {
+  aspect-ratio: 1; padding: 0; border-radius: 14px; border: 2px solid transparent;
+  background: var(--card-2); overflow: hidden; cursor: pointer;
+}
+.char-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@media (max-width: 360px) {
+  .char-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 .medal-card { padding: 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); }
 .medal-actions { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
 .medal-admin-preview { width: 180px; height: 225px; border-radius: 20px; margin: 12px auto; display: block; box-shadow: 0 12px 32px rgba(0,0,0,.35); object-fit: cover; }

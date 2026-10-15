@@ -46,8 +46,8 @@ function menuRow({ ic, title, sub, onClick, trailing, danger, tag }) {
 
 function applyChessStyle(pieceSet, boardTheme) {
   const root = document.documentElement;
-  root.dataset.pieces = PIECE_SETS.includes(pieceSet) ? pieceSet : 'outline';
-  root.dataset.board = BOARD_THEMES.includes(boardTheme) ? boardTheme : 'classic';
+  root.dataset.pieces = PIECE_SETS.includes(pieceSet) ? pieceSet : 'neo';
+  root.dataset.board = BOARD_THEMES.includes(boardTheme) ? boardTheme : 'green';
   restyleBoards();
   try { restyleOpenGame(); } catch { /* no open game */ }
 }
@@ -349,7 +349,7 @@ export function renderProfilePage(ctx) {
     const locked = !canStyleChess(u);
     const pickPiece = async (v) => {
       if (locked) return toast(t('style_premium_only'), true);
-      const prev = { pieceSet: u.pieceSet || 'outline', boardTheme: u.boardTheme || 'classic' };
+      const prev = { pieceSet: u.pieceSet || 'neo', boardTheme: u.boardTheme || 'green' };
       applyChessStyle(v, prev.boardTheme);
       try {
         state.me = await save({ pieceSet: v });
@@ -362,7 +362,7 @@ export function renderProfilePage(ctx) {
     };
     const pickBoard = async (v) => {
       if (locked) return toast(t('style_premium_only'), true);
-      const prev = { pieceSet: u.pieceSet || 'outline', boardTheme: u.boardTheme || 'classic' };
+      const prev = { pieceSet: u.pieceSet || 'neo', boardTheme: u.boardTheme || 'green' };
       applyChessStyle(prev.pieceSet, v);
       try {
         state.me = await save({ boardTheme: v });
@@ -535,17 +535,24 @@ export function renderProfilePage(ctx) {
 
   const openAvatar = () => openScreen((close) => {
     const host = h('div');
+    let chars = [];
     const draw = async () => {
       let medals = [];
       try {
-        const r = await api('GET', '/medals/mine');
+        const [r, ch] = await Promise.all([
+          api('GET', '/medals/mine'),
+          fetch('/api/char-avatars').then((x) => x.json()).catch(() => ({ avatars: [] })),
+        ]);
         medals = r.medals || [];
         if (r.avatarKey != null) state.me.avatarKey = r.avatarKey;
+        chars = ch.avatars || [];
       } catch (e) { fail(e); }
       const meNow = state.me;
       const cur = meNow.avatarKey || null;
       const canPhoto = !!(meNow.premium || meNow.isAdmin);
       const isPhoto = !!(cur && /^img:/i.test(cur));
+      const isChar = !!(cur && /^char:/i.test(cur));
+      const selectedChar = isChar ? chars.find((c) => c.key === cur) : null;
       const pick = async (key) => {
         try {
           state.me = await save({ avatarKey: key });
@@ -581,7 +588,28 @@ export function renderProfilePage(ctx) {
         },
       });
       host.replaceChildren(
-        h('p.muted', t('avatar_sub')),
+        h('div.char-preview',
+          avBlock(meNow.firstName, meNow.id, { size: 'xl', round: true, avatarKey: cur }),
+          h('div.char-preview-meta',
+            h('div.char-name-badge',
+              h('div.t', selectedChar ? selectedChar.name : (isPhoto ? t('avatar_photo') : (!cur ? t('avatar_letter') : t('avatar_title')))),
+              h('div.s', meNow.displayName || meNow.firstName || ''),
+            ),
+          ),
+        ),
+        h('div.h2', t('avatar_chars')),
+        chars.length
+          ? h('div.char-grid', chars.map((c) => h('button.char-tile' + (cur === c.key ? '.on' : ''), {
+            type: 'button',
+            title: c.name,
+            onclick: () => { haptic('select'); pick(c.key); },
+          }, h('img', { src: c.url, alt: c.name, draggable: 'false' }))))
+          : h('p.muted', t('avatar_chars_empty')),
+        h('div.h2', t('avatar_default')),
+        h('button.avatar-pick' + (!cur ? '.on' : ''), {
+          type: 'button',
+          onclick: () => pick(null),
+        }, avBlock(meNow.firstName, meNow.id, { size: 'xl', round: true }), h('span', t('avatar_letter'))),
         h('div.h2', t('avatar_photo')),
         canPhoto
           ? h('button.avatar-pick' + (isPhoto ? '.on' : ''), {
@@ -600,11 +628,6 @@ export function renderProfilePage(ctx) {
             },
           }, h('div.avatar.xl.photo-ph', icon('image', 28)), h('span', t('avatar_photo_premium'))),
         fileInp,
-        h('div.h2', t('avatar_default')),
-        h('button.avatar-pick' + (!cur ? '.on' : ''), {
-          type: 'button',
-          onclick: () => pick(null),
-        }, avBlock(meNow.firstName, meNow.id, { size: 'xl', round: true }), h('span', t('avatar_letter'))),
         h('div.h2', t('avatar_medals')),
         medals.length
           ? h('div.medal-grid', medals.map((m) => h('div.medal-card' + (cur === m.key ? '.on' : ''),

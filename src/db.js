@@ -192,8 +192,10 @@ CREATE INDEX IF NOT EXISTS idx_announcements_ends ON announcements(ends_at);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS diamonds BIGINT NOT NULL DEFAULT 0;   -- in-app currency
 ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER NOT NULL DEFAULT 0;   -- 1 while premium_until is in the future (or legacy)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TIMESTAMPTZ;            -- monthly Premium expiry (UTC); null + premium=1 = legacy permanent
-ALTER TABLE users ADD COLUMN IF NOT EXISTS piece_set TEXT NOT NULL DEFAULT 'outline';   -- outline | classic | neo | staunton
-ALTER TABLE users ADD COLUMN IF NOT EXISTS board_theme TEXT NOT NULL DEFAULT 'classic'; -- classic | green | wood | blue | brown
+ALTER TABLE users ADD COLUMN IF NOT EXISTS piece_set TEXT NOT NULL DEFAULT 'neo';   -- outline | classic | neo | staunton (default neo until Premium changes)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS board_theme TEXT NOT NULL DEFAULT 'green'; -- classic | green | wood | blue | brown (default green until Premium changes)
+ALTER TABLE users ALTER COLUMN piece_set SET DEFAULT 'neo';
+ALTER TABLE users ALTER COLUMN board_theme SET DEFAULT 'green';
 ALTER TABLE games ADD COLUMN IF NOT EXISTS white_ms BIGINT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS black_ms BIGINT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS turn_started_at TIMESTAMPTZ;
@@ -210,7 +212,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS region TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT ''; -- Premium profile quote
-ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key TEXT; -- null = letter; medal:<id> = monthly medal; img:<uuid> = Premium photo
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key TEXT; -- null = letter; char:<id> = free cartoon; medal:<id> = monthly medal; img:<uuid> = Premium photo
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_inviter_id BIGINT REFERENCES users(id) ON DELETE SET NULL; -- set on /start i<id>; claimed in Mini App
 ALTER TABLE announcements ADD COLUMN IF NOT EXISTS board TEXT NOT NULL DEFAULT 'home'; -- home | puzzle
 CREATE INDEX IF NOT EXISTS idx_announcements_board_ends ON announcements(board, ends_at);
@@ -247,6 +249,22 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id) WHERE read_at IS NULL;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ; -- null = permanent
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS campaign_id UUID; -- groups broadcast copies for admin edit/delete
+CREATE INDEX IF NOT EXISTS idx_notifications_campaign ON notifications(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_expires ON notifications(expires_at) WHERE expires_at IS NOT NULL;
+CREATE TABLE IF NOT EXISTS notification_campaigns (
+  id UUID PRIMARY KEY,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  media_id TEXT,
+  expires_at TIMESTAMPTZ,
+  created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  sent_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_notification_campaigns_created ON notification_campaigns(created_at DESC);
 CREATE TABLE IF NOT EXISTS dm_threads (
   id BIGSERIAL PRIMARY KEY,
   user_a BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
