@@ -61,7 +61,9 @@ function notifMediaEl(n) {
       if (!blob || !wrap.isConnected) return;
       const url = URL.createObjectURL(blob);
       const img = h('img', { src: url, alt: '' });
-      img.onload = () => URL.revokeObjectURL(url);
+      const revoke = () => { try { URL.revokeObjectURL(url); } catch { /* ignore */ } };
+      img.onload = revoke;
+      img.onerror = revoke;
       wrap.replaceChildren(img);
     })
     .catch(() => {});
@@ -240,6 +242,7 @@ function openNotifDetail(n, onBack) {
 }
 
 export function openMessages() {
+  let searchTimer = null;
   openScreen((close) => {
     const threadsHost = h('div.msg-threads', h('div.skeleton'), h('div.skeleton'));
     const searchInput = h('input.input.msg-search', {
@@ -248,7 +251,6 @@ export function openMessages() {
       autocomplete: 'off',
     });
     const searchResults = h('div.msg-search-results');
-    let searchTimer = null;
 
     const loadThreads = async () => {
       try {
@@ -310,7 +312,12 @@ export function openMessages() {
       h('div.h2', t('msg_chats')),
       threadsHost,
     ];
-  }, { onClose: () => refreshInboxBadges() });
+  }, {
+    onClose: () => {
+      clearTimeout(searchTimer);
+      refreshInboxBadges();
+    },
+  });
 }
 
 /** Open (or create) a DM thread with a friend and show the chat screen. */

@@ -249,26 +249,31 @@ export function sendBye() {
 
 // ---------- websocket (auto reconnect) ----------
 const listeners = new Set();
-let ws, wsTimer, wsOpen = false, retry = 0;
+let ws, wsTimer, wsOpen = false, retry = 0, wsOnState = null;
 export const onWs = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 export const wsConnected = () => wsOpen;
 export function connectWs(onState) {
+  if (typeof onState === 'function') wsOnState = onState;
+  const notify = wsOnState;
   clearTimeout(wsTimer);
+  try {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  } catch { /* ignore */ }
   try {
     ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   } catch { return; }
   ws.onopen = () => ws.send(JSON.stringify({ t: 'auth', initData }));
   ws.onmessage = (ev) => {
     let m; try { m = JSON.parse(ev.data); } catch { return; }
-    if (m.t === 'hello') { wsOpen = true; retry = 0; onState && onState(true); }
+    if (m.t === 'hello') { wsOpen = true; retry = 0; notify && notify(true); }
     listeners.forEach((fn) => { try { fn(m); } catch (e) { console.error(e); } });
   };
   ws.onclose = () => {
     const was = wsOpen; wsOpen = false;
-    if (was && onState) onState(false);
+    if (was && notify) notify(false);
     if (document.hidden) return; // closed Mini App — do not keep reconnecting as "online"
     retry = Math.min(retry + 1, 6);
-    wsTimer = setTimeout(() => connectWs(onState), 600 * 2 ** retry);
+    wsTimer = setTimeout(() => connectWs(), 600 * 2 ** retry);
   };
   ws.onerror = () => { try { ws.close(); } catch { /* ignore */ } };
 }

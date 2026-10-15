@@ -90,11 +90,14 @@ function hasCopy(a) {
 function slide(a, opts) {
   const font = FONT_CSS[a.fontFamily] || FONT_CSS.system;
   const clickable = a.linkType === 'url' || a.linkType === 'page' || a.linkType === 'invite';
-  const mediaOnly = !!a._src && !hasCopy(a);
+  const wantedMedia = !!a.mediaId;
+  const mediaOnly = (!!a._src || wantedMedia) && !hasCopy(a);
+  const bgFrom = a.bgFrom || '#1a2740';
+  const bgTo = a.bgTo || '#0b1220';
   return h((clickable ? 'button' : 'div') + '.ann-slide' + (mediaOnly ? '.media-only' : ''), {
     type: clickable ? 'button' : undefined,
     style: mediaOnly ? { fontFamily: font } : {
-      background: `linear-gradient(135deg, ${a.bgFrom}, ${a.bgTo})`,
+      background: `linear-gradient(135deg, ${bgFrom}, ${bgTo})`,
       fontFamily: font,
     },
     onclick: clickable ? (e) => {
@@ -107,7 +110,7 @@ function slide(a, opts) {
       a.body ? h('span.ann-body', { style: { color: a.bodyColor, fontSize: `${Math.max(12, a.fontSize - 4)}px` } }, a.body) : null),
     a._src
       ? h('div.ann-media', h('img', { src: a._src, alt: '', draggable: 'false' }))
-      : h('div.ann-media.emoji', '♛'));
+      : (mediaOnly ? h('div.ann-media.emoji', '♟') : h('div.ann-media.emoji', '♛')));
 }
 
 function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {

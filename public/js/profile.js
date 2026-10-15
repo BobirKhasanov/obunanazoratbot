@@ -815,15 +815,18 @@ export function renderProfilePage(ctx) {
 
 function applyThemeLocal(theme) {
   document.documentElement.dataset.theme = theme;
-  const bg = theme === 'light' ? '#f3f5f9' : '#111827';
+  const flat = theme === 'light' ? '#f3f5f9' : '#111827';
+  const shell = theme === 'light'
+    ? 'radial-gradient(ellipse at 50% 40%, #ffffff 0%, #f3f5f9 55%, #e8edf5 100%)'
+    : 'radial-gradient(ellipse at 50% 42%, #1a2740 0%, #111827 62%, #0b1220 100%)';
   try {
-    tg.setHeaderColor(bg);
-    tg.setBackgroundColor(bg);
-    if (tg.setBottomBarColor) tg.setBottomBarColor(bg);
+    tg.setHeaderColor(flat);
+    tg.setBackgroundColor(flat);
+    if (tg.setBottomBarColor) tg.setBottomBarColor(flat);
   } catch { /* old */ }
-  document.documentElement.style.background = bg;
-  document.body.style.background = bg;
+  document.documentElement.style.background = shell;
+  document.body.style.background = shell;
   const app = document.getElementById('app');
-  if (app) app.style.background = bg;
+  if (app) app.style.background = shell;
   const m = document.querySelector('meta[name=color-scheme]'); if (m) m.content = theme;
 }

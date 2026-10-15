@@ -4,6 +4,7 @@ import { t } from './i18n.js';
 import { openScreen, closeScreen } from './screen.js';
 import { PRESETS, normalizeTimeControl } from './time.js';
 import { softPollMs } from './perf.js';
+import { openGameId } from './game.js';
 
 const TIME_GROUPS = [
   { key: 'bullet', icon: '🚀', chips: ['1+0', '1+1', '2+1'] },
@@ -155,6 +156,7 @@ export function createPlayFlow(deps) {
 
   function openSearching(initialGame) {
     let game = initialGame;
+    const searchIds = new Set([initialGame.id]);
     let alive = true;
     let unsub = () => {};
     let poll = null;
@@ -167,22 +169,31 @@ export function createPlayFlow(deps) {
     };
 
     const onGameActive = (e) => {
-      if (e && e.detail && e.detail.status === 'active' && game && e.detail.id === game.id) {
+      if (e && e.detail && e.detail.status === 'active' && e.detail.id && searchIds.has(e.detail.id)) {
         cancelled = true; // prevent onClose DELETE while global handler opens the board
+        stop();
+        window.removeEventListener('chess-game-active', onGameActive);
       }
     };
     window.addEventListener('chess-game-active', onGameActive);
 
+    const deleteSearchIds = async (exceptId) => {
+      for (const id of [...searchIds]) {
+        if (exceptId && id === exceptId) continue;
+        try {
+          const r = await api('GET', `/games/${id}`);
+          if (r.game && r.game.status === 'active') continue;
+          await api('DELETE', `/games/${id}`);
+        } catch { /* ignore */ }
+      }
+    };
+
     const cancelGame = async () => {
+      stop(); // always clear poll/WS even if already cancelled
+      window.removeEventListener('chess-game-active', onGameActive);
       if (cancelled) return;
       cancelled = true;
-      stop();
-      window.removeEventListener('chess-game-active', onGameActive);
-      try {
-        const r = await api('GET', `/games/${game.id}`);
-        if (r.game && r.game.status === 'active') return; // already matched
-        await api('DELETE', `/games/${game.id}`);
-      } catch { /* ignore */ }
+      await deleteSearchIds(null);
     };
 
     openScreen((close) => {
@@ -190,25 +201,26 @@ export function createPlayFlow(deps) {
       let entering = false;
       const enterGame = async (g) => {
         if (!alive || entering || !g || g.status !== 'active') return;
+        if (!searchIds.has(g.id) && g.id !== game.id) return;
         entering = true;
         stop();
         cancelled = true;
         window.removeEventListener('chess-game-active', onGameActive);
-        if (g.id !== game.id) {
-          try { await api('DELETE', `/games/${game.id}`); } catch { /* ignore */ }
-        }
+        await deleteSearchIds(g.id);
         let full = g;
         try {
           const r = await api('GET', `/games/${g.id}`);
           if (r.game) full = r.game;
         } catch { /* use snapshot */ }
         close(true);
+        // Global WS handler may already have opened this board
+        if (openGameId() === full.id) return;
         deps.openOnline(full);
       };
 
       const matched = (g) => {
         if (!alive || !g) return;
-        if (g.status === 'active') enterGame(g);
+        if (g.status === 'active' && (g.id === game.id || searchIds.has(g.id))) enterGame(g);
         else if (g.id === game.id && (g.status === 'cancelled' || g.status === 'finished')) {
           stop();
           cancelled = true;
@@ -228,7 +240,14 @@ export function createPlayFlow(deps) {
             if (!alive) return;
             if (q.eloDelta != null) eloDelta = q.eloDelta;
             if (q.game) {
-              if (q.game.id !== game.id) game = q.game;
+              if (q.game.id !== game.id) {
+                const prevId = game.id;
+                searchIds.add(q.game.id);
+                game = q.game;
+                // Drop superseded waiting search so it cannot match later
+                try { await api('DELETE', `/games/${prevId}`); } catch { /* ignore */ }
+                searchIds.delete(prevId);
+              }
               matched(q.game);
               if (!alive) return;
             }
@@ -237,7 +256,7 @@ export function createPlayFlow(deps) {
           const l = await api('GET', '/lobby');
           if (!alive) return;
           // Only enter an active game that is this search (or replaced by match) — never an unrelated game
-          const active = (l.games?.active || []).find((g) => g && g.id === game.id);
+          const active = (l.games?.active || []).find((g) => g && searchIds.has(g.id));
           if (active) { matched(active); return; }
           stats.replaceChildren(
             h('div', '👥 ' + t('live_players', { n: l.onlineCount || 0 })),

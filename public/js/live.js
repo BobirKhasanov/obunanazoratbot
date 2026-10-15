@@ -647,13 +647,15 @@ async function renderGame(mount, onRefresh) {
   const host = h('div.board-host.live-full-board');
   const status = h('div.pz-status.live-turn', '');
   const moveStrip = h('div.moves');
-  const topName = h('b', playerLabel(snap.players[1]));
-  const botName = h('b', playerLabel(snap.players[0]));
-  const topFed = h('span.live-fed', snap.players[1].fed || '');
-  const botFed = h('span.live-fed', snap.players[0].fed || '');
+  const white0 = (snap.players && snap.players[0]) || {};
+  const black0 = (snap.players && snap.players[1]) || {};
+  const topName = h('b', playerLabel(black0));
+  const botName = h('b', playerLabel(white0));
+  const topFed = h('span.live-fed', black0.fed || '');
+  const botFed = h('span.live-fed', white0.fed || '');
   const nameHue = (n) => [...String(n || '?')].reduce((a, c) => a + c.charCodeAt(0), 0);
-  const topAv = avatar(snap.players[1].name || '?', nameHue(snap.players[1].name), '');
-  const botAv = avatar(snap.players[0].name || '?', nameHue(snap.players[0].name), '');
+  const topAv = avatar(black0.name || '?', nameHue(black0.name), '');
+  const botAv = avatar(white0.name || '?', nameHue(white0.name), '');
   topAv.classList.add('pav');
   botAv.classList.add('pav');
   const topClk = h('span.live-clk', fmtClockMs(liveSideMs(clockState, 'b')));
@@ -710,10 +712,12 @@ async function renderGame(mount, onRefresh) {
     nav.snap = g;
     clockState = makeClockState(g);
     lastKey = key;
-    topName.textContent = playerLabel(g.players[1]);
-    botName.textContent = playerLabel(g.players[0]);
-    topFed.textContent = g.players[1].fed || '';
-    botFed.textContent = g.players[0].fed || '';
+    const w = (g.players && g.players[0]) || {};
+    const b = (g.players && g.players[1]) || {};
+    topName.textContent = playerLabel(b);
+    botName.textContent = playerLabel(w);
+    topFed.textContent = b.fed || '';
+    botFed.textContent = w.fed || '';
     paintClocks();
     paintStatus();
     if (!changed) return;
@@ -774,8 +778,8 @@ async function renderGame(mount, onRefresh) {
     clearPoll(); destroyBoards(); renderGen += 1; backIntl(); onRefresh();
   };
 
-  const whiteShort = (snap.players[0].name || '').split(',')[0] || '…';
-  const blackShort = (snap.players[1].name || '').split(',')[0] || '…';
+  const whiteShort = (white0.name || '').split(',')[0] || '…';
+  const blackShort = (black0.name || '').split(',')[0] || '…';
   mount([
     h('div.live-watch',
       h('div.top',

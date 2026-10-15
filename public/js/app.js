@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, connectWs, onWs, sendBye, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, shareUrl, copyText } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, shareUrl, copyText } from './ui.js';
 import { homeTabRefreshMs, softPollMs } from './perf.js';
 import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread } from './inbox.js';
 import { t, setLang } from './i18n.js';
@@ -153,10 +153,13 @@ async function refresh(which = state.tab) {
 // ---------- actions ----------
 /** Friend link games: invite UI first; board only after the friend joins (status=active). */
 const openOnline = (g) => {
-  if (g && g.mode === 'friend' && g.status === 'open') {
+  if (!g) return;
+  if (g.mode === 'friend' && g.status === 'open') {
     openFriendWait(g);
     return;
   }
+  // Avoid double open when both global WS and search/friend screens race
+  if (g.status === 'active' && openGameId() === g.id) return;
   openGame({ kind: 'online', game: g, meta: gameMeta() }, () => refresh());
 };
 
@@ -597,7 +600,7 @@ refreshers.play = async function renderPlay() {
     l.games.invites.length ? [h('div.h2', t('invites')), h('div.list', l.games.invites.map((g) => h('div.row.invite',
       avBlock(g.opponent.name, g.opponent.id, { premium: !!g.opponent.premium, round: true, avatarKey: g.opponent.avatarKey || null }),
       h('div.grow', h('div.t', g.opponent.name), h('div.s', t('challenge'))),
-      h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
+      h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); closeScreen(true); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
       h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } playSnap = ''; refresh(); } }, icon('x', 18)))))] : null,
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
       saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('cpu', 22)), h('div.grow', h('div.t', t('computer') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
@@ -882,7 +885,7 @@ function showInvite(g, ttl) {
   const pop = h('div.invite-pop',
     avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, avatarKey: o.avatarKey || null }),
     h('div.grow', h('b', t('challenge_from', { name: o.name || '' }))),
-    h('button.mini.ok', { 'aria-label': t('accept'), onclick: async () => { done(); try { const r = await api('POST', `/games/${g.id}/join`); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 20)),
+    h('button.mini.ok', { 'aria-label': t('accept'), onclick: async () => { done(); try { const r = await api('POST', `/games/${g.id}/join`); closeScreen(true); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 20)),
     h('button.mini', { 'aria-label': t('decline'), onclick: async () => { done(); try { await api('POST', `/games/${g.id}/decline`); } catch { /* expired */ } refresh(); } }, icon('x', 20)),
     h('div.pbar-track', bar));
   document.body.append(pop); haptic('success');
@@ -922,6 +925,10 @@ function initPager() {
     if (state.index !== prev) {
       closeScreen(true);
       if (prev === TABS.indexOf('play')) { stopAnnouncementsCarousel(); playSnap = ''; }
+      if (prev === TABS.indexOf('puzzles') && pz) {
+        try { if (pz.board) pz.board.destroy(); } catch { /* ignore */ }
+        pz = null;
+      }
       if (state.tab === 'play') playSnap = '';
     }
     // Sticky Play fades with CSS; toggle after paint so opacity/transform transitions run
@@ -1133,7 +1140,11 @@ export async function start(me) {
   }, homeTabRefreshMs());
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) sendBye();
-    else refresh();
+    else {
+      // WS skips reconnect while hidden — resume live pushes on foreground
+      if (!wsConnected()) connectWs();
+      refresh();
+    }
   });
   window.addEventListener('pagehide', () => sendBye());
   // Premium crown taps → Premium shop (works from Online list, profile, sheets)
