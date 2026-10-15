@@ -798,13 +798,20 @@ async function handleDeepLink() {
 
 // ---------- boot ----------
 function hideBoot() {
-  const boot = $('#boot');
-  if (boot) boot.hidden = true;
+  // Prefer getElementById — some WebViews mishandle [hidden] alone
+  const boot = document.getElementById('boot');
+  if (!boot) return;
+  boot.hidden = true;
+  boot.setAttribute('hidden', '');
+  boot.style.setProperty('display', 'none', 'important');
+  boot.style.visibility = 'hidden';
+  boot.style.pointerEvents = 'none';
+  try { boot.remove(); } catch { /* ignore */ }
 }
 function showGate(msg) {
   hideBoot();
-  const gate = $('#gate');
-  const app = $('#app');
+  const gate = document.getElementById('gate');
+  const app = document.getElementById('app');
   if (app) app.hidden = true;
   if (gate) {
     gate.hidden = false;
@@ -816,15 +823,18 @@ function showGate(msg) {
 }
 function showApp() {
   hideBoot();
-  const gate = $('#gate');
-  const app = $('#app');
+  const gate = document.getElementById('gate');
+  const app = document.getElementById('app');
   if (gate) gate.hidden = true;
-  if (app) app.hidden = false;
+  if (app) {
+    app.hidden = false;
+    app.removeAttribute('hidden');
+  }
 }
 
 async function boot() {
   // Lite CSS before first paint of heavy UI (Android LOW only; iOS unchanged)
-  applyPerfMode();
+  try { applyPerfMode(); } catch { /* ignore */ }
 
   // ready/expand already called from index.html; keep idempotent chrome sync here
   try {
@@ -832,7 +842,7 @@ async function boot() {
       try { tg.ready(); } catch { /* ignore */ }
       try { tg.expand(); } catch { /* ignore */ }
       try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch { /* old client */ }
-      syncTgChrome('dark');
+      try { syncTgChrome('dark'); } catch { /* ignore */ }
       try {
         tg.onEvent && tg.onEvent('viewportChanged', () => syncTgChrome());
         tg.onEvent && tg.onEvent('themeChanged', () => syncTgChrome());
@@ -848,22 +858,30 @@ async function boot() {
 
   let me;
   try {
-    // Hard timeout so a stalled API never leaves users on the splash forever
-    me = await api('GET', '/me', undefined, { timeoutMs: 12_000 });
+    // Abort + Promise.race — some WebViews ignore fetch AbortController
+    const timed = new Promise((_, reject) => {
+      setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'net' })), 8_000);
+    });
+    me = await Promise.race([api('GET', '/me', undefined, { timeoutMs: 7_500 }), timed]);
   } catch (e) {
-    const { errText } = await import('./i18n.js');
-    showGate(errText(e));
+    let msg = 'Open from Telegram';
+    try { const { errText } = await import('./i18n.js'); msg = errText(e); } catch { /* ignore */ }
+    showGate(msg);
     return;
   }
 
-  state.me = me.user; state.stats = me.stats; state.meta = me.meta;
-  setLang(me.user.lang); applyTheme(me.user.theme);
-  if (canStyleChess(me.user)) applyChessStyle(me.user.pieceSet, me.user.boardTheme);
-  else applyChessStyle('outline', 'classic');
+  try {
+    state.me = me.user; state.stats = me.stats; state.meta = me.meta;
+    setLang(me.user.lang); applyTheme(me.user.theme);
+    if (canStyleChess(me.user)) applyChessStyle(me.user.pieceSet, me.user.boardTheme);
+    else applyChessStyle('outline', 'classic');
+  } catch (e) {
+    console.error('[boot] theme', e);
+  }
 
-  // Reveal shell BEFORE data refresh so the user never sits on a black void
+  // Reveal shell BEFORE data refresh so the user never sits on splash
   showApp();
-  initPager();
+  try { initPager(); } catch (e) { console.error('[boot] pager', e); }
 
   if (me.referralClaim && me.referralClaim.inviteeReward) {
     toast(t('invitee_reward', { n: me.referralClaim.inviteeReward, name: (me.referralClaim.friend && me.referralClaim.friend.name) || '…' }));

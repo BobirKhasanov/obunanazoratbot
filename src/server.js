@@ -89,13 +89,15 @@ app.use((req, res, next) => {
 
 app.use(express.static(path.join(__dirname, '..', 'public'), {
   setHeaders(res, file) {
-    // Versioned assets (?v= in HTML) can be cached; HTML itself stays no-cache
-    if (/\.(?:js|mjs|css|woff2?|png|jpe?g|gif|svg|webp|wasm)$/i.test(file)) {
+    // Short TTL — Telegram WebView often keeps stale JS despite ?v= busting
+    if (/\.(?:js|mjs|css)$/i.test(file)) {
+      res.set('Cache-Control', 'public, max-age=120, must-revalidate');
+    } else if (/\.(?:woff2?|png|jpe?g|gif|svg|webp|wasm)$/i.test(file)) {
       res.set('Cache-Control', 'public, max-age=86400, must-revalidate');
     } else {
-      res.set('Cache-Control', 'no-cache');
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
-    // Explicit MIME so Telegram WebView accepts ES module scripts (incl. inbox.js)
+    // Explicit MIME so Telegram WebView accepts ES module scripts
     if (file.endsWith('.mjs') || file.endsWith('.js')) {
       res.set('Content-Type', 'text/javascript; charset=utf-8');
     }
@@ -643,12 +645,18 @@ const bot = createBot(BOT_TOKEN, WEBAPP_URL || 'https://example.com');
 notify.init(bot, WEBAPP_URL);
 
 let botUsername = process.env.BOT_USERNAME || null;
+/** Resolves quickly: cached, or getMe with a hard 2s cap so /me never stalls on Telegram. */
 async function getBotUsername() {
   if (botUsername) return botUsername;
   try {
-    botUsername = (await bot.api.getMe()).username;
+    const me = await Promise.race([
+      bot.api.getMe(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('getMe timeout')), 2_000)),
+    ]);
+    botUsername = me && me.username ? me.username : null;
   } catch (e) {
     console.error('[bot] getMe failed:', e.description || e.message);
+    bot.api.getMe().then((me) => { if (me && me.username) botUsername = me.username; }).catch(() => {});
   }
   return botUsername;
 }

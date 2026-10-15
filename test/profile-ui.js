@@ -26,7 +26,7 @@ assert.ok(perf.includes("platform === 'ios'") || perf.includes('isIOS'), 'perf d
 assert.ok(css.includes('data-perf="lite"') && css.includes('#bg { display: none'), 'lite CSS drops heavy bg');
 const live = read('public/js/live.js');
 assert.ok(live.includes('liveRoundPollMs') && live.includes('liveMiniBoardBudget') && live.includes('live-mini-ph'), 'live uses perf budgets');
-assert.ok(read('src/server.js').includes('max-age=86400'), 'static JS/CSS cached with revalidate');
+assert.ok(read('src/server.js').includes('max-age=120'), 'static JS/CSS short-cached with revalidate');
 
 assert.ok(profile.includes('export function renderProfilePage'));
 assert.ok(profile.includes('sec_rating'));
@@ -178,8 +178,10 @@ assert.ok(read('public/js/ui.js').includes('timeoutMs') && read('public/js/ui.js
 assert.ok(html.includes('Doska ochilmoqda') && html.includes('boot-ring') && html.includes('boot-spin'), 'animated boot splash copy');
 assert.ok(html.includes('failBoot') && html.includes('Juda uzoq kutildi'), 'boot watchdog if splash stalls');
 assert.ok(!html.includes('rel="modulepreload"'), 'no inbox modulepreload (was false-triggering boot fail UI)');
-assert.ok(html.includes("/js/app.js") && html.includes('ev.filename'), 'boot fail only on app.js load errors');
+assert.ok(html.includes('/js/') && html.includes('unhandledrejection'), 'boot fails on any JS module error while splash up');
 assert.ok(read('src/server.js').includes("file.endsWith('.js')") && read('src/server.js').includes('text/javascript'), 'JS modules served with correct MIME');
+assert.ok(read('src/server.js').includes('getMe timeout'), 'getMe for /me is time-capped');
+assert.ok(read('public/js/app.js').includes("getElementById('boot')"), 'hideBoot forcefully removes splash');
 assert.ok(read('src/db.js').includes('puzzle_daily_claims'), 'daily puzzle reward table');
 assert.ok(css.includes('.pclk') && css.includes('.gchat') && css.includes('.shop-pack.on'), 'clock + chat + pack select styles');
 
