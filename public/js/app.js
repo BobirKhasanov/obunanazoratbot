@@ -624,7 +624,7 @@ refreshers.play = async function renderPlay() {
   if (state.tab === 'play') {
     const onPage = (page) => {
       if (['play', 'puzzles', 'rankings', 'live', 'profile'].includes(page)) go(TABS.indexOf(page), true);
-      else if (page === 'premium' || page === 'friends' || page === 'settings' || page === 'diamonds' || page === 'gems' || page === 'stats') {
+      else if (page === 'premium' || page === 'friends' || page === 'settings' || page === 'diamonds' || page === 'gems' || page === 'stats' || page === 'promo') {
         const idx = TABS.indexOf('profile');
         const already = state.index === idx;
         go(idx, true);

@@ -374,6 +374,35 @@ CREATE TABLE IF NOT EXISTS diamond_ledger (
 );
 CREATE INDEX IF NOT EXISTS idx_diamond_ledger_user_created ON diamond_ledger(user_id, created_at DESC);
 ALTER TABLE diamond_ledger ENABLE ROW LEVEL SECURITY;
+
+-- Promo codes: diamonds or Premium (days/months); ends_at = code validity (Tashkent wall clock stored as timestamptz)
+CREATE TABLE IF NOT EXISTS promo_codes (
+  id BIGSERIAL PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  reward_type TEXT NOT NULL,                 -- diamonds | premium_days | premium_months
+  reward_amount INTEGER NOT NULL,
+  max_uses INTEGER,                          -- null = unlimited
+  used_count INTEGER NOT NULL DEFAULT 0,
+  ends_at TIMESTAMPTZ NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1,
+  note TEXT NOT NULL DEFAULT '',
+  created_by BIGINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_promo_codes_ends ON promo_codes(ends_at);
+ALTER TABLE promo_codes ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS promo_redemptions (
+  id BIGSERIAL PRIMARY KEY,
+  promo_id BIGINT NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reward_type TEXT NOT NULL,
+  reward_amount INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (promo_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_promo_redemptions_user ON promo_redemptions(user_id, created_at DESC);
+ALTER TABLE promo_redemptions ENABLE ROW LEVEL SECURITY;
 `;
 
 const DEFAULT_DIAMOND_PACKS = JSON.stringify([

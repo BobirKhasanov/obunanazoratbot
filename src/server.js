@@ -749,6 +749,34 @@ function addOneMonthTashkent(from) {
   return addMonthsTashkent(from, 1);
 }
 
+function addDaysUtc(from, days) {
+  const n = Math.floor(Number(days));
+  if (!(n >= 1 && n <= 3660)) throw bad('Invalid premium days', 'bad_request');
+  const d = from instanceof Date ? new Date(from.getTime()) : new Date(from);
+  d.setTime(d.getTime() + n * 86400000);
+  return d;
+}
+
+function normalizePromoCode(raw) {
+  return String(raw || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function publicPromo(row) {
+  return {
+    id: Number(row.id),
+    code: row.code,
+    rewardType: row.reward_type,
+    rewardAmount: Number(row.reward_amount),
+    maxUses: row.max_uses == null ? null : Number(row.max_uses),
+    usedCount: Number(row.used_count || 0),
+    endsAt: row.ends_at,
+    endsAtTashkent: formatTashkent(row.ends_at),
+    active: !!row.active && new Date(row.ends_at).getTime() > Date.now(),
+    note: row.note || '',
+    createdAt: row.created_at,
+  };
+}
+
 /** Soft-expire Premium flag when premium_until has passed. */
 async function syncPremiumExpiry(u) {
   if (!u || !u.premium_until) return u;
@@ -2547,9 +2575,93 @@ api.delete('/friends/:id', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ---------- promo codes ----------
+api.post('/promo/redeem', wrap(async (req, res) => {
+  const code = normalizePromoCode(req.body && req.body.code);
+  if (!PROMO_CODE_RE.test(code)) throw bad('Invalid promo code', 'promo_invalid');
+  const uid = req.user.id;
+  const client = await db.pool.connect();
+  let rewardType;
+  let rewardAmount;
+  let untilIso = null;
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM promo_codes WHERE code = $1 FOR UPDATE', [code]);
+    const p = rows[0];
+    if (!p || !p.active) throw bad('Promo code not found', 'promo_notfound');
+    if (new Date(p.ends_at).getTime() <= Date.now()) throw bad('Promo code expired', 'promo_expired');
+    if (p.max_uses != null && Number(p.used_count) >= Number(p.max_uses)) {
+      throw bad('Promo code fully used', 'promo_exhausted');
+    }
+    const used = await client.query(
+      'SELECT 1 FROM promo_redemptions WHERE promo_id = $1 AND user_id = $2',
+      [p.id, uid],
+    );
+    if (used.rows.length) throw bad('You already used this promo', 'promo_used');
+
+    rewardType = p.reward_type;
+    rewardAmount = Number(p.reward_amount);
+    const uRow = await client.query('SELECT diamonds, premium, premium_until FROM users WHERE id = $1 FOR UPDATE', [uid]);
+    const u = uRow.rows[0];
+    if (!u) throw new HttpError(404, 'User not found', 'notfound');
+
+    if (rewardType === 'diamonds') {
+      await client.query('UPDATE users SET diamonds = diamonds + $1 WHERE id = $2', [rewardAmount, uid]);
+    } else if (rewardType === 'premium_days' || rewardType === 'premium_months') {
+      const base = (u.premium_until && new Date(u.premium_until).getTime() > Date.now())
+        ? new Date(u.premium_until)
+        : new Date();
+      const until = rewardType === 'premium_months'
+        ? addMonthsTashkent(base, rewardAmount)
+        : addDaysUtc(base, rewardAmount);
+      untilIso = until.toISOString();
+      await client.query(
+        'UPDATE users SET premium = 1, premium_until = $1 WHERE id = $2',
+        [untilIso, uid],
+      );
+    } else {
+      throw bad('Invalid promo reward', 'promo_invalid');
+    }
+
+    await client.query(
+      `INSERT INTO promo_redemptions (promo_id, user_id, reward_type, reward_amount)
+       VALUES ($1, $2, $3, $4)`,
+      [p.id, uid, rewardType, rewardAmount],
+    );
+    await client.query('UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1', [p.id]);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  if (rewardType === 'diamonds') {
+    await ledgerDiamonds(uid, rewardAmount, 'promo', { code });
+  }
+  invalidateUserCache(uid);
+  const nextRow = await getUser.get(uid);
+  memoUser(nextRow);
+  const next = publicUser(nextRow, isAdmin(nextRow.id));
+  realtime.send(uid, { t: 'wallet', user: next, promo: { code, rewardType, rewardAmount } });
+  res.json({
+    ok: true,
+    user: next,
+    reward: {
+      type: rewardType,
+      amount: rewardAmount,
+      premiumUntil: untilIso,
+      premiumUntilTashkent: untilIso ? formatTashkent(untilIso) : null,
+    },
+  });
+}));
+
 // ---------- announcements (home carousel) ----------
 const ANN_FONTS = ['system', 'rounded', 'serif', 'mono'];
-const ANN_PAGES = ['play', 'puzzles', 'rankings', 'live', 'profile', 'premium', 'friends', 'settings', 'diamonds'];
+const ANN_PAGES = ['play', 'puzzles', 'rankings', 'live', 'profile', 'premium', 'friends', 'settings', 'diamonds', 'promo'];
+const PROMO_REWARD_TYPES = ['diamonds', 'premium_days', 'premium_months'];
+const PROMO_CODE_RE = /^[A-Z0-9][A-Z0-9_-]{2,31}$/;
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 /** Tashkent is UTC+5 year-round. Accept "YYYY-MM-DDTHH:mm" wall clock → ISO UTC. */
@@ -3010,6 +3122,90 @@ admin.post('/users/:id/diamonds', wrap(async (req, res) => {
     until: untilLabel,
   }), { force: true, effect: 'party' });
   res.json({ ok: true, user: next });
+}));
+
+admin.get('/promos', wrap(async (req, res) => {
+  const rows = await db.prepare(`
+    SELECT * FROM promo_codes ORDER BY created_at DESC LIMIT 100
+  `).all();
+  res.json({
+    promos: rows.map(publicPromo),
+    rewardTypes: PROMO_REWARD_TYPES,
+    nowTashkent: formatTashkent(new Date()),
+  });
+}));
+
+admin.post('/promos', wrap(async (req, res) => {
+  const b = req.body || {};
+  let code = normalizePromoCode(b.code);
+  if (!code) code = crypto.randomBytes(4).toString('hex').toUpperCase();
+  if (!PROMO_CODE_RE.test(code)) throw bad('Code: 3–32 letters/digits/_/-', 'promo_invalid');
+  const rewardType = String(b.rewardType || '');
+  if (!PROMO_REWARD_TYPES.includes(rewardType)) throw bad('Choose diamonds or Premium', 'promo_reward');
+  const rewardAmount = Math.floor(Number(b.rewardAmount));
+  if (rewardType === 'diamonds') {
+    if (!(rewardAmount >= 1 && rewardAmount <= 1_000_000)) throw bad('Diamonds: 1…1000000', 'promo_amount');
+  } else if (rewardType === 'premium_days') {
+    if (!(rewardAmount >= 1 && rewardAmount <= 3660)) throw bad('Premium days: 1…3660', 'promo_amount');
+  } else if (!(rewardAmount >= 1 && rewardAmount <= 120)) {
+    throw bad('Premium months: 1…120', 'promo_amount');
+  }
+  let maxUses = null;
+  if (b.maxUses != null && b.maxUses !== '') {
+    maxUses = Math.floor(Number(b.maxUses));
+    if (!(maxUses >= 1 && maxUses <= 1_000_000)) throw bad('Max uses: 1…1000000', 'promo_max');
+  }
+  const ends = parseTashkentEnd(b.endsAtTashkent || b.endsAt);
+  if (ends.getTime() <= Date.now()) throw bad('End date must be in the future (Tashkent)', 'ends_at');
+  const note = cleanText(b.note, 120, 'bad_request', false);
+  try {
+    const info = await db.prepare(`
+      INSERT INTO promo_codes (
+        code, reward_type, reward_amount, max_uses, ends_at, note, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      RETURNING *
+    `).run(code, rewardType, rewardAmount, maxUses, ends.toISOString(), note, req.user.id);
+    res.status(201).json({ promo: publicPromo(info.rows[0]) });
+  } catch (e) {
+    if (String(e && e.message || e).includes('promo_codes_code_key') || e.code === '23505') {
+      throw bad('Code already exists', 'promo_exists');
+    }
+    throw e;
+  }
+}));
+
+admin.patch('/promos/:id', wrap(async (req, res) => {
+  const id = intParam(req.params.id);
+  const cur = await db.prepare('SELECT * FROM promo_codes WHERE id = ?').get(id);
+  if (!cur) throw bad('Not found', 'notfound');
+  const b = req.body || {};
+  let active = cur.active;
+  if (b.active !== undefined) active = b.active ? 1 : 0;
+  let endsAt = cur.ends_at;
+  if (b.endsAtTashkent || b.endsAt) {
+    endsAt = parseTashkentEnd(b.endsAtTashkent || b.endsAt).toISOString();
+  }
+  let maxUses = cur.max_uses;
+  if (b.maxUses !== undefined) {
+    if (b.maxUses === null || b.maxUses === '') maxUses = null;
+    else {
+      maxUses = Math.floor(Number(b.maxUses));
+      if (!(maxUses >= 1 && maxUses <= 1_000_000)) throw bad('Max uses: 1…1000000', 'promo_max');
+      if (maxUses < Number(cur.used_count || 0)) throw bad('Max uses below already used count', 'promo_max');
+    }
+  }
+  const note = b.note !== undefined ? cleanText(b.note, 120, 'bad_request', false) : cur.note;
+  await db.prepare(`
+    UPDATE promo_codes SET active = ?, ends_at = ?, max_uses = ?, note = ? WHERE id = ?
+  `).run(active ? 1 : 0, endsAt, maxUses, note, id);
+  res.json({ promo: publicPromo(await db.prepare('SELECT * FROM promo_codes WHERE id = ?').get(id)) });
+}));
+
+admin.delete('/promos/:id', wrap(async (req, res) => {
+  const id = intParam(req.params.id);
+  const r = await db.prepare('DELETE FROM promo_codes WHERE id = ?').run(id);
+  if (!r.changes) throw bad('Not found', 'notfound');
+  res.json({ ok: true });
 }));
 
 admin.get('/profile-banner', wrap(async (req, res) => {

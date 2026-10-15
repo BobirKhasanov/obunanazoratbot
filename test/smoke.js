@@ -996,6 +996,42 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual((await call('ADMIN', 'POST', '/admin/upload', null, big)).data.code, 'media_big');
     });
 
+    await step('promo codes: admin create, user redeem diamonds/premium, expiry and once-per-user', async () => {
+      const ends = '2099-12-31T23:59';
+      await err('A', 'POST', '/admin/promos', { rewardType: 'diamonds', rewardAmount: 50, endsAtTashkent: ends }, 404);
+      const created = await ok('ADMIN', 'POST', '/admin/promos', {
+        code: 'chess_gems',
+        rewardType: 'diamonds',
+        rewardAmount: 50,
+        maxUses: 2,
+        endsAtTashkent: ends,
+        note: 'test',
+      });
+      assert.strictEqual(created.promo.code, 'CHESS_GEMS');
+      assert.strictEqual(created.promo.rewardType, 'diamonds');
+      const before = (await ok('A', 'GET', '/me')).user.diamonds;
+      const redeem = await ok('A', 'POST', '/promo/redeem', { code: 'chess_gems' });
+      assert.strictEqual(redeem.user.diamonds, before + 50);
+      assert.strictEqual(redeem.reward.type, 'diamonds');
+      await err('A', 'POST', '/promo/redeem', { code: 'CHESS_GEMS' }, 400, 'promo_used');
+      const prem = await ok('ADMIN', 'POST', '/admin/promos', {
+        code: 'PREM7',
+        rewardType: 'premium_days',
+        rewardAmount: 7,
+        endsAtTashkent: ends,
+      });
+      assert.strictEqual(prem.promo.rewardType, 'premium_days');
+      const got = await ok('B', 'POST', '/promo/redeem', { code: 'prem7' });
+      assert.ok(got.user.premium, 'premium granted');
+      assert.ok(got.reward.premiumUntilTashkent);
+      // Past end date rejected at create
+      await err('ADMIN', 'POST', '/admin/promos', {
+        code: 'OLDCODE', rewardType: 'diamonds', rewardAmount: 1, endsAtTashkent: '2020-01-01T00:00',
+      }, 400, 'ends_at');
+      const listed = await ok('ADMIN', 'GET', '/admin/promos');
+      assert.ok((listed.promos || []).some((p) => p.code === 'CHESS_GEMS'));
+    });
+
     await step('announcements: media-only publish works on home and puzzle boards', async () => {
       const ends = '2099-12-31T23:59';
       await err('ADMIN', 'POST', '/admin/announcements', { title: '', body: '', endsAtTashkent: ends }, 400, 'text');

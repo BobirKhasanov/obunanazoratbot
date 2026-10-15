@@ -114,6 +114,50 @@ export function renderProfilePage(ctx) {
     ]);
   };
 
+  const openPromo = () => openScreen((close) => {
+    const input = h('input.input', {
+      placeholder: t('promo_enter_ph'),
+      maxlength: 32,
+      autocomplete: 'off',
+      autocapitalize: 'characters',
+    });
+    const result = h('div');
+    const submit = h('button.cta', {
+      type: 'button',
+      onclick: async () => {
+        try {
+          const r = await api('POST', '/promo/redeem', { code: input.value });
+          state.me = r.user;
+          const rw = r.reward || {};
+          let msg = t('promo_ok');
+          if (rw.type === 'diamonds') msg = t('promo_ok_diamonds', { n: rw.amount });
+          else if (rw.type === 'premium_days') {
+            msg = t('promo_ok_days', {
+              n: rw.amount,
+              d: (rw.premiumUntilTashkent || '').replace('T', ' '),
+            });
+          } else if (rw.type === 'premium_months') {
+            msg = t('promo_ok_months', {
+              n: rw.amount,
+              d: (rw.premiumUntilTashkent || '').replace('T', ' '),
+            });
+          }
+          result.replaceChildren(h('div.card', h('b', msg)));
+          input.value = '';
+          toast(msg);
+          haptic('success');
+          refresh();
+        } catch (e) { fail(e); }
+      },
+    }, t('promo_redeem'));
+    return [
+      ...subTop(t('promo_title'), close),
+      h('p.muted', t('promo_sub')),
+      h('div.card', input, submit),
+      result,
+    ];
+  });
+
   // Deep-link from announcement carousel → profile subpages
   const onProfileOpen = (e) => {
     const page = e.detail;
@@ -121,6 +165,7 @@ export function renderProfilePage(ctx) {
     try { closeScreen(true); } catch { /* ignore */ }
     if (page === 'premium') openPremium();
     else if (page === 'diamonds' || page === 'gems') openDiamonds();
+    else if (page === 'promo') openPromo();
     else if (page === 'friends') openFriends();
     else if (page === 'settings') openSettings();
     else if (page === 'stats') openStats();
@@ -768,6 +813,7 @@ export function renderProfilePage(ctx) {
             : t('premium_plans'),
           onClick: openPremium,
         }),
+        menuRow({ ic: 'gem', title: t('promo_title'), sub: t('promo_menu_sub'), onClick: openPromo }),
         me.isAdmin ? menuRow({ ic: 'shield', title: t('admin_panel'), onClick: () => openAdmin(rebuildAll) }) : null,
       ),
 

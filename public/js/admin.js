@@ -306,11 +306,15 @@ export function openAdmin(onClose) {
         oninput: (e) => { annForm.linkUrl = e.target.value; },
       }));
     } else if (annForm.linkType === 'page') {
-      const pages = ['play', 'puzzles', 'rankings', 'live', 'profile', 'premium', 'friends', 'settings', 'diamonds'];
-      linkExtra.append(h('div.chips', pages.map((p) => h('button.chip' + (annForm.linkPage === p ? '.on' : ''), {
+      const pages = [
+        ['play', 'play'], ['puzzles', 'puzzles'], ['rankings', 'rankings'], ['live', 'live'],
+        ['profile', 'profile'], ['premium', 'premium'], ['friends', 'friends'],
+        ['settings', 'settings'], ['diamonds', 'diamonds'], ['promo', t('promo_title')],
+      ];
+      linkExtra.append(h('div.chips', pages.map(([p, label]) => h('button.chip' + (annForm.linkPage === p ? '.on' : ''), {
         type: 'button',
         onclick: () => { annForm.linkPage = p; drawAnnLink(); },
-      }, p))));
+      }, label))));
     }
   }
   drawAnnLink();
@@ -852,6 +856,109 @@ export function openAdmin(onClose) {
       shopHost,
     ];
   });
+
+  const openPromos = () => {
+    const list = h('div.list');
+    const codeIn = h('input.input', { placeholder: t('promo_code_ph'), maxlength: 32, autocomplete: 'off' });
+    const amountIn = h('input.input', { type: 'number', min: '1', value: '100', placeholder: '100' });
+    const maxIn = h('input.input', { type: 'number', min: '1', placeholder: t('promo_max_ph') });
+    const endsIn = h('input.input', { type: 'datetime-local' });
+    const noteIn = h('input.input', { placeholder: t('promo_note_ph'), maxlength: 120 });
+    let rewardType = 'diamonds';
+    const typeSeg = seg([
+      ['diamonds', t('promo_reward_diamonds')],
+      ['premium_days', t('promo_reward_days')],
+      ['premium_months', t('promo_reward_months')],
+    ], 'diamonds', (v) => { rewardType = v; });
+
+    const rewardLabel = (p) => {
+      if (p.rewardType === 'diamonds') return t('promo_reward_n_diamonds', { n: p.rewardAmount });
+      if (p.rewardType === 'premium_days') return t('promo_reward_n_days', { n: p.rewardAmount });
+      return t('promo_reward_n_months', { n: p.rewardAmount });
+    };
+
+    async function loadPromos() {
+      try {
+        const r = await api('GET', '/admin/promos');
+        if (!endsIn.value && r.nowTashkent) {
+          const base = r.nowTashkent.slice(0, 10);
+          const d = new Date(base + 'T12:00:00+05:00');
+          d.setDate(d.getDate() + 7);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          endsIn.value = `${y}-${m}-${day}T23:59`;
+        }
+        const rows = r.promos || [];
+        list.replaceChildren(...rows.map((p) => h('div.row' + (p.active ? '' : '.off'),
+          h('div.grow',
+            h('div.t', p.code, p.active ? null : h('span.pill', ' ' + t('promo_inactive'))),
+            h('div.s', `${rewardLabel(p)} · ${p.usedCount}${p.maxUses != null ? '/' + p.maxUses : ''} · ${t('ann_until')} ${String(p.endsAtTashkent || '').replace('T', ' ')}`),
+            p.note ? h('div.s', p.note) : null),
+          h('button.mini', {
+            type: 'button',
+            onclick: async () => {
+              try {
+                await api('PATCH', `/admin/promos/${p.id}`, { active: !p.active });
+                loadPromos();
+              } catch (e) { fail(e); }
+            },
+          }, p.active ? t('promo_disable') : t('promo_enable')),
+          h('button.mini', {
+            type: 'button',
+            onclick: async () => {
+              if (!(await confirmSheet(t('promo_delete_confirm'), t('remove'), true))) return;
+              try {
+                await api('DELETE', `/admin/promos/${p.id}`);
+                toast(t('promo_deleted'));
+                loadPromos();
+              } catch (e) { fail(e); }
+            },
+          }, icon('trash', 16)))));
+        if (!rows.length) list.append(h('div.muted', t('promo_empty')));
+      } catch (e) { fail(e); }
+    }
+
+    const createBtn = h('button.btn', {
+      type: 'button',
+      onclick: async () => {
+        try {
+          const payload = {
+            code: codeIn.value.trim() || undefined,
+            rewardType,
+            rewardAmount: Math.floor(Number(amountIn.value)),
+            maxUses: maxIn.value === '' ? null : Math.floor(Number(maxIn.value)),
+            endsAtTashkent: endsIn.value,
+            note: noteIn.value.trim(),
+          };
+          const r = await api('POST', '/admin/promos', payload);
+          toast(t('promo_created', { code: r.promo.code }));
+          haptic('success');
+          codeIn.value = '';
+          noteIn.value = '';
+          loadPromos();
+        } catch (e) { fail(e); }
+      },
+    }, icon('plus', 18), t('promo_create'));
+
+    openScreen((close) => {
+      loadPromos();
+      return [
+        ...subTop(t('promo_admin_title'), close),
+        h('p.muted', t('promo_admin_hint')),
+        h('div.card',
+          h('div.label', t('promo_code')), codeIn,
+          h('div.label', t('promo_reward')), typeSeg,
+          h('div.label', t('promo_amount')), amountIn,
+          h('div.label', t('promo_max')), maxIn,
+          h('div.label', t('promo_ends') + ' · Tashkent (UTC+5)'), endsIn,
+          h('div.label', t('promo_note')), noteIn,
+          createBtn),
+        h('div.h2', t('promo_list')),
+        list,
+      ];
+    });
+  };
 
   const openBroadcast = () => openScreen((close) => {
     drawMedia(); drawButtons(); drawPreview(); loadHistory();
@@ -1493,6 +1600,7 @@ export function openAdmin(onClose) {
     menuCard(
       menuRow({ ic: 'friends', title: t('users_list'), sub: t('admin_users_sub'), onClick: openUsers }),
       menuRow({ ic: 'gem', title: t('admin_sec_shop'), sub: t('admin_shop_sub'), onClick: openShop }),
+      menuRow({ ic: 'crown', title: t('promo_admin_title'), sub: t('promo_admin_sub'), onClick: openPromos }),
     ),
     sec(t('admin_sec_content')),
     menuCard(
