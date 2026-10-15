@@ -18,6 +18,12 @@ const SWIPE_PX = 40;
 /** Per-host cleanup + blob URLs so unused carousels can be torn down without killing reused ones. */
 const hostState = new WeakMap();
 
+function revokeBlobs(blobs) {
+  while (blobs && blobs.length) {
+    try { URL.revokeObjectURL(blobs.pop()); } catch { /* ignore */ }
+  }
+}
+
 function stopHost(host) {
   const st = host && hostState.get(host);
   if (!st) return;
@@ -25,9 +31,24 @@ function stopHost(host) {
   while (st.cleanups.length) {
     try { st.cleanups.pop()(); } catch { /* ignore */ }
   }
-  while (st.blobs.length) {
-    try { URL.revokeObjectURL(st.blobs.pop()); } catch { /* ignore */ }
-  }
+  revokeBlobs(st.blobs);
+}
+
+function pauseHost(host) {
+  const st = host && hostState.get(host);
+  if (!st || !st.pause) return;
+  try { st.pause(); } catch { /* ignore */ }
+}
+
+function resumeHost(host) {
+  const st = host && hostState.get(host);
+  if (!st || !st.resume) return;
+  try { st.resume(); } catch { /* ignore */ }
+}
+
+/** True when host still has live timers/blobs (safe to reuse without remount). */
+export function isAnnouncementsHostLive(host) {
+  return !!(host && hostState.get(host) && host.querySelector('.ann-track'));
 }
 
 /** Tear down one carousel host (timers + media blobs). */
@@ -41,6 +62,26 @@ export function stopAnnouncementsCarousel(root = document) {
     const scope = root && root.querySelectorAll ? root : document;
     scope.querySelectorAll('.ann-carousel').forEach((el) => stopHost(el));
   } catch { /* ignore */ }
+}
+
+/** Pause auto-advance only — keep DOM + blob URLs (tab leave). */
+export function pauseAnnouncementsCarousel(root = document) {
+  try {
+    const scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll('.ann-carousel').forEach((el) => pauseHost(el));
+  } catch { /* ignore */ }
+}
+
+/** Resume auto-advance after pause / reuse. */
+export function resumeAnnouncementsCarousel(root = document) {
+  try {
+    const scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll('.ann-carousel').forEach((el) => resumeHost(el));
+  } catch { /* ignore */ }
+}
+
+export function resumeAnnouncementsHost(host) {
+  resumeHost(host);
 }
 
 async function resolveMedia(items, blobs) {
@@ -91,7 +132,8 @@ function slide(a, opts) {
   const font = FONT_CSS[a.fontFamily] || FONT_CSS.system;
   const clickable = a.linkType === 'url' || a.linkType === 'page' || a.linkType === 'invite';
   const wantedMedia = !!a.mediaId;
-  const mediaOnly = (!!a._src || wantedMedia) && !hasCopy(a);
+  // Media-only when there is no title/body (both boards may be media-only).
+  const mediaOnly = wantedMedia && !hasCopy(a);
   const bgFrom = a.bgFrom || '#1a2740';
   const bgTo = a.bgTo || '#0b1220';
   return h((clickable ? 'button' : 'div') + '.ann-slide' + (mediaOnly ? '.media-only' : ''), {
@@ -109,8 +151,15 @@ function slide(a, opts) {
       a.title ? h('b.ann-title', { style: { color: a.titleColor, fontSize: `${a.fontSize}px` } }, a.title) : null,
       a.body ? h('span.ann-body', { style: { color: a.bodyColor, fontSize: `${Math.max(12, a.fontSize - 4)}px` } }, a.body) : null),
     a._src
-      ? h('div.ann-media', h('img', { src: a._src, alt: '', draggable: 'false' }))
-      : (mediaOnly ? h('div.ann-media.emoji', '♟') : h('div.ann-media.emoji', '♛')));
+      ? h('div.ann-media', h('img', {
+        src: a._src,
+        alt: '',
+        draggable: 'false',
+        decoding: 'async',
+        // Keep last paint stable while the decode finishes (media-only boards).
+        style: mediaOnly ? { background: '#0b1220' } : undefined,
+      }))
+      : (mediaOnly ? h('div.ann-media') : h('div.ann-media.emoji', '♛')));
 }
 
 function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {
@@ -189,17 +238,26 @@ export function announcementsKey(items) {
 /** Mount carousel into host (does not clear other carousels). Returns host or null. */
 export async function mountAnnouncementsCarousel(host, items, { onPage, botUsername, userId, delayMs = 0 } = {}) {
   if (!host) return null;
-  stopHost(host);
-  host.replaceChildren();
-  if (!items || !items.length) { host.hidden = true; return null; }
-  const blobs = [];
-  const cleanups = [];
-  hostState.set(host, { blobs, cleanups });
-  const resolved = await resolveMedia(items, blobs);
-  if (!host.isConnected) {
+  if (!items || !items.length) {
     stopHost(host);
+    host.replaceChildren();
+    host.hidden = true;
     return null;
   }
+
+  // Fetch media first, then swap — avoids empty/emoji flash on remount (both boards can be media-only).
+  const blobs = [];
+  const resolved = await resolveMedia(items, blobs);
+  if (!host.isConnected) {
+    revokeBlobs(blobs);
+    return null;
+  }
+
+  stopHost(host);
+  const cleanups = [];
+  const state = { blobs, cleanups, pause: null, resume: null };
+  hostState.set(host, state);
+
   host.hidden = false;
   const opts = { onPage, botUsername, userId };
   const track = h('div.ann-track', resolved.map((a) => slide(a, opts)));
@@ -234,10 +292,12 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
       timer = setInterval(() => go(go.idx + 1), DWELL_MS);
     };
     // First mount: optional phase offset so two carousels don't flip together.
-    // After swipe/interaction: resume on the 6s cadence immediately.
+    // After swipe/interaction / resume: resume on the 6s cadence immediately once armed.
     if (!armed && delayMs > 0) timer = setTimeout(start, delayMs);
     else start();
   };
+  state.pause = stopAuto;
+  state.resume = armAuto;
 
   const unbindSwipe = bindSwipe(host, track, n, go, { armAuto, stopAuto });
   armAuto();

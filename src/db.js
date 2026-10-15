@@ -23,7 +23,15 @@ try { // never prints the password itself, only what is needed to spot a bad val
     + `${/[\s\[\]]/.test(pw) ? ' (contains a space or bracket!)' : ''}${url !== url.trim() ? ' (URL has leading/trailing whitespace!)' : ''}`);
 } catch { console.error('[db] DATABASE_URL is not a valid URL (special characters in the password must be %-encoded)'); }
 const local = /@(localhost|127\.0\.0\.1)|host=\/|%2F/.test(url);
-// ~2.5k concurrent Mini App users: prefer Neon pooled (-pooler) URL + this pool size.
+const neonHost = (() => {
+  try { return new URL(url.trim()).hostname || ''; } catch { return ''; }
+})();
+const isNeon = /\.neon\.tech$/i.test(neonHost);
+const isPooler = /-pooler\./i.test(neonHost);
+// ~2.5k concurrent Mini App users: Neon pooled (-pooler) URL + this pool size.
+if (isNeon && !isPooler && !local) {
+  console.warn('[db] DATABASE_URL host has no "-pooler" — use the Neon pooled connection string for the app (direct URL is for migrations/dumps only).');
+}
 const pool = new Pool({
   connectionString: url,
   max: Number(process.env.PG_POOL_MAX || 20),
@@ -33,7 +41,7 @@ const pool = new Pool({
   allowExitOnIdle: false,
 });
 pool.on('error', (e) => console.error('[db] idle client error:', e.message));
-console.log(`[db] pool max=${pool.options.max}`);
+console.log(`[db] pool max=${pool.options.max}${isNeon ? (isPooler ? ' (Neon pooler)' : ' (Neon direct)') : ''}`);
 
 /** "?" and ":name" -> "$1, $2 ..."; returns the SQL and the ordered parameter list */
 function compile(sql, args) {

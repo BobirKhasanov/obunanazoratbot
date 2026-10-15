@@ -54,9 +54,22 @@ assert.ok(css.includes('.ann-track'));
 assert.ok(ann.includes('mediaOnly') && ann.includes('media-only') && css.includes('.ann-slide.media-only'), 'media-only slides');
 assert.ok(css.includes('object-fit: contain') && /ann-carousel:not\(\[hidden\]\)[\s\S]{0,80}140px/.test(css), 'media carousel fixed height + contain');
 assert.ok(ann.includes('announcementsKey') && ann.includes('stopAnnouncementsHost'), 'carousel reuse helpers');
+assert.ok(ann.includes('pauseAnnouncementsCarousel') && ann.includes('resumeAnnouncementsCarousel'), 'pause/resume keeps blobs on tab leave');
+assert.ok(ann.includes('isAnnouncementsHostLive'), 'reuse requires live host state');
+assert.ok(ann.includes('resolveMedia') && /await resolveMedia[\s\S]*stopHost\(host\)/.test(ann), 'fetch media before DOM swap');
 assert.ok(app.includes('reuseAnn') && app.includes('announcementsKey'), 'home reuses carousel to avoid flicker');
+assert.ok(app.includes('pauseAnnouncementsCarousel') && app.includes('resumeAnnouncementsHost'), 'tab leave pauses; reuse resumes');
+assert.ok(!/prev === TABS\.indexOf\('play'\)\)\s*\{\s*stopAnnouncementsCarousel/.test(app), 'must not hard-stop carousels on leave play');
 assert.ok(app.includes('time-option') && app.includes("classList.toggle('selected'"), 'time pick in-place (no remount)');
 assert.ok(i18n.includes('ann_title_section:'));
+
+// Neon-only media path (no Supabase Storage)
+const storage = read('src/storage.js');
+const envEx = read('.env.example');
+assert.ok(!storage.includes('SUPABASE'), 'storage.js must not use Supabase');
+assert.ok(storage.includes('BYTEA') || storage.includes('bytea') || /INSERT INTO media[\s\S]*data/.test(storage), 'media stored as BYTEA');
+assert.ok(!envEx.includes('SUPABASE'), '.env.example has no Supabase vars');
+assert.ok(server.includes('SELECT id, mime, data, size FROM media'), 'media endpoint selects BYTEA columns');
 
 // Pure Tashkent parse/format mirrors (same rules as server)
 function parseTashkentEnd(s) {

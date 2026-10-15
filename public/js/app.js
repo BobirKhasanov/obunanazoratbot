@@ -13,7 +13,17 @@ import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleOpenGame } from './game.js';
 import { renderProfilePage, openUserProfile } from './profile.js';
 import { openScreen, closeScreen, screenOpen } from './screen.js';
-import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel, stopAnnouncementsHost, announcementsKey, CAROUSEL_STAGGER_MS } from './announcements.js';
+import {
+  loadAnnouncements,
+  mountAnnouncementsCarousel,
+  pauseAnnouncementsCarousel,
+  resumeAnnouncementsCarousel,
+  resumeAnnouncementsHost,
+  stopAnnouncementsHost,
+  isAnnouncementsHostLive,
+  announcementsKey,
+  CAROUSEL_STAGGER_MS,
+} from './announcements.js';
 import { createPlayFlow } from './playflow.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
 
@@ -467,6 +477,8 @@ refreshers.play = async function renderPlay() {
     const gem = playEl.querySelector('.gempill');
     if (gem) gem.textContent = '💎 ' + (state.me.diamonds || 0);
     try { refreshInboxBadges(playEl); } catch { /* ignore */ }
+    // Tab return / soft poll: keep media carousels and restart auto-advance if paused
+    if (state.tab === 'play') resumeAnnouncementsCarousel(playEl);
     return;
   }
   playSnap = snap;
@@ -476,8 +488,9 @@ refreshers.play = async function renderPlay() {
   const pzKey = announcementsKey(puzzleAnns);
   const prevAnn = playEl?.querySelector('.ann-carousel[data-ann-board="home"]');
   const prevPz = playEl?.querySelector('.ann-carousel[data-ann-board="puzzle"]');
-  const reuseAnn = !!(prevAnn && prevAnn.dataset.annKey === annKey && prevAnn.querySelector('.ann-track'));
-  const reusePz = !!(prevPz && prevPz.dataset.annKey === pzKey && prevPz.querySelector('.ann-track'));
+  // Must still be "live" (blobs + timers state). Dead hosts after hard-stop must remount.
+  const reuseAnn = !!(prevAnn && prevAnn.dataset.annKey === annKey && isAnnouncementsHostLive(prevAnn));
+  const reusePz = !!(prevPz && prevPz.dataset.annKey === pzKey && isAnnouncementsHostLive(prevPz));
   if (reuseAnn) prevAnn.remove();
   else if (prevAnn) stopAnnouncementsHost(prevAnn);
   if (reusePz) prevPz.remove();
@@ -621,12 +634,14 @@ refreshers.play = async function renderPlay() {
       }
     };
     const opts = { botUsername: state.meta?.botUsername, userId: state.me?.id, onPage };
-    if (!reuseAnn) {
+    if (reuseAnn) resumeAnnouncementsHost(annHost);
+    else {
       annHost.dataset.annKey = annKey;
       await mountAnnouncementsCarousel(annHost, anns, opts);
     }
     if (puzzleAnns && puzzleAnns.length) {
-      if (!reusePz) {
+      if (reusePz) resumeAnnouncementsHost(puzzleHost);
+      else {
         puzzleHost.dataset.annKey = pzKey;
         await mountAnnouncementsCarousel(puzzleHost, puzzleAnns, { ...opts, delayMs: CAROUSEL_STAGGER_MS });
       }
@@ -924,11 +939,16 @@ function initPager() {
     state.index = clamp(i, 0, TABS.length - 1); state.tab = TABS[state.index];
     if (state.index !== prev) {
       closeScreen(true);
-      if (prev === TABS.indexOf('play')) { stopAnnouncementsCarousel(); playSnap = ''; }
+      // Pause auto-advance only — keep blob URLs so media carousels don't flash on return
+      if (prev === TABS.indexOf('play')) {
+        pauseAnnouncementsCarousel(page('play'));
+        playSnap = '';
+      }
       if (prev === TABS.indexOf('puzzles') && pz) {
         try { if (pz.board) pz.board.destroy(); } catch { /* ignore */ }
         pz = null;
       }
+      // Returning to play: refresh lobby data, but reuse live carousels (see renderPlay)
       if (state.tab === 'play') playSnap = '';
     }
     // Sticky Play fades with CSS; toggle after paint so opacity/transform transitions run

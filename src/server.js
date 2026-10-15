@@ -2609,12 +2609,13 @@ function parseAnnouncementBody(b, { requireFuture = true } = {}) {
 api.get('/media/:id', wrap(async (req, res) => {
   const id = String(req.params.id || '');
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw bad('Not found', 'notfound');
-  const row = await db.prepare('SELECT * FROM media WHERE id = ?').get(id);
+  // Only columns needed to stream BYTEA from Neon (avoid SELECT * on large rows).
+  const row = await db.prepare('SELECT id, mime, data, size FROM media WHERE id = ?').get(id);
   if (!row) throw bad('Not found', 'notfound');
   const buf = await loadMediaBytes(row);
   if (!buf) throw bad('Not found', 'notfound');
   res.set({
-    'Content-Type': row.mime,
+    'Content-Type': row.mime || 'application/octet-stream',
     'Cache-Control': 'private, max-age=3600',
     'Content-Length': buf.length,
   });

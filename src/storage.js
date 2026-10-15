@@ -18,10 +18,17 @@ async function saveMedia({ id, kind, mime, buf, adminId }) {
   return { id, kind, mime, size, storagePath: null };
 }
 
-/** Load media bytes for HTTP serve or Telegram upload. */
+/** Load media bytes for HTTP serve or Telegram upload (Neon BYTEA → Buffer). */
 async function loadMediaBytes(row) {
   if (!row || row.data == null) return null;
-  return Buffer.isBuffer(row.data) ? row.data : Buffer.from(row.data);
+  if (Buffer.isBuffer(row.data)) return row.data;
+  if (row.data instanceof Uint8Array) return Buffer.from(row.data);
+  // Rare: hex/escape string from a non-binary driver path
+  if (typeof row.data === 'string') {
+    const s = row.data.startsWith('\\x') ? row.data.slice(2) : row.data;
+    try { return Buffer.from(s, 'hex'); } catch { return null; }
+  }
+  try { return Buffer.from(row.data); } catch { return null; }
 }
 
 module.exports = {
