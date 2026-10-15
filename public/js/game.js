@@ -390,7 +390,7 @@ export function openGame(opts, onClose) {
     else if (c.isThreefoldRepetition()) reason = 'repetition';
     else if (c.isDraw() && !c.isStalemate()) reason = 'fifty';
     saveAi(null);
-    api('POST', '/results', { level: S.level, outcome }).then((r) => S.onStats && S.onStats(r.stats)).catch(() => {});
+    // Vs-computer never updates server stats / Elo
     setTimeout(() => { render(); showResult(outcome, reason); }, 650);
     return true;
   }
@@ -427,7 +427,7 @@ export function openGame(opts, onClose) {
   }
   async function resign() {
     if (!(await confirmSheet(t('resign_confirm'), t('resign'), true))) return;
-    if (S.kind === 'ai') { S.over = true; S.token = null; saveAi(null); api('POST', '/results', { level: S.level, outcome: 'loss' }).then((r) => S.onStats && S.onStats(r.stats)).catch(() => {}); render(); showResult('loss', 'resign'); }
+    if (S.kind === 'ai') { S.over = true; S.token = null; saveAi(null); render(); showResult('loss', 'resign'); }
     else try { applyServer((await api('POST', `/games/${S.id}/resign`)).game); } catch (e) { fail(e); }
   }
   async function drawAction(action) {

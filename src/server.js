@@ -595,17 +595,12 @@ const onlineStats = db.prepare(`
     COALESCE(SUM(CASE WHEN (white_id = :u AND result = '0-1') OR (black_id = :u AND result = '1-0') THEN 1 ELSE 0 END), 0) l
   FROM games WHERE status = 'finished' AND result IS NOT NULL AND (white_id = :u OR black_id = :u)
 `);
-const aiStats = db.prepare(`
-  SELECT
-    COUNT(*) FILTER (WHERE outcome = 'win') w, COUNT(*) FILTER (WHERE outcome = 'draw') d, COUNT(*) FILTER (WHERE outcome = 'loss') l,
-    COALESCE(MAX(CASE WHEN outcome = 'win' THEN level END), 0) best
-  FROM results WHERE user_id = ?
-`);
 const friendCount = db.prepare('SELECT COUNT(*) n FROM friends WHERE user_id = ?');
 
+/** Online PvP only — vs-computer results never affect stats or Elo. */
 const statsFor = async (uid) => ({
   online: await onlineStats.get({ u: uid }),
-  ai: await aiStats.get(uid),
+  ai: { w: 0, d: 0, l: 0, best: 0 },
   friends: (await friendCount.get(uid)).n,
 });
 
@@ -1285,16 +1280,11 @@ api.post('/puzzles/claim-daily', wrap(async (req, res) => {
   res.json({ ok: true, awarded: amount, amount, diamonds, day });
 }));
 
-// ---------- computer games (played in the browser, only the result is reported) ----------
-const lastResult = new Map();
+// ---------- computer games (local only — never counted in stats / ratings) ----------
 api.post('/results', wrap(async (req, res) => {
   const { level, outcome } = req.body || {};
   if (![1, 2, 3, 4].includes(level) || !['win', 'draw', 'loss'].includes(outcome)) throw bad('Bad result', 'bad_request');
-  const now = Date.now();
-  if (now - (lastResult.get(req.user.id) || 0) > 10_000) { // a real game takes longer than 10 seconds
-    lastResult.set(req.user.id, now);
-    await db.prepare('INSERT INTO results (user_id, level, outcome) VALUES (?, ?, ?)').run(req.user.id, level, outcome);
-  }
+  // Accept the payload for older clients, but do not store or rate vs-computer games.
   res.json({ stats: await statsFor(req.user.id) });
 }));
 

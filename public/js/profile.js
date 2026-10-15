@@ -68,10 +68,11 @@ export function renderProfilePage(ctx) {
   const me = state.me;
   const st = state.stats;
   const friends = state.friends || [];
+  // Online PvP only — vs-computer never counts in stats / ratings
   const s = {
-    w: (st?.online?.w || 0) + (st?.ai?.w || 0),
-    d: (st?.online?.d || 0) + (st?.ai?.d || 0),
-    l: (st?.online?.l || 0) + (st?.ai?.l || 0),
+    w: st?.online?.w || 0,
+    d: st?.online?.d || 0,
+    l: st?.online?.l || 0,
   };
   const save = async (patch) => {
     state.me = (await api('PATCH', '/me', patch)).user;
@@ -88,9 +89,9 @@ export function renderProfilePage(ctx) {
       state.stats = stats;
     } catch (e) { fail(e); }
     const tot = {
-      w: (stats?.online?.w || 0) + (stats?.ai?.w || 0),
-      d: (stats?.online?.d || 0) + (stats?.ai?.d || 0),
-      l: (stats?.online?.l || 0) + (stats?.ai?.l || 0),
+      w: stats?.online?.w || 0,
+      d: stats?.online?.d || 0,
+      l: stats?.online?.l || 0,
     };
     openScreen((close) => [
       ...subTop(t('stats'), close),
@@ -98,16 +99,7 @@ export function renderProfilePage(ctx) {
         h('div.stat', h('b.g', String(tot.w)), h('small', t('wins'))),
         h('div.stat', h('b', String(tot.d)), h('small', t('draws'))),
         h('div.stat', h('b.r', String(tot.l)), h('small', t('losses')))),
-      h('div.h2', t('vs_online')),
-      h('div.card.stats',
-        h('div.stat', h('b', String(stats?.online?.w || 0)), h('small', t('wins'))),
-        h('div.stat', h('b', String(stats?.online?.d || 0)), h('small', t('draws'))),
-        h('div.stat', h('b', String(stats?.online?.l || 0)), h('small', t('losses')))),
-      h('div.h2', t('vs_pc')),
-      h('div.card.stats',
-        h('div.stat', h('b', String(stats?.ai?.w || 0)), h('small', t('wins'))),
-        h('div.stat', h('b', String(stats?.ai?.d || 0)), h('small', t('draws'))),
-        h('div.stat', h('b', String(stats?.ai?.l || 0)), h('small', t('losses')))),
+      h('p.muted', t('stats_online_only')),
       h('div.h2', t('recent')),
       recent.length && gameRow
         ? h('div.list', recent.map((g) => gameRow(g, 'recent')))

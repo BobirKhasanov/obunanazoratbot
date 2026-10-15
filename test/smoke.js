@@ -594,12 +594,21 @@ async function playMoves(game, players, moves, startPly = 0) {
       await err('D', 'POST', '/games', { opponentId: USERS.B.id }, 404, 'user_unavailable'); // hidden players cannot be challenged
     });
 
-    await step('computer results are validated and counted (and cannot be spammed)', async () => {
+    await step('computer results validated but never counted in stats/rating', async () => {
       await err('A', 'POST', '/results', { level: 9, outcome: 'win' }, 400);
       await err('A', 'POST', '/results', { level: 3, outcome: 'cheat' }, 400);
+      const before = await ok('A', 'GET', '/me');
+      const eloBefore = before.user.elo;
+      const onlineBefore = before.stats.online;
       const r = await ok('A', 'POST', '/results', { level: 3, outcome: 'win' });
-      assert.deepStrictEqual([r.stats.ai.w, r.stats.ai.best], [1, 3]);
-      assert.strictEqual((await ok('A', 'POST', '/results', { level: 4, outcome: 'win' })).stats.ai.w, 1, 'second result within 10s ignored');
+      assert.deepStrictEqual([r.stats.ai.w, r.stats.ai.d, r.stats.ai.l], [0, 0, 0], 'ai stats always zero');
+      assert.deepStrictEqual(
+        [r.stats.online.w, r.stats.online.d, r.stats.online.l],
+        [onlineBefore.w, onlineBefore.d, onlineBefore.l],
+        'online stats unchanged by computer game',
+      );
+      const after = await ok('A', 'GET', '/me');
+      assert.strictEqual(after.user.elo, eloBefore, 'computer game does not change Elo');
     });
 
     // ---------------------------------------------------------------- websocket security

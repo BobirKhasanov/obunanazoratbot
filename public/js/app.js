@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, setInitData, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, setInitData, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep, unlockAudio, playMoveSound } from './ui.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -103,7 +103,8 @@ const empty = (text, ic) => h('div.empty', ic ? h('div.empty-ic', ic) : null, te
 const rowBtn = (...kids) => h('button.row', ...kids);
 
 const stat = (n, label, color) => h('div.stat', h('b' + (color ? '.' + color : ''), String(n)), h('small', label));
-const sumStats = (s) => ({ w: s.online.w + s.ai.w, d: s.online.d + s.ai.d, l: s.online.l + s.ai.l });
+/** Online PvP only — computer games never count toward stats/ratings. */
+const sumStats = (s) => ({ w: s.online.w || 0, d: s.online.d || 0, l: s.online.l || 0 });
 
 // ---------- data ----------
 async function loadLobby() { const l = await api('GET', '/lobby'); state.lobby = l; state.stats = l.stats; return l; }
@@ -550,10 +551,12 @@ function openPuzzle(i) {
       : h('button.btn.ghost.sm', { onclick: () => { const g = goodMoves(chess, state2.left)[0]; if (g) board.showHint({ from: g.from, to: g.to }); } }, t('puzzle_hint')));
   const onMove = async (from, to, promotion) => {
     if (state2.locked) return;
+    unlockAudio();
     const good = goodMoves(chess, state2.left);
     const mv = good.find((m) => m.from === from && m.to === to && (m.promotion || undefined) === (promotion || undefined));
     if (!mv) { say(t('puzzle_wrong'), 'bad'); haptic('error'); draw(); return; }
     chess.move({ from, to, promotion });
+    playMoveSound();
     state2.locked = true; draw({ from, to });
     if (chess.isCheckmate()) {
       markSolved(puzzle.id);
@@ -568,12 +571,15 @@ function openPuzzle(i) {
     const replies = chess.moves({ verbose: true });
     const r = replies[Math.floor(Math.random() * replies.length)];
     chess.move(r); state2.left -= 1; state2.locked = false; draw({ from: r.from, to: r.to });
+    playMoveSound();
     say(t(colour === 'w' ? 'puzzle_white' : 'puzzle_black'));
   };
   pz = state2;
   mount('puzzles',
-    h('div.top', h('button.mini.back', { 'aria-label': t('puzzle_back'), onclick: closePuzzle }, icon('arrow', 18)),
-      h('h1', t('puzzle_n', { n: i + 1 })), h('div.livepill', t('puzzle_diff', { n: puzzle.diff }) + ' · ' + t('mate_in', { n: puzzle.n }))),
+    h('div.top',
+      h('button.round.back', { type: 'button', 'aria-label': t('back'), onclick: closePuzzle }, icon('back', 22)),
+      h('h1', t('puzzle_n', { n: i + 1 })),
+      h('div.livepill', t('puzzle_diff', { n: puzzle.diff }) + ' · ' + t('mate_in', { n: puzzle.n }))),
     host, status, actions);
   board = state2.board = new Board(host, { onMove });
   draw(); buttons(false);

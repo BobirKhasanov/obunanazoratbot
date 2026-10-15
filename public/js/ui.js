@@ -264,85 +264,69 @@ export function floatEmoji(emoji, x, y) {
   setTimeout(() => el.remove(), 3600);
 }
 
-/** Build a short piece-click WAV blob URL (Telegram WebView–friendly). */
-function moveWavUrl() {
-  const sr = 22050;
-  const n = Math.floor(sr * 0.08);
-  const samples = new Int16Array(n);
+/** Soft wooden piece-on-board thud (quiet; Web Audio so overlaps never glitch). */
+let moveAudioCtx = null;
+let moveBuf = null;
+let lastMoveSoundAt = 0;
+
+function ensureMoveCtx() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!moveAudioCtx) moveAudioCtx = new AC();
+  return moveAudioCtx;
+}
+
+function buildMoveBuffer(ctx) {
+  const sr = ctx.sampleRate || 44100;
+  const n = Math.floor(sr * 0.11);
+  const buf = ctx.createBuffer(1, n, sr);
+  const d = buf.getChannelData(0);
+  let n0 = 0;
+  let n1 = 0;
   for (let i = 0; i < n; i++) {
     const t = i / sr;
-    const env = Math.exp(-t * 48);
-    samples[i] = (Math.sin(2 * Math.PI * 760 * t) * env * 0.55) * 32767;
+    // Soft wood: low thud + short mid knock + tiny filtered noise (not a beep)
+    const thud = Math.sin(2 * Math.PI * 165 * t) * Math.exp(-t * 38);
+    const knock = Math.sin(2 * Math.PI * 380 * t) * Math.exp(-t * 62) * 0.4;
+    n0 = n0 * 0.7 + (Math.random() * 2 - 1) * 0.3;
+    n1 = n1 * 0.55 + n0 * 0.45;
+    const noise = n1 * Math.exp(-t * 85) * 0.22;
+    const env = Math.exp(-t * 42);
+    d[i] = (thud * 0.7 + knock + noise) * env * 0.48;
   }
-  const bytes = new ArrayBuffer(44 + samples.length * 2);
-  const v = new DataView(bytes);
-  const ascii = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
-  ascii(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true); ascii(8, 'WAVE');
-  ascii(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
-  ascii(36, 'data'); v.setUint32(40, samples.length * 2, true);
-  for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, samples[i], true);
-  return URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+  return buf;
 }
 
-let moveAudioEl = null;
-let moveAudioCtx = null;
-let moveWav = null;
-
-function ensureMoveAudio() {
-  if (moveAudioEl) return moveAudioEl;
-  moveWav = moveWav || moveWavUrl();
-  moveAudioEl = new Audio(moveWav);
-  moveAudioEl.preload = 'auto';
-  moveAudioEl.volume = 0.5;
-  return moveAudioEl;
-}
-
-/** Call from a user gesture so later move sounds are allowed. */
+/** Call from a user gesture so later move sounds are allowed in Telegram WebView. */
 export function unlockAudio() {
   try {
-    const el = ensureMoveAudio();
-    const p = el.play();
-    if (p && p.then) p.then(() => { try { el.pause(); el.currentTime = 0; } catch { /* ignore */ } }).catch(() => {});
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (AC) {
-      moveAudioCtx = moveAudioCtx || new AC();
-      if (moveAudioCtx.state === 'suspended') moveAudioCtx.resume().catch(() => {});
-    }
+    const ctx = ensureMoveCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    if (!moveBuf) moveBuf = buildMoveBuffer(ctx);
   } catch { /* ignore */ }
 }
 
-/** Short soft click when a piece moves (timed + untimed + AI). */
+/** Quiet realistic piece-drop when a move lands (player, opponent, AI). */
 export function playMoveSound() {
   try {
-    const el = ensureMoveAudio();
-    el.currentTime = 0;
-    const played = el.play();
-    if (played && played.catch) played.catch(() => playMoveSoundOsc());
-  } catch {
-    playMoveSoundOsc();
-  }
-}
-
-function playMoveSoundOsc() {
-  try {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    moveAudioCtx = moveAudioCtx || new AC();
-    const run = () => {
-      const t0 = moveAudioCtx.currentTime;
-      const o = moveAudioCtx.createOscillator();
-      const g = moveAudioCtx.createGain();
-      o.type = 'triangle';
-      o.frequency.setValueAtTime(620, t0);
-      o.frequency.exponentialRampToValueAtTime(280, t0 + 0.07);
-      g.gain.setValueAtTime(0.12, t0);
-      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.09);
-      o.connect(g); g.connect(moveAudioCtx.destination);
-      o.start(t0); o.stop(t0 + 0.1);
+    const now = performance.now();
+    if (now - lastMoveSoundAt < 45) return; // ignore double-fire from pointer+click
+    lastMoveSoundAt = now;
+    const ctx = ensureMoveCtx();
+    if (!ctx) return;
+    if (!moveBuf) moveBuf = buildMoveBuffer(ctx);
+    const start = () => {
+      const src = ctx.createBufferSource();
+      const g = ctx.createGain();
+      src.buffer = moveBuf;
+      g.gain.value = 0.22; // keep soft in phone speakers / WebView
+      src.connect(g);
+      g.connect(ctx.destination);
+      src.start(0);
     };
-    if (moveAudioCtx.state === 'suspended') moveAudioCtx.resume().then(run).catch(() => {});
-    else run();
+    if (ctx.state === 'suspended') ctx.resume().then(start).catch(() => {});
+    else start();
   } catch { /* autoplay / old WebView */ }
 }
 

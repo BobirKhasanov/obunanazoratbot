@@ -95,12 +95,16 @@ const gameJs = read('public/js/game.js');
 assert.ok(read('public/js/ui.js').includes('unlockAudio') && gameJs.includes('unlockAudio'), 'move sound unlocks on board gesture');
 assert.ok(gameJs.includes('playMoveSound') && gameJs.includes('/chat') && gameJs.includes('gchat'), 'in-game move sound + ephemeral chat');
 assert.ok(gameJs.includes('pclk') && gameJs.includes('categoryOf'), 'clocks styled by time-control category');
-assert.ok(read('public/js/ui.js').includes('playMoveSound') && /floatup 3\.4s/.test(css), 'slower emoji float + move sound helper');
+assert.ok(read('public/js/ui.js').includes('playMoveSound') && read('public/js/ui.js').includes('buildMoveBuffer') && /floatup 3\.4s/.test(css), 'wood move buffer + slower emoji float');
+assert.ok(app.includes("button.round.back") && app.includes("icon('back', 22)") && app.includes('closePuzzle'), 'puzzle uses circular back like other pages');
+assert.ok(!gameJs.includes("POST', '/results'") && !gameJs.includes('"/results"'), 'AI games do not post results to stats');
+assert.ok(profile.includes('stats_online_only') && !profile.includes("t('vs_pc')"), 'stats page online-only, no vs-pc totals');
+assert.ok(!read('public/js/userprofile.js').includes("t('vs_pc')"), 'public profile hides computer W/D/L');
 assert.ok(admin.includes('admin_pack_sum') || admin.includes('admin_pack_diamonds'), 'admin validates diamond packs before save');
 assert.ok(read('src/server.js').includes('parseDiamondPacksStrict') && read('src/server.js').includes('/puzzles/claim-daily') && read('src/server.js').includes('/games/:id/chat'), 'server shop/chat/puzzle endpoints');
 assert.ok(read('src/server.js').includes('puzzle_daily_reward') && read('src/server.js').includes('puzzleDailyReward'), 'server stores puzzle daily reward setting');
 
-for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down']) {
+for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down', 'stats_online_only']) {
   assert.ok(i18n.includes(k + ':'), `i18n ${k}`);
 }
 
