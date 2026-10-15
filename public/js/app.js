@@ -1,23 +1,59 @@
 // Main app: boot, swipe pager, pages, deep links.
 import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, setInitData, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep } from './ui.js';
 import { t, setLang } from './i18n.js';
-import { openMessages, openNotifications, refreshInboxBadges, headerInboxBtns } from './inbox.js';
+import { openGame, savedAiGame, openGameId } from './game.js';
+import { Chess } from '/vendor/chess.js';
+import { Board, restyleBoards } from './board.js';
+import { PUZZLES, goodMoves, mateIn } from './puzzles.js';
+import { normalizeTimeControl, formatTashkentWhen } from './time.js';
+import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
+import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
+import { restyleOpenGame } from './game.js';
+import { renderProfilePage, openUserProfile } from './profile.js';
+import { closeScreen } from './screen.js';
 
-/** Wire header mail/bell so Telegram WebView taps always open (no lazy-import race). */
-function headerInboxBtnsSafe() {
-  try {
-    return headerInboxBtns();
-  } catch (e) {
-    console.warn('[inbox] header fallback', e);
+/** Lazy inbox — must not block app boot if the chunk fails to load. */
+let inboxMod = null;
+let inboxPromise = null;
+function loadInbox() {
+  if (inboxMod) return Promise.resolve(inboxMod);
+  if (!inboxPromise) {
+    inboxPromise = import('./inbox.js?v=20261015e')
+      .then((m) => { inboxMod = m; return m; })
+      .catch((e) => {
+        console.warn('[inbox]', e);
+        inboxPromise = null;
+        return null;
+      });
   }
-  const bind = (el, open) => {
+  return inboxPromise;
+}
+function openInbox(kind) {
+  const go = async () => {
+    haptic('light');
+    const m = await loadInbox();
+    if (!m) { toast(t('msg_unavailable')); return; }
+    try {
+      if (kind === 'messages') m.openMessages();
+      else m.openNotifications();
+    } catch (e) { console.warn('[inbox]', e); fail(e); }
+  };
+  go();
+}
+function headerInboxBtnsSafe() {
+  const bind = (el, kind) => {
+    let last = 0;
     el.addEventListener('pointerdown', (e) => { e.stopPropagation(); }, { passive: true });
-    el.addEventListener('click', (e) => {
+    const onTap = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      haptic('light');
-      try { open(); } catch (err) { console.warn('[inbox]', err); fail(err); }
-    });
+      const now = Date.now();
+      if (now - last < 450) return;
+      last = now;
+      openInbox(kind);
+    };
+    el.addEventListener('pointerup', onTap);
+    el.addEventListener('click', onTap);
   };
   const mail = h('button.hdr-ic', {
     type: 'button',
@@ -29,25 +65,15 @@ function headerInboxBtnsSafe() {
     'aria-label': t('xabarnoma'),
     'data-noswipe': '',
   }, icon('bell', 20), h('span.hdr-badge-slot'));
-  bind(mail, openMessages);
-  bind(bell, openNotifications);
+  bind(mail, 'messages');
+  bind(bell, 'notifications');
   const wrap = h('div.hdr-inbox', { 'data-noswipe': '' }, mail, bell);
-  try { refreshInboxBadges(wrap); } catch { /* ignore */ }
+  refreshInboxBadgesSafe(wrap);
   return wrap;
 }
 function refreshInboxBadgesSafe(root) {
-  try { refreshInboxBadges(root); } catch { /* ignore */ }
+  loadInbox().then((m) => { try { m && m.refreshInboxBadges(root); } catch { /* ignore */ } });
 }
-import { openGame, savedAiGame, openGameId } from './game.js';
-import { Chess } from '/vendor/chess.js';
-import { Board, restyleBoards } from './board.js';
-import { PUZZLES, goodMoves, mateIn } from './puzzles.js';
-import { normalizeTimeControl, formatTashkentWhen } from './time.js';
-import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
-import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
-import { restyleOpenGame } from './game.js';
-import { renderProfilePage, openUserProfile } from './profile.js';
-import { closeScreen } from './screen.js';
 import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel, CAROUSEL_STAGGER_MS } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
 
@@ -766,7 +792,8 @@ async function boot() {
 
   let me;
   try {
-    me = await api('GET', '/me');
+    // Hard timeout so a stalled API never leaves users on the splash forever
+    me = await api('GET', '/me', undefined, { timeoutMs: 12_000 });
   } catch (e) {
     const { errText } = await import('./i18n.js');
     showGate(errText(e));
@@ -835,7 +862,8 @@ async function boot() {
     console.error('[boot] refresh', e);
     fail(e);
   }
-  try { refreshInboxBadges(); } catch { /* ignore */ }
+  // Warm inbox in the background (never blocks boot)
+  loadInbox();
 }
 boot().catch((e) => {
   console.error('[boot]', e);

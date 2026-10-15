@@ -190,15 +190,23 @@ export class ApiError extends Error {
   constructor(status, body) { super((body && body.error) || 'Error'); this.status = status; this.code = (body && body.code) || (status ? 'server' : 'net'); }
 }
 
-export async function api(method, url, body) {
+export async function api(method, url, body, opts = {}) {
   let res;
+  const timeoutMs = Number(opts && opts.timeoutMs) || 0;
+  const ctrl = timeoutMs > 0 && typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch { /* ignore */ } }, timeoutMs) : null;
   try {
     res = await fetch('/api' + url, {
       method,
       headers: { 'X-Init-Data': initData, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: ctrl ? ctrl.signal : undefined,
     });
-  } catch { throw new ApiError(0, { code: 'net' }); }
+  } catch {
+    throw new ApiError(0, { code: 'net' });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, data);
   return data;
