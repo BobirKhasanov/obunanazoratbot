@@ -87,6 +87,11 @@ assert.ok(!app.includes("h('span.star', ' ★')"), 'home live/friends no friend 
 assert.ok(read('src/server.js').includes('/notifications/by-copy/'), 'admin delete notif by copy');
 assert.ok(css.includes('data-android="1"') && css.includes('0.38s'), 'Android snappier screen transitions');
 assert.ok(read('public/js/pieces.js').includes('linearGradient') && read('public/js/pieces.js').includes('neo-'), 'neo pieces use shaded gradients');
+assert.ok(read('public/js/perf.js').includes('homeTabRefreshMs') && app.includes('homeTabRefreshMs'), 'lighter home tab refresh');
+assert.ok(read('src/char-avatars.js').includes('clipPath') && read('src/char-avatars.js').includes('circ-'), 'char avatars are circular SVGs');
+assert.ok(css.includes('will-change: transform, opacity') && !/will-change:\s*scroll-position\s*[,;]/.test(css), 'no scroll-position will-change (Android sticky scroll)');
+assert.ok(read('src/db.js').includes('idx_games_matchmaking'), 'matchmaking DB index');
+assert.ok(app.includes('avatarKey') && read('src/server.js').includes('avatar_key'), 'lobby/friends expose avatar keys');
 assert.ok(ui.includes("CustomEvent('open-premium')") && ui.includes('button.prem-ic'), 'premIc is a tappable button');
 assert.ok(css.includes('prem-ring') && css.includes('prem-spin'), 'rotating premium avatar ring');
 assert.ok(css.includes('mask:') || css.includes('-webkit-mask:'), 'premium ring is rim-only (not solid gold disc)');
@@ -200,7 +205,7 @@ assert.ok(css.includes('#play-sticky') && css.includes('order: -1'), 'Play CTA o
 assert.ok(/#play-sticky\.show[\s\S]{0,220}overflow:\s*visible/.test(css), 'Play CTA edges/shadow not clipped');
 assert.ok(/#nav-ind\s*\{[^}]*0\.95s/.test(css), 'nav indicator matches pager timing');
 assert.ok(css.includes('overscroll-behavior-y: contain'), 'pages contain overscroll for smoother feel');
-assert.ok(css.includes('--ease-scroll') && css.includes('will-change: scroll-position'), 'high-smooth scroll tuning');
+assert.ok(css.includes('--ease-scroll') && css.includes('-webkit-overflow-scrolling: touch'), 'high-smooth scroll tuning');
 assert.ok(ui.includes('smoothScrollTo') && app.includes('smoothScrollTo'), 'programmatic high-smooth scroll');
 assert.ok(admin.includes('referralReward') && admin.includes('admin_referral_rewards'), 'admin can edit referral bonuses');
 const html = read('public/index.html');

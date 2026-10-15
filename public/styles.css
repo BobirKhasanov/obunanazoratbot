@@ -82,10 +82,10 @@ h1, h2, h3, p { margin: 0; }
   -webkit-overflow-scrolling: touch; scrollbar-width: none;
   scroll-behavior: smooth; overscroll-behavior-y: contain;
   overscroll-behavior-x: none;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  will-change: scroll-position;
+  /* Avoid will-change:scroll-position — forces large layers and sticky scroll on Android */
   scroll-padding-top: 8px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
 }
 /* Extra room for dock + Play CTA stacked above the nav */
 .page[data-page="play"] { padding-bottom: calc(190px + var(--safe-b)); }
@@ -233,7 +233,7 @@ button.row:active { transform: scale(0.98); }
   background: var(--sheet-bg); border-radius: 30px 30px 0 0; padding: 8px 18px calc(22px + var(--safe-b));
   transform: translateY(100%) translateZ(0); transition: transform 0.72s var(--ease-scroll); touch-action: pan-y; scrollbar-width: none;
   overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; scroll-behavior: smooth;
-  will-change: scroll-position, transform;
+  will-change: transform;
 }
 .sheet::-webkit-scrollbar { display: none; }
 .sheet.show { transform: translateY(0); }
@@ -324,7 +324,7 @@ button.row:active { transform: scale(0.98); }
   visibility: hidden; opacity: 0; scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain;
   overscroll-behavior-x: none;
-  will-change: transform, opacity, scroll-position;
+  will-change: transform, opacity;
   scroll-padding-top: 8px;
 }
 .screen.show { transform: none; visibility: visible; opacity: 1; }
@@ -747,8 +747,12 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .rank-points b { display: block; font-size: 20px; font-weight: 850; }
 .rank-points small { display: block; color: var(--muted); font-size: 11px; }
 .rank-footnote { margin: 16px 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.avatar.medal { padding: 0; overflow: hidden; background: #0b0f16 !important; }
-.avatar-medal, .medal-preview { width: 100%; height: 100%; object-fit: contain; display: block; border-radius: inherit; background: #0b0f16; }
+.avatar.medal { padding: 0; overflow: hidden; }
+.avatar.medal.char { background: transparent !important; }
+.avatar.medal.photo { background: transparent !important; }
+.avatar-medal, .medal-preview { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; background: transparent; }
+.avatar.medal:not(.char):not(.photo) .avatar-medal,
+.medal-preview { object-fit: contain; background: #0b0f16; }
 .uprof-medal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 12px; }
 .uprof-medals .medal-preview { width: 100%; height: auto; aspect-ratio: 4/5; }
 .avatar.photo-ph {
@@ -1224,6 +1228,14 @@ html[data-android="1"] #nav-ind {
 html[data-android="1"] .page {
   scroll-behavior: auto;
   -webkit-overflow-scrolling: touch;
+  content-visibility: visible; /* Android WebView: auto can clip during fling */
+}
+html[data-android="1"] .page > *,
+html[data-perf="lite"] .page > * { animation: none !important; }
+html[data-android="1"] .list .row,
+html[data-perf="lite"] .list .row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
 }
 html[data-android="1"] .sheet {
   transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
@@ -1595,8 +1607,10 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 /* Circular avatars + ONE rotating gold Premium RING (rim only — never a solid gold disc) */
 @keyframes prem-spin { to { transform: rotate(360deg); } }
 .avwrap.circ,
-.avwrap.circ .avatar { border-radius: 50%; }
+.avwrap.circ .avatar,
+.avwrap.circ .avatar-medal { border-radius: 50%; }
 .avwrap.circ .prem-ring { border-radius: 50%; }
+.avwrap.circ .avatar.medal { border-radius: 50%; overflow: hidden; }
 .avwrap.prem {
   width: 42px; height: 42px;
   overflow: visible;

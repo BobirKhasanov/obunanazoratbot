@@ -807,7 +807,7 @@ export function openAdmin(onClose) {
   // ----- section screens -----
   const openLive = () => openScreen((close) => {
     loadLive();
-    clearInterval(timer); timer = setInterval(() => { if (!document.hidden) loadLive(); }, 5000);
+    clearInterval(timer); timer = setInterval(() => { if (!document.hidden) loadLive(); }, 10000);
     return [
       ...subTop(t('admin_sec_live'), close),
       liveBox,

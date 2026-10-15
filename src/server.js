@@ -1661,6 +1661,17 @@ api.post('/games/:id/draw', wrap(async (req, res) => {
 
 // Emoji reactions travel straight to the opponent's screen and are not stored
 const lastReact = new Map();
+function touchRateMap(map, key, now, max = 4_000) {
+  map.set(key, now);
+  if (map.size <= max) return;
+  // Drop oldest ~20% so flood maps cannot grow forever under free-tier memory
+  const drop = Math.ceil(map.size * 0.2);
+  let i = 0;
+  for (const k of map.keys()) {
+    map.delete(k);
+    if (++i >= drop) break;
+  }
+}
 api.post('/games/:id/react', wrap(async (req, res) => {
   const uid = req.user.id;
   const row = await loadGame(req.params.id, uid);
@@ -1668,7 +1679,7 @@ api.post('/games/:id/react', wrap(async (req, res) => {
   if (!REACTIONS.includes(emoji)) throw bad('Unknown reaction', 'bad_request');
   const now = Date.now();
   if (now - (lastReact.get(uid) || 0) < 500) return res.json({ ok: true }); // flood guard
-  lastReact.set(uid, now);
+  touchRateMap(lastReact, uid, now);
   for (const id of await participants(row)) if (id !== uid) realtime.send(id, { t: 'react', id: row.id, emoji, by: uid });
   res.json({ ok: true });
 }));
@@ -1684,7 +1695,7 @@ api.post('/games/:id/chat', wrap(async (req, res) => {
   if (!text) throw bad('Empty message', 'bad_request');
   const now = Date.now();
   if (now - (lastChat.get(uid) || 0) < 400) return res.json({ ok: true });
-  lastChat.set(uid, now);
+  touchRateMap(lastChat, uid, now);
   const name = (await person(uid)).name;
   for (const id of await participants(row)) {
     if (id !== uid) realtime.send(id, { t: 'chat', id: row.id, text, by: uid, name });
@@ -1745,7 +1756,7 @@ api.get('/rankings', wrap(async (req, res) => {
   const month = monthKey();
   // v2: includes premium flag (old cache entries without it must not be reused)
   const cacheKey = `rankings:v2:${board}:${category}:${month}`;
-  const cached = await cacheGet(cacheKey, 5_000);
+  const cached = await cacheGet(cacheKey, 15_000);
   if (cached) return res.json(cached);
 
   const mapPremium = (r) => isPremiumActive({
@@ -1828,7 +1839,7 @@ api.get('/rankings', wrap(async (req, res) => {
     board, category, month, monthLabel: monthLabelEn(month),
     rankings: rows, updatedAt: new Date().toISOString(),
   };
-  await cacheSet(cacheKey, payload, 5_000);
+  await cacheSet(cacheKey, payload, 15_000);
   res.json(payload);
 }));
 
@@ -1860,12 +1871,13 @@ api.get('/lobby', wrap(async (req, res) => {
   `).all({ u: uid });
   // Shared busy-set cache (not per-user) — safe across lobby polls
   let busy;
-  const busyCached = await cacheGet('lobby:busy', 2_000);
+  // Longer shared TTLs cut Render/Supabase load; WS still pushes game events live
+  const busyCached = await cacheGet('lobby:busy', 5_000);
   if (busyCached) busy = new Set(busyCached);
   else {
     const pairs = (await db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all()).flatMap((g) => [g.white_id, g.black_id]);
     busy = new Set(pairs);
-    await cacheSet('lobby:busy', pairs, 2_000);
+    await cacheSet('lobby:busy', pairs, 5_000);
   }
 
   const pendingInvites = await db.prepare(
@@ -1875,7 +1887,7 @@ api.get('/lobby', wrap(async (req, res) => {
 
   // Shared presence: present_until is refreshed on every API call and cleared on Mini App close / WS leave.
   const rows = await db.prepare(`
-    SELECT id, first_name, last_name, discoverable, premium, premium_until
+    SELECT id, first_name, last_name, discoverable, premium, premium_until, avatar_key
     FROM users
     WHERE blocked = 0 AND id != ?
       AND present_until > now()
@@ -1889,17 +1901,18 @@ api.get('/lobby', wrap(async (req, res) => {
       id: r.id, name: displayName(r), inGame: busy.has(r.id), friend: friendIds.has(r.id),
       premium: isPremiumActive(r), discoverable: !!r.discoverable || friendIds.has(r.id),
       invited: inviteGameByUser.has(r.id), inviteGameId: inviteGameByUser.get(r.id) || null,
+      avatarKey: r.avatar_key || null,
     }))
     .sort((a, b) => (b.friend - a.friend) || (a.inGame - b.inGame) || a.name.localeCompare(b.name));
 
-  let onlineCount = await cacheGet('lobby:onlineCount', 3_000);
+  let onlineCount = await cacheGet('lobby:onlineCount', 8_000);
   if (onlineCount == null) {
     const countRow = await db.prepare(`
       SELECT COUNT(*)::int AS n FROM users
       WHERE blocked = 0 AND present_until > now()
     `).get();
     onlineCount = Math.max(countRow?.n || 0, realtime.onlineIds().length);
-    await cacheSet('lobby:onlineCount', onlineCount, 3_000);
+    await cacheSet('lobby:onlineCount', onlineCount, 8_000);
   } else {
     onlineCount = Math.max(Number(onlineCount) || 0, realtime.onlineIds().length);
   }
@@ -1908,11 +1921,11 @@ api.get('/lobby', wrap(async (req, res) => {
     SELECT * FROM games WHERE status = 'finished' AND (white_id = :u OR black_id = :u) ORDER BY updated_at DESC LIMIT 8
   `).all({ u: uid });
 
-  let liveGames = await cacheGet('lobby:liveGames', 2_000);
+  let liveGames = await cacheGet('lobby:liveGames', 5_000);
   if (liveGames == null) {
     const liveGamesRow = await db.prepare("SELECT COUNT(*)::int AS n FROM games WHERE status = 'active'").get();
     liveGames = liveGamesRow?.n || 0;
-    await cacheSet('lobby:liveGames', liveGames, 2_000);
+    await cacheSet('lobby:liveGames', liveGames, 5_000);
   }
   res.json({
     onlineCount,
@@ -2218,7 +2231,7 @@ api.get('/messages/search', wrap(async (req, res) => {
   const uid = req.user.id;
   // Search any player (not friends-only); starting a chat still requires friendship
   const rows = await db.prepare(`
-    SELECT u.id, u.first_name, u.last_name, u.username, u.premium, u.premium_until
+    SELECT u.id, u.first_name, u.last_name, u.username, u.premium, u.premium_until, u.avatar_key
     FROM users u
     WHERE u.id <> ? AND u.blocked = 0
       AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.user_id = ? AND b.blocked_id = u.id) OR (b.user_id = u.id AND b.blocked_id = ?))
@@ -2232,6 +2245,7 @@ api.get('/messages/search', wrap(async (req, res) => {
   res.json({
     users: rows.map((u) => ({
       id: u.id, name: displayName(u), username: u.username || null, premium: isPremiumActive(u),
+      avatarKey: u.avatar_key || null,
     })),
   });
 }));
@@ -2240,8 +2254,8 @@ api.get('/messages/threads', wrap(async (req, res) => {
   const uid = Number(req.user.id);
   const rows = await db.prepare(`
     SELECT t.id, t.updated_at, t.user_a, t.user_b,
-      ua.first_name AS a_first, ua.last_name AS a_last, ua.username AS a_user, ua.premium AS a_prem, ua.premium_until AS a_until,
-      ub.first_name AS b_first, ub.last_name AS b_last, ub.username AS b_user, ub.premium AS b_prem, ub.premium_until AS b_until,
+      ua.first_name AS a_first, ua.last_name AS a_last, ua.username AS a_user, ua.premium AS a_prem, ua.premium_until AS a_until, ua.avatar_key AS a_av,
+      ub.first_name AS b_first, ub.last_name AS b_last, ub.username AS b_user, ub.premium AS b_prem, ub.premium_until AS b_until, ub.avatar_key AS b_av,
       (SELECT body FROM dm_messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS last_body,
       (SELECT COUNT(*)::int FROM dm_messages m WHERE m.thread_id = t.id AND m.sender_id <> ? AND m.read_at IS NULL) AS unread
     FROM dm_threads t
@@ -2254,8 +2268,8 @@ api.get('/messages/threads', wrap(async (req, res) => {
   res.json({
     threads: rows.map((r) => {
       const peer = Number(r.user_a) === uid
-        ? { id: r.user_b, name: displayName({ first_name: r.b_first, last_name: r.b_last }), username: r.b_user, premium: isPremiumActive({ premium: r.b_prem, premium_until: r.b_until }) }
-        : { id: r.user_a, name: displayName({ first_name: r.a_first, last_name: r.a_last }), username: r.a_user, premium: isPremiumActive({ premium: r.a_prem, premium_until: r.a_until }) };
+        ? { id: r.user_b, name: displayName({ first_name: r.b_first, last_name: r.b_last }), username: r.b_user, premium: isPremiumActive({ premium: r.b_prem, premium_until: r.b_until }), avatarKey: r.b_av || null }
+        : { id: r.user_a, name: displayName({ first_name: r.a_first, last_name: r.a_last }), username: r.a_user, premium: isPremiumActive({ premium: r.a_prem, premium_until: r.a_until }), avatarKey: r.a_av || null };
       return { id: r.id, peer, lastBody: r.last_body || '', unread: r.unread || 0, updatedAt: r.updated_at };
     }),
   });
@@ -2279,7 +2293,7 @@ api.post('/messages/threads', wrap(async (req, res) => {
   }
   res.status(201).json({
     id: Number(row.id),
-    peer: { id: u.id, name: displayName(u), username: u.username || null, premium: isPremiumActive(u) },
+    peer: { id: u.id, name: displayName(u), username: u.username || null, premium: isPremiumActive(u), avatarKey: u.avatar_key || null },
   });
 }));
 
@@ -2302,7 +2316,7 @@ api.get('/messages/threads/:id', wrap(async (req, res) => {
   `).all(tid);
   res.json({
     peer: other
-      ? { id: other.id, name: displayName(other), username: other.username || null, premium: isPremiumActive(other) }
+      ? { id: other.id, name: displayName(other), username: other.username || null, premium: isPremiumActive(other), avatarKey: other.avatar_key || null }
       : { id: otherId, name: 'Player' },
     messages: msgs.map((m) => ({
       id: m.id, body: m.body, mine: Number(m.sender_id) === uid, createdAt: m.created_at,
@@ -2367,9 +2381,17 @@ api.post('/messages/threads/:id', wrap(async (req, res) => {
 api.get('/friends', wrap(async (req, res) => {
   const uid = req.user.id;
   const rows = await db.prepare(`
-    SELECT u.id, u.first_name, u.premium, u.premium_until, u.present_until FROM friends f JOIN users u ON u.id = f.friend_id WHERE f.user_id = ? ORDER BY u.first_name
+    SELECT u.id, u.first_name, u.premium, u.premium_until, u.present_until, u.avatar_key
+    FROM friends f JOIN users u ON u.id = f.friend_id WHERE f.user_id = ? ORDER BY u.first_name
   `).all(uid);
-  const busy = new Set((await db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all()).flatMap((g) => [g.white_id, g.black_id]));
+  let busy;
+  const busyCached = await cacheGet('lobby:busy', 5_000);
+  if (busyCached) busy = new Set(busyCached);
+  else {
+    const pairs = (await db.prepare("SELECT white_id, black_id FROM games WHERE status = 'active'").all()).flatMap((g) => [g.white_id, g.black_id]);
+    busy = new Set(pairs);
+    await cacheSet('lobby:busy', pairs, 5_000);
+  }
   const pending = await db.prepare(
     "SELECT i.user_id, i.game_id FROM game_invites i JOIN games g ON g.id = i.game_id WHERE g.status = 'invited' AND g.creator_id = ?"
   ).all(uid);
@@ -2379,6 +2401,7 @@ api.get('/friends', wrap(async (req, res) => {
       id: r.id, name: r.first_name || 'Player', online: isUserOnline(r.id, r.present_until), inGame: busy.has(r.id),
       premium: isPremiumActive(r),
       invited: inviteGameByUser.has(r.id), inviteGameId: inviteGameByUser.get(r.id) || null,
+      avatarKey: r.avatar_key || null,
     })).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name)),
   });
 }));

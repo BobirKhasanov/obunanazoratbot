@@ -110,14 +110,19 @@ function cacheEnabled() {
 /** Redis INCR with TTL (memory fallback). Used for per-user rate limits. */
 async function incr(key, ttlSec = 60) {
   const full = PREFIX + key;
+  const ttl = Math.max(1, ttlSec);
   if (enabled()) {
+    // Atomic-ish: SET NX EX creates the key with TTL; INCR then bumps. Avoids orphan keys without EXPIRE.
+    const created = await redisCommand(['SET', full, '0', 'EX', String(ttl), 'NX']);
     const n = await redisCommand(['INCR', full]);
-    if (n === 1 || n === '1') await redisCommand(['EXPIRE', full, String(Math.max(1, ttlSec))]);
+    if (created == null && (n === 1 || n === '1')) {
+      await redisCommand(['EXPIRE', full, String(ttl)]);
+    }
     const num = Number(n);
     if (Number.isFinite(num) && num > 0) return num;
   }
-  const cur = (memGet(full, ttlSec * 1000) || 0) + 1;
-  memSet(full, cur, ttlSec * 1000);
+  const cur = (memGet(full, ttl * 1000) || 0) + 1;
+  memSet(full, cur, ttl * 1000);
   return cur;
 }
 

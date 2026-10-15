@@ -882,6 +882,7 @@ async function playMoves(game, players, moves, startPly = 0) {
       const wsC = await connect('C'); sockets.push(wsC);
       await ok('A', 'GET', '/me'); await ok('B', 'GET', '/me');
       const lobby = await ok('D', 'GET', '/lobby');
+      assert.ok(lobby.online.every((o) => 'avatarKey' in o), 'lobby online rows include avatarKey');
       const names = lobby.online.map((o) => o.name);
       assert.ok(names.includes('Alice') && names.includes('Cara'), `online: ${names}`);
       assert.ok(!names.includes('Dan'), 'not listed to yourself');

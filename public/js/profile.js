@@ -252,7 +252,7 @@ export function renderProfilePage(ctx) {
             onChallenge: challenge ? (u) => challenge(u.id) : undefined,
             refreshHome: refresh,
           }),
-        }, avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online, round: true })),
+        }, avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online, round: true, avatarKey: f.avatarKey || null })),
         h('button.grow.plain', {
           type: 'button',
           onclick: () => openUserProfile(f.id, {

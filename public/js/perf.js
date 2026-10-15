@@ -96,6 +96,22 @@ export function liveClockTickMs() {
   return detect().lite ? 500 : 250;
 }
 
+/** Home / lobby soft refresh when WS is connected (ms). Longer = lighter free tier. */
+export function homeTabRefreshMs() {
+  const p = detect();
+  if (p.lite) return 20000;
+  if (p.isAndroid) return 16000;
+  return 14000;
+}
+
+/** Sheet / inbox / friend-wait soft poll (ms). */
+export function softPollMs() {
+  const p = detect();
+  if (p.lite) return 8000;
+  if (p.isAndroid) return 6000;
+  return 5000;
+}
+
 /** How many mini-boards to mount on a live round (rest = lightweight placeholder). */
 export function liveMiniBoardBudget() {
   return detect().lite ? 6 : Infinity;

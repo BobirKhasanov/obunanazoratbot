@@ -5,6 +5,7 @@ import { t, getLang } from './i18n.js';
 import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
 import { formatClock, remainingMs, isTimed, formatTashkentWhen, categoryOf } from './time.js';
+import { liveGamePollMs } from './perf.js';
 
 const AI_KEY = 'chess-ai-game';
 const EMOTES = ['🤔', '😎', '😮', '👏', '🙈', '😀'];
@@ -569,7 +570,7 @@ export function openGame(opts, onClose) {
     S.poll = setInterval(() => {
       if (ctx !== S || S.over) return;
       api('GET', `/live/games/${S.id}`).then((r) => applyServer(r.game)).catch(() => {});
-    }, 1500);
+    }, liveGamePollMs());
   } else { S.moves = opts.game.moves || []; S.chess = build(S.moves); S.colour = opts.game.you || 'w'; S.over = opts.game.status === 'finished'; render(false); }
 
   root.classList.add('show'); root.removeAttribute('aria-hidden');

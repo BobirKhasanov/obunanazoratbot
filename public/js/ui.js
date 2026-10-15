@@ -437,7 +437,7 @@ export const initial = (name) => ([...String(name || '?').trim()][0] || '?').toU
 export const hue = (id) => (Number(id) * 47) % 360;
 /** Letter avatar, character (`char:<id>`), medal SVG (`medal:<id>`), or Premium photo (`img:<uuid>`). */
 export const avatar = (name, id, cls = '', avatarKey = null) => {
-  const el = h('div.avatar' + (cls ? '.' + cls : ''), { style: { background: `hsl(${hue(id)} 45% 42%)`, color: '#fff' } }, initial(name));
+  const el = h('div.avatar' + (cls ? '.' + cls : ''), { style: { background: `hsl(${hue(id)} 48% 44%)`, color: '#fff' } }, initial(name));
   const key = avatarKey ? String(avatarKey) : '';
   const char = /^char:([a-z0-9_-]+)$/i.exec(key);
   const medal = /^medal:(.+)$/.exec(key);
@@ -446,17 +446,21 @@ export const avatar = (name, id, cls = '', avatarKey = null) => {
     el.classList.add('medal', 'char');
     el.style.background = 'transparent';
     el.replaceChildren(h('img.avatar-medal', {
-      src: `/api/char-avatars/${encodeURIComponent(char[1].toLowerCase())}.svg`,
+      src: `/api/char-avatars/${encodeURIComponent(char[1].toLowerCase())}.svg?v=3`,
       alt: '',
       draggable: 'false',
+      loading: 'lazy',
+      decoding: 'async',
     }));
   } else if (medal) {
     el.classList.add('medal');
-    el.style.background = 'transparent';
+    el.style.background = '#0b0f16';
     el.replaceChildren(h('img.avatar-medal', {
       src: `/api/medals/${encodeURIComponent(medal[1])}.svg`,
       alt: '',
       draggable: 'false',
+      loading: 'lazy',
+      decoding: 'async',
     }));
   } else if (img) {
     el.classList.add('medal', 'photo');
@@ -465,6 +469,8 @@ export const avatar = (name, id, cls = '', avatarKey = null) => {
       src: `/api/avatars/${encodeURIComponent(img[1])}`,
       alt: '',
       draggable: 'false',
+      loading: 'lazy',
+      decoding: 'async',
     }));
   }
   return el;

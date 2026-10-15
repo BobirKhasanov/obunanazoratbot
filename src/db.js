@@ -122,6 +122,7 @@ CREATE INDEX IF NOT EXISTS idx_games_white ON games(white_id);
 CREATE INDEX IF NOT EXISTS idx_games_black ON games(black_id);
 CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
 CREATE INDEX IF NOT EXISTS idx_games_status_updated ON games(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_games_matchmaking ON games(status, mode, time_control, created_at);
 
 -- Everyone who was asked to play a challenge game (the first to accept starts it)
 CREATE TABLE IF NOT EXISTS game_invites (
@@ -290,6 +291,7 @@ ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dm_threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dm_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS preferred_color TEXT; -- w | b | null (random) — creator preference while waiting
+CREATE INDEX IF NOT EXISTS idx_games_matchmaking ON games(status, mode, time_control, created_at);
 -- Allow home-screen presets (and keep legacy category values already stored)
 ALTER TABLE games DROP CONSTRAINT IF EXISTS games_time_control_check;
 CREATE TABLE IF NOT EXISTS monthly_scores (

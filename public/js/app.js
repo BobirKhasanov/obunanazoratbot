@@ -1,5 +1,6 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, shareUrl, copyText } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, connectWs, onWs, sendBye, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, shareUrl, copyText } from './ui.js';
+import { homeTabRefreshMs, softPollMs } from './perf.js';
 import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
@@ -20,7 +21,16 @@ const state = { me: null, stats: null, meta: null, lobby: null, friends: null, i
 let selectedTime = 'any';
 const TABS = ['play', 'puzzles', 'rankings', 'live', 'profile'];
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
-const gameMeta = () => ({ me: { id: state.me.id, name: state.me.firstName }, botUsername: state.meta.botUsername, reactions: state.meta.REACTIONS });
+const gameMeta = () => ({
+  me: {
+    id: state.me.id,
+    name: state.me.firstName,
+    premium: !!state.me.premium,
+    avatarKey: state.me.avatarKey || null,
+  },
+  botUsername: state.meta.botUsername,
+  reactions: state.meta.REACTIONS,
+});
 /** Exact home-screen preset sent to the server (Any → untimed classic). */
 const selectedPreset = () => normalizeTimeControl(selectedTime === 'any' ? 'classic' : selectedTime);
 
@@ -180,7 +190,7 @@ function openFriendWait(game) {
         if (r.game.status === 'active') finish(r.game);
         else if (r.game.status === 'cancelled' || r.game.status === 'finished') finish(null);
       } catch { /* ignore */ }
-    }, 2500);
+    }, softPollMs());
     const cancel = async () => {
       if (joined) return;
       joined = true;
@@ -329,7 +339,7 @@ function aiSheet() {
 }
 
 const playerRow = (u, close) => h('div.row',
-  avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true }),
+  avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true, avatarKey: u.avatarKey || null }),
   h('div.grow',
     h('div.t', h('span.name', u.name), u.premium ? premIc() : null),
     h('div.s', u.inGame ? t('in_game') : t('online'))),
@@ -354,7 +364,7 @@ function onlineSheet() {
             h('button.plain', {
               type: 'button',
               onclick: () => { close(); openUserProfile(u.id, { onChallenge: (x) => challenge(x.id) }); },
-            }, avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true })),
+            }, avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true, avatarKey: u.avatarKey || null })),
             h('button.grow.plain', {
               type: 'button',
               onclick: () => { close(); openUserProfile(u.id, { onChallenge: (x) => challenge(x.id) }); },
@@ -365,7 +375,7 @@ function onlineSheet() {
           : [empty(t('nobody'), '🛰️')]));
       } catch (e) { /* keep the old list */ }
     };
-    load(); timer = setInterval(load, 4000);
+    load(); timer = setInterval(load, softPollMs());
     return [
       h('h2', t('pick_player')),
       h('button.btn.sm.ghost.rand', { onclick: () => { close(); startQuick(); } }, icon('globe', 18), t('random_opp')),
@@ -390,7 +400,8 @@ const tile = (title, sub, ic, fn, hero) => h('button.tile' + (hero ? '.hero' : '
 const gameRow = (g, kind) => {
   const o = g.opponent || {};
   const mine = g.you && g.turn === g.you;
-  return rowBtn({ onclick: () => openOnline(g) }, avatar(o.name || '?', o.id || 0),
+  return rowBtn({ onclick: () => openOnline(g) },
+    avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, avatarKey: o.avatarKey || null }),
     h('div.grow', h('div.t', o.name || '…'), h('div.s', kind === 'recent' ? resultText(g) : g.status === 'active' ? (mine ? t('your_turn') : t('their_turn')) : t('waiting_opp'))),
     kind === 'active' && mine ? h('span.pill', '●') : icon('arrow', 18));
 };
@@ -423,8 +434,8 @@ refreshers.play = async function renderPlay() {
     inv: (l.games.invites || []).map((g) => g.id),
     act: (l.games.active || []).map((g) => [g.id, g.turn, g.you]),
     wait: (l.games.waiting || []).map((g) => g.id),
-    on: onlinePlayers.map((u) => [u.id, !!u.invited, !!u.inGame, !!u.friend, !!u.premium]),
-    fr: friends.map((f) => [f.id, !!f.online, !!f.inGame, !!f.invited, !!f.premium]),
+    on: onlinePlayers.map((u) => [u.id, !!u.invited, !!u.inGame, !!u.friend, !!u.premium, u.avatarKey || '']),
+    fr: friends.map((f) => [f.id, !!f.online, !!f.inGame, !!f.invited, !!f.premium, f.avatarKey || '']),
     sav: saved ? [saved.level, saved.fen] : null,
     ann: (anns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
     pz: (puzzleAnns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
@@ -472,7 +483,7 @@ refreshers.play = async function renderPlay() {
           const row = { ...f, friend: true, online: !!f.online, discoverable: true };
           return h('div.row',
             h('button.plain', { type: 'button', onclick: () => openProfile(f.id) },
-              avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online, round: true })),
+              avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online, round: true, avatarKey: f.avatarKey || null })),
             h('button.grow.plain', { type: 'button', onclick: () => openProfile(f.id) },
               h('div.t', h('span.name', f.name), f.premium ? premIc() : null),
               h('div.s', f.invited ? t('challenge_sent') : (f.inGame ? t('in_game') : (f.online ? t('online') : t('offline'))))),
@@ -483,7 +494,7 @@ refreshers.play = async function renderPlay() {
       peopleListHost.replaceChildren(onlinePlayers.length
         ? h('div.list.home-online', ...onlinePlayers.map((u) => h('div.row',
           h('button.plain', { type: 'button', onclick: () => openProfile(u.id) },
-            avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true })),
+            avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true, avatarKey: u.avatarKey || null })),
           h('button.grow.plain', { type: 'button', onclick: () => openProfile(u.id) },
             h('div.t', h('span.name', u.name), u.premium ? premIc() : null),
             h('div.s', u.invited ? t('challenge_sent') : (u.inGame ? t('in_game') : t('online')))),
@@ -534,7 +545,8 @@ refreshers.play = async function renderPlay() {
       card('🤖', t('play_card_ai'), aiSheet)),
     ...onlineBlock,
     l.games.invites.length ? [h('div.h2', t('invites')), h('div.list', l.games.invites.map((g) => h('div.row.invite',
-      avatar(g.opponent.name, g.opponent.id), h('div.grow', h('div.t', g.opponent.name), h('div.s', t('challenge'))),
+      avBlock(g.opponent.name, g.opponent.id, { premium: !!g.opponent.premium, round: true, avatarKey: g.opponent.avatarKey || null }),
+      h('div.grow', h('div.t', g.opponent.name), h('div.s', t('challenge'))),
       h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
       h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } playSnap = ''; refresh(); } }, icon('x', 18)))))] : null,
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
@@ -807,7 +819,8 @@ function showInvite(g, ttl) {
   const o = g.opponent || {};
   const done = () => { pop.classList.remove('show'); setTimeout(() => pop.remove(), 400); clearTimeout(popTimer); };
   const bar = h('i.pbar-fill'); bar.style.animationDuration = `${ttl}ms`;
-  const pop = h('div.invite-pop', avatar(o.name || '?', o.id || 0),
+  const pop = h('div.invite-pop',
+    avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, avatarKey: o.avatarKey || null }),
     h('div.grow', h('b', t('challenge_from', { name: o.name || '' }))),
     h('button.mini.ok', { 'aria-label': t('accept'), onclick: async () => { done(); try { const r = await api('POST', `/games/${g.id}/join`); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 20)),
     h('button.mini', { 'aria-label': t('decline'), onclick: async () => { done(); try { await api('POST', `/games/${g.id}/decline`); } catch { /* expired */ } refresh(); } }, icon('x', 20)),
@@ -822,7 +835,8 @@ function showChallengeSent(g, ttl) {
   const o = g.opponent || {};
   const done = () => { pop.classList.remove('show'); setTimeout(() => pop.remove(), 400); clearTimeout(popTimer); };
   const bar = h('i.pbar-fill'); bar.style.animationDuration = `${ttl}ms`;
-  const pop = h('div.invite-pop', avatar(o.name || '?', o.id || 0),
+  const pop = h('div.invite-pop',
+    avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, avatarKey: o.avatarKey || null }),
     h('div.grow', h('b', t('challenge_to', { name: o.name || '' }))),
     h('button.mini', { 'aria-label': t('cancel'), onclick: async () => { done(); await cancelChallenge(g.id); } }, t('cancel')),
     h('div.pbar-track', bar));
@@ -1043,13 +1057,14 @@ export async function start(me) {
       } else if (m.game.id !== openGameId()) refresh();
     } else if (m.t === 'invite_gone') { clearInvitePop(); refresh(); }
   });
-  // Background tab refresh — tuned for ~2.5k concurrent (lite Android slower)
-  const tabRefreshMs = document.documentElement.dataset.perf === 'lite' ? 12000 : 8000;
+  // Background soft refresh — WS pushes game/invite events; poll only for presence/lists
   setInterval(() => {
     if (document.hidden || openGameId()) return;
     if (state.tab === 'live' && liveBlocksAutoRefresh()) return;
-    if (['live', 'play', 'rankings', 'profile'].includes(state.tab)) refresh();
-  }, tabRefreshMs);
+    // Profile is mostly static; rankings are cached server-side — skip to cut free-tier load
+    if (state.tab === 'profile') return;
+    if (['live', 'play', 'rankings'].includes(state.tab)) refresh();
+  }, homeTabRefreshMs());
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) sendBye();
     else refresh();

@@ -3,6 +3,7 @@ import { h, icon, haptic, api, fail, onWs } from './ui.js';
 import { t } from './i18n.js';
 import { openScreen, closeScreen } from './screen.js';
 import { PRESETS, normalizeTimeControl } from './time.js';
+import { softPollMs } from './perf.js';
 
 const TIME_GROUPS = [
   { key: 'bullet', icon: '🚀', chips: ['1+0', '1+1', '2+1'] },
@@ -228,7 +229,7 @@ export function createPlayFlow(deps) {
         } catch { /* ignore */ }
       };
       refreshStats();
-      poll = setInterval(refreshStats, 2500);
+      poll = setInterval(refreshStats, softPollMs());
 
       unsub = onWs((m) => {
         if (m.t === 'game' && m.game) matched(m.game);

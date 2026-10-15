@@ -1,4 +1,4 @@
-/** Free cartoon character avatars (Play-Bots style). Keys: char:<id> */
+/** Free cartoon character avatars (circular, Play-Bots style). Keys: char:<id> */
 
 const CHARS = [
   { id: 'jimmy', name: 'Jimmy', bg: '#7cb8e8', skin: '#f0c9a6', hair: '#3d2314', shirt: '#3b82f6', style: 'short', eyes: 'normal' },
@@ -95,29 +95,33 @@ function renderCharSvg(c) {
         <path d="M59 60h10M41 60H34M87 60h7" stroke-linecap="round"/>
       </g>`
     : '';
+  // Full-bleed circle so circular UI crops cleanly (no square corners)
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <defs>
     <linearGradient id="bg-${c.id}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${c.bg}"/>
-      <stop offset="100%" stop-color="${c.bg}" stop-opacity=".82"/>
+      <stop offset="100%" stop-color="${c.bg}" stop-opacity=".78"/>
     </linearGradient>
     <linearGradient id="skin-${c.id}" x1="0.2" y1="0" x2="0.9" y2="1">
       <stop offset="0%" stop-color="${c.skin}"/>
-      <stop offset="100%" stop-color="${c.skin}" stop-opacity=".88"/>
+      <stop offset="100%" stop-color="${c.skin}" stop-opacity=".9"/>
     </linearGradient>
+    <clipPath id="circ-${c.id}"><circle cx="64" cy="64" r="64"/></clipPath>
   </defs>
-  <rect width="128" height="128" rx="28" fill="url(#bg-${c.id})"/>
-  <ellipse cx="64" cy="122" rx="42" ry="30" fill="${c.shirt}"/>
-  <ellipse cx="64" cy="108" rx="22" ry="10" fill="${c.skin}" opacity=".35"/>
-  ${hair}
-  <ellipse cx="64" cy="64" rx="30" ry="34" fill="url(#skin-${c.id})"/>
-  ${eyes}
-  <path d="M54 78 Q64 86 74 78" fill="none" stroke="#1e293b" stroke-width="2.6" stroke-linecap="round"/>
-  <ellipse cx="42" cy="70" rx="6" ry="3.5" fill="${c.skin}" opacity=".45"/>
-  <ellipse cx="86" cy="70" rx="6" ry="3.5" fill="${c.skin}" opacity=".45"/>
-  ${beard}
-  ${glasses}
+  <g clip-path="url(#circ-${c.id})">
+    <circle cx="64" cy="64" r="64" fill="url(#bg-${c.id})"/>
+    <ellipse cx="64" cy="126" rx="48" ry="34" fill="${c.shirt}"/>
+    <ellipse cx="64" cy="110" rx="24" ry="12" fill="${c.skin}" opacity=".35"/>
+    ${hair}
+    <ellipse cx="64" cy="64" rx="30" ry="34" fill="url(#skin-${c.id})"/>
+    ${eyes}
+    <path d="M54 78 Q64 86 74 78" fill="none" stroke="#1e293b" stroke-width="2.6" stroke-linecap="round"/>
+    <ellipse cx="42" cy="70" rx="6" ry="3.5" fill="${c.skin}" opacity=".45"/>
+    <ellipse cx="86" cy="70" rx="6" ry="3.5" fill="${c.skin}" opacity=".45"/>
+    ${beard}
+    ${glasses}
+  </g>
 </svg>`;
 }
 
@@ -126,7 +130,7 @@ function listCharAvatars() {
     id: c.id,
     name: c.name,
     key: `char:${c.id}`,
-    url: `/api/char-avatars/${c.id}.svg?v=2`,
+    url: `/api/char-avatars/${c.id}.svg?v=3`,
   }));
 }
 

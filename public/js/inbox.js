@@ -262,7 +262,7 @@ export function openMessages() {
           type: 'button',
           onclick: () => openChat(th.id, th.peer),
         },
-          avBlock(th.peer.name, th.peer.id, { premium: !!th.peer.premium, round: true }),
+          avBlock(th.peer.name, th.peer.id, { premium: !!th.peer.premium, round: true, avatarKey: th.peer.avatarKey || null }),
           h('div.grow',
             h('div.t', th.peer.name, th.peer.premium ? premIc() : null),
             h('div.s', th.lastBody || t('msg_start'))),
@@ -291,7 +291,7 @@ export function openMessages() {
                   } catch (e) { fail(e); }
                 },
               },
-                avBlock(u.name, u.id, { premium: !!u.premium, round: true }),
+                avBlock(u.name, u.id, { premium: !!u.premium, round: true, avatarKey: u.avatarKey || null }),
                 h('div.grow', h('div.t', u.name, u.premium ? premIc() : null),
                   h('div.s', u.username ? '@' + u.username : t('msg_start'))),
                 icon('chevron', 18))))
@@ -432,7 +432,7 @@ function openChat(threadId, peer) {
     });
 
     load();
-    const poll = setInterval(load, 5000);
+    const poll = setInterval(load, 8000);
     const finish = () => {
       clearInterval(poll);
       try { offWs(); } catch { /* ignore */ }
