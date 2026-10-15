@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, setInitData, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo } from './ui.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -14,7 +14,6 @@ import { closeScreen } from './screen.js';
 import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel, CAROUSEL_STAGGER_MS } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
-import { applyPerfMode } from './perf.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
 let selectedTime = 'any';
@@ -796,87 +795,23 @@ async function handleDeepLink() {
   else if (gid && /^[\w-]{4,20}$/.test(gid)) await openById(gid);
 }
 
-// ---------- boot ----------
-function hideBoot() {
-  // Prefer getElementById — some WebViews mishandle [hidden] alone
-  const boot = document.getElementById('boot');
-  if (!boot) return;
-  boot.hidden = true;
-  boot.setAttribute('hidden', '');
-  boot.style.setProperty('display', 'none', 'important');
-  boot.style.visibility = 'hidden';
-  boot.style.pointerEvents = 'none';
-  try { boot.remove(); } catch { /* ignore */ }
-}
-function showGate(msg) {
-  hideBoot();
-  const gate = document.getElementById('gate');
-  const app = document.getElementById('app');
-  if (app) app.hidden = true;
-  if (gate) {
-    gate.hidden = false;
-    if (msg) {
-      const h1 = gate.querySelector('h1');
-      if (h1) h1.textContent = msg;
-    }
-  }
-}
-function showApp() {
-  hideBoot();
-  const gate = document.getElementById('gate');
-  const app = document.getElementById('app');
-  if (gate) gate.hidden = true;
-  if (app) {
-    app.hidden = false;
-    app.removeAttribute('hidden');
-  }
-}
-
-async function boot() {
-  // Lite CSS before first paint of heavy UI (Android LOW only; iOS unchanged)
-  try { applyPerfMode(); } catch { /* ignore */ }
-
-  // ready/expand already called from index.html; keep idempotent chrome sync here
+// ---------- start (called from entry.js AFTER splash is already dismissed) ----------
+/**
+ * Wire the full Mini App after entry.js hid #boot and fetched /me.
+ * @param {{ user: object, stats: object, meta: object, referralClaim?: object }} me
+ */
+export async function start(me) {
   try {
     if (tg) {
       try { tg.ready(); } catch { /* ignore */ }
       try { tg.expand(); } catch { /* ignore */ }
       try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch { /* old client */ }
-      try { syncTgChrome('dark'); } catch { /* ignore */ }
       try {
         tg.onEvent && tg.onEvent('viewportChanged', () => syncTgChrome());
         tg.onEvent && tg.onEvent('themeChanged', () => syncTgChrome());
       } catch { /* ignore */ }
     }
   } catch { /* ignore */ }
-
-  if (!tg || !tg.initData) {
-    showGate();
-    return;
-  }
-  setInitData(tg.initData);
-
-  let me;
-  try {
-    // AbortController timeout; also clear a backup timer so it never rejects later
-    // (a dangling Promise.race reject was flashing "Yuklashda xato" via unhandledrejection).
-    const req = api('GET', '/me', undefined, { timeoutMs: 8_000 });
-    req.catch(() => {}); // if backup wins, ignore late abort noise
-    let timer;
-    const backup = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'net' })), 8_500);
-    });
-    try {
-      me = await Promise.race([req, backup]);
-    } finally {
-      clearTimeout(timer);
-    }
-  } catch (e) {
-    let msg = 'Open from Telegram';
-    try { const { errText } = await import('./i18n.js'); msg = errText(e); } catch { /* ignore */ }
-    showGate(msg);
-    return;
-  }
 
   try {
     state.me = me.user; state.stats = me.stats; state.meta = me.meta;
@@ -887,8 +822,20 @@ async function boot() {
     console.error('[boot] theme', e);
   }
 
-  // Reveal shell BEFORE data refresh so the user never sits on splash
-  showApp();
+  // Ensure shell visible (entry.js usually already did this)
+  try {
+    const boot = document.getElementById('boot');
+    if (boot) {
+      boot.hidden = true;
+      boot.style.setProperty('display', 'none', 'important');
+      try { boot.remove(); } catch { /* ignore */ }
+    }
+    const gate = document.getElementById('gate');
+    const app = document.getElementById('app');
+    if (gate) gate.hidden = true;
+    if (app) { app.hidden = false; app.removeAttribute('hidden'); }
+  } catch { /* ignore */ }
+
   try { initPager(); } catch (e) { console.error('[boot] pager', e); }
 
   if (me.referralClaim && me.referralClaim.inviteeReward) {
@@ -947,11 +894,3 @@ async function boot() {
     fail(e);
   }
 }
-boot().catch((e) => {
-  console.error('[boot]', e);
-  try {
-    showGate((e && e.message) || 'Something went wrong');
-  } catch {
-    hideBoot();
-  }
-});
