@@ -20,6 +20,7 @@ export function h(sel, props, ...kids) {
       }
     } else if (k === 'style') el.setAttribute('style', String(v));
     else if (k === 'html') el.innerHTML = v;
+    else if (k === 'value') el.value = v === true ? '' : String(v); // textarea/input: attr alone does not set .value
     else el.setAttribute(k, v === true ? '' : v);
   }
   const add = (c) => { if (Array.isArray(c)) c.forEach(add); else if (c != null && c !== false) el.append(c instanceof Node ? c : document.createTextNode(String(c))); };

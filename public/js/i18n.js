@@ -296,7 +296,7 @@ Object.assign(en, {
   rankings_elo_scoring: 'Elo starts at 1200. Wins raise your rating, losses lower it. Separate boards per time control.',
   rankings_monthly_hint: 'Monthly mini-app points · {month}',
   rank_board_elo: 'Elo', rank_board_monthly: 'Monthly',
-  rank_record: '{w}W · {d}D · {l}L', rank_games: '{n} games', points: 'points', elo: 'Elo', you: 'you',
+  rank_record: '{w}W · {d}D · {l}L', rank_games: '{n} games', points: 'points', elo: 'Elo', you_short: 'you',
   avatar_title: 'Avatar', avatar_menu_sub: 'Characters, photo & medals', avatar_sub: 'Pick a character avatar. Premium unlocks a custom photo.',
   avatar_chars: 'Characters', avatar_chars_empty: 'Characters unavailable right now.',
   avatar_default: 'Default', avatar_letter: 'Letter', avatar_medals: 'Your medals',
@@ -327,7 +327,7 @@ Object.assign(ru, {
   rankings_elo_scoring: 'Elo начинается с 1200. Победы повышают рейтинг, поражения снижают. Отдельные доски по контролю времени.',
   rankings_monthly_hint: 'Месячные очки мини-приложения · {month}',
   rank_board_elo: 'Elo', rank_board_monthly: 'Месяц',
-  rank_record: '{w}П · {d}Н · {l}П', rank_games: '{n} партий', points: 'очков', elo: 'Elo', you: 'вы',
+  rank_record: '{w}П · {d}Н · {l}П', rank_games: '{n} партий', points: 'очков', elo: 'Elo', you_short: 'вы',
   avatar_title: 'Аватар', avatar_menu_sub: 'Персонажи, фото и медали', avatar_sub: 'Выберите персонажа. Своё фото — в Премиуме.',
   avatar_chars: 'Персонажи', avatar_chars_empty: 'Персонажи сейчас недоступны.',
   avatar_default: 'По умолчанию', avatar_letter: 'Буква', avatar_medals: 'Ваши медали',
@@ -358,7 +358,7 @@ Object.assign(uz, {
   rankings_elo_scoring: 'Elo 1200 dan boshlanadi. G‘alaba oshiradi, mag‘lubiyat kamaytiradi. Har vaqt nazorati alohida.',
   rankings_monthly_hint: 'Oylik mini app ochkolari · {month}',
   rank_board_elo: 'Elo', rank_board_monthly: 'Oylik',
-  rank_record: '{w}G · {d}D · {l}M', rank_games: '{n} o‘yin', points: 'ochko', elo: 'Elo', you: 'siz',
+  rank_record: '{w}G · {d}D · {l}M', rank_games: '{n} o‘yin', points: 'ochko', elo: 'Elo', you_short: 'siz',
   avatar_title: 'Avatar', avatar_menu_sub: 'Personajlar, rasm va medallar', avatar_sub: 'Personaj tanlang. O‘z rasmingiz — Premiumda.',
   avatar_chars: 'Personajlar', avatar_chars_empty: 'Personajlar hozircha mavjud emas.',
   avatar_default: 'Standart', avatar_letter: 'Harf', avatar_medals: 'Medallaringiz',
@@ -389,7 +389,7 @@ Object.assign(uzc, {
   rankings_elo_scoring: 'Elo 1200 дан бошланади. Ғалаба оширади, мағлубият камайтиради.',
   rankings_monthly_hint: 'Ойлик мини апп очколари · {month}',
   rank_board_elo: 'Elo', rank_board_monthly: 'Ойлик',
-  rank_record: '{w}Ғ · {d}Д · {l}М', rank_games: '{n} ўйин', points: 'очко', elo: 'Elo', you: 'сиз',
+  rank_record: '{w}Ғ · {d}Д · {l}М', rank_games: '{n} ўйин', points: 'очко', elo: 'Elo', you_short: 'сиз',
   avatar_title: 'Аватар', avatar_menu_sub: 'Персонажлар, расм ва медаллар', avatar_sub: 'Персонаж танланг. Ўз расмингиз — Премиумда.',
   avatar_chars: 'Персонажлар', avatar_chars_empty: 'Персонажлар ҳозирча мавжуд эмас.',
   avatar_default: 'Стандарт', avatar_letter: 'Ҳарф', avatar_medals: 'Медалларингиз',
@@ -463,28 +463,28 @@ Object.assign(uzc, { play_btn: 'Ўйнаш', any_time: 'Исталган', any_t
 
 Object.assign(en, {
   nav_game: 'Game', choose_time_title: 'Select time', pick_color: 'Choose piece color',
-  tc_bullet: 'Bullet', tc_blitz: 'Blitz', tc_rapid: 'Rapid',
+  tc_bullet: 'Bullet', tc_blitz: 'Blitz', tc_rapid: 'Rapid', tc_classic: 'Classic', rank_all: 'All',
   time_min: '{n} min', time_daq: '{n} min', go_back: 'Go back',
   tournaments_menu: 'Tournaments', live_players: 'Live players: {n}', live_games_n: 'Live games: {n}',
   search_elo_window: 'Elo ±{n}',
 });
 Object.assign(ru, {
   nav_game: 'Игра', choose_time_title: 'Выберите время', pick_color: 'Выберите цвет',
-  tc_bullet: 'Пуля', tc_blitz: 'Блиц', tc_rapid: 'Рапид',
+  tc_bullet: 'Пуля', tc_blitz: 'Блиц', tc_rapid: 'Рапид', tc_classic: 'Классика', rank_all: 'Все',
   time_min: '{n} мин', time_daq: '{n} мин', go_back: 'Назад',
   tournaments_menu: 'Турниры', live_players: 'Игроки онлайн: {n}', live_games_n: 'Партий онлайн: {n}',
   search_elo_window: 'Эло ±{n}',
 });
 Object.assign(uz, {
   nav_game: "O'yin", choose_time_title: 'Vaqtni tanlang', pick_color: 'Dona rangini tanlang',
-  tc_bullet: 'Tezkor', tc_blitz: 'Blitz', tc_rapid: 'Rapid',
+  tc_bullet: 'Tezkor', tc_blitz: 'Blitz', tc_rapid: 'Rapid', tc_classic: 'Klassik', rank_all: 'Hammasi',
   time_min: '{n} min', time_daq: '{n} daq', go_back: 'Ortga qaytish',
   tournaments_menu: 'Turnirlar', live_players: 'Jonli o\'yinchilar: {n}', live_games_n: 'Jonli o\'yinlar: {n}',
   search_elo_window: 'Elo ±{n}',
 });
 Object.assign(uzc, {
   nav_game: 'Ўйин', choose_time_title: 'Вақтни танланг', pick_color: 'Дона рангини танланг',
-  tc_bullet: 'Тезкор', tc_blitz: 'Блиц', tc_rapid: 'Рапид',
+  tc_bullet: 'Тезкор', tc_blitz: 'Блиц', tc_rapid: 'Рапид', tc_classic: 'Классик', rank_all: 'Ҳаммаси',
   time_min: '{n} мин', time_daq: '{n} дақ', go_back: 'Ортга қайтиш',
   tournaments_menu: 'Турнирлар', live_players: 'Жонли ўйинчилар: {n}', live_games_n: 'Жонли ўйинлар: {n}',
   search_elo_window: 'Эло ±{n}',

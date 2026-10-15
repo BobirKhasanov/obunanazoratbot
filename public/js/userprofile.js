@@ -96,14 +96,16 @@ export function openUserProfile(userId, opts = {}) {
             opts.onChallenge
               ? h('button.cta', {
                 type: 'button',
+                disabled: !u.online,
                 onclick: () => {
+                  if (!u.online) return toast(t('e_user_offline') || t('offline'), true);
                   close(true);
                   opts.onChallenge({
                     id: u.id, name: u.displayName, premium: u.premium,
                     discoverable: true, online: u.online,
                   });
                 },
-              }, t('challenge'))
+              }, u.online ? t('challenge') : t('offline'))
               : null,
             h('button.btn.ghost' + (data.blockedByMe ? '.ok' : ''), {
               type: 'button',
@@ -128,12 +130,13 @@ export function openUserProfile(userId, opts = {}) {
 
     draw();
     return [
-      h('div.top',
+      h('div.top.inbox-head',
         h('button.round.back', {
           type: 'button', 'aria-label': t('back'),
           onclick: () => { haptic('light'); close(); },
         }, icon('back', 22)),
-        h('h1', t('profile_title'))),
+        h('h1', t('profile_title')),
+        h('span.inbox-head-spacer', { 'aria-hidden': 'true' })),
       host,
     ];
   });

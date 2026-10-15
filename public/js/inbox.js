@@ -341,6 +341,7 @@ function bubbleEl(m) {
 
 function openChat(threadId, peer) {
   const tid = Number(threadId);
+  let cleanupChat = () => {};
   openScreen((close) => {
     activeThreadId = tid;
     const log = h('div.chat-log');
@@ -433,10 +434,13 @@ function openChat(threadId, peer) {
 
     load();
     const poll = setInterval(load, 8000);
-    const finish = () => {
+    cleanupChat = () => {
       clearInterval(poll);
       try { offWs(); } catch { /* ignore */ }
       if (activeThreadId === tid) activeThreadId = null;
+    };
+    const finish = () => {
+      cleanupChat();
       close();
     };
 
@@ -448,7 +452,7 @@ function openChat(threadId, peer) {
     ];
   }, {
     onClose: () => {
-      if (activeThreadId === tid) activeThreadId = null;
+      cleanupChat();
       refreshInboxBadges();
     },
   });

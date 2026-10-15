@@ -89,7 +89,12 @@ export function createPlayFlow(deps) {
           }, h('span.art', '🤖'), t('play_card_ai')),
           h('button.pf-menu-row', {
             type: 'button',
-            onclick: () => { haptic('light'); close(); deps.goTab('live'); },
+            onclick: () => {
+              haptic('light');
+              close();
+              try { deps.openLiveTournaments && deps.openLiveTournaments(); }
+              catch { deps.goTab('live'); }
+            },
           }, h('span.art', '🏆'), t('tournaments_menu')),
         )),
     ]);
@@ -161,11 +166,23 @@ export function createPlayFlow(deps) {
       try { unsub(); } catch { /* ignore */ }
     };
 
+    const onGameActive = (e) => {
+      if (e && e.detail && e.detail.status === 'active' && game && e.detail.id === game.id) {
+        cancelled = true; // prevent onClose DELETE while global handler opens the board
+      }
+    };
+    window.addEventListener('chess-game-active', onGameActive);
+
     const cancelGame = async () => {
       if (cancelled) return;
       cancelled = true;
       stop();
-      try { await api('DELETE', `/games/${game.id}`); } catch { /* ignore */ }
+      window.removeEventListener('chess-game-active', onGameActive);
+      try {
+        const r = await api('GET', `/games/${game.id}`);
+        if (r.game && r.game.status === 'active') return; // already matched
+        await api('DELETE', `/games/${game.id}`);
+      } catch { /* ignore */ }
     };
 
     openScreen((close) => {
@@ -176,6 +193,7 @@ export function createPlayFlow(deps) {
         entering = true;
         stop();
         cancelled = true;
+        window.removeEventListener('chess-game-active', onGameActive);
         if (g.id !== game.id) {
           try { await api('DELETE', `/games/${game.id}`); } catch { /* ignore */ }
         }
@@ -254,7 +272,10 @@ export function createPlayFlow(deps) {
             }, t('go_back')))),
       ];
     }, {
-      onClose: () => { cancelGame(); },
+      onClose: () => {
+        window.removeEventListener('chess-game-active', onGameActive);
+        cancelGame();
+      },
     });
   }
 

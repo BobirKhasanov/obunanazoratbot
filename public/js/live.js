@@ -240,7 +240,7 @@ async function renderBot(mount, meta, onClose, onRefresh) {
           try { await openSpectate(g, meta, onClose); } catch (e) { fail(e); }
         },
       },
-        h('div.avwrap', avatar(w.name || '?', w.id || 0), h('i.dot.on')),
+        h('div.avwrap', avatar(w.name || '?', w.id || 0, '', w.avatarKey || null), h('i.dot.on')),
         h('div.grow',
           h('div.t', `${w.name || '?'} – ${b.name || '?'}`),
           h('div.s', [
@@ -838,4 +838,10 @@ export function resetLiveNav() {
 /** Intl pages poll/refresh themselves — skip the global 8s remount (avoids request storms). */
 export function liveBlocksAutoRefresh() {
   return section === 'intl';
+}
+
+/** Play hub → Tournaments: open Halqaro (Lichess) section, not bot spectate. */
+export function openLiveTournaments() {
+  setSection('intl');
+  nav = { view: 'list' };
 }

@@ -8,11 +8,11 @@ import { Chess } from '/vendor/chess.js';
 import { Board, restyleBoards } from './board.js';
 import { goodMoves, mateIn } from './puzzles.js';
 import { normalizeTimeControl, formatTashkentWhen } from './time.js';
-import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
+import { renderLivePage, liveBlocksAutoRefresh, openLiveTournaments } from './live.js';
 import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleOpenGame } from './game.js';
 import { renderProfilePage, openUserProfile } from './profile.js';
-import { openScreen, closeScreen } from './screen.js';
+import { openScreen, closeScreen, screenOpen } from './screen.js';
 import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel, CAROUSEL_STAGGER_MS } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
@@ -43,6 +43,10 @@ function ensurePlayFlow() {
     startFriendGame,
     aiSheet,
     goTab: (name) => go(TABS.indexOf(name), true),
+    openLiveTournaments: () => {
+      openLiveTournaments();
+      go(TABS.indexOf('live'), true);
+    },
     setSelectedTime: (id) => { selectedTime = id; playSnap = ''; },
     getSelectedTime: () => selectedTime,
   });
@@ -162,6 +166,11 @@ function openFriendWait(game) {
   let poll = null;
   let off = () => {};
   const gameId = game.id;
+  const markJoined = () => { joined = true; };
+  const onGameActive = (e) => {
+    if (e && e.detail && e.detail.id === gameId && e.detail.status === 'active') markJoined();
+  };
+  window.addEventListener('chess-game-active', onGameActive);
   const friendLink = () => {
     const bot = state.meta && state.meta.botUsername;
     const meId = state.me && state.me.id;
@@ -175,6 +184,7 @@ function openFriendWait(game) {
       joined = true;
       try { clearInterval(poll); } catch { /* ignore */ }
       try { off(); } catch { /* ignore */ }
+      window.removeEventListener('chess-game-active', onGameActive);
       close(true);
       if (nextGame && nextGame.status === 'active') openOnline(nextGame);
       else refresh();
@@ -196,6 +206,7 @@ function openFriendWait(game) {
       joined = true;
       try { clearInterval(poll); } catch { /* ignore */ }
       try { off(); } catch { /* ignore */ }
+      window.removeEventListener('chess-game-active', onGameActive);
       try { await api('DELETE', `/games/${gameId}`); } catch { /* ignore */ }
       close();
       refresh();
@@ -236,16 +247,22 @@ function openFriendWait(game) {
     onClose: () => {
       try { clearInterval(poll); } catch { /* ignore */ }
       try { off(); } catch { /* ignore */ }
-      if (!joined) {
-        joined = true;
-        api('DELETE', `/games/${gameId}`).catch(() => {});
-        refresh();
-      }
+      window.removeEventListener('chess-game-active', onGameActive);
+      if (joined) return;
+      joined = true;
+      // Never cancel if the friend already joined (WS race with global openOnline)
+      api('GET', `/games/${gameId}`).then((r) => {
+        if (r.game && r.game.status === 'active') return null;
+        return api('DELETE', `/games/${gameId}`);
+      }).catch(() => {}).finally(() => refresh());
     },
   });
 }
 
-const rankingCategory = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapid', classic: 'Classic', all: 'All' };
+const rankingCategory = () => ({
+  bullet: t('tc_bullet'), blitz: t('tc_blitz'), rapid: t('tc_rapid'),
+  classic: t('tc_classic'), all: t('rank_all') || 'All',
+});
 let selectedRankingBoard = 'elo';
 let selectedRanking = 'bullet';
 async function startQuick() {
@@ -595,7 +612,7 @@ function paintRankBody(host, data, isElo) {
   };
   host.replaceChildren(
     h('div.card.rank-summary',
-      h('div.rank-summary-title', rankingCategory[selectedRanking] + ' · ' + (isElo ? t('rank_board_elo') : t('rank_board_monthly'))),
+      h('div.rank-summary-title', rankingCategory()[selectedRanking] + ' · ' + (isElo ? t('rank_board_elo') : t('rank_board_monthly'))),
       h('div.muted', hint),
       rows.length ? h('div.list.rank-list', rows.map((p) => {
         const prem = !!(p.premium || (state.me && p.id === state.me.id && state.me.premium));
@@ -606,7 +623,7 @@ function paintRankBody(host, data, isElo) {
           h('div.rank-place' + (p.rank <= 3 ? '.podium-' + p.rank : ''), p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : String(p.rank)),
           avBlock(p.name, p.id, { premium: prem, round: true, avatarKey: p.avatarKey }),
           h('div.grow',
-            h('div.t', h('span.name', p.name), prem ? premIc() : null, p.id === state.me.id ? h('span.star', ' · ' + t('you')) : null),
+            h('div.t', h('span.name', p.name), prem ? premIc() : null, p.id === state.me.id ? h('span.star', ' · ' + t('you_short')) : null),
             h('div.s', isElo
               ? t('rank_games', { n: p.games || 0 })
               : t('rank_record', { w: p.wins || 0, d: p.draws || 0, l: p.losses || 0 }))),
@@ -648,7 +665,7 @@ refreshers.rankings = async function renderRankings() {
     { className: 'rank-board-bar' },
   );
   const tabs = pillBar(
-    categories.map((c) => [c, rankingCategory[c]]),
+    categories.map((c) => [c, rankingCategory()[c]]),
     selectedRanking,
     (category) => {
       if (category === selectedRanking) return;
@@ -1049,11 +1066,17 @@ export async function start(me) {
       refresh();
     }
     else if (m.t === 'game') {
-      // Opponent accepted — close invite-wait screen and open the board when the game starts
+      // Enter board only when waiting (friend/search/invite) — not on every move pushGame
       if (m.game.status === 'active' && m.game.id !== openGameId()) {
+        const waiting = screenOpen() || !!$('.invite-pop');
         clearInvitePop();
-        closeScreen(true);
-        openOnline(m.game);
+        if (waiting) {
+          window.dispatchEvent(new CustomEvent('chess-game-active', { detail: m.game }));
+          closeScreen(true);
+          openOnline(m.game);
+        } else {
+          refresh();
+        }
       } else if (m.game.id !== openGameId()) refresh();
     } else if (m.t === 'invite_gone') { clearInvitePop(); refresh(); }
   });
