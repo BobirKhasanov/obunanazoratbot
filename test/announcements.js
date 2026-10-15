@@ -51,6 +51,7 @@ assert.ok(i18n.includes("2- E'lonlar taxtasi") || i18n.includes('2- E\'lonlar ta
 assert.ok(css.includes('0.72s') || css.includes('ann-track.dragging'));
 assert.ok(css.includes('.ann-carousel'));
 assert.ok(css.includes('.ann-track'));
+assert.ok(ann.includes('mediaOnly') && ann.includes('media-only') && css.includes('.ann-slide.media-only'), 'media-only full-bleed slides');
 assert.ok(i18n.includes('ann_title_section:'));
 
 // Pure Tashkent parse/format mirrors (same rules as server)

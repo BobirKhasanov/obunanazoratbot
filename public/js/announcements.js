@@ -68,12 +68,17 @@ function openLink(a, { onPage, botUsername, userId } = {}) {
   if (a.linkType === 'page' && a.linkPage && onPage) onPage(a.linkPage);
 }
 
+function hasCopy(a) {
+  return !!(String(a.title || '').trim() || String(a.body || '').trim());
+}
+
 function slide(a, opts) {
   const font = FONT_CSS[a.fontFamily] || FONT_CSS.system;
   const clickable = a.linkType === 'url' || a.linkType === 'page' || a.linkType === 'invite';
-  return h((clickable ? 'button' : 'div') + '.ann-slide', {
+  const mediaOnly = !!a._src && !hasCopy(a);
+  return h((clickable ? 'button' : 'div') + '.ann-slide' + (mediaOnly ? '.media-only' : ''), {
     type: clickable ? 'button' : undefined,
-    style: {
+    style: mediaOnly ? { fontFamily: font } : {
       background: `linear-gradient(135deg, ${a.bgFrom}, ${a.bgTo})`,
       fontFamily: font,
     },
@@ -82,10 +87,12 @@ function slide(a, opts) {
       openLink(a, opts);
     } : undefined,
   },
-    h('div.ann-copy',
+    mediaOnly ? null : h('div.ann-copy',
       a.title ? h('b.ann-title', { style: { color: a.titleColor, fontSize: `${a.fontSize}px` } }, a.title) : null,
       a.body ? h('span.ann-body', { style: { color: a.bodyColor, fontSize: `${Math.max(12, a.fontSize - 4)}px` } }, a.body) : null),
-    a._src ? h('div.ann-media', h('img', { src: a._src, alt: '', draggable: 'false' })) : h('div.ann-media.emoji', '♛'));
+    a._src
+      ? h('div.ann-media', h('img', { src: a._src, alt: '', draggable: 'false' }))
+      : h('div.ann-media.emoji', '♛'));
 }
 
 function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {
