@@ -284,6 +284,8 @@ async function applyRatingFinish(row, result) {
     ...['bullet', 'blitz', 'rapid', 'classic', 'all'].flatMap((c) => [
       cacheDel(`rankings:elo:${c}:${mk}`),
       cacheDel(`rankings:monthly:${c}:${mk}`),
+      cacheDel(`rankings:v2:elo:${c}:${mk}`),
+      cacheDel(`rankings:v2:monthly:${c}:${mk}`),
     ]),
   ]);
 }
@@ -409,6 +411,25 @@ function normalizeDiamondPacks(raw) {
     out.push({ diamonds, sum });
   }
   return out.length ? out : DEFAULT_DIAMOND_PACKS.slice();
+}
+
+/** Strict parse for admin PATCH — never silently drop packs. */
+function parseDiamondPacksStrict(raw) {
+  if (!Array.isArray(raw)) throw bad('Invalid diamond packs', 'bad_request');
+  if (!raw.length) throw bad('Need at least one diamond pack', 'bad_request');
+  const out = [];
+  for (const p of raw) {
+    const diamonds = Math.floor(Number(p && p.diamonds));
+    const sum = Math.floor(Number(p && p.sum));
+    if (!(diamonds >= 1 && diamonds <= 1_000_000)) {
+      throw bad('Pack diamonds must be 1…1000000', 'bad_request');
+    }
+    if (!(sum >= 1000 && sum <= 1_000_000_000)) {
+      throw bad('Pack price must be at least 1000 so\'m', 'bad_request');
+    }
+    out.push({ diamonds, sum });
+  }
+  return out;
 }
 
 function normalizePremiumPlans(raw, fallbackMonthPrice) {
@@ -689,8 +710,9 @@ api.delete('/me', wrap(async (req, res) => {
   }
   await db.prepare("UPDATE games SET status = 'cancelled' WHERE status IN ('open', 'invited') AND (creator_id = ? OR invited_id = ?)").run(uid, uid);
   await db.prepare('DELETE FROM game_invites WHERE user_id = ? OR game_id IN (SELECT id FROM games WHERE creator_id = ? OR white_id = ? OR black_id = ? OR invited_id = ?)').run(uid, uid, uid, uid, uid);
-  // games has no FK cascade — remove the user's games so no orphan rows remain
-  await db.prepare('DELETE FROM games WHERE creator_id = ? OR white_id = ? OR black_id = ? OR invited_id = ?').run(uid, uid, uid, uid);
+  // Drop unfinished / cancelled games; keep finished ones so the opponent can still open the result
+  await db.prepare(`DELETE FROM games WHERE (creator_id = ? OR white_id = ? OR black_id = ? OR invited_id = ?)
+    AND status != 'finished'`).run(uid, uid, uid, uid);
   await clearPresent.run(uid).catch(() => {});
   await db.prepare('DELETE FROM users WHERE id = ?').run(uid); // friends, results, DMs, medals, referrals cascade
   await Promise.all([
@@ -718,7 +740,18 @@ const getGame = db.prepare('SELECT * FROM games WHERE id = ?');
 function clockPayload(row, now = Date.now()) {
   const tc = normalizeTimeControl(row.time_control);
   const spec = presetOf(tc);
-  if (!isTimed(tc) || row.white_ms == null || row.black_ms == null) return null;
+  if (!isTimed(tc)) return null;
+  // Waiting games still expose the chosen time control so the UI can show clocks immediately
+  if (row.white_ms == null || row.black_ms == null) {
+    return {
+      whiteMs: spec.baseMs,
+      blackMs: spec.baseMs,
+      turnStartedAt: null,
+      serverNow: new Date(now).toISOString(),
+      initialMs: spec.baseMs,
+      incrementMs: spec.incMs,
+    };
+  }
   // Stored remaining at last move; clients drain the active side using turnStartedAt
   return {
     whiteMs: Number(row.white_ms),
@@ -1064,8 +1097,15 @@ async function finish(row, result, reason) {
     .run(result, reason, row.id);
   try { await applyRatingFinish(row, result); } catch (e) { console.error('[rating]', e.message || e); }
   // Rankings / busy-set caches must not serve pre-finish data
-  await Promise.all(['bullet', 'blitz', 'rapid', 'classic'].map((c) => cacheDel(`rankings:${c}`)));
-  await cacheDel('lobby:busy');
+  const mk = monthKey();
+  await Promise.all([
+    ...['bullet', 'blitz', 'rapid', 'classic', 'all'].flatMap((c) => [
+      cacheDel(`rankings:${c}`),
+      cacheDel(`rankings:v2:elo:${c}:${mk}`),
+      cacheDel(`rankings:v2:monthly:${c}:${mk}`),
+    ]),
+    cacheDel('lobby:busy'),
+  ]);
   const next = await getGame.get(row.id);
   await pushGame(next);
 
@@ -1189,6 +1229,47 @@ api.post('/games/:id/react', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Ephemeral in-game chat (not stored; cleared when the client closes the game)
+const lastChat = new Map();
+api.post('/games/:id/chat', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const row = await loadGame(req.params.id, uid);
+  if (row.status !== 'active') throw bad('Game is not active', 'bad_request');
+  if (!(sameId(row.white_id, uid) || sameId(row.black_id, uid))) throw bad('Not a player', 'forbidden');
+  const text = String((req.body && req.body.text) || '').trim().slice(0, 120);
+  if (!text) throw bad('Empty message', 'bad_request');
+  const now = Date.now();
+  if (now - (lastChat.get(uid) || 0) < 400) return res.json({ ok: true });
+  lastChat.set(uid, now);
+  const name = (await person(uid)).name;
+  for (const id of await participants(row)) {
+    if (id !== uid) realtime.send(id, { t: 'chat', id: row.id, text, by: uid, name });
+  }
+  res.json({ ok: true });
+}));
+
+/** Award +1 💎 once per Tashkent day when the user finishes all 10 daily puzzles. */
+function tashkentDateKey(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(date);
+}
+api.post('/puzzles/claim-daily', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const day = tashkentDateKey();
+  try {
+    await db.prepare('INSERT INTO puzzle_daily_claims (user_id, day) VALUES (?, ?)').run(uid, day);
+  } catch {
+    const u = await getUser.get(uid);
+    return res.json({ ok: true, awarded: 0, diamonds: Number(u.diamonds || 0), day });
+  }
+  await db.prepare('UPDATE users SET diamonds = diamonds + 1 WHERE id = ?').run(uid);
+  const u = await getUser.get(uid);
+  const diamonds = Number(u.diamonds || 0);
+  realtime.send(uid, { t: 'wallet', diamonds });
+  res.json({ ok: true, awarded: 1, diamonds, day });
+}));
+
 // ---------- computer games (played in the browser, only the result is reported) ----------
 const lastResult = new Map();
 api.post('/results', wrap(async (req, res) => {
@@ -1203,9 +1284,9 @@ api.post('/results', wrap(async (req, res) => {
 }));
 
 const TC_CASE = `CASE COALESCE(g.time_control, 'classic')
-  WHEN '1+0' THEN 'bullet' WHEN 'bullet' THEN 'bullet'
-  WHEN '3+2' THEN 'blitz' WHEN '5+0' THEN 'blitz' WHEN 'blitz' THEN 'blitz'
-  WHEN '10+0' THEN 'rapid' WHEN '15+10' THEN 'rapid' WHEN 'rapid' THEN 'rapid'
+  WHEN '1+0' THEN 'bullet' WHEN '1+1' THEN 'bullet' WHEN '2+1' THEN 'bullet' WHEN 'bullet' THEN 'bullet'
+  WHEN '3+0' THEN 'blitz' WHEN '3+2' THEN 'blitz' WHEN '5+0' THEN 'blitz' WHEN 'blitz' THEN 'blitz'
+  WHEN '10+0' THEN 'rapid' WHEN '15+10' THEN 'rapid' WHEN '30+0' THEN 'rapid' WHEN 'rapid' THEN 'rapid'
   ELSE 'classic' END`;
 
 // ---------- live competitive rankings (Elo lifetime + monthly points) ----------
@@ -2234,8 +2315,7 @@ admin.patch('/shop', wrap(async (req, res) => {
     await setSetting('premium_plans', JSON.stringify(plans));
   }
   if (b.diamondPacks !== undefined) {
-    const packs = normalizeDiamondPacks(b.diamondPacks);
-    if (!packs.length) throw bad('Need at least one diamond pack', 'bad_request');
+    const packs = parseDiamondPacksStrict(b.diamondPacks);
     await setSetting('diamond_packs', JSON.stringify(packs));
   }
   if (b.payUsername !== undefined) {

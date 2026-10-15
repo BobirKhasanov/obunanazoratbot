@@ -77,15 +77,23 @@ assert.ok(read('public/js/userprofile.js').includes('filter(Boolean)'), 'user pr
 assert.ok(profile.includes('.filter(Boolean)') && profile.includes('host.replaceChildren'), 'my info does not append null text nodes');
 assert.ok(read('public/js/userprofile.js').includes('uprof-statgrid.wdl'), 'profile W/D/L is a full 3-col row');
 assert.ok(css.includes('.uprof-statgrid.wdl'), 'W/D/L grid style');
-assert.ok(app.includes('openInbox') && app.includes('loadInbox') && (app.includes("data-noswipe") || read('public/js/inbox.js').includes("data-noswipe")), 'mail/bell open inbox and ignore pager swipe');
+assert.ok(!app.includes('headerInboxBtnsSafe') && !app.includes('loadInbox') && !app.includes('openInbox'), 'home header mail/bell removed');
 assert.ok(read('src/server.js').includes('premium_flag') && read('src/server.js').includes('mapPremium'), 'rankings API maps premium');
 assert.ok(profile.includes("t('delete_account')") && profile.includes("DELETE', '/me'"), 'profile settings can delete account');
 assert.ok(read('src/server.js').includes("api.delete('/me'") && read('src/server.js').includes('DELETE FROM games WHERE'), 'account delete wipes user games + row');
 assert.ok(profile.includes('/shop/order') || profile.includes('shop/order'));
+assert.ok(profile.includes('shop_write_admin') && profile.includes('shop_pick_pack'), 'diamonds: select pack then write admin');
 assert.ok(profile.includes('premiumPlans') || profile.includes('premium_plans'));
 assert.ok(app.includes("t === 'wallet'") || app.includes('m.t === \'wallet\''));
+assert.ok(app.includes('dailyPuzzles') && app.includes('claim-daily') && app.includes('puzzle_diff'), 'daily 1–10 puzzles + diamond claim');
+const gameJs = read('public/js/game.js');
+assert.ok(gameJs.includes('playMoveSound') && gameJs.includes('/chat') && gameJs.includes('gchat'), 'in-game move sound + ephemeral chat');
+assert.ok(gameJs.includes('pclk') && gameJs.includes('categoryOf'), 'clocks styled by time-control category');
+assert.ok(read('public/js/ui.js').includes('playMoveSound') && /floatup 3\.4s/.test(css), 'slower emoji float + move sound helper');
+assert.ok(admin.includes('admin_pack_sum') || admin.includes('admin_pack_diamonds'), 'admin validates diamond packs before save');
+assert.ok(read('src/server.js').includes('parseDiamondPacksStrict') && read('src/server.js').includes('/puzzles/claim-daily') && read('src/server.js').includes('/games/:id/chat'), 'server shop/chat/puzzle endpoints');
 
-for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans']) {
+for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward']) {
   assert.ok(i18n.includes(k + ':'), `i18n ${k}`);
 }
 
@@ -122,11 +130,9 @@ assert.ok(html.includes('id="play-sticky"') && html.includes('id="dock"'), 'Play
 assert.ok(html.includes('id="boot"'), 'boot splash in HTML');
 assert.ok(html.includes('var(--text') && html.includes('var(--bg'), 'boot splash uses theme vars (light text not stuck white)');
 assert.ok(css.includes('pill-thumb') && ui.includes('pillBar'), 'sliding pill bars for section selection');
-assert.ok((app.includes('headerInboxBtns') || app.includes('headerInboxBtnsSafe')) && app.includes('rank-board-bar'), 'home inbox + ranking bars');
+assert.ok(app.includes('rank-board-bar'), 'ranking bars on home/rankings');
 assert.ok(app.includes("online-heading") && app.includes("t('online_now'") && !/gempill[\s\S]{0,180}livepill/.test(app), 'online count sits by Online players, not in gem header');
-assert.ok(app.includes('hdr-ic') && app.includes("t('messages')") && app.includes("t('xabarnoma')"), 'header shows mail + notifications');
-assert.ok(app.includes('loadInbox') && app.includes('import.meta.url') && app.includes("('./inbox.js'"), 'inbox lazy-loaded via import.meta.url (no ?v= query)');
-assert.ok(app.includes('function openInbox') || app.includes('openInbox(kind)'), 'header opens inbox after lazy load');
+assert.ok(!app.includes('hdr-ic') && !app.includes("t('xabarnoma')"), 'header mail/bell icons removed');
 assert.ok(app.includes('timeoutMs') && app.includes('showApp') && app.includes('showGate'), 'boot has /me timeout and reveals app/gate');
 assert.ok(read('public/js/ui.js').includes('timeoutMs') && read('public/js/ui.js').includes('AbortController'), 'api supports request timeout');
 assert.ok(html.includes('Doska ochilmoqda') && html.includes('boot-ring') && html.includes('boot-spin'), 'animated boot splash copy');
@@ -134,18 +140,7 @@ assert.ok(html.includes('failBoot') && html.includes('Juda uzoq kutildi'), 'boot
 assert.ok(!html.includes('rel="modulepreload"'), 'no inbox modulepreload (was false-triggering boot fail UI)');
 assert.ok(html.includes("/js/app.js") && html.includes('ev.filename'), 'boot fail only on app.js load errors');
 assert.ok(read('src/server.js').includes("file.endsWith('.js')") && read('src/server.js').includes('text/javascript'), 'JS modules served with correct MIME');
-const inbox = read('public/js/inbox.js');
-assert.ok(inbox.includes('openNotifications') && inbox.includes('openMessages'), 'inbox screens');
-assert.ok(inbox.includes('/messages/search') && inbox.includes('/notifications'), 'inbox API wiring');
-assert.ok(inbox.includes('inbox-head') && inbox.includes('notif-snippet') && inbox.includes('notifMediaEl'), 'xabarnoma UI matches feed layout + media');
-assert.ok(inbox.includes('msg_sub') && inbox.includes('/messages/search'), 'messages page has search + chat');
-assert.ok(server.includes("CREATE TABLE IF NOT EXISTS notifications") || read('src/db.js').includes('CREATE TABLE IF NOT EXISTS notifications'), 'notifications table');
-assert.ok(read('src/db.js').includes('dm_threads') && read('src/db.js').includes('dm_messages'), 'DM tables');
-assert.ok(server.includes("admin.post('/notifications'") && server.includes("api.get('/notifications'"), 'notif APIs');
-assert.ok(server.includes('mediaId') && server.includes("'feedback'") && server.includes('Shikoyat / taklif'), 'admin notifs can attach media; feedback → admin inbox');
-assert.ok(server.includes("api.get('/messages/threads'") && server.includes("api.post('/messages/threads'"), 'messages APIs');
-assert.ok(admin.includes('admin_notif') && admin.includes('/admin/notifications') && admin.includes('admin_notif_media'), 'admin in-app notif composer with optional image');
-assert.ok(css.includes('.hdr-ic') && css.includes('.hdr-badge') && css.includes('.inbox-head') && css.includes('.notif-media'), 'header + xabarnoma styles');
-assert.ok(i18n.includes('xabarnoma:') && i18n.includes('messages:') && i18n.includes('msg_search_ph:') && i18n.includes('msg_sub:'), 'inbox i18n');
+assert.ok(read('src/db.js').includes('puzzle_daily_claims'), 'daily puzzle reward table');
+assert.ok(css.includes('.pclk') && css.includes('.gchat') && css.includes('.shop-pack.on'), 'clock + chat + pack select styles');
 
 console.log('ok  profile-ui (hub + smooth nav)');

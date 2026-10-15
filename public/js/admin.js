@@ -406,6 +406,7 @@ export function openAdmin(onClose) {
         h('div.label', t('shop_packs')), packsBox,
         h('button.btn.ghost.sm', {
           onclick: () => {
+            if (!Array.isArray(shop.diamondPacks)) shop.diamondPacks = [];
             shop.diamondPacks.push({ diamonds: 100, sum: 100000 });
             redrawPacks();
           },
@@ -413,9 +414,19 @@ export function openAdmin(onClose) {
         h('button.btn', {
           onclick: async () => {
             try {
+              const packs = (shop.diamondPacks || []).map((p) => ({
+                diamonds: Math.floor(Number(p.diamonds) || 0),
+                sum: Math.floor(Number(p.sum) || 0),
+              }));
+              if (!packs.length) { toast(t('admin_pack_need'), true); return; }
+              for (const p of packs) {
+                if (!(p.diamonds >= 1 && p.diamonds <= 1_000_000)) { toast(t('admin_pack_diamonds'), true); return; }
+                if (!(p.sum >= 1000 && p.sum <= 1_000_000_000)) { toast(t('admin_pack_sum'), true); return; }
+              }
+              shop.diamondPacks = packs;
               const r = await api('PATCH', '/admin/shop', {
                 premiumPlans: shop.premiumPlans,
-                diamondPacks: shop.diamondPacks,
+                diamondPacks: packs,
                 payUsername: shop.payUsername,
               });
               shop = r.shop;

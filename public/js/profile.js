@@ -9,13 +9,18 @@ import { stylePickerCard } from './style-ui.js';
 import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleBoards } from './board.js';
 import { restyleOpenGame } from './game.js';
-import { PUZZLES } from './puzzles.js';
+import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
 
 const APP_VERSION = '1.0.0';
-const PZ_KEY = 'chess-puzzles-solved';
+const PZ_KEY = 'chess-puzzles-daily';
 
 const solvedCount = () => {
-  try { return (JSON.parse(localStorage.getItem(PZ_KEY)) || []).length; } catch { return 0; }
+  try {
+    const day = tashkentDayKey();
+    const raw = JSON.parse(localStorage.getItem(PZ_KEY) || 'null');
+    if (!raw || raw.day !== day || !Array.isArray(raw.ids)) return 0;
+    return raw.ids.length;
+  } catch { return 0; }
 };
 
 function sec(label) {
@@ -140,29 +145,42 @@ export function renderProfilePage(ctx) {
     const packs = state.meta.diamondPacks || [];
     const payUser = state.meta.payUsername || 'hasanovbobur';
     const have = state.me.diamonds || 0;
-    const orderPack = async (p) => {
+    let selected = null;
+    const host = h('div.diamonds-host');
+    const orderSelected = async () => {
+      if (!selected) { toast(t('shop_pick_pack'), true); return; }
       try {
-        await api('POST', '/shop/order', { diamonds: p.diamonds, sum: p.sum });
+        await api('POST', '/shop/order', { diamonds: selected.diamonds, sum: selected.sum });
         toast(t('shop_order_sent')); haptic('success');
         openPayContact();
       } catch (e) { fail(e); }
     };
-    return [
-      ...subTop(t('diamonds'), close),
-      h('div.card.gems',
-        h('div.gems-top', h('div.gems-num', '💎 ', h('b', String(have)))),
-        h('small.muted', t('shop_sub'))),
-      h('div.h2', t('shop_packs')),
-      packs.length
-        ? h('div.list.shop-packs', packs.map((p) => h('button.row.shop-pack', {
+    const draw = () => {
+      host.replaceChildren(
+        h('div.card.gems',
+          h('div.gems-top', h('div.gems-num', '💎 ', h('b', String(have)))),
+          h('small.muted', t('shop_sub'))),
+        h('div.h2', t('shop_packs')),
+        packs.length
+          ? h('div.list.shop-packs', packs.map((p) => {
+            const on = selected && selected.diamonds === p.diamonds && selected.sum === p.sum;
+            return h('button.row.shop-pack' + (on ? '.on' : ''), {
+              type: 'button',
+              onclick: () => { haptic('select'); selected = p; draw(); },
+            },
+              h('div.grow', h('div.t', `💎 ${p.diamonds}`), h('div.s', formatSom(p.sum))),
+              h('span.pill', on ? t('shop_selected') : t('shop_buy')));
+          }))
+          : h('div.empty', t('shop_empty')),
+        h('button.btn', {
           type: 'button',
-          onclick: () => { haptic('select'); orderPack(p); },
-        },
-          h('div.grow', h('div.t', `💎 ${p.diamonds}`), h('div.s', formatSom(p.sum))),
-          h('span.pill', t('shop_buy')))))
-        : h('div.empty', t('shop_empty')),
-      h('p.muted.shop-hint', t('shop_pay_hint', { user: '@' + payUser })),
-    ];
+          onclick: () => { haptic('medium'); orderSelected(); },
+        }, icon('mail', 18), t('shop_write_admin')),
+        h('p.muted.shop-hint', t('shop_pay_hint', { user: '@' + payUser })),
+      );
+    };
+    draw();
+    return [...subTop(t('diamonds'), close), host];
   });
   document.removeEventListener('profile-open', document._profileOpenHandler);
   document._profileOpenHandler = onProfileOpen;
@@ -583,7 +601,7 @@ export function renderProfilePage(ctx) {
         h('button.card.rating-tile', { type: 'button', onclick: () => { haptic('select'); goTab('puzzles'); } },
           h('span.rating-ic', '🧩'),
           h('div', h('small.muted', t('nav_puzzles')), h('b.rating-n', String(pzDone))),
-          h('div.s', t('puzzle_solved_count', { a: pzDone, b: PUZZLES.length })))),
+          h('div.s', t('puzzle_solved_count', { a: pzDone, b: dailyPuzzles().length })))),
 
       sec(t('sec_game')),
       menuCard(

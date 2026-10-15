@@ -458,6 +458,7 @@ Object.assign(uzc, { diamonds: 'Олмослар', gems_title: 'Сизнинг �
 
 Object.assign(en, {
   shop_buy: 'Buy', shop_order_sent: 'Request sent to admin. Complete payment in Telegram.',
+  shop_write_admin: 'Message admin', shop_pick_pack: 'Select a pack first', shop_selected: 'Selected',
   premium_plans: 'Premium plans', premium_plan_months: '{n} months', premium_plan_year: '1 year',
   premium_buy_short: 'Buy', premium_need_short: 'Need {n} 💎',
   wallet_updated: 'Balance updated',
@@ -465,10 +466,18 @@ Object.assign(en, {
   admin_grant_premium_bad: 'Use 1, 3, 6 or 12 months',
   admin_grant_ok_full: 'Granted: {d} 💎, Premium +{m} mo',
   admin_premium_plans: 'Premium prices (diamonds)',
+  admin_pack_need: 'Add at least one diamond pack',
+  admin_pack_diamonds: 'Pack diamonds must be 1…1000000',
+  admin_pack_sum: 'Pack price must be at least 1000 so\'m',
+  game_chat: 'Chat', game_chat_ph: 'Message…', game_chat_send: 'Send',
+  puzzles_daily_sub: 'New puzzles every day · 1 easy → 10 hard · finish all 10 for +1 💎',
+  puzzle_diff: 'Level {n}', puzzle_daily_reward: '+1 💎 for today’s puzzles!',
+  puzzle_daily_done: 'All 10 solved today — diamond claimed',
 });
 
 Object.assign(ru, {
   shop_buy: 'Купить', shop_order_sent: 'Запрос отправлен админу. Оплатите в Telegram.',
+  shop_write_admin: 'Написать админу', shop_pick_pack: 'Сначала выберите пакет', shop_selected: 'Выбрано',
   premium_plans: 'Тарифы Премиум', premium_plan_months: '{n} мес.', premium_plan_year: '1 год',
   premium_buy_short: 'Купить', premium_need_short: 'Нужно {n} 💎',
   wallet_updated: 'Баланс обновлён',
@@ -476,10 +485,18 @@ Object.assign(ru, {
   admin_grant_premium_bad: 'Укажите 1, 3, 6 или 12 месяцев',
   admin_grant_ok_full: 'Выдано: {d} 💎, Премиум +{m} мес.',
   admin_premium_plans: 'Цены Премиум (алмазы)',
+  admin_pack_need: 'Добавьте хотя бы один пакет',
+  admin_pack_diamonds: 'Алмазы в пакете: 1…1000000',
+  admin_pack_sum: 'Цена пакета от 1000 сум',
+  game_chat: 'Чат', game_chat_ph: 'Сообщение…', game_chat_send: 'Отправить',
+  puzzles_daily_sub: 'Новые задачи каждый день · 1 легко → 10 сложно · все 10 = +1 💎',
+  puzzle_diff: 'Уровень {n}', puzzle_daily_reward: '+1 💎 за сегодняшние задачи!',
+  puzzle_daily_done: 'Все 10 решены сегодня — алмаз получен',
 });
 
 Object.assign(uz, {
   shop_buy: 'Sotib olish', shop_order_sent: "So'rov adminga yuborildi. Telegramda to'lovni yakunlang.",
+  shop_write_admin: 'Adminga yozish', shop_pick_pack: 'Avval paketni tanlang', shop_selected: 'Tanlandi',
   premium_plans: 'Premium tariflar', premium_plan_months: '{n} oy', premium_plan_year: '1 yil',
   premium_buy_short: 'Olish', premium_need_short: '{n} 💎 kerak',
   wallet_updated: 'Balans yangilandi',
@@ -487,10 +504,18 @@ Object.assign(uz, {
   admin_grant_premium_bad: '1, 3, 6 yoki 12 oy kiriting',
   admin_grant_ok_full: "Berildi: {d} 💎, Premium +{m} oy",
   admin_premium_plans: 'Premium narxlari (olmos)',
+  admin_pack_need: 'Kamida bitta olmos paketi qo‘shing',
+  admin_pack_diamonds: 'Paket olmoslari 1…1000000 bo‘lsin',
+  admin_pack_sum: 'Paket narxi kamida 1000 so‘m',
+  game_chat: 'Chat', game_chat_ph: 'Xabar…', game_chat_send: 'Yuborish',
+  puzzles_daily_sub: 'Har kuni yangi masalalar · 1 oson → 10 qiyin · 10 tasini yechsangiz +1 💎',
+  puzzle_diff: '{n}-daraja', puzzle_daily_reward: 'Bugungi masalalar uchun +1 💎!',
+  puzzle_daily_done: 'Bugun 10 tasi yechildi — olmos olindi',
 });
 
 Object.assign(uzc, {
   shop_buy: 'Сотиб олиш', shop_order_sent: 'Сўров админга юборилди. Телеграмда тўловни якунланг.',
+  shop_write_admin: 'Админга ёзиш', shop_pick_pack: 'Аввал пакетни танланг', shop_selected: 'Танланди',
   premium_plans: 'Премиум тарифлар', premium_plan_months: '{n} ой', premium_plan_year: '1 йил',
   premium_buy_short: 'Олиш', premium_need_short: '{n} 💎 керак',
   wallet_updated: 'Баланс янгиланди',
@@ -498,6 +523,13 @@ Object.assign(uzc, {
   admin_grant_premium_bad: '1, 3, 6 ёки 12 ой киритинг',
   admin_grant_ok_full: 'Берилди: {d} 💎, Премиум +{m} ой',
   admin_premium_plans: 'Премиум нархлари (олмос)',
+  admin_pack_need: 'Камида битта олмос пакети қўшинг',
+  admin_pack_diamonds: 'Пакет олмослари 1…1000000 бўлсин',
+  admin_pack_sum: 'Пакет нархи камида 1000 сўм',
+  game_chat: 'Чат', game_chat_ph: 'Хабар…', game_chat_send: 'Юбориш',
+  puzzles_daily_sub: 'Ҳар куни янги масалалар · 1 осон → 10 қийин · 10 тасини ечсангиз +1 💎',
+  puzzle_diff: '{n}-даража', puzzle_daily_reward: 'Бугунги масалалар учун +1 💎!',
+  puzzle_daily_done: 'Бугун 10 таси ечилди — олмос олинди',
 });
 
 Object.assign(en, {

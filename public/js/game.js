@@ -1,10 +1,10 @@
 // Game screen: vs computer (local engine in a Web Worker) and online / friend games (server-authoritative over WebSocket).
 import { Chess } from '/vendor/chess.js';
-import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatEmoji, rain, avatar, sleep, shareUrl, copyText } from './ui.js';
+import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatEmoji, rain, avatar, sleep, shareUrl, copyText, playMoveSound } from './ui.js';
 import { t, getLang } from './i18n.js';
 import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
-import { formatClock, remainingMs, isTimed, formatTashkentWhen } from './time.js';
+import { formatClock, remainingMs, isTimed, formatTashkentWhen, categoryOf } from './time.js';
 
 const AI_KEY = 'chess-ai-game';
 const EMOTES = ['🤔', '😎', '😮', '👏', '🙈', '😀'];
@@ -63,7 +63,7 @@ export function openGame(opts, onClose) {
   const S = ctx = {
     kind: opts.kind, onClose, level: opts.level || 3, colour: opts.colour || 'w', id: opts.game ? opts.game.id : null,
     moves: [], chess: new Chess(), over: false, busy: false, game: opts.game || null, flipped: false, meta: opts.meta || {}, thinking: false,
-    clockTimer: null, flagClaimed: false,
+    clockTimer: null, flagClaimed: false, chat: [], chatOpen: false,
   };
 
   const bar = (cls) => ({
@@ -80,9 +80,19 @@ export function openGame(opts, onClose) {
   const act = (ic, label, fn) => h('button.act', { onclick: fn, 'aria-label': label }, icon(ic, 22), h('span', label));
   const actions = h('div.actions');
   const reactBar = h('div.reactbar'); reactBar.hidden = true;
+  const chatPanel = h('div.gchat'); chatPanel.hidden = true;
+  const chatLog = h('div.gchat-log');
+  const chatInput = h('input.input', {
+    type: 'text', maxlength: 120, placeholder: t('game_chat_ph'), autocomplete: 'off',
+    onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); sendChat(); } },
+  });
+  chatPanel.append(
+    chatLog,
+    h('div.gchat-form', chatInput, h('button.mini', { type: 'button', 'aria-label': t('game_chat_send'), onclick: sendChat }, icon('send', 18))),
+  );
   root.append(
     h('div.ghead', back, title, h('button.round', { 'aria-label': t('flip'), onclick: () => { S.flipped = !S.flipped; render(false); haptic('light'); } }, icon('flip', 22))),
-    status, top.el, boardHost, bot.el, moveStrip, banner, reactBar, actions,
+    status, top.el, boardHost, bot.el, moveStrip, banner, reactBar, chatPanel, actions,
   );
   const board = S.board = new Board(boardHost, { onMove: (f, to, p) => humanMove(f, to, p) });
 
@@ -122,13 +132,64 @@ export function openGame(opts, onClose) {
     b.av.replaceChildren(ai ? h('div.avatar.ai', icon('cpu', 22)) : avatar(p.name, p.id));
     b.name.textContent = p.name;
     const clock = sideClock(colour);
-    b.sub.textContent = clock != null ? clock : (colour === 'w' ? t('white') : t('black'));
     const ms = S.game && S.game.clock && S.game.status === 'active'
       ? remainingMs(S.game.clock, colour, S.game.turn, S.game.status) : null;
+    if (clock != null) {
+      const cat = categoryOf((S.game && S.game.timeControl) || 'classic');
+      const low = ms != null && ms <= 20_000;
+      b.sub.replaceChildren(h('span.pclk.' + cat + (low ? '.low' : ''), clock));
+    } else {
+      b.sub.textContent = colour === 'w' ? t('white') : t('black');
+    }
     b.el.classList.toggle('low', ms != null && ms <= 20_000);
     b.cap.replaceChildren(...cap.lost[colour === 'w' ? 'b' : 'w'].map((k) => h('span.cp', { html: pieceSvg(colour === 'w' ? 'b' : 'w', k) })));
     const diff = (colour === 'w' ? 1 : -1) * cap.score;
     b.mat.textContent = diff > 0 ? `+${diff}` : '';
+  }
+
+  function paintChat() {
+    const meId = S.meta.me && S.meta.me.id;
+    chatLog.replaceChildren(...S.chat.map((m) => h('div.gchat-row' + (m.by === meId ? '.me' : ''),
+      h('span.who', m.name || '?'),
+      h('span.msg', m.text))));
+    chatLog.scrollTop = chatLog.scrollHeight;
+    chatPanel.hidden = !S.chatOpen;
+  }
+  function sendChat() {
+    if (S.kind !== 'online' || S.over || !S.game || S.game.status !== 'active') return;
+    const text = String(chatInput.value || '').trim().slice(0, 120);
+    if (!text) return;
+    chatInput.value = '';
+    const me = S.meta.me || {};
+    const local = { by: me.id, name: me.name || t('you'), text };
+    S.chat.push(local);
+    if (S.chat.length > 40) S.chat.shift();
+    paintChat();
+    api('POST', `/games/${S.id}/chat`, { text }).catch(() => {});
+  }
+  function toggleChat() {
+    if (S.kind !== 'online') return;
+    S.chatOpen = !S.chatOpen;
+    if (S.chatOpen) reactBar.hidden = true;
+    paintChat();
+    haptic('select');
+    if (S.chatOpen) setTimeout(() => chatInput.focus(), 50);
+  }
+
+  function paintSideClock(el, side) {
+    const text = sideClock(side);
+    if (text == null) return;
+    const ms = remainingMs(S.game.clock, side, S.game.turn, S.game.status);
+    const cat = categoryOf(S.game.timeControl || 'classic');
+    const low = ms != null && ms <= 20_000;
+    let span = el.querySelector('.pclk');
+    if (!span) {
+      span = h('span.pclk.' + cat + (low ? '.low' : ''), text);
+      el.replaceChildren(span);
+    } else {
+      span.textContent = text;
+      span.className = 'pclk ' + cat + (low ? ' low' : '');
+    }
   }
 
   function syncClocks() {
@@ -139,8 +200,8 @@ export function openGame(opts, onClose) {
     const topIsOpp = ori === S.colour;
     const topSide = topIsOpp ? oppCol : S.colour;
     const botSide = topIsOpp ? S.colour : oppCol;
-    top.sub.textContent = sideClock(topSide) || '';
-    bot.sub.textContent = sideClock(botSide) || '';
+    paintSideClock(top.sub, topSide);
+    paintSideClock(bot.sub, botSide);
     const topMs = remainingMs(S.game.clock, topSide, S.game.turn, S.game.status);
     const botMs = remainingMs(S.game.clock, botSide, S.game.turn, S.game.status);
     top.el.classList.toggle('low', topMs != null && topMs <= 20_000);
@@ -238,6 +299,13 @@ export function openGame(opts, onClose) {
   function renderActions() {
     actions.replaceChildren();
     reactBar.hidden = true;
+    if (S.over || (S.game && S.game.status === 'finished')) {
+      S.chatOpen = false;
+      chatPanel.hidden = true;
+      S.chat = [];
+    } else {
+      chatPanel.hidden = !S.chatOpen;
+    }
     const live = !S.over && (S.kind === 'ai' || (S.game && S.game.status === 'active'));
     const drawIn = S.kind === 'online' && live && S.game.drawBy && S.game.drawBy !== S.game.you;
     const drawOut = S.kind === 'online' && live && S.game.drawBy === S.game.you;
@@ -257,7 +325,7 @@ export function openGame(opts, onClose) {
       );
     } else if (S.kind === 'online' && live) {
       if (!drawOut) actions.append(act('handshake', t('offer_draw'), () => drawAction('offer')));
-      actions.append(act('flag', t('resign'), resign), act('smile', '', toggleReact));
+      actions.append(act('flag', t('resign'), resign), act('chat', t('game_chat'), toggleChat), act('smile', '', toggleReact));
     } else if (S.kind === 'spectate') {
       // view-only: no actions
     } else if (S.over || (S.game && S.game.status === 'finished')) {
@@ -269,7 +337,9 @@ export function openGame(opts, onClose) {
     if (!reactBar.children.length) {
       for (const e of S.meta.reactions) reactBar.append(h('button', { onclick: (ev) => react(e, ev.currentTarget) }, e));
     }
-    reactBar.hidden = !reactBar.hidden; haptic('select');
+    reactBar.hidden = !reactBar.hidden;
+    if (!reactBar.hidden) { S.chatOpen = false; chatPanel.hidden = true; }
+    haptic('select');
   }
   function react(emoji, el) {
     const r = el.getBoundingClientRect();
@@ -284,10 +354,12 @@ export function openGame(opts, onClose) {
     if (S.over || S.kind === 'spectate') return;
     if (S.kind === 'ai') {
       try { S.chess.move({ from, to, promotion }); } catch { return render(); }
+      playMoveSound();
       S.moves.push([from, to, promotion]); afterMove(true);
     } else {
       const g = S.game; const before = S.chess.fen();
       try { S.chess.move({ from, to, promotion }); } catch { return render(); }
+      playMoveSound();
       render();
       try { const r = await api('POST', `/games/${S.id}/move`, { from, to, promotion }); applyServer(r.game); }
       catch (e) { fail(e); try { applyServer((await api('GET', `/games/${S.id}`)).game, true); } catch { S.chess = new Chess(before); render(false); } }
@@ -332,6 +404,7 @@ export function openGame(opts, onClose) {
     if (!mv) { const all = S.chess.moves({ verbose: true }); if (!all.length) return afterMove(false); const m = all[Math.floor(Math.random() * all.length)]; mv = { from: m.from, to: m.to, promotion: m.promotion }; }
     S.chess.move({ from: mv.from, to: mv.to, promotion: mv.promotion });
     S.moves.push([mv.from, mv.to, mv.promotion]);
+    playMoveSound();
     haptic('light'); afterMove(false);
   }
 
@@ -387,11 +460,14 @@ export function openGame(opts, onClose) {
     const moves = g.moves || [];
     if (S.kind !== 'spectate') S.colour = g.you || S.colour;
     const grew = moves.length !== S.moves.length || force;
+    const oppMoved = grew && moves.length > S.moves.length && S.kind !== 'spectate'
+      && prev && prev.status === 'active';
     S.moves = moves;
     if (grew) S.chess = build(moves);
+    if (oppMoved && moves.length && S.chess.turn() === S.colour) playMoveSound();
     const was = prev && prev.status;
     if (g.status === 'finished' && was !== 'finished') {
-      S.over = true; render(grew);
+      S.over = true; S.chat = []; S.chatOpen = false; render(grew);
       const outcome = S.kind === 'spectate' ? 'draw'
         : g.result === '1/2-1/2' ? 'draw' : (g.result === '1-0') === (g.you === 'w') ? 'win' : 'loss';
       setTimeout(() => showResult(outcome, g.reason), 500);
@@ -414,6 +490,15 @@ export function openGame(opts, onClose) {
     if (ctx !== S || S.kind !== 'online') return;
     if (m.t === 'game' && m.game.id === S.id) applyServer(m.game);
     else if (m.t === 'react' && m.id === S.id) { const b = top.av.getBoundingClientRect(); floatEmoji(m.emoji, b.left + 24, b.bottom); haptic('light'); }
+    else if (m.t === 'chat' && m.id === S.id && !S.over) {
+      const meId = S.meta.me && S.meta.me.id;
+      if (m.by === meId) return;
+      S.chat.push({ by: m.by, name: m.name || '…', text: m.text });
+      if (S.chat.length > 40) S.chat.shift();
+      if (!S.chatOpen) S.chatOpen = true;
+      paintChat();
+      haptic('light');
+    }
     else if (m.t === 'hello') api('GET', `/games/${S.id}`).then((r) => applyServer(r.game, true)).catch(() => {});
   });
 
@@ -442,6 +527,7 @@ function closeNow() {
   clearInterval(ctx.clockTimer);
   clearInterval(ctx.poll);
   ctx.token = null; clearTimeout(ctx.emoteT);
+  ctx.chat = []; ctx.chatOpen = false;
   const root = $('#game');
   root.classList.remove('show'); root.setAttribute('aria-hidden', 'true');
   try { const bb = window.Telegram.WebApp.BackButton; bb.offClick(closeGame); bb.hide(); } catch { /* ignore */ }

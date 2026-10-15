@@ -444,6 +444,47 @@ async function playMoves(game, players, moves, startPly = 0) {
       await err('C', 'POST', `/games/${g.id}/react`, { emoji: '🔥' }, 404, 'notfound');
     });
 
+    await step('ephemeral in-game chat reaches opponent and rejects empty text', async () => {
+      const g = (await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game;
+      await ok('B', 'POST', `/games/${g.id}/join`);
+      const wsA = sockets[1];
+      await ok('B', 'POST', `/games/${g.id}/chat`, { text: 'Salom!' });
+      const m = await wsA.waitFor((x) => x.t === 'chat' && x.id === g.id);
+      assert.strictEqual(m.text, 'Salom!');
+      assert.strictEqual(m.by, USERS.B.id);
+      await err('B', 'POST', `/games/${g.id}/chat`, { text: '   ' }, 400, 'bad_request');
+    });
+
+    await step('daily puzzle claim awards 1 diamond once per Tashkent day', async () => {
+      const before = (await ok('D', 'GET', '/me')).user.diamonds;
+      const r1 = await ok('D', 'POST', '/puzzles/claim-daily');
+      assert.strictEqual(r1.awarded, 1);
+      assert.strictEqual(r1.diamonds, before + 1);
+      const r2 = await ok('D', 'POST', '/puzzles/claim-daily');
+      assert.strictEqual(r2.awarded, 0);
+      assert.strictEqual(r2.diamonds, before + 1);
+    });
+
+    await step('admin diamond pack save rejects invalid packs', async () => {
+      await err('ADMIN', 'PATCH', '/admin/shop', {
+        diamondPacks: [{ diamonds: 50, sum: 100 }],
+      }, 400, 'bad_request');
+      const okPack = await ok('ADMIN', 'PATCH', '/admin/shop', {
+        diamondPacks: [{ diamonds: 250, sum: 250000 }, { diamonds: 100, sum: 100000 }],
+      });
+      assert.ok(okPack.shop.diamondPacks.some((p) => p.diamonds === 250 && p.sum === 250000));
+      await ok('ADMIN', 'PATCH', '/admin/shop', {
+        diamondPacks: [
+          { diamonds: 100, sum: 100000 },
+          { diamonds: 200, sum: 200000 },
+          { diamonds: 300, sum: 300000 },
+          { diamonds: 400, sum: 400000 },
+          { diamonds: 500, sum: 500000 },
+          { diamonds: 1000, sum: 1000000 },
+        ],
+      });
+    });
+
     // ---------------------------------------------------------------- match-making + invite links
     await step('online match-making pairs two waiting players', async () => {
       const first = (await ok('C', 'POST', '/games/quick')).game;
@@ -491,11 +532,11 @@ async function playMoves(game, players, moves, startPly = 0) {
 
     // ---------------------------------------------------------------- notifications for offline players
     await step('"your move" goes to Telegram only when the opponent is offline, once per move', async () => {
-      // Dan and Cara have no websocket open, so both count as offline
+      // Dan and Cara have no websocket; wait out REST presence (PRESENCE_REST_MS=5000) so isOnline is false
       const g = (await ok('D', 'POST', '/games', { opponentId: USERS.C.id })).game;
       const j = (await ok('C', 'POST', `/games/${g.id}/join`)).game;
       const p = colours(j, 'C', 'D');
-      await sleep(450);
+      await sleep(5200);
       const other = p.b; // black moves next, so black is the one to be notified
       const before = tg.to(USERS[other].id).length;
       await ok(p.w, 'POST', `/games/${g.id}/move`, { from: 'e2', to: 'e4' });
@@ -667,7 +708,7 @@ async function playMoves(game, players, moves, startPly = 0) {
     });
 
     await step('challenges: offline players cannot be challenged; unanswered ones expire and cannot be accepted', async () => {
-      await sleep(450);
+      await sleep(5200); // outlast PRESENCE_REST_MS so Dan counts as offline
       await err('A', 'POST', '/games', { opponentId: USERS.D.id }, 409, 'user_offline');
       const g = (await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game;
       await pg.q("UPDATE games SET updated_at = now() - interval '120 seconds' WHERE id = $1", g.id);

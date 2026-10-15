@@ -4,82 +4,16 @@ import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
 import { Board, restyleBoards } from './board.js';
-import { PUZZLES, goodMoves, mateIn } from './puzzles.js';
+import { goodMoves } from './puzzles.js';
 import { normalizeTimeControl, formatTashkentWhen } from './time.js';
 import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
 import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleOpenGame } from './game.js';
 import { renderProfilePage, openUserProfile } from './profile.js';
 import { closeScreen } from './screen.js';
-
-/**
- * Lazy-load inbox AFTER boot so a missing/broken chunk cannot blank the Mini App.
- * Resolve via import.meta.url (no ?v= query) — versioned dynamic imports fail in Telegram WebView.
- */
-let inboxMod = null;
-let inboxPromise = null;
-function loadInbox() {
-  if (inboxMod) return Promise.resolve(inboxMod);
-  if (!inboxPromise) {
-    const href = new URL('./inbox.js', import.meta.url).href;
-    inboxPromise = import(href)
-      .then((m) => { inboxMod = m; return m; })
-      .catch((e) => {
-        console.warn('[inbox]', e);
-        inboxPromise = null;
-        return null;
-      });
-  }
-  return inboxPromise;
-}
-function openInbox(kind) {
-  const go = async () => {
-    haptic('light');
-    const m = await loadInbox();
-    if (!m) { toast(t('msg_unavailable')); return; }
-    try {
-      if (kind === 'messages') m.openMessages();
-      else m.openNotifications();
-    } catch (e) { console.warn('[inbox]', e); fail(e); }
-  };
-  go();
-}
-function headerInboxBtnsSafe() {
-  const bind = (el, kind) => {
-    let last = 0;
-    el.addEventListener('pointerdown', (e) => { e.stopPropagation(); }, { passive: true });
-    const onTap = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const now = Date.now();
-      if (now - last < 450) return;
-      last = now;
-      openInbox(kind);
-    };
-    el.addEventListener('pointerup', onTap);
-    el.addEventListener('click', onTap);
-  };
-  const mail = h('button.hdr-ic', {
-    type: 'button',
-    'aria-label': t('messages'),
-    'data-noswipe': '',
-  }, icon('mail', 20), h('span.hdr-badge-slot'));
-  const bell = h('button.hdr-ic', {
-    type: 'button',
-    'aria-label': t('xabarnoma'),
-    'data-noswipe': '',
-  }, icon('bell', 20), h('span.hdr-badge-slot'));
-  bind(mail, 'messages');
-  bind(bell, 'notifications');
-  const wrap = h('div.hdr-inbox', { 'data-noswipe': '' }, mail, bell);
-  refreshInboxBadgesSafe(wrap);
-  return wrap;
-}
-function refreshInboxBadgesSafe(root) {
-  loadInbox().then((m) => { try { m && m.refreshInboxBadges(root); } catch { /* ignore */ } });
-}
 import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel, CAROUSEL_STAGGER_MS } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
+import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
 let selectedTime = 'any';
@@ -405,8 +339,7 @@ refreshers.play = async function renderPlay() {
     h('div.top',
       h('h1', '♟ ' + t('app')),
       h('div.pills',
-        h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)),
-        headerInboxBtnsSafe())),
+        h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)))),
     annHost,
     puzzleAnns && puzzleAnns.length ? puzzleHost : puzzleFallback,
     h('div.time-heading', t('choose_time')),
@@ -539,26 +472,65 @@ refreshers.rankings = async function renderRankings() {
   rankUi = { root, body, boardBar, tabs, board: selectedRankingBoard };
 };
 
-// ---------- puzzles (mate in 1-2, checked on the device) ----------
-const PZ_KEY = 'chess-puzzles-solved';
-const solvedSet = () => { try { return new Set(JSON.parse(localStorage.getItem(PZ_KEY)) || []); } catch { return new Set(); } };
-const markSolved = (id) => { try { const s = solvedSet(); s.add(id); localStorage.setItem(PZ_KEY, JSON.stringify([...s])); } catch { /* storage blocked */ } };
+// ---------- puzzles (daily 1–10 easy→hard; +1 💎 for all 10) ----------
+const PZ_KEY = 'chess-puzzles-daily';
+function puzzleDayState() {
+  const day = tashkentDayKey();
+  try {
+    const raw = JSON.parse(localStorage.getItem(PZ_KEY) || 'null');
+    if (raw && raw.day === day && Array.isArray(raw.ids)) return { day, ids: new Set(raw.ids), claimed: !!raw.claimed };
+  } catch { /* ignore */ }
+  return { day, ids: new Set(), claimed: false };
+}
+function persistPuzzleDay(st) {
+  try { localStorage.setItem(PZ_KEY, JSON.stringify({ day: st.day, ids: [...st.ids], claimed: !!st.claimed })); } catch { /* storage blocked */ }
+}
+const solvedSet = () => puzzleDayState().ids;
+const markSolved = (id) => {
+  const st = puzzleDayState();
+  st.ids.add(id);
+  persistPuzzleDay(st);
+  return st;
+};
+async function maybeClaimDailyReward() {
+  const st = puzzleDayState();
+  const list = dailyPuzzles(st.day);
+  if (st.claimed || st.ids.size < list.length) return;
+  try {
+    const r = await api('POST', '/puzzles/claim-daily');
+    st.claimed = true;
+    persistPuzzleDay(st);
+    if (r.awarded > 0) {
+      if (state.me) state.me.diamonds = r.diamonds;
+      toast(t('puzzle_daily_reward'));
+      haptic('success');
+    }
+  } catch (e) { fail(e); }
+}
 let pz = null; // the puzzle on screen, or null for the list
 
 function puzzleList() {
+  const day = tashkentDayKey();
+  const list = dailyPuzzles(day);
   const done = solvedSet();
+  const nDone = list.filter((p) => done.has(p.id)).length;
   mount('puzzles',
-    h('div.top', h('h1', '🧩 ' + t('puzzles_title')), h('div.livepill', t('puzzle_solved_count', { a: PUZZLES.filter((p) => done.has(p.id)).length, b: PUZZLES.length }))),
-    h('div.muted.pz-sub', t('puzzles_sub')),
-    h('div.list', PUZZLES.map((p, i) => rowBtn({ onclick: () => { haptic('light'); openPuzzle(i); } },
+    h('div.top', h('h1', '🧩 ' + t('puzzles_title')), h('div.livepill', t('puzzle_solved_count', { a: nDone, b: list.length }))),
+    h('div.muted.pz-sub', t('puzzles_daily_sub')),
+    h('div.list', list.map((p, i) => rowBtn({ onclick: () => { haptic('light'); openPuzzle(i); } },
       h('div.pz-num' + (done.has(p.id) ? '.done' : ''), done.has(p.id) ? icon('check', 18) : String(i + 1)),
-      h('div.grow', h('div.t', t('puzzle_n', { n: i + 1 })), h('div.s', t('mate_in', { n: p.n }) + ' · ' + (new Chess(p.fen).turn() === 'w' ? t('puzzle_white') : t('puzzle_black')))),
-      icon('arrow', 18)))));
+      h('div.grow',
+        h('div.t', t('puzzle_n', { n: i + 1 })),
+        h('div.s', t('puzzle_diff', { n: p.diff }) + ' · ' + t('mate_in', { n: p.n }) + ' · ' + (new Chess(p.fen).turn() === 'w' ? t('puzzle_white') : t('puzzle_black')))),
+      icon('arrow', 18)))),
+    nDone >= list.length ? h('div.card.pz-reward', '💎 ' + t('puzzle_daily_done')) : null);
 }
 
 function openPuzzle(i) {
   if (pz && pz.board) pz.board.destroy();
-  const puzzle = PUZZLES[i];
+  const list = dailyPuzzles();
+  const puzzle = list[i];
+  if (!puzzle) return puzzleList();
   const chess = new Chess(puzzle.fen);
   const colour = chess.turn();
   const status = h('div.pz-status', t(colour === 'w' ? 'puzzle_white' : 'puzzle_black'));
@@ -570,7 +542,7 @@ function openPuzzle(i) {
   const draw = (lastMove) => board.set(chess, { orientation: colour, mine: state2.locked ? null : colour, lastMove, animate: true });
   const buttons = (solved) => actions.replaceChildren(
     h('button.btn.ghost.sm', { onclick: () => openPuzzle(i) }, t('puzzle_retry')),
-    solved ? (i + 1 < PUZZLES.length ? h('button.btn.sm', { onclick: () => openPuzzle(i + 1) }, t('puzzle_next')) : h('button.btn.sm', { onclick: closePuzzle }, t('puzzle_back')))
+    solved ? (i + 1 < list.length ? h('button.btn.sm', { onclick: () => openPuzzle(i + 1) }, t('puzzle_next')) : h('button.btn.sm', { onclick: closePuzzle }, t('puzzle_back')))
       : h('button.btn.ghost.sm', { onclick: () => { const g = goodMoves(chess, state2.left)[0]; if (g) board.showHint({ from: g.from, to: g.to }); } }, t('puzzle_hint')));
   const onMove = async (from, to, promotion) => {
     if (state2.locked) return;
@@ -579,7 +551,14 @@ function openPuzzle(i) {
     if (!mv) { say(t('puzzle_wrong'), 'bad'); haptic('error'); draw(); return; }
     chess.move({ from, to, promotion });
     state2.locked = true; draw({ from, to });
-    if (chess.isCheckmate()) { markSolved(puzzle.id); say(t('puzzle_done'), 'ok'); haptic('success'); buttons(true); return; }
+    if (chess.isCheckmate()) {
+      markSolved(puzzle.id);
+      say(t('puzzle_done'), 'ok');
+      haptic('success');
+      buttons(true);
+      maybeClaimDailyReward();
+      return;
+    }
     say(t('puzzle_continue'), 'ok'); haptic('light');
     await sleep(550);
     const replies = chess.moves({ verbose: true });
@@ -590,7 +569,7 @@ function openPuzzle(i) {
   pz = state2;
   mount('puzzles',
     h('div.top', h('button.mini.back', { 'aria-label': t('puzzle_back'), onclick: closePuzzle }, icon('arrow', 18)),
-      h('h1', t('puzzle_n', { n: i + 1 })), h('div.livepill', t('mate_in', { n: puzzle.n }))),
+      h('h1', t('puzzle_n', { n: i + 1 })), h('div.livepill', t('puzzle_diff', { n: puzzle.diff }) + ' · ' + t('mate_in', { n: puzzle.n }))),
     host, status, actions);
   board = state2.board = new Board(host, { onMove });
   draw(); buttons(false);
@@ -866,8 +845,6 @@ async function boot() {
     console.error('[boot] refresh', e);
     fail(e);
   }
-  // Warm inbox after splash is gone so load errors never flash the boot fail UI
-  loadInbox();
 }
 boot().catch((e) => {
   console.error('[boot]', e);

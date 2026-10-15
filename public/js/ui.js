@@ -69,6 +69,7 @@ const P = {
   chart: '<path d="M4 19V5M4 19h16M8 16v-5M12 16V8M16 16v-3"/>',
   mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4.5 7.5L12 13l7.5-5.5"/>',
   bell: '<path d="M6.5 10a5.5 5.5 0 0 1 11 0c0 4 1.5 5.5 1.5 5.5H5S6.5 14 6.5 10z"/><path d="M10 18.5a2 2 0 0 0 4 0"/>',
+  chat: '<path d="M5 6a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H10l-4 3v-3a3 3 0 0 1-3-3z"/>',
 };
 export const icon = (name, size = 24, sw = 1.9) => h('span.ic', {
   html: `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`,
@@ -252,13 +253,35 @@ export function connectWs(onState) {
 setInterval(() => { if (wsOpen) try { ws.send(JSON.stringify({ t: 'ping' })); } catch { /* ignore */ } }, 25_000);
 
 // ---------- emoji effects ----------
-/** Floating emoji rising from a point (reactions) */
+/** Floating emoji rising from a point (reactions) — slow so the emoji is readable */
 export function floatEmoji(emoji, x, y) {
   const el = h('div.float-emoji', emoji);
   el.style.left = `${x}px`; el.style.top = `${y}px`;
   el.style.setProperty('--dx', `${(Math.random() - 0.5) * 80}px`);
   document.body.append(el);
-  setTimeout(() => el.remove(), 1700);
+  setTimeout(() => el.remove(), 3600);
+}
+
+/** Short soft click when a piece moves. */
+let moveAudioCtx = null;
+export function playMoveSound() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    moveAudioCtx = moveAudioCtx || new AC();
+    if (moveAudioCtx.state === 'suspended') moveAudioCtx.resume().catch(() => {});
+    const t0 = moveAudioCtx.currentTime;
+    const o = moveAudioCtx.createOscillator();
+    const g = moveAudioCtx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(520, t0);
+    o.frequency.exponentialRampToValueAtTime(280, t0 + 0.06);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.1, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+    o.connect(g); g.connect(moveAudioCtx.destination);
+    o.start(t0); o.stop(t0 + 0.1);
+  } catch { /* autoplay / old WebView */ }
 }
 
 /** Emoji rain (victory) */
