@@ -138,12 +138,12 @@ export function openGame(opts, onClose) {
       ? remainingMs(S.game.clock, colour, S.game.turn, S.game.status) : null;
     if (clock != null) {
       const cat = categoryOf((S.game && S.game.timeControl) || 'classic');
-      const low = ms != null && ms <= 20_000;
+      const low = ms != null && ms <= 20000;
       b.sub.replaceChildren(h('span.pclk.' + cat + (low ? '.low' : ''), clock));
     } else {
       b.sub.textContent = colour === 'w' ? t('white') : t('black');
     }
-    b.el.classList.toggle('low', ms != null && ms <= 20_000);
+    b.el.classList.toggle('low', ms != null && ms <= 20000);
     b.cap.replaceChildren(...cap.lost[colour === 'w' ? 'b' : 'w'].map((k) => h('span.cp', { html: pieceSvg(colour === 'w' ? 'b' : 'w', k) })));
     const diff = (colour === 'w' ? 1 : -1) * cap.score;
     b.mat.textContent = diff > 0 ? `+${diff}` : '';
@@ -183,7 +183,7 @@ export function openGame(opts, onClose) {
     if (text == null) return;
     const ms = remainingMs(S.game.clock, side, S.game.turn, S.game.status);
     const cat = categoryOf(S.game.timeControl || 'classic');
-    const low = ms != null && ms <= 20_000;
+    const low = ms != null && ms <= 20000;
     let span = el.querySelector('.pclk');
     if (!span) {
       span = h('span.pclk.' + cat + (low ? '.low' : ''), text);
@@ -206,8 +206,8 @@ export function openGame(opts, onClose) {
     paintSideClock(bot.sub, botSide);
     const topMs = remainingMs(S.game.clock, topSide, S.game.turn, S.game.status);
     const botMs = remainingMs(S.game.clock, botSide, S.game.turn, S.game.status);
-    top.el.classList.toggle('low', topMs != null && topMs <= 20_000);
-    bot.el.classList.toggle('low', botMs != null && botMs <= 20_000);
+    top.el.classList.toggle('low', topMs != null && topMs <= 20000);
+    bot.el.classList.toggle('low', botMs != null && botMs <= 20000);
     if (S.kind === 'online' && !S.flagClaimed && (topMs === 0 || botMs === 0)) {
       S.flagClaimed = true;
       api('POST', `/games/${S.id}/flag`).then((r) => applyServer(r.game, true)).catch(() => { S.flagClaimed = false; });

@@ -14,7 +14,7 @@ const TIME_GROUPS = [
 export function timeLabel(id) {
   const p = PRESETS[id];
   if (!p || !p.baseMs) return t('any_time');
-  const mins = Math.round(p.baseMs / 60_000);
+  const mins = Math.round(p.baseMs / 60000);
   const inc = Math.round((p.incMs || 0) / 1000);
   if (!inc) return t('time_min', { n: mins });
   return `${mins} | ${inc}`;
@@ -23,7 +23,7 @@ export function timeLabel(id) {
 function chipLabel(id) {
   const p = PRESETS[id];
   if (!p) return id;
-  const mins = Math.round(p.baseMs / 60_000);
+  const mins = Math.round(p.baseMs / 60000);
   const inc = Math.round((p.incMs || 0) / 1000);
   if (!inc) return t('time_daq', { n: mins });
   return `${mins} | ${inc}`;

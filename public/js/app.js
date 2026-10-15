@@ -865,7 +865,7 @@ export async function start(me) {
     } else if (m.t === 'invite_gone') { clearInvitePop(); refresh(); }
   });
   // Background tab refresh — tuned for ~2.5k concurrent (lite Android slower)
-  const tabRefreshMs = document.documentElement.dataset.perf === 'lite' ? 12_000 : 8_000;
+  const tabRefreshMs = document.documentElement.dataset.perf === 'lite' ? 12000 : 8000;
   setInterval(() => {
     if (document.hidden || openGameId()) return;
     if (state.tab === 'live' && liveBlocksAutoRefresh()) return;

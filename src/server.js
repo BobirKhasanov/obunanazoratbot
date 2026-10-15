@@ -89,9 +89,10 @@ app.use((req, res, next) => {
 
 app.use(express.static(path.join(__dirname, '..', 'public'), {
   setHeaders(res, file) {
-    // Short TTL — Telegram WebView often keeps stale JS despite ?v= busting
+    // JS/CSS: always revalidate — Telegram WebView otherwise serves truncated/stale modules
+    // (bare import './app.js' ignores the entry.js?v= query and was flashing SyntaxError toasts).
     if (/\.(?:js|mjs|css)$/i.test(file)) {
-      res.set('Cache-Control', 'public, max-age=120, must-revalidate');
+      res.set('Cache-Control', 'no-cache, must-revalidate');
     } else if (/\.(?:woff2?|png|jpe?g|gif|svg|webp|wasm)$/i.test(file)) {
       res.set('Cache-Control', 'public, max-age=86400, must-revalidate');
     } else {

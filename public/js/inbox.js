@@ -257,7 +257,7 @@ export function openMessages() {
                 avBlock(u.name, u.id, { premium: !!u.premium, round: true }),
                 h('div.grow', h('div.t', u.name, u.premium ? premIc() : null),
                   h('div.s', u.username ? '@' + u.username : t('msg_start'))),
-                icon('chevron', 18)))
+                icon('chevron', 18))))
               : h('div.muted.msg-search-empty', t('msg_no_users')),
           );
         } catch (e) { fail(e); }

@@ -678,8 +678,8 @@ async function renderGame(mount, onRefresh) {
   const paintClocks = () => {
     topClk.textContent = fmtClockMs(liveSideMs(clockState, 'b'));
     botClk.textContent = fmtClockMs(liveSideMs(clockState, 'w'));
-    topClk.classList.toggle('low', (liveSideMs(clockState, 'b') || 0) <= 20_000);
-    botClk.classList.toggle('low', (liveSideMs(clockState, 'w') || 0) <= 20_000);
+    topClk.classList.toggle('low', (liveSideMs(clockState, 'b') || 0) <= 20000);
+    botClk.classList.toggle('low', (liveSideMs(clockState, 'w') || 0) <= 20000);
     topClk.classList.toggle('on', clockState.active && clockState.turn === 'b');
     botClk.classList.toggle('on', clockState.active && clockState.turn === 'w');
   };

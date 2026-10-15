@@ -410,7 +410,7 @@ export function openAdmin(onClose) {
               toast(t('ann_deleted'));
             } catch (e) { fail(e); }
           },
-        }, icon('trash', 16))));
+        }, icon('trash', 16)))));
       if (!active.length) annList.append(h('div.muted', t('ann_empty')));
     } catch (e) { fail(e); }
   }
@@ -571,17 +571,17 @@ export function openAdmin(onClose) {
               }));
               if (!packs.length) { toast(t('admin_pack_need'), true); return; }
               for (const p of packs) {
-                if (!(p.diamonds >= 1 && p.diamonds <= 1_000_000)) { toast(t('admin_pack_diamonds'), true); return; }
-                if (!(p.sum >= 1000 && p.sum <= 1_000_000_000)) { toast(t('admin_pack_sum'), true); return; }
+                if (!(p.diamonds >= 1 && p.diamonds <= 1000000)) { toast(t('admin_pack_diamonds'), true); return; }
+                if (!(p.sum >= 1000 && p.sum <= 1000000000)) { toast(t('admin_pack_sum'), true); return; }
               }
               const puzzleDailyReward = Math.floor(Number(shop.puzzleDailyReward) || 0);
-              if (!(puzzleDailyReward >= 0 && puzzleDailyReward <= 1_000_000)) {
+              if (!(puzzleDailyReward >= 0 && puzzleDailyReward <= 1000000)) {
                 toast(t('admin_puzzle_reward_bad'), true); return;
               }
               const referralReward = Math.floor(Number(shop.referralReward) || 0);
               const referralInviteeReward = Math.floor(Number(shop.referralInviteeReward) || 0);
-              if (!(referralReward >= 0 && referralReward <= 1_000_000)
-                || !(referralInviteeReward >= 0 && referralInviteeReward <= 1_000_000)) {
+              if (!(referralReward >= 0 && referralReward <= 1000000)
+                || !(referralInviteeReward >= 0 && referralInviteeReward <= 1000000)) {
                 toast(t('admin_referral_bad'), true); return;
               }
               shop.diamondPacks = packs;

@@ -49,9 +49,9 @@ export default {
         out.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
         return out;
       }
-      if (path.endsWith('.css') || path.endsWith('.js')) {
+      if (path.endsWith('.css') || path.endsWith('.js') || path.endsWith('.mjs')) {
         const out = new Response(res.body, res);
-        out.headers.set('Cache-Control', 'public, max-age=120, must-revalidate');
+        out.headers.set('Cache-Control', 'no-cache, must-revalidate');
         return out;
       }
       return res;

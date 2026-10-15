@@ -271,7 +271,7 @@ export function connectWs(onState) {
   };
   ws.onerror = () => { try { ws.close(); } catch { /* ignore */ } };
 }
-setInterval(() => { if (wsOpen) try { ws.send(JSON.stringify({ t: 'ping' })); } catch { /* ignore */ } }, 25_000);
+setInterval(() => { if (wsOpen) try { ws.send(JSON.stringify({ t: 'ping' })); } catch { /* ignore */ } }, 25000);
 
 // ---------- emoji effects ----------
 /** Floating emoji rising from a point (reactions) — slow so the emoji is readable */

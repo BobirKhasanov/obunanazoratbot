@@ -11,7 +11,7 @@ function hideBoot() {
   boot.style.setProperty('display', 'none', 'important');
   boot.style.visibility = 'hidden';
   boot.style.pointerEvents = 'none';
-  try { boot.remove(); } catch { /* ignore */ }
+  try { boot.remove(); } catch (e) { /* ignore */ }
 }
 
 function showGate(msg) {
@@ -42,20 +42,26 @@ function showApp() {
 function syncChrome() {
   try {
     if (!tg) return;
-    try { tg.ready(); } catch { /* ignore */ }
-    try { tg.expand(); } catch { /* ignore */ }
-    try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch { /* ignore */ }
+    try { tg.ready(); } catch (e) { /* ignore */ }
+    try { tg.expand(); } catch (e) { /* ignore */ }
+    try { if (tg.disableVerticalSwipes) tg.disableVerticalSwipes(); } catch (e) { /* ignore */ }
     const bg = '#111827';
-    try { tg.setHeaderColor(bg); tg.setBackgroundColor(bg); } catch { /* ignore */ }
-  } catch { /* ignore */ }
+    try { tg.setHeaderColor(bg); tg.setBackgroundColor(bg); } catch (e) { /* ignore */ }
+  } catch (e) { /* ignore */ }
+}
+
+function assetV() {
+  return document.documentElement.getAttribute('data-asset') || String(Date.now());
 }
 
 async function loadMe() {
-  const req = api('GET', '/me', undefined, { timeoutMs: 6_000 });
-  req.catch(() => {});
+  const req = api('GET', '/me', undefined, { timeoutMs: 6000 });
+  req.catch(function () {});
   let timer;
-  const backup = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'net' })), 6_500);
+  const backup = new Promise(function (_, reject) {
+    timer = setTimeout(function () {
+      reject(Object.assign(new Error('timeout'), { code: 'net' }));
+    }, 6500);
   });
   try {
     return await Promise.race([req, backup]);
@@ -64,8 +70,16 @@ async function loadMe() {
   }
 }
 
+function isSyntaxLoadError(e) {
+  const msg = String((e && e.message) || e || '');
+  return e && (e.name === 'SyntaxError'
+    || /missing \) after argument list/i.test(msg)
+    || /Unexpected (token|end|identifier)/i.test(msg)
+    || /Identifier directly after number/i.test(msg));
+}
+
 async function main() {
-  try { applyPerfMode(); } catch { /* ignore */ }
+  try { applyPerfMode(); } catch (e) { /* ignore */ }
   syncChrome();
 
   if (!tg || !tg.initData) {
@@ -83,23 +97,34 @@ async function main() {
   }
 
   // Reveal shell BEFORE downloading game/live/profile modules
-  try { if (me.user && me.user.lang) setLang(me.user.lang); } catch { /* ignore */ }
+  try { if (me.user && me.user.lang) setLang(me.user.lang); } catch (e) { /* ignore */ }
   showApp();
 
+  const v = assetV();
   try {
-    const mod = await import('./app.js');
+    // MUST bust cache — bare ./app.js is cached separately from entry.js?v=… in Telegram WebView
+    const mod = await import('./app.js?v=' + encodeURIComponent(v));
     await mod.start(me);
+    try { sessionStorage.removeItem('chess-syntax-reload'); } catch (e) { /* ignore */ }
   } catch (e) {
     console.error('[entry] app', e);
-    // Shell already visible — show a toast-level failure if possible
+    if (isSyntaxLoadError(e)) {
+      try {
+        if (!sessionStorage.getItem('chess-syntax-reload')) {
+          sessionStorage.setItem('chess-syntax-reload', '1');
+          location.reload();
+          return;
+        }
+      } catch (err) { /* ignore */ }
+    }
     try {
-      const { fail } = await import('./ui.js');
-      fail(e);
-    } catch { /* ignore */ }
+      const ui = await import('./ui.js?v=' + encodeURIComponent(v));
+      ui.fail(e);
+    } catch (err) { /* ignore */ }
   }
 }
 
-main().catch((e) => {
+main().catch(function (e) {
   console.error('[entry]', e);
-  try { showGate((e && e.message) || 'Something went wrong'); } catch { hideBoot(); }
+  try { showGate((e && e.message) || 'Something went wrong'); } catch (err) { hideBoot(); }
 });

@@ -26,7 +26,7 @@ assert.ok(perf.includes("platform === 'ios'") || perf.includes('isIOS'), 'perf d
 assert.ok(css.includes('data-perf="lite"') && css.includes('#bg { display: none'), 'lite CSS drops heavy bg');
 const live = read('public/js/live.js');
 assert.ok(live.includes('liveRoundPollMs') && live.includes('liveMiniBoardBudget') && live.includes('live-mini-ph'), 'live uses perf budgets');
-assert.ok(read('src/server.js').includes('max-age=120'), 'static JS/CSS short-cached with revalidate');
+assert.ok(read('src/server.js').includes("no-cache, must-revalidate") && read('src/server.js').includes('.js'), 'static JS/CSS always revalidate');
 
 assert.ok(profile.includes('export function renderProfilePage'));
 assert.ok(profile.includes('sec_rating'));
@@ -175,7 +175,9 @@ assert.ok(app.includes("online-heading") && app.includes("t('online_now'") && !/
 assert.ok(!app.includes('hdr-ic') && !app.includes("t('xabarnoma')"), 'header mail/bell icons removed');
 const entry = read('public/js/entry.js');
 assert.ok(entry.includes('timeoutMs') && entry.includes('showApp') && entry.includes('showGate'), 'entry has /me timeout and reveals app/gate');
-assert.ok(entry.includes("import('./app.js')") && app.includes('export async function start'), 'entry loads app after splash');
+assert.ok(entry.includes("import('./app.js?v=") && app.includes('export async function start'), 'entry loads app after splash with cache bust');
+assert.ok(html.includes('data-asset=') && entry.includes('assetV'), 'HTML data-asset drives module cache bust');
+assert.ok(entry.includes('chess-syntax-reload') && entry.includes('SyntaxError'), 'syntax load errors trigger one reload');
 assert.ok(read('public/js/ui.js').includes('timeoutMs') && read('public/js/ui.js').includes('AbortController'), 'api supports request timeout');
 assert.ok(html.includes('Doska ochilmoqda') && html.includes('boot-ring') && html.includes('boot-spin'), 'animated boot splash copy');
 assert.ok(html.includes('failBoot') && html.includes('Juda uzoq kutildi'), 'boot watchdog if splash stalls');
