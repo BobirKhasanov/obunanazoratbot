@@ -68,9 +68,9 @@ async function toUser(userId, build, { gameId, dmThreadId, effect, force } = {})
 }
 
 /**
- * Deliver a monthly podium medal: SVG document + caption + Open app button.
+ * Deliver a monthly podium medal as PNG photo (preferred) or SVG document.
  * @param {number} userId
- * @param {{ svg: string, filename?: string, caption: string }} opts
+ * @param {{ svg: string, filename?: string, caption: string, png?: Buffer|null }} opts
  */
 async function sendMedal(userId, opts) {
   if (!bot) return false;
@@ -79,19 +79,38 @@ async function sendMedal(userId, opts) {
   const T = tr(u.lang);
   const url = appUrl();
   const extra = url ? { reply_markup: { inline_keyboard: [[{ text: T.open, web_app: { url } }]] } } : {};
-  const makeFile = () => new InputFile(Buffer.from(opts.svg, 'utf8'), opts.filename || 'medal.svg');
-  try {
-    await bot.api.sendDocument(userId, makeFile(), {
-      caption: opts.caption,
-      ...extra,
-      message_effect_id: EFFECT.party,
-    });
+  const base = String(opts.filename || 'medal').replace(/\.(svg|png)$/i, '');
+  let png = opts.png;
+  if (!png && opts.svg) {
+    try {
+      png = await require('./medal-png').svgToPngBuffer(opts.svg);
+    } catch { png = null; }
+  }
+
+  const sendPhoto = async (withEffect) => {
+    if (!png) return false;
+    const photo = new InputFile(png, `${base}.png`);
+    const payload = { caption: opts.caption, ...extra };
+    if (withEffect) payload.message_effect_id = EFFECT.party;
+    await bot.api.sendPhoto(userId, photo, payload);
     return true;
+  };
+  const sendDoc = async (withEffect) => {
+    const file = new InputFile(Buffer.from(opts.svg, 'utf8'), `${base}.svg`);
+    const payload = { caption: opts.caption, ...extra };
+    if (withEffect) payload.message_effect_id = EFFECT.party;
+    await bot.api.sendDocument(userId, file, payload);
+    return true;
+  };
+
+  try {
+    if (await sendPhoto(true)) return true;
+    return await sendDoc(true);
   } catch (e) {
     if (e.error_code === 400 && e.description && /effect/i.test(e.description)) {
       try {
-        await bot.api.sendDocument(userId, makeFile(), { caption: opts.caption, ...extra });
-        return true;
+        if (await sendPhoto(false)) return true;
+        return await sendDoc(false);
       } catch (e2) {
         console.error('[notify] medal send failed:', e2.description || e2.message);
       }

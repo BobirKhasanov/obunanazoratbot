@@ -110,7 +110,12 @@ assert.ok(read('public/js/userprofile.js').includes('uprof-statgrid.wdl'), 'prof
 assert.ok(css.includes('.uprof-statgrid.wdl'), 'W/D/L grid style');
 assert.ok(app.includes('headerInboxBtns'), 'home header mail/bell for DMs + notifications');
 assert.ok(app.includes('openFriendWait') && app.includes('friend-wait'), 'friend play shows invite wait before board');
-assert.ok(app.includes('startapp=g') || read('public/js/game.js').includes('startapp=g'), 'friend game link opens Mini App via startapp');
+assert.ok(
+  (app.includes('startapp=i') && read('public/js/game.js').includes('startapp=i'))
+  || read('public/js/profile.js').includes('startapp=i'),
+  'share/invite links use startapp=i{userId} for referral bonus',
+);
+assert.ok(!app.includes('startapp=g${') && !read('public/js/game.js').includes('startapp=g${'), 'friend share no longer uses opaque game startapp');
 assert.ok(read('public/js/ui.js').includes('el.muted = true') || read('public/js/ui.js').includes('muted = true'), 'unlockAudio is silent (no first-touch click)');
 assert.ok(app.includes("m.t === 'dm'") || app.includes('t === \'dm\''), 'live DM toast + badge refresh');
 assert.ok(read('src/server.js').includes("kind, title, body, meta) VALUES (?, 'dm'") || read('src/server.js').includes("'dm'"), 'DM creates in-app notification');

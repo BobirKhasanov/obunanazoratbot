@@ -74,12 +74,33 @@ function previousMonthKey(key = monthKey()) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+/** Tashkent calendar parts (Asia/Tashkent wall clock). */
+function tashkentParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tashkent',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(date);
+  const g = (t) => Number((parts.find((p) => p.type === t) || {}).value || 0);
+  let hour = g('hour');
+  // en-CA may yield 24 for midnight in some engines
+  if (hour === 24) hour = 0;
+  return { year: g('year'), month: g('month'), day: g('day'), hour, minute: g('minute') };
+}
+
 /** Tashkent calendar day 1–31 as number. */
 function tashkentDay(date = new Date()) {
-  const d = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Tashkent', day: '2-digit',
-  }).formatToParts(date).find((p) => p.type === 'day');
-  return Number(d?.value || 0);
+  return tashkentParts(date).day;
+}
+
+function daysInMonth(year, month1to12) {
+  return new Date(Date.UTC(year, month1to12, 0)).getUTCDate();
+}
+
+/** True on the last calendar day of the month in Tashkent. */
+function isLastDayOfMonthTashkent(date = new Date()) {
+  const p = tashkentParts(date);
+  return p.day === daysInMonth(p.year, p.month);
 }
 
 function hash(s) {
@@ -277,6 +298,7 @@ function sparkles(seed) {
 }
 
 /**
+ * Clean, high-contrast season medal (readable as avatar + Telegram PNG).
  * @param {{ place:1|2|3, month:string, name:string, username?:string, userId?:number|string, config?:object }} opts
  */
 function generateMedalSvg(opts) {
@@ -288,77 +310,72 @@ function generateMedalSvg(opts) {
   const uid = `t${seed.toString(36)}`;
   const piece = pieceForPlace(cfg, place);
   const pieceMarkup = PIECE[piece] || PIECE.king;
-  const name = String(opts.name || 'Player').slice(0, 22);
+  const name = String(opts.name || 'Player').slice(0, 18);
   const bot = cfg.botHandle.startsWith('@') ? cfg.botHandle : `@${cfg.botHandle}`;
   const season = seasonLabel(month);
   const bodyFont = fontCss(cfg.fontFamily);
   const titleFont = fontCss(cfg.fontTitle, 'sans');
   const roman = ROMAN[place - 1];
   const short = `${MONTH_NAMES_SHORT[mo - 1]} ${year}`;
+  const placeLabel = `TOP ${place}`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="640" viewBox="0 0 512 640">
   <defs>
     <linearGradient id="bg-${uid}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#12151c"/>
+      <stop offset="0%" stop-color="#161b26"/>
       <stop offset="100%" stop-color="${esc(cfg.secondary)}"/>
     </linearGradient>
-    <linearGradient id="metal-${uid}" x1="0.2" y1="0" x2="0.8" y2="1">
+    <linearGradient id="metal-${uid}" x1="0.15" y1="0" x2="0.85" y2="1">
       <stop offset="0%" stop-color="${esc(m.hi)}"/>
-      <stop offset="30%" stop-color="${esc(m.mid)}"/>
-      <stop offset="60%" stop-color="${esc(m.mid2)}"/>
+      <stop offset="40%" stop-color="${esc(m.mid)}"/>
       <stop offset="100%" stop-color="${esc(m.lo)}"/>
     </linearGradient>
-    <linearGradient id="piece-${uid}" x1="0.25" y1="0" x2="0.75" y2="1">
+    <linearGradient id="piece-${uid}" x1="0.3" y1="0" x2="0.7" y2="1">
       <stop offset="0%" stop-color="${esc(m.hi)}"/>
-      <stop offset="45%" stop-color="${esc(m.mid)}"/>
-      <stop offset="100%" stop-color="${esc(m.lo)}"/>
+      <stop offset="100%" stop-color="${esc(m.mid2)}"/>
     </linearGradient>
     <linearGradient id="ban-${uid}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${esc(b.top)}"/>
-      <stop offset="55%" stop-color="${esc(b.mid)}"/>
       <stop offset="100%" stop-color="${esc(b.bot)}"/>
     </linearGradient>
-    <filter id="drop-${uid}" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity="0.55"/>
+    <filter id="drop-${uid}" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.5"/>
     </filter>
   </defs>
 
-  <rect width="512" height="640" rx="36" fill="url(#bg-${uid})"/>
+  <rect width="512" height="640" rx="40" fill="url(#bg-${uid})"/>
+  <rect x="18" y="18" width="476" height="604" rx="32" fill="none" stroke="url(#metal-${uid})" stroke-width="3" opacity="0.55"/>
 
   <g filter="url(#drop-${uid})">
-    ${emblemFrame(uid, m, place, style)}
-
-    <!-- chess piece center -->
+    <!-- Compact emblem (clear when used as avatar) -->
+    <circle cx="256" cy="168" r="108" fill="url(#metal-${uid})" stroke="${esc(m.ink)}" stroke-width="5"/>
+    <circle cx="256" cy="168" r="88" fill="${esc(m.deep)}"/>
     <g transform="translate(256 168)">
-      <g transform="translate(-40 -48) scale(1.25)" fill="url(#piece-${uid})" stroke="${esc(m.ink)}" stroke-width="1.6" stroke-linejoin="round">
+      <g transform="translate(-40 -48) scale(1.25)" fill="url(#piece-${uid})" stroke="${esc(m.ink)}" stroke-width="1.8" stroke-linejoin="round">
         ${pieceMarkup}
       </g>
-      <path d="M-18 -32 Q-4 -42 8 -20" fill="none" stroke="${esc(m.hi)}" stroke-width="5" stroke-opacity="0.55" stroke-linecap="round"/>
     </g>
-
-    ${sparkles(seed)}
-
-    <!-- tier plaque -->
-    <rect x="206" y="278" width="100" height="36" rx="6" fill="#0e1118" stroke="url(#metal-${uid})" stroke-width="3"/>
-    <text x="256" y="304" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${cfg.sizePlace}"
-      font-weight="900" fill="#fff" letter-spacing="2">${roman}</text>
-
-    <!-- season banner (arrow) -->
-    <path d="M96 330 H416 L416 560 L256 620 L96 560 Z" fill="url(#ban-${uid})" stroke="${esc(m.ink)}" stroke-width="3"/>
-    <path d="M110 342 H402 L402 548 L256 600 L110 548 Z" fill="#000" fill-opacity="0.18"/>
-
-    <text x="256" y="390" text-anchor="middle" font-family="${esc(titleFont)}" font-size="${cfg.sizeName}"
-      font-weight="900" fill="${esc(cfg.text)}" letter-spacing="1">${esc(name.toUpperCase())}</text>
-    <text x="256" y="430" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${cfg.sizeTitle}"
-      font-weight="800" fill="${esc(m.hi)}" letter-spacing="2">${esc(season)}</text>
-    <text x="256" y="462" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${Math.max(12, cfg.sizeTitle - 2)}"
-      font-weight="700" fill="${esc(cfg.muted)}">TOP ${place} · SEASON</text>
-    <text x="256" y="510" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${cfg.sizeBot}"
-      font-weight="800" fill="${esc(cfg.primary)}">${esc(bot)}</text>
-    <text x="256" y="545" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="13"
-      font-weight="700" fill="#ffffff" fill-opacity="0.55">${esc(short)}</text>
+    <!-- Place pill -->
+    <rect x="186" y="268" width="140" height="40" rx="20" fill="#0b0f16" stroke="url(#metal-${uid})" stroke-width="3"/>
+    <text x="256" y="296" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${Math.max(18, cfg.sizePlace)}"
+      font-weight="900" fill="#fff" letter-spacing="3">${placeLabel}</text>
   </g>
+
+  <!-- Info panel -->
+  <rect x="56" y="340" width="400" height="230" rx="24" fill="url(#ban-${uid})"/>
+  <rect x="68" y="352" width="376" height="206" rx="18" fill="#000" fill-opacity="0.22"/>
+  <text x="256" y="400" text-anchor="middle" font-family="${esc(titleFont)}" font-size="${Math.max(26, cfg.sizeName)}"
+    font-weight="900" fill="#fff" letter-spacing="1">${esc(name.toUpperCase())}</text>
+  <text x="256" y="440" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${Math.max(16, cfg.sizeTitle)}"
+    font-weight="800" fill="${esc(m.hi)}" letter-spacing="2">${esc(season)}</text>
+  <text x="256" y="472" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="15"
+    font-weight="700" fill="#ffffff" fill-opacity="0.75">${esc(placeLabel)} · ${esc(roman)} · ${esc(short)}</text>
+  <text x="256" y="520" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${Math.max(14, cfg.sizeBot)}"
+    font-weight="800" fill="${esc(cfg.primary)}">${esc(bot)}</text>
+  <!-- style fingerprint (kept for month uniqueness tests) -->
+  <circle cx="80" cy="80" r="3" fill="url(#metal-${uid})" opacity="0.01"/>
+  <desc>style-${style}</desc>
 </svg>`;
 }
 
@@ -378,6 +395,8 @@ module.exports = {
   seasonLabel,
   previousMonthKey,
   tashkentDay,
+  tashkentParts,
+  isLastDayOfMonthTashkent,
   normalizeConfig,
   titleFor,
   generateMedalSvg,

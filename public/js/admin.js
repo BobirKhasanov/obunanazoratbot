@@ -740,17 +740,19 @@ export function openAdmin(onClose) {
             } catch (e) { fail(e); }
           },
         }, icon('check', 18), t('save')),
-        h('button.btn.ghost', {
-          onclick: async () => {
-            try {
-              const month = medalState.previewMonth || medalState.previousMonth;
-              await api('POST', '/admin/medals/award', { month, notify: true });
-              toast(t('admin_medals_award_ok')); haptic('success');
-              loadMedals(month);
-            } catch (e) { fail(e); }
-          },
-        }, t('admin_medals_award')),
-        h('p.muted', t('admin_medals_auto_hint'))),
+        h('p.muted', t('admin_medals_auto_hint')),
+        curMonth
+          ? h('button.btn.ghost.sm', {
+            type: 'button',
+            onclick: async () => {
+              try {
+                await api('DELETE', `/admin/medals/${encodeURIComponent(curMonth)}`);
+                toast(t('admin_medals_cleared')); haptic('success');
+                loadMedals(curMonth);
+              } catch (e) { fail(e); }
+            },
+          }, t('admin_medals_clear_month'))
+          : null),
       h('div.h2', t('admin_medals')), list,
     );
   }
@@ -1225,12 +1227,16 @@ export function openAdmin(onClose) {
     const send = h('button.btn', {
       type: 'button',
       onclick: async () => {
+        const ttl = title.value.trim();
+        const txt = body.value.trim();
+        if (!ttl) return toast(t('e_title'), true);
+        if (!txt) return toast(t('e_text'), true);
         try {
           const r = await api('POST', '/admin/notifications', {
-            title: title.value.trim(),
-            body: body.value.trim(),
+            title: ttl,
+            body: txt,
             mediaId: mediaId || undefined,
-          });
+          }, { timeoutMs: 60000 });
           toast(t('admin_notif_sent', { n: r.sent || 0 }));
           haptic('success');
           title.value = '';

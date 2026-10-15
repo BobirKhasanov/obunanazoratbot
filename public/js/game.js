@@ -267,7 +267,11 @@ export function openGame(opts, onClose) {
     if (S.kind === 'online' && g) {
       if (g.status === 'open' || g.status === 'invited') {
         banner.hidden = false; banner.classList.add('wait');
-        const link = S.meta.botUsername ? `https://t.me/${S.meta.botUsername}?startapp=g${g.id}` : '';
+        const meId = S.meta && S.meta.me ? S.meta.me.id : null;
+        // Referral link (startapp=i…) pays diamonds; joiner auto-joins open friend board
+        const link = (S.meta.botUsername && meId)
+          ? `https://t.me/${S.meta.botUsername}?startapp=i${meId}`
+          : '';
         const shareFriend = async () => {
           if (!link) return toast(t('e_server'), true);
           shareUrl(link, t('share_text'));
@@ -277,7 +281,6 @@ export function openGame(opts, onClose) {
           if (await copyText(link)) toast(t('link_copied'));
         };
         const tcHint = g.timeControl && g.timeControl !== 'classic' ? ` · ${g.timeControl}` : '';
-        const meId = S.meta && S.meta.me ? S.meta.me.id : null;
         const iAmCreator = meId != null && Number(g.creator) === Number(meId);
         const iAmInvitee = g.status === 'invited' && !iAmCreator;
         banner.append(

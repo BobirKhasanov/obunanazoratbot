@@ -23,9 +23,11 @@ const { cacheGet, cacheSet, cacheDel, cacheEnabled, incr } = require('./cache');
 const { saveMedia, loadMediaBytes, storageEnabled, deleteMediaObject } = require('./storage');
 const { DEFAULT_ELO, pairUpdate, scoresForResult, eloColumn, expandingEloDelta } = require('./elo');
 const {
-  monthKey, monthLabelEn, seasonLabel, previousMonthKey, tashkentDay, monthsForYear,
+  monthKey, monthLabelEn, seasonLabel, previousMonthKey, tashkentDay, tashkentParts,
+  isLastDayOfMonthTashkent, monthsForYear,
   normalizeConfig, generateMedalSvg, titleFor, DEFAULT_CONFIG, FONT_KEYS, PIECE_KEYS,
 } = require('./medals');
+const { svgToPngBuffer } = require('./medal-png');
 const { loadWelcomeConfig, saveWelcomeLang, sendWelcome } = require('./welcome');
 const {
   ANIMATIONS: BOOT_ANIMS,
@@ -397,20 +399,59 @@ async function getMedalConfig() {
   return normalizeConfig(await getSetting('medal_gen_config', JSON.stringify(DEFAULT_CONFIG)));
 }
 
-async function awardMonthMedals(month, { notifyWinners = false } = {}) {
-  const m = month || previousMonthKey();
-  const cfg = await getMedalConfig();
-  const top = await db.prepare(`
+async function loadTopScores(month) {
+  return db.prepare(`
     SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, m.points
     FROM monthly_scores m JOIN users u ON u.id = m.user_id
     WHERE m.month = ? AND u.blocked = 0 AND m.points > 0
     ORDER BY m.points DESC, m.wins DESC, lower(COALESCE(u.first_name, '')) ASC
     LIMIT 3
-  `).all(m);
+  `).all(month);
+}
+
+/** Freeze top-3 at ~23:59 on the last Tashkent day of the month (for next-day award). */
+async function snapshotMonthPodium(month) {
+  const m = month || monthKey();
+  const top = await loadTopScores(m);
+  if (!top.length) return null;
+  const payload = top.map((u, i) => ({
+    place: i + 1, userId: u.id, name: u.name, username: u.username || '', points: u.points,
+  }));
+  await setSetting(`medal_snapshot_${m}`, JSON.stringify(payload));
+  return payload;
+}
+
+async function loadPodiumForAward(month) {
+  const raw = await getSetting(`medal_snapshot_${month}`, '');
+  if (raw) {
+    try {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length) {
+        return list.map((r, i) => ({
+          id: Number(r.userId),
+          name: r.name || 'Player',
+          username: r.username || '',
+          points: Number(r.points) || 0,
+          place: Number(r.place) || (i + 1),
+        })).filter((r) => r.id);
+      }
+    } catch { /* fall through */ }
+  }
+  const top = await loadTopScores(month);
+  return top.map((u, i) => ({ id: u.id, name: u.name, username: u.username, points: u.points, place: i + 1 }));
+}
+
+async function awardMonthMedals(month, { notifyWinners = false } = {}) {
+  const m = month || previousMonthKey();
+  if (!/^\d{4}-\d{2}$/.test(m)) throw bad('month must be YYYY-MM', 'bad_request');
+  // Never award the in-progress month — only completed seasons
+  if (m >= monthKey()) throw bad('Cannot award the current month yet', 'bad_request');
+  const cfg = await getMedalConfig();
+  const top = await loadPodiumForAward(m);
   const awarded = [];
-  for (let i = 0; i < top.length; i++) {
-    const place = i + 1;
-    const u = top[i];
+  for (const u of top) {
+    const place = u.place || (awarded.length + 1);
+    if (place > 3) break;
     const id = `m-${m}-p${place}`;
     const title = titleFor(cfg, place, m);
     const svg = generateMedalSvg({
@@ -434,9 +475,11 @@ async function awardMonthMedals(month, { notifyWinners = false } = {}) {
       const T = require('./i18n').tr(u?.lang || 'en');
       const caption = T.medalAward({ place: a.place, season, bot: cfg.botHandle });
       try {
+        const png = await svgToPngBuffer(a.svg);
         await notify.sendMedal(a.userId, {
           svg: a.svg,
-          filename: `medal-${m}-top${a.place}.svg`,
+          png,
+          filename: `medal-${m}-top${a.place}`,
           caption,
         });
       } catch (e) {
@@ -465,19 +508,31 @@ async function ensurePreviousMonthMedals() {
 }
 
 /**
- * On the 1st of each Tashkent month, award previous month's top 3 and DM them.
- * Idempotent via medals_notified_YYYY-MM setting.
+ * Last day 23:xx Tashkent → freeze podium.
+ * 1st of month → mint medals + DM PNG to winners.
  */
 async function runMonthlyMedalAwards() {
+  try {
+    const parts = tashkentParts();
+    if (isLastDayOfMonthTashkent() && parts.hour === 23) {
+      const cur = monthKey();
+      const already = await getSetting(`medal_snapshot_${cur}`, '');
+      if (!already) {
+        const snap = await snapshotMonthPodium(cur);
+        if (snap) console.log('[medals] snapshot', cur, snap.map((s) => s.userId).join(','));
+      }
+    }
+  } catch (e) {
+    console.error('[medals] snapshot', e.message || e);
+  }
+
   if (tashkentDay() !== 1) return null;
   const prev = previousMonthKey();
   const already = await getSetting(`medals_notified_${prev}`, '');
   if (already === '1') return null;
-  const hasScores = await db.prepare(
-    'SELECT 1 AS ok FROM monthly_scores WHERE month = ? AND points > 0 LIMIT 1',
-  ).get(prev);
-  if (!hasScores) {
-    await setSetting(`medals_notified_${prev}`, '1'); // nothing to award; don't retry forever
+  const podium = await loadPodiumForAward(prev);
+  if (!podium.length) {
+    await setSetting(`medals_notified_${prev}`, '1');
     return null;
   }
   try {
@@ -1937,6 +1992,9 @@ api.get('/users/:id', wrap(async (req, res) => {
     : !!(await db.prepare('SELECT 1 AS ok FROM user_blocks WHERE user_id = ? AND blocked_id = ?').get(uid, id));
   const premium = isPremiumActive(u);
   const presence = stillPresent(u.present_until) || realtime.isOnline(id);
+  const medalRows = await db.prepare(`
+    SELECT id, month, place, title FROM medals WHERE user_id = ? ORDER BY month DESC, place ASC LIMIT 24
+  `).all(id);
   res.json({
     user: {
       id: u.id,
@@ -1957,6 +2015,10 @@ api.get('/users/:id', wrap(async (req, res) => {
     likes,
     likedByMe,
     blockedByMe,
+    medals: medalRows.map((r) => ({
+      id: r.id, month: r.month, monthLabel: monthLabelEn(r.month), place: r.place,
+      title: r.title, url: `/api/medals/${r.id}.svg`, key: `medal:${r.id}`,
+    })),
   });
 }));
 
@@ -2100,10 +2162,10 @@ api.get('/messages/search', wrap(async (req, res) => {
   const rows = await db.prepare(`
     SELECT u.id, u.first_name, u.last_name, u.username, u.premium, u.premium_until
     FROM users u
-    WHERE u.id <> ? AND u.blocked = FALSE
+    WHERE u.id <> ? AND u.blocked = 0
       AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.user_id = ? AND b.blocked_id = u.id) OR (b.user_id = u.id AND b.blocked_id = ?))
       AND (
-        lower(u.first_name) LIKE ? OR lower(coalesce(u.last_name,'')) LIKE ?
+        lower(coalesce(u.first_name,'')) LIKE ? OR lower(coalesce(u.last_name,'')) LIKE ?
         OR lower(coalesce(u.username,'')) LIKE ?
       )
     ORDER BY u.first_name ASC
@@ -2117,7 +2179,7 @@ api.get('/messages/search', wrap(async (req, res) => {
 }));
 
 api.get('/messages/threads', wrap(async (req, res) => {
-  const uid = req.user.id;
+  const uid = Number(req.user.id);
   const rows = await db.prepare(`
     SELECT t.id, t.updated_at, t.user_a, t.user_b,
       ua.first_name AS a_first, ua.last_name AS a_last, ua.username AS a_user, ua.premium AS a_prem, ua.premium_until AS a_until,
@@ -2133,7 +2195,7 @@ api.get('/messages/threads', wrap(async (req, res) => {
   `).all(uid, uid, uid);
   res.json({
     threads: rows.map((r) => {
-      const peer = r.user_a === uid
+      const peer = Number(r.user_a) === uid
         ? { id: r.user_b, name: displayName({ first_name: r.b_first, last_name: r.b_last }), username: r.b_user, premium: isPremiumActive({ premium: r.b_prem, premium_until: r.b_until }) }
         : { id: r.user_a, name: displayName({ first_name: r.a_first, last_name: r.a_last }), username: r.a_user, premium: isPremiumActive({ premium: r.a_prem, premium_until: r.a_until }) };
       return { id: r.id, peer, lastBody: r.last_body || '', unread: r.unread || 0, updatedAt: r.updated_at };
@@ -2274,11 +2336,18 @@ api.post('/friends/join', wrap(async (req, res) => {
   }
   const meRow = inviteeReward || reward ? await getUser.get(uid) : null;
   if (meRow) memoUser(meRow);
+  // If inviter is waiting on a friend board, let the client join it after the referral claim
+  const openWait = await db.prepare(`
+    SELECT id FROM games
+    WHERE creator_id = ? AND status = 'open' AND mode = 'friend'
+    ORDER BY created_at DESC LIMIT 1
+  `).get(other);
   res.json({
     friend: await person(other),
     already: already && !reward && !inviteeReward,
     inviteeReward,
     reward,
+    openGameId: openWait?.id || null,
     user: meRow ? publicUser(meRow, req.isAdmin) : undefined,
   });
 }));
@@ -2573,20 +2642,20 @@ admin.post('/notifications', wrap(async (req, res) => {
     if (!u || u.blocked) throw new HttpError(404, 'User not found', 'notfound');
     targets = [one];
   } else {
-    targets = (await db.prepare('SELECT id FROM users WHERE blocked = FALSE').all()).map((r) => r.id);
+    targets = (await db.prepare('SELECT id FROM users WHERE blocked = 0').all()).map((r) => Number(r.id));
   }
-  const meta = JSON.stringify({
+  if (!targets.length) return res.status(201).json({ ok: true, sent: 0 });
+  const meta = {
     fromAdmin: req.user.id,
     ...(mediaId ? { mediaId } : {}),
-  });
-  let n = 0;
-  for (const id of targets) {
-    await db.prepare(`
-      INSERT INTO notifications (user_id, kind, title, body, meta) VALUES (?, 'admin', ?, ?, ?::jsonb)
-    `).run(id, title, body, meta);
-    n++;
-  }
-  res.status(201).json({ ok: true, sent: n });
+  };
+  // One round-trip for everyone (avoids timeouts / partial sends on large user lists)
+  const r = await db.prepare(`
+    INSERT INTO notifications (user_id, kind, title, body, meta)
+    SELECT x.id, 'admin', ?, ?, ?::jsonb
+    FROM unnest(?::bigint[]) AS x(id)
+  `).run(title, body, JSON.stringify(meta), targets);
+  res.status(201).json({ ok: true, sent: r.changes || targets.length });
 }));
 
 /**
@@ -2840,13 +2909,29 @@ admin.post('/medals/preview', wrap(async (req, res) => {
   });
 }));
 
+/** Internal/test: mint a completed month. Current month is rejected. UI award button removed. */
 admin.post('/medals/award', wrap(async (req, res) => {
   const month = String((req.body && req.body.month) || previousMonthKey());
   if (!/^\d{4}-\d{2}$/.test(month)) throw bad('month must be YYYY-MM', 'bad_request');
-  // Default: notify winners (bot DM + SVG). Pass notify:false to mint only.
+  if (month >= monthKey()) throw bad('Cannot award the current month yet', 'bad_request');
   const notifyWinners = !(req.body && req.body.notify === false);
   const result = await awardMonthMedals(month, { notifyWinners });
   res.json(result);
+}));
+
+/** Remove accidentally minted medals for a month (clears matching avatars). */
+admin.delete('/medals/:month', wrap(async (req, res) => {
+  const month = String(req.params.month || '');
+  if (!/^\d{4}-\d{2}$/.test(month)) throw bad('month must be YYYY-MM', 'bad_request');
+  await db.prepare(`
+    UPDATE users SET avatar_key = NULL
+    WHERE avatar_key LIKE ?
+  `).run(`medal:m-${month}-%`);
+  const r = await db.prepare('DELETE FROM medals WHERE month = ?').run(month);
+  await db.prepare("DELETE FROM app_settings WHERE key = ? OR key = ?").run(
+    `medals_notified_${month}`, `medal_snapshot_${month}`,
+  );
+  res.json({ ok: true, deleted: r.changes || 0, month });
 }));
 
 // ----- post composer: media upload -----

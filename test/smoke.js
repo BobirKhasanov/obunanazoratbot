@@ -487,6 +487,21 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok(meB.eloBullet > meA.eloBullet);
     });
 
+    await step('admin in-app notification to everyone', async () => {
+      const r = await ok('ADMIN', 'POST', '/admin/notifications', { title: 'Test', body: 'Test body' });
+      assert.ok(r.sent >= 1, 'sent to at least one user');
+      const notifs = await ok('A', 'GET', '/notifications');
+      assert.ok((notifs.notifications || []).some((n) => n.kind === 'admin' && n.title === 'Test'));
+      await err('ADMIN', 'POST', '/admin/notifications', { title: '', body: 'x' }, 400, 'title');
+    });
+
+    await step('messages threads list never 500s', async () => {
+      const th = await ok('A', 'GET', '/messages/threads');
+      assert.ok(Array.isArray(th.threads));
+      const search = await ok('A', 'GET', '/messages/search?q=bo');
+      assert.ok(Array.isArray(search.users));
+    });
+
     await step('boot splash public + admin edit', async () => {
       const pub = await fetch(`${BASE}/api/public/boot-splash`);
       assert.strictEqual(pub.status, 200);
@@ -559,11 +574,14 @@ async function playMoves(game, players, moves, startPly = 0) {
          ON CONFLICT (user_id, month) DO UPDATE SET points = EXCLUDED.points, wins = EXCLUDED.wins`,
         USERS.B.id, prevMonth, USERS.A.id, USERS.C.id,
       );
-      // notify:false — fake Telegram cannot accept SVG documents in this harness
+      // Current month must not be awardable (prevents accidental mid-season medals)
+      await err('ADMIN', 'POST', '/admin/medals/award', { month: cfg.month, notify: false }, 400, 'bad_request');
+      // notify:false — fake Telegram cannot accept SVG/PNG documents in this harness
       const awarded = await ok('ADMIN', 'POST', '/admin/medals/award', { month: prevMonth, notify: false });
       assert.ok(awarded.awarded.length >= 1);
       const top1 = awarded.awarded.find((m) => m.place === 1);
       assert.ok(top1 && top1.userId === USERS.B.id);
+      assert.ok(awarded.awarded.every((m) => m.svg === undefined), 'svg not echoed in award JSON');
 
       const svgRes = await fetch(`${BASE}/api/medals/${top1.id}.svg`, {
         headers: { 'X-Init-Data': init('B') },

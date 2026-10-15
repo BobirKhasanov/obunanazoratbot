@@ -82,6 +82,15 @@ export function openUserProfile(userId, opts = {}) {
             h('div.card.uprof-stat', h('small.muted', t('losses')), h('b', String(total.l)))),
           placeBits.length ? h('div.card.uprof-place', h('div.s', placeBits.join(' · '))) : null),
 
+        (data.medals && data.medals.length)
+          ? h('div.uprof-medals',
+            h('div.h2', t('avatar_medals')),
+            h('div.medal-grid.uprof-medal-grid', ...data.medals.map((m) => h('div.medal-card',
+              h('img.medal-preview', { src: m.url, alt: m.title }),
+              h('div.t', m.title),
+              h('div.s', `${m.monthLabel} · #${m.place}`)))))
+          : null,
+
         !u.you
           ? h('div.uprof-actions', ...[
             opts.onChallenge

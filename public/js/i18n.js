@@ -67,7 +67,7 @@ const en = {
   admin_delete_confirm: 'Delete {name} permanently? All their data will be wiped. If they rejoin (or via referral), they start as a new user.',
   admin_user_deleted: 'User deleted',
   confirm_send: 'Send this post to {n} users?', up_to: 'Up to 6 buttons', uploading: 'Uploading…',
-  e_text: 'Write a message or add media', e_text_long: 'The text is too long', e_button_text: 'Every button needs a text',
+  e_title: 'Enter a title', e_text: 'Write a message or add media', e_text_long: 'The text is too long', e_button_text: 'Every button needs a text',
   e_button_url: 'Button links must start with https://', e_buttons: 'Up to 6 buttons', e_media: 'Media not found, add it again',
   e_media_type: 'Use a JPG, PNG, GIF or MP4 file', e_media_big: 'The file is too large', e_busy: 'A broadcast is already running',
   e_tg_error: 'Telegram refused the post', e_no_app_url: 'The app address is not configured', e_admin_block: 'Admins cannot be blocked',
@@ -136,7 +136,7 @@ const ru = {
   admin_delete_confirm: 'Удалить {name} навсегда? Все данные будут стёрты. При повторном входе (или по рефералу) это будет новый пользователь.',
   admin_user_deleted: 'Пользователь удалён',
   confirm_send: 'Отправить пост {n} пользователям?', up_to: 'До 6 кнопок', uploading: 'Загрузка…',
-  e_text: 'Напишите текст или добавьте медиа', e_text_long: 'Текст слишком длинный', e_button_text: 'У каждой кнопки должен быть текст',
+  e_title: 'Введите заголовок', e_text: 'Напишите текст или добавьте медиа', e_text_long: 'Текст слишком длинный', e_button_text: 'У каждой кнопки должен быть текст',
   e_button_url: 'Ссылка должна начинаться с https://', e_buttons: 'До 6 кнопок', e_media: 'Медиа не найдено, добавьте снова',
   e_media_type: 'Нужен файл JPG, PNG, GIF или MP4', e_media_big: 'Файл слишком большой', e_busy: 'Рассылка уже идёт',
   e_tg_error: 'Telegram отклонил пост', e_no_app_url: 'Адрес приложения не настроен', e_admin_block: 'Админов нельзя блокировать',
@@ -205,7 +205,7 @@ const uz = {
   admin_delete_confirm: "{name} ni butunlay o'chirilsinmi? Barcha ma'lumotlari o'chadi. Qayta qo'shilsa (yoki referal orqali) yangi user bo'ladi.",
   admin_user_deleted: "Foydalanuvchi o'chirildi",
   confirm_send: 'Post {n} foydalanuvchiga yuborilsinmi?', up_to: '6 tagacha tugma', uploading: 'Yuklanmoqda…',
-  e_text: "Xabar yozing yoki media qo'shing", e_text_long: 'Matn juda uzun', e_button_text: "Har bir tugmada matn bo'lishi kerak",
+  e_title: 'Sarlavha yozing', e_text: "Xabar yozing yoki media qo'shing", e_text_long: 'Matn juda uzun', e_button_text: "Har bir tugmada matn bo'lishi kerak",
   e_button_url: 'Havola https:// bilan boshlanishi kerak', e_buttons: '6 tagacha tugma', e_media: "Media topilmadi, qayta qo'shing",
   e_media_type: 'JPG, PNG, GIF yoki MP4 fayl kerak', e_media_big: 'Fayl juda katta', e_busy: 'Xabar yuborish allaqachon ketmoqda',
   e_tg_error: 'Telegram postni rad etdi', e_no_app_url: 'Ilova manzili sozlanmagan', e_admin_block: 'Adminlarni bloklab bo\'lmaydi',
@@ -274,7 +274,7 @@ const uzc = {
   admin_delete_confirm: '{name} ни бутунлай ўчирилсинми? Барча маълумотлари ўчади. Қайта қўшилса (ёки реферал орқали) янги user бўлади.',
   admin_user_deleted: 'Фойдаланувчи ўчирилди',
   confirm_send: 'Пост {n} фойдаланувчига юборилсинми?', up_to: '6 тагача тугма', uploading: 'Юкланмоқда…',
-  e_text: 'Хабар ёзинг ёки медиа қўшинг', e_text_long: 'Матн жуда узун', e_button_text: 'Ҳар бир тугмада матн бўлиши керак',
+  e_title: 'Сарлавҳа ёзинг', e_text: 'Хабар ёзинг ёки медиа қўшинг', e_text_long: 'Матн жуда узун', e_button_text: 'Ҳар бир тугмада матн бўлиши керак',
   e_button_url: 'Ҳавола https:// билан бошланиши керак', e_buttons: '6 тагача тугма', e_media: 'Медиа топилмади, қайта қўшинг',
   e_media_type: 'JPG, PNG, GIF ёки MP4 файл керак', e_media_big: 'Файл жуда катта', e_busy: 'Хабар юбориш аллақачон кетмоқда',
   e_tg_error: 'Телеграм постни рад этди', e_no_app_url: 'Илова манзили созланмаган', e_admin_block: 'Админларни блоклаб бўлмайди',
@@ -305,6 +305,7 @@ Object.assign(en, {
   avatar_download: 'Download', avatar_share: 'Share', avatar_saved: 'Avatar updated',
   admin_medals: 'Medal generator', admin_medals_sub: 'Season tier badges with chess icons for Top 1 / 2 / 3',
   admin_medals_award: 'Award & notify this month', admin_medals_award_ok: 'Medals awarded — winners notified',
+  admin_medals_clear_month: 'Remove this month’s medals', admin_medals_cleared: 'Month medals removed',
   admin_medals_preview: 'Preview', admin_medals_saved: 'Medal style saved',
   admin_medals_bot: 'Bot handle', admin_medals_title_tpl: 'Title template',
   admin_medals_tpl_hint: 'Use {place} and {month} placeholders.',
@@ -314,7 +315,7 @@ Object.assign(en, {
   admin_medals_sizes: 'Text sizes', admin_medals_sz_place: 'Tier I/II/III',
   admin_medals_sz_name: 'Name', admin_medals_sz_handle: 'Handle', admin_medals_sz_title: 'Season', admin_medals_sz_bot: 'Bot',
   admin_medals_pick_month: 'Season month', admin_medals_preview_place: 'Preview place',
-  admin_medals_auto_hint: 'Auto: on the 1st of each month (Tashkent) the bot awards the previous month and DMs winners.',
+  admin_medals_auto_hint: 'Auto (Tashkent): last day 23:59 freezes the top 3; on the 1st the bot mints medals and sends PNG photos to winners. No manual award.',
 });
 Object.assign(ru, {
   nav_rankings: 'Рейтинг', rankings_title: 'Рейтинг в реальном времени', rankings_live: 'Таблица обновляется онлайн',
@@ -334,6 +335,7 @@ Object.assign(ru, {
   avatar_download: 'Скачать', avatar_share: 'Поделиться', avatar_saved: 'Аватар обновлён',
   admin_medals: 'Генератор медалей', admin_medals_sub: 'Сезонные значки с шахматными фигурами для Top 1 / 2 / 3',
   admin_medals_award: 'Выдать и уведомить за месяц', admin_medals_award_ok: 'Медали выданы — победители уведомлены',
+  admin_medals_clear_month: 'Удалить медали этого месяца', admin_medals_cleared: 'Медали месяца удалены',
   admin_medals_preview: 'Превью', admin_medals_saved: 'Стиль сохранён',
   admin_medals_bot: 'Ник бота', admin_medals_title_tpl: 'Шаблон заголовка',
   admin_medals_tpl_hint: 'Плейсхолдеры: {place} и {month}.',
@@ -343,7 +345,7 @@ Object.assign(ru, {
   admin_medals_sizes: 'Размеры текста', admin_medals_sz_place: 'Уровень I/II/III',
   admin_medals_sz_name: 'Имя', admin_medals_sz_handle: 'Ник', admin_medals_sz_title: 'Сезон', admin_medals_sz_bot: 'Бот',
   admin_medals_pick_month: 'Месяц сезона', admin_medals_preview_place: 'Место превью',
-  admin_medals_auto_hint: 'Авто: 1-го числа каждого месяца (Ташкент) бот выдаёт прошлый месяц и пишет победителям.',
+  admin_medals_auto_hint: 'Авто (Ташкент): в последний день в 23:59 фиксируется топ-3; 1-го бот выдаёт медали и шлёт PNG победителям. Без ручной выдачи.',
 });
 Object.assign(uz, {
   nav_rankings: 'Reyting', rankings_title: 'Jonli reyting', rankings_live: 'Reyting yangilanib turadi',
@@ -363,6 +365,7 @@ Object.assign(uz, {
   avatar_download: 'Yuklab olish', avatar_share: 'Ulashish', avatar_saved: 'Avatar yangilandi',
   admin_medals: 'Medal generator', admin_medals_sub: 'Mavsum nishonlari — Top 1 / 2 / 3 uchun shaxmat figuralari',
   admin_medals_award: 'Shu oy uchun berish va xabar', admin_medals_award_ok: 'Medallar berildi — g‘oliblarga xabar',
+  admin_medals_clear_month: 'Shu oy medallarini olib tashlash', admin_medals_cleared: 'Oy medallari olib tashlandi',
   admin_medals_preview: 'Ko‘rish', admin_medals_saved: 'Stil saqlandi',
   admin_medals_bot: 'Bot nomi', admin_medals_title_tpl: 'Sarlavha andozasi',
   admin_medals_tpl_hint: '{place} va {month} joylashuvchi belgilari.',
@@ -372,7 +375,7 @@ Object.assign(uz, {
   admin_medals_sizes: 'Matn o‘lchamlari', admin_medals_sz_place: 'Daraja I/II/III',
   admin_medals_sz_name: 'Ism', admin_medals_sz_handle: 'Nik', admin_medals_sz_title: 'Mavsum', admin_medals_sz_bot: 'Bot',
   admin_medals_pick_month: 'Mavsum oyi', admin_medals_preview_place: 'Ko‘rish o‘rni',
-  admin_medals_auto_hint: 'Avto: har oyning 1-ida (Toshkent) bot o‘tgan oyini beradi va g‘oliblarga yozadi.',
+  admin_medals_auto_hint: 'Avto (Toshkent): oyning oxirgi kuni 23:59 da top-3 saqlanadi; 1-sida bot medal beradi va g‘oliblarga PNG yuboradi. Qo‘lda berish yo‘q.',
 });
 Object.assign(uzc, {
   nav_rankings: 'Рейтинг', rankings_title: 'Жонли рейтинг', rankings_live: 'Рейтинг автоматик янгиланади',
@@ -392,6 +395,7 @@ Object.assign(uzc, {
   avatar_download: 'Юклаб олиш', avatar_share: 'Улашиш', avatar_saved: 'Аватар янгиланди',
   admin_medals: 'Медал генератор', admin_medals_sub: 'Мавсум нишонлари — Top 1 / 2 / 3 учун шахмат фигуралари',
   admin_medals_award: 'Шу ой учун бериш ва хабар', admin_medals_award_ok: 'Медаллар берилди — ғолибларга хабар',
+  admin_medals_clear_month: 'Шу ой медалларини олиб ташлаш', admin_medals_cleared: 'Ой медаллари олиб ташланди',
   admin_medals_preview: 'Кўриш', admin_medals_saved: 'Стил сақланди',
   admin_medals_bot: 'Бот номи', admin_medals_title_tpl: 'Сарлавҳа андозаси',
   admin_medals_tpl_hint: '{place} ва {month} жойлашувчи белгилари.',
@@ -401,7 +405,7 @@ Object.assign(uzc, {
   admin_medals_sizes: 'Матн ўлчамлари', admin_medals_sz_place: 'Даража I/II/III',
   admin_medals_sz_name: 'Исм', admin_medals_sz_handle: 'Ник', admin_medals_sz_title: 'Мавсум', admin_medals_sz_bot: 'Бот',
   admin_medals_pick_month: 'Мавсум ойи', admin_medals_preview_place: 'Кўриш ўрни',
-  admin_medals_auto_hint: 'Авто: ҳар ойнинг 1-ида (Тошкент) бот ўтган ойни беради ва ғолибларга ёзади.',
+  admin_medals_auto_hint: 'Авто (Тошкент): ойнинг охирги куни 23:59 да топ-3 сақланади; 1-сида бот медал беради ва ғолибларга PNG юборади. Қўлда бериш йўқ.',
 });
 
 const DICT = { en, ru, uz, uzc };

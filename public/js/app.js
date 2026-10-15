@@ -154,9 +154,10 @@ function openFriendWait(game) {
   const gameId = game.id;
   const friendLink = () => {
     const bot = state.meta && state.meta.botUsername;
-    if (!bot) return '';
-    // startapp opens Mini App with start_param=g… (client joins); start= also works via bot welcome
-    return `https://t.me/${bot}?startapp=g${gameId}`;
+    const meId = state.me && state.me.id;
+    if (!bot || !meId) return '';
+    // Referral startapp=i… pays diamonds; friend can then join your open board from the lobby
+    return `https://t.me/${bot}?startapp=i${meId}`;
   };
   openScreen((close) => {
     const finish = (nextGame) => {
@@ -945,13 +946,20 @@ async function handleDeepLink() {
     try {
       const r = await api('POST', '/friends/join', { userId: Number(p.slice(1)) });
       if (r.user) state.me = r.user;
+      if (r.openGameId) {
+        await joinGame(r.openGameId);
+        if (r.inviteeReward) {
+          toast(t('invitee_reward', { n: r.inviteeReward, name: (r.friend && r.friend.name) || '…' }));
+          haptic('success');
+        }
+        return;
+      }
       // Stale welcome buttons still carry ?p=i… — ignore once already friends / already paid
       if (r.already) return;
       if (r.inviteeReward) {
         toast(t('invitee_reward', { n: r.inviteeReward, name: (r.friend && r.friend.name) || '…' }));
         haptic('success');
       } else if (r.friend) toast(t('friend_added', { name: r.friend.name }));
-      // Only nudge to profile on a fresh referral claim, not every re-open of an old invite link
       if (r.inviteeReward || r.reward) go(TABS.indexOf('profile'), true);
     } catch (e) { fail(e); }
   } else if (/^g[\w-]{4,20}$/.test(p)) await joinGame(p.slice(1));
