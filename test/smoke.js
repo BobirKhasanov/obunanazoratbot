@@ -983,6 +983,30 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual(markup[0].text, '♟ Play now', 'button text is exactly what the admin typed');
     });
 
+    await step('post composer: invite button personalizes startapp=i{userId} referral link', async () => {
+      tg.calls.length = 0;
+      await ok('ADMIN', 'POST', '/admin/broadcast', {
+        text: 'Invite friends',
+        buttons: [{ text: 'Share invite', type: 'invite', color: 'primary' }],
+        test: true,
+      });
+      const send = tg.calls.find((c) => c.method === 'sendMessage');
+      assert.ok(send, 'test invite send');
+      const row = send.body.reply_markup.inline_keyboard[0][0];
+      assert.ok(row.url.includes('startapp=i' + ADMIN_ID) || decodeURIComponent(row.url).includes('startapp=i' + ADMIN_ID),
+        'invite button carries personal startapp referral');
+      assert.ok(row.url.includes('t.me/share/url') || row.url.includes('startapp=i'), 'invite is share or direct referral url');
+    });
+
+    await step('admin message stats covers telegram + in-app', async () => {
+      const st = await ok('ADMIN', 'GET', '/admin/message-stats');
+      assert.ok(st.telegram && typeof st.telegram.sent === 'number');
+      assert.ok(st.inApp && typeof st.inApp.campaigns === 'number');
+      assert.ok(Array.isArray(st.telegram.recent));
+      assert.ok(Array.isArray(st.inApp.recent));
+      await err('A', 'GET', '/admin/message-stats', null, 404, 'notfound');
+    });
+
     await step('post composer: falls back to plain buttons if Telegram rejects colours', async () => {
       tg.state.rejectStyle = true;
       tg.calls.length = 0;

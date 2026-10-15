@@ -28,7 +28,7 @@ const {
   normalizeConfig, generateMedalSvg, titleFor, DEFAULT_CONFIG, FONT_KEYS, PIECE_KEYS,
 } = require('./medals');
 const { svgToPngBuffer } = require('./medal-png');
-const { loadWelcomeConfig, saveWelcomeLang, sendWelcome } = require('./welcome');
+const { loadWelcomeConfig, saveWelcomeLang, sendWelcome, resolveButtons } = require('./welcome');
 const {
   ANIMATIONS: BOOT_ANIMS,
   loadBootSplashConfig,
@@ -3121,16 +3121,38 @@ function parseButtons(raw) {
   if (!Array.isArray(raw) || raw.length > 6) throw bad('Up to 6 buttons', 'buttons');
   return raw.map((b) => {
     const text = cleanText(b && b.text, 64, 'button_text', true);
-    const type = b && b.type === 'app' ? 'app' : 'url';
+    const type = b && b.type === 'invite' ? 'invite' : (b && b.type === 'app' ? 'app' : 'url');
     const color = COLORS.includes(b && b.color) ? b.color : 'default';
     if (type === 'app') {
       if (!(WEBAPP_URL || '').startsWith('https://')) throw bad('WEBAPP_URL is not configured', 'no_app_url');
       return { text, type, color };
     }
+    if (type === 'invite') return { text, type, color };
     const url = String((b && b.url) || '').trim();
     if (!URL_RE.test(url)) throw bad('Button link must start with https://', 'button_url');
     return { text, type, color, url };
   });
+}
+
+async function personalizeBroadcastPost(basePost, userId) {
+  const needsInvite = (basePost.buttons || []).some((b) => b.type === 'invite');
+  if (!needsInvite) {
+    // Keep app buttons pointing at WEBAPP_URL as-is (no URL normalization side effects)
+    return {
+      ...basePost,
+      buttons: (basePost.buttons || []).map((b) => (
+        b.type === 'app' ? { ...b, url: b.url || basePost.webAppUrl || WEBAPP_URL } : b
+      )),
+    };
+  }
+  const botUser = await getBotUsername();
+  const buttons = resolveButtons(basePost.buttons, {
+    webAppUrl: basePost.webAppUrl || WEBAPP_URL,
+    botUsername: botUser,
+    userId,
+    shareText: '',
+  });
+  return { ...basePost, buttons };
 }
 
 async function deliver(chatId, post) {
@@ -3173,7 +3195,9 @@ admin.post('/broadcast', wrap(async (req, res) => {
 
   // Test: send only to the admin who pressed the button and report Telegram's answer
   if (b.test) {
-    try { await deliver(req.user.id, post); } catch (e) { throw bad(`Telegram refused the post: ${e.description || e.message}`, 'tg_error'); }
+    try {
+      await deliver(req.user.id, await personalizeBroadcastPost(post, req.user.id));
+    } catch (e) { throw bad(`Telegram refused the post: ${e.description || e.message}`, 'tg_error'); }
     return res.json({ test: true, sent: 1 });
   }
 
@@ -3192,7 +3216,10 @@ admin.post('/broadcast', wrap(async (req, res) => {
     let sent = 0, failed = 0;
     const save = () => db.prepare('UPDATE broadcasts SET sent = ?, failed = ? WHERE id = ?').run(sent, failed, bid);
     for (const t of targets) {
-      try { await deliver(t.id, post); sent++; } catch (e) {
+      try {
+        await deliver(t.id, await personalizeBroadcastPost(post, t.id));
+        sent++;
+      } catch (e) {
         failed++;
         if (e.error_code === 403) await db.prepare('UPDATE users SET bot_blocked = 1 WHERE id = ?').run(t.id);
       }
@@ -3208,9 +3235,112 @@ admin.post('/broadcast', wrap(async (req, res) => {
 }));
 
 admin.get('/broadcasts', wrap(async (req, res) => {
+  const limit = Math.min(50, Math.max(8, Number(req.query.limit) || 8));
   res.json({
     busy: broadcasting,
-    broadcasts: await db.prepare('SELECT id, text, media_id, lang, total, sent, failed, status, created_at FROM broadcasts ORDER BY id DESC LIMIT 8').all(),
+    broadcasts: await db.prepare(`
+      SELECT id, text, media_id, lang, total, sent, failed, status, created_at
+      FROM broadcasts ORDER BY id DESC LIMIT ?
+    `).all(limit),
+  });
+}));
+
+/** Full stats: Telegram chat broadcasts + Mini App in-app notification campaigns. */
+admin.get('/message-stats', wrap(async (req, res) => {
+  const tgTotals = await db.prepare(`
+    SELECT
+      COUNT(*)::int AS campaigns,
+      COALESCE(SUM(total), 0)::int AS targeted,
+      COALESCE(SUM(sent), 0)::int AS sent,
+      COALESCE(SUM(failed), 0)::int AS failed
+    FROM broadcasts
+  `).get();
+  const tg7 = await db.prepare(`
+    SELECT
+      COUNT(*)::int AS campaigns,
+      COALESCE(SUM(sent), 0)::int AS sent,
+      COALESCE(SUM(failed), 0)::int AS failed
+    FROM broadcasts WHERE created_at >= now() - interval '7 days'
+  `).get();
+  const tg30 = await db.prepare(`
+    SELECT
+      COUNT(*)::int AS campaigns,
+      COALESCE(SUM(sent), 0)::int AS sent,
+      COALESCE(SUM(failed), 0)::int AS failed
+    FROM broadcasts WHERE created_at >= now() - interval '30 days'
+  `).get();
+  const tgRecent = await db.prepare(`
+    SELECT id, text, lang, total, sent, failed, status, created_at
+    FROM broadcasts ORDER BY id DESC LIMIT 40
+  `).all();
+
+  const appTotals = await db.prepare(`
+    SELECT
+      COUNT(*)::int AS campaigns,
+      COALESCE(SUM(sent_count), 0)::int AS sent
+    FROM notification_campaigns
+  `).get();
+  const app7 = await db.prepare(`
+    SELECT COUNT(*)::int AS campaigns, COALESCE(SUM(sent_count), 0)::int AS sent
+    FROM notification_campaigns WHERE created_at >= now() - interval '7 days'
+  `).get();
+  const app30 = await db.prepare(`
+    SELECT COUNT(*)::int AS campaigns, COALESCE(SUM(sent_count), 0)::int AS sent
+    FROM notification_campaigns WHERE created_at >= now() - interval '30 days'
+  `).get();
+  const appReads = await db.prepare(`
+    SELECT
+      COUNT(*) FILTER (WHERE kind = 'admin')::int AS copies,
+      COUNT(*) FILTER (WHERE kind = 'admin' AND read_at IS NOT NULL)::int AS read,
+      COUNT(*) FILTER (WHERE kind = 'admin' AND read_at IS NULL AND (expires_at IS NULL OR expires_at > now()))::int AS unread_active
+    FROM notifications
+  `).get();
+  const appRecent = await db.prepare(`
+    SELECT c.id, c.title, c.body, c.expires_at, c.sent_count, c.created_at, c.updated_at,
+      (SELECT COUNT(*)::int FROM notifications n WHERE n.campaign_id = c.id AND n.read_at IS NOT NULL) AS read_count
+    FROM notification_campaigns c
+    ORDER BY c.created_at DESC LIMIT 40
+  `).all();
+
+  res.json({
+    telegram: {
+      campaigns: tgTotals?.campaigns || 0,
+      targeted: tgTotals?.targeted || 0,
+      sent: tgTotals?.sent || 0,
+      failed: tgTotals?.failed || 0,
+      last7d: { campaigns: tg7?.campaigns || 0, sent: tg7?.sent || 0, failed: tg7?.failed || 0 },
+      last30d: { campaigns: tg30?.campaigns || 0, sent: tg30?.sent || 0, failed: tg30?.failed || 0 },
+      recent: tgRecent.map((r) => ({
+        id: r.id,
+        text: r.text || '',
+        lang: r.lang,
+        total: Number(r.total || 0),
+        sent: Number(r.sent || 0),
+        failed: Number(r.failed || 0),
+        status: r.status,
+        createdAt: r.created_at,
+      })),
+    },
+    inApp: {
+      campaigns: appTotals?.campaigns || 0,
+      sent: appTotals?.sent || 0,
+      copies: appReads?.copies || 0,
+      read: appReads?.read || 0,
+      unreadActive: appReads?.unread_active || 0,
+      last7d: { campaigns: app7?.campaigns || 0, sent: app7?.sent || 0 },
+      last30d: { campaigns: app30?.campaigns || 0, sent: app30?.sent || 0 },
+      recent: appRecent.map((r) => ({
+        id: r.id,
+        title: r.title,
+        body: r.body || '',
+        sentCount: Number(r.sent_count || 0),
+        readCount: Number(r.read_count || 0),
+        expiresAt: r.expires_at || null,
+        permanent: !r.expires_at,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      })),
+    },
   });
 }));
 

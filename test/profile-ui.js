@@ -74,6 +74,9 @@ assert.ok(admin.includes('admin_notif_ttl') && admin.includes('PATCH') && admin.
 assert.ok(admin.includes('admin_notif_delete') && admin.includes('DELETE'), 'admin can delete sent notifs');
 assert.ok(read('src/server.js').includes('notification_campaigns') && read('src/server.js').includes('expires_at'), 'notif campaigns + expiry');
 assert.ok(css.includes('.char-grid') && css.includes('.char-tile'), 'character avatar grid styles');
+assert.ok(admin.includes("['invite', t('btn_invite')]") || admin.includes("['invite', t(\"btn_invite\")]") || (admin.includes("btn_invite") && admin.includes("'invite'")), 'composer has invite/referral button type');
+assert.ok(admin.includes('/admin/message-stats') && admin.includes('msg_stats_title'), 'admin message stats screen');
+assert.ok(read('src/server.js').includes("admin.get('/message-stats'") && read('src/server.js').includes('personalizeBroadcastPost'), 'message stats + invite personalization');
 assert.ok(ui.includes("CustomEvent('open-premium')") && ui.includes('button.prem-ic'), 'premIc is a tappable button');
 assert.ok(css.includes('prem-ring') && css.includes('prem-spin'), 'rotating premium avatar ring');
 assert.ok(css.includes('mask:') || css.includes('-webkit-mask:'), 'premium ring is rim-only (not solid gold disc)');

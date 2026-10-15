@@ -131,8 +131,16 @@ export function openAdmin(onClose) {
   function drawButtons() {
     btnBox.replaceChildren(...post.buttons.map((b, i) => h('div.beditor',
       h('input.input', { value: b.text, placeholder: t('btn_text'), maxlength: 64, oninput: (e) => { b.text = e.target.value; drawPreview(); } }),
-      seg([['app', t('btn_app')], ['url', t('btn_url')]], b.type, (v) => { b.type = v; drawButtons(); drawPreview(); }),
-      b.type === 'url' ? h('input.input', { value: b.url, placeholder: t('btn_link'), inputmode: 'url', oninput: (e) => { b.url = e.target.value; } }) : null,
+      seg(
+        [['app', t('btn_app')], ['invite', t('btn_invite')], ['url', t('btn_url')]],
+        b.type,
+        (v) => { b.type = v; drawButtons(); drawPreview(); },
+      ),
+      b.type === 'url'
+        ? h('input.input', { value: b.url, placeholder: t('btn_link'), inputmode: 'url', oninput: (e) => { b.url = e.target.value; } })
+        : b.type === 'invite'
+          ? h('p.muted', t('btn_invite_hint'))
+          : null,
       h('div.swatches', COLOR_KEYS.map((c) => h('button.sw' + (b.color === c ? '.on' : ''), { 'aria-label': t('c_' + (c === 'default' ? 'default' : c)), style: { background: swatch[c] }, onclick: () => { b.color = c; drawButtons(); drawPreview(); } }))),
       h('button.mini', { onclick: () => { post.buttons.splice(i, 1); drawButtons(); drawPreview(); } }, icon('trash', 16), t('remove')))));
     if (post.buttons.length < 6) btnBox.append(h('button.btn.ghost.sm', { onclick: () => { post.buttons.push({ text: '', type: 'app', url: '', color: 'primary' }); drawButtons(); drawPreview(); } }, icon('plus', 18), t('add_button')));
@@ -144,7 +152,18 @@ export function openAdmin(onClose) {
       ...post.buttons.map((b) => h('div.pb.c-' + b.color, b.text || '…'))].filter(Boolean));
     preview.hidden = !post.text && !post.media;
   }
-  const payload = (test) => ({ text: post.text, mediaId: post.media ? post.media.id : undefined, lang: post.lang, test, buttons: post.buttons.map((b) => ({ text: b.text, type: b.type, color: b.color, url: b.type === 'url' ? b.url : undefined })) });
+  const payload = (test) => ({
+    text: post.text,
+    mediaId: post.media ? post.media.id : undefined,
+    lang: post.lang,
+    test,
+    buttons: post.buttons.map((b) => ({
+      text: b.text,
+      type: b.type,
+      color: b.color,
+      url: b.type === 'url' ? b.url : undefined,
+    })),
+  });
   const sendTest = h('button.btn.ghost', { onclick: async () => { try { await api('POST', '/admin/broadcast', payload(true)); toast(t('test_sent')); } catch (e) { fail(e); } } }, icon('send', 18), t('send_test'));
   const sendAll = h('button.btn', { onclick: async () => {
     try {
@@ -826,6 +845,80 @@ export function openAdmin(onClose) {
     ];
   });
 
+  const msgStatsHost = h('div');
+  const loadMessageStats = async () => {
+    try {
+      const r = await api('GET', '/admin/message-stats');
+      const tg = r.telegram || {};
+      const app = r.inApp || {};
+      const kpi = (label, value) => h('div.kpi', h('small.muted', label), h('b', String(value ?? 0)));
+      msgStatsHost.replaceChildren(
+        h('div.h2', t('msg_stats_tg')),
+        h('p.muted', t('msg_stats_tg_sub')),
+        h('div.kpis',
+          kpi(t('msg_stats_campaigns'), tg.campaigns),
+          kpi(t('msg_stats_sent'), tg.sent),
+          kpi(t('msg_stats_failed'), tg.failed),
+          kpi(t('msg_stats_targeted'), tg.targeted),
+        ),
+        h('div.card',
+          h('div.t', t('msg_stats_7d')),
+          h('div.s', t('msg_stats_period', {
+            c: tg.last7d?.campaigns || 0,
+            s: tg.last7d?.sent || 0,
+            f: tg.last7d?.failed || 0,
+          })),
+          h('div.t', { style: { marginTop: '8px' } }, t('msg_stats_30d')),
+          h('div.s', t('msg_stats_period', {
+            c: tg.last30d?.campaigns || 0,
+            s: tg.last30d?.sent || 0,
+            f: tg.last30d?.failed || 0,
+          })),
+        ),
+        h('div.h2', t('msg_stats_tg_recent')),
+        (tg.recent || []).length
+          ? h('div.list', ...(tg.recent || []).map((b) => h('div.card',
+            h('div.t', (b.text || '📎').slice(0, 80)),
+            h('div.s', `#${b.id} · ${b.lang} · ${b.sent}/${b.total}${b.failed ? ` · ✗${b.failed}` : ''} · ${t('status_' + b.status)}`),
+          )))
+          : h('div.empty', t('msg_stats_empty')),
+        h('div.h2', t('msg_stats_app')),
+        h('p.muted', t('msg_stats_app_sub')),
+        h('div.kpis',
+          kpi(t('msg_stats_campaigns'), app.campaigns),
+          kpi(t('msg_stats_sent'), app.sent),
+          kpi(t('msg_stats_read'), app.read),
+          kpi(t('msg_stats_unread'), app.unreadActive),
+        ),
+        h('div.card',
+          h('div.t', t('msg_stats_7d')),
+          h('div.s', t('msg_stats_app_period', { c: app.last7d?.campaigns || 0, s: app.last7d?.sent || 0 })),
+          h('div.t', { style: { marginTop: '8px' } }, t('msg_stats_30d')),
+          h('div.s', t('msg_stats_app_period', { c: app.last30d?.campaigns || 0, s: app.last30d?.sent || 0 })),
+        ),
+        h('div.h2', t('msg_stats_app_recent')),
+        (app.recent || []).length
+          ? h('div.list', ...(app.recent || []).map((c) => h('div.card',
+            h('div.t', c.title),
+            h('div.s', (c.body || '').slice(0, 80)),
+            h('div.s', t('msg_stats_app_row', {
+              n: c.sentCount || 0,
+              r: c.readCount || 0,
+              ttl: c.permanent ? t('admin_notif_ttl_permanent') : (c.expiresAt ? new Date(c.expiresAt).toLocaleString() : '—'),
+            })),
+          )))
+          : h('div.empty', t('msg_stats_empty')),
+      );
+    } catch (e) { fail(e); }
+  };
+  const openMessageStats = () => openScreen((close) => {
+    loadMessageStats();
+    return [
+      ...subTop(t('msg_stats_title'), close),
+      msgStatsHost,
+    ];
+  });
+
   // ----- welcome message (bot /start after language pick) -----
   const welcomeHost = h('div');
   let welcomeCfg = null;
@@ -1383,6 +1476,7 @@ export function openAdmin(onClose) {
     sec(t('admin_sec_content')),
     menuCard(
       menuRow({ ic: 'send', title: t('composer'), sub: t('admin_sec_broadcast_sub'), onClick: openBroadcast }),
+      menuRow({ ic: 'chart', title: t('msg_stats_title'), sub: t('msg_stats_menu_sub'), onClick: openMessageStats }),
       menuRow({ ic: 'play', title: t('welcome_title'), sub: t('welcome_menu_sub'), onClick: openWelcome }),
       menuRow({ ic: 'cpu', title: t('boot_title_section'), sub: t('boot_menu_sub'), onClick: openBootSplash }),
       menuRow({ ic: 'bell', title: t('admin_notif'), sub: t('admin_notif_menu_sub'), onClick: openInAppNotif }),
