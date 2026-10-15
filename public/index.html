@@ -6,8 +6,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#111827">
   <title>Chess</title>
-  <link rel="stylesheet" href="/styles.css?v=20261015f">
-  <link rel="modulepreload" href="/js/inbox.js?v=20261015f">
+  <link rel="stylesheet" href="/styles.css?v=20261015g">
   <style>
     /* Inline boot splash — always visible until JS reveals gate/app (never a blank black WebView) */
     html, body { margin: 0; min-height: 100%; min-height: 100dvh; background: var(--bg, #111827); color: var(--text, #fff); }
@@ -116,12 +115,12 @@
     <div id="sheet-root"></div>
     <div id="toast" role="status"></div>
   </main>
-  <script type="module" src="/js/app.js?v=20261015f"></script>
+  <script type="module" src="/js/app.js?v=20261015g"></script>
   <script>
     (function () {
       function failBoot(msg) {
         var b = document.getElementById('boot');
-        if (!b || b.hidden) return;
+        if (!b || b.hidden || b.classList.contains('boot-fail')) return;
         b.className = 'boot-fail';
         b.innerHTML =
           '<div class="boot-mark" aria-hidden="true"><div class="boot-ring"></div><div class="boot-ic">♟</div></div>' +
@@ -129,19 +128,23 @@
           '<p class="boot-sub">Qayta urinish uchun bosing</p>';
         b.onclick = function () { location.reload(); };
       }
-      window.addEventListener('error', function () {
+      // Only treat a failed app.js entry as fatal. Do NOT fail on Telegram SDK noise,
+      // modulepreload, or unrelated rejections — those were showing "Yuklashda xato" falsely.
+      window.addEventListener('error', function (ev) {
         var b = document.getElementById('boot');
-        if (b && !b.hidden) failBoot('Yuklashda xato');
-      });
-      window.addEventListener('unhandledrejection', function () {
-        var b = document.getElementById('boot');
-        if (b && !b.hidden) failBoot('Ulanishda xato');
-      });
-      // Watchdog: never leave users on splash forever
+        if (!b || b.hidden) return;
+        var src = '';
+        try {
+          src = String((ev && ev.filename) || (ev && ev.target && (ev.target.src || ev.target.href)) || '');
+        } catch (e) { src = ''; }
+        if (src.indexOf('/js/app.js') === -1) return;
+        failBoot('Yuklashda xato');
+      }, true);
+      // Last-resort watchdog only (boot() already routes API failures to the gate)
       setTimeout(function () {
         var b = document.getElementById('boot');
         if (b && !b.hidden) failBoot('Juda uzoq kutildi');
-      }, 16000);
+      }, 20000);
     })();
   </script>
 </body>
