@@ -607,11 +607,19 @@ export function renderProfilePage(ctx) {
         ),
         h('div.h2', t('avatar_chars')),
         chars.length
-          ? h('div.char-grid', chars.map((c) => h('button.char-tile' + (cur === c.key ? '.on' : ''), {
-            type: 'button',
-            title: c.name,
-            onclick: () => { haptic('select'); pick(c.key); },
-          }, h('img', { src: c.url, alt: c.name, draggable: 'false' }))))
+          ? (() => {
+            const boys = chars.filter((c) => c.group !== 'f');
+            const girls = chars.filter((c) => c.group === 'f');
+            const tile = (c) => h('button.char-tile' + (cur === c.key ? '.on' : ''), {
+              type: 'button',
+              title: c.name,
+              onclick: () => { haptic('select'); pick(c.key); },
+            }, h('img', { src: c.url, alt: c.name, draggable: 'false', loading: 'lazy' }));
+            return h('div.char-sets',
+              boys.length ? h('div.char-grid', boys.map(tile)) : null,
+              girls.length ? h('div.char-grid', girls.map(tile)) : null,
+            );
+          })()
           : h('p.muted', t('avatar_chars_empty')),
         h('div.h2', t('avatar_default')),
         h('button.avatar-pick' + (!cur ? '.on' : ''), {

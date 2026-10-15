@@ -67,7 +67,7 @@ assert.ok(app.includes('open-premium') && app.includes("detail: 'premium'"), 'pr
 assert.ok(app.includes('round: true'), 'online avatars are circular');
 const ui = read('public/js/ui.js');
 assert.ok(ui.includes('img:') && ui.includes('/api/avatars/'), 'avatar renderer supports img: keys');
-assert.ok(ui.includes('char:') && ui.includes('/api/char-avatars/'), 'avatar renderer supports char: keys');
+assert.ok(ui.includes('char:') && ui.includes('/img/char-avatars/'), 'avatar renderer supports char: PNG keys');
 assert.ok(profile.includes('char-grid') && profile.includes('/api/char-avatars'), 'avatar picker shows character grid');
 assert.ok(read('src/char-avatars.js').includes('jimmy') && read('src/server.js').includes('char-avatars'), 'char avatar catalog wired');
 assert.ok(admin.includes('admin_notif_ttl') && admin.includes('PATCH') && admin.includes('/admin/notifications/'), 'admin notif TTL + edit');
@@ -88,7 +88,8 @@ assert.ok(read('src/server.js').includes('/notifications/by-copy/'), 'admin dele
 assert.ok(css.includes('data-android="1"') && css.includes('0.38s'), 'Android snappier screen transitions');
 assert.ok(read('public/js/pieces.js').includes('linearGradient') && read('public/js/pieces.js').includes('neo-'), 'neo pieces use shaded gradients');
 assert.ok(read('public/js/perf.js').includes('homeTabRefreshMs') && app.includes('homeTabRefreshMs'), 'lighter home tab refresh');
-assert.ok(read('src/char-avatars.js').includes('clipPath') && read('src/char-avatars.js').includes('circ-'), 'char avatars are circular SVGs');
+assert.ok(read('src/char-avatars.js').includes('charAvatarUrl') && fs.existsSync(path.join(root, 'public/img/char-avatars/jimmy.png')), 'char avatars are PNG assets');
+assert.ok(fs.existsSync(path.join(root, 'public/img/char-avatars/maya.png')) && fs.readdirSync(path.join(root, 'public/img/char-avatars')).filter((f) => f.endsWith('.png')).length >= 40, '40 character PNGs shipped');
 assert.ok(css.includes('will-change: transform, opacity') && !/will-change:\s*scroll-position\s*[,;]/.test(css), 'no scroll-position will-change (Android sticky scroll)');
 assert.ok(read('src/db.js').includes('idx_games_matchmaking'), 'matchmaking DB index');
 assert.ok(app.includes('avatarKey') && read('src/server.js').includes('avatar_key'), 'lobby/friends expose avatar keys');

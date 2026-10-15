@@ -446,7 +446,7 @@ export const avatar = (name, id, cls = '', avatarKey = null) => {
     el.classList.add('medal', 'char');
     el.style.background = 'transparent';
     el.replaceChildren(h('img.avatar-medal', {
-      src: `/api/char-avatars/${encodeURIComponent(char[1].toLowerCase())}.svg?v=3`,
+      src: `/img/char-avatars/${encodeURIComponent(char[1].toLowerCase())}.png?v=4`,
       alt: '',
       draggable: 'false',
       loading: 'lazy',

@@ -35,7 +35,7 @@ const {
   saveBootSplashLang,
   saveBootSplashConfig,
 } = require('./boot-splash');
-const { listCharAvatars, isCharAvatarKey, charAvatarSvg } = require('./char-avatars');
+const { listCharAvatars, isCharAvatarKey, charAvatarExists, ASSET_V } = require('./char-avatars');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
@@ -132,19 +132,24 @@ app.get('/api/medals/:id.svg', wrap(async (req, res) => {
   res.send(row.svg);
 }));
 
-// Free cartoon character avatars — public for <img> tags
+// Free character avatars (PNG set under public/img/char-avatars/) — public for <img>
 app.get('/api/char-avatars', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=3600');
-  res.json({ avatars: listCharAvatars() });
+  res.json({ avatars: listCharAvatars(), v: ASSET_V });
 });
-app.get('/api/char-avatars/:id.svg', wrap(async (req, res) => {
+// Legacy SVG URL → static PNG (old clients / cached markup)
+app.get('/api/char-avatars/:id.svg', (req, res) => {
   const id = String(req.params.id || '').replace(/\.svg$/i, '').toLowerCase();
-  const svg = charAvatarSvg(id);
-  if (!svg) throw new HttpError(404, 'Not found', 'notfound');
-  res.set('Content-Type', 'image/svg+xml; charset=utf-8');
+  if (!charAvatarExists(id)) return res.status(404).json({ error: 'notfound' });
   res.set('Cache-Control', 'public, max-age=86400');
-  res.send(svg);
-}));
+  res.redirect(302, `/img/char-avatars/${encodeURIComponent(id)}.png?v=${ASSET_V}`);
+});
+app.get('/api/char-avatars/:id.png', (req, res) => {
+  const id = String(req.params.id || '').replace(/\.png$/i, '').toLowerCase();
+  if (!charAvatarExists(id)) return res.status(404).json({ error: 'notfound' });
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.redirect(302, `/img/char-avatars/${encodeURIComponent(id)}.png?v=${ASSET_V}`);
+});
 
 // Premium custom avatars — public so <img> tags can load without initData
 app.get('/api/avatars/:id', wrap(async (req, res) => {

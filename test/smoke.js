@@ -525,11 +525,13 @@ async function playMoves(game, players, moves, startPly = 0) {
       const list = await fetch(`${BASE}/api/char-avatars`);
       assert.strictEqual(list.status, 200);
       const body = await list.json();
-      assert.ok((body.avatars || []).length >= 8, 'char catalog');
+      assert.ok((body.avatars || []).length >= 40, 'char catalog (male+female sheets)');
       const first = body.avatars[0];
-      const svg = await fetch(`${BASE}${first.url}`);
-      assert.strictEqual(svg.status, 200);
-      assert.ok((await svg.text()).includes('<svg'));
+      assert.ok(String(first.url).includes('/img/char-avatars/') && String(first.url).endsWith('.png') || String(first.url).includes('.png?'));
+      const png = await fetch(`${BASE}${first.url}`);
+      assert.strictEqual(png.status, 200);
+      const buf = Buffer.from(await png.arrayBuffer());
+      assert.ok(buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47, 'PNG magic');
       const saved = await ok('A', 'PATCH', '/me', { avatarKey: first.key });
       assert.strictEqual(saved.user.avatarKey, first.key);
       await ok('A', 'PATCH', '/me', { avatarKey: null });
