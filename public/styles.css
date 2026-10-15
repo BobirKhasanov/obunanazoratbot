@@ -377,10 +377,10 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .pbar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 16px; background: var(--card); transition: box-shadow 0.35s var(--ease), transform 0.35s var(--ease); }
 .pbar.turn { box-shadow: 0 0 0 2px var(--blue); }
 .pbar .pav, .pbar .avwrap { flex: none; }
-.pbar .avwrap { width: 40px; height: 40px; }
-.pbar .avwrap.prem { width: 44px; height: 44px; }
-.pbar .avwrap .avatar, .pbar .avatar { width: 36px; height: 36px; border-radius: 50%; font-size: 15px; }
-.pbar .avwrap.prem .avatar { width: 36px; height: 36px; }
+.pbar .avwrap { width: 36px; height: 36px; }
+.pbar .avwrap.prem { width: 36px; height: 36px; }
+.pbar .avwrap .avatar, .pbar .avatar { width: 100%; height: 100%; border-radius: 50%; font-size: 15px; }
+.pbar .avwrap.prem .avatar { width: calc(100% - 5px); height: calc(100% - 5px); }
 .pav { position: relative; }
 .pav .avatar { width: 38px; height: 38px; border-radius: 12px; font-size: 16px; }
 .pav.online::after, .avwrap .dot.on { content: ""; position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; background: var(--green); border: 2px solid var(--card); }
@@ -802,10 +802,10 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 }
 .char-preview-av { flex: none; display: grid; place-items: center; }
 .char-preview-av .avwrap.xl { width: 88px; height: 88px; }
-.char-preview-av .avatar.xl { width: 88px; height: 88px; border-radius: 22px; }
+.char-preview-av .avatar.xl { width: 100%; height: 100%; border-radius: 22px; }
 .char-preview-av .avwrap.circ .avatar.xl { border-radius: 50%; }
-.char-preview-av .avwrap.prem.xl { width: 96px; height: 96px; }
-.char-preview-av .avwrap.prem.xl .avatar.xl { width: 80px; height: 80px; }
+.char-preview-av .avwrap.prem.xl { width: 88px; height: 88px; }
+.char-preview-av .avwrap.prem.xl .avatar.xl { width: calc(100% - 7px); height: calc(100% - 7px); }
 .char-preview-meta { flex: 1; min-width: 0; }
 .char-name-badge {
   display: grid; gap: 2px; padding: 12px 14px; border-radius: 14px;
@@ -981,15 +981,18 @@ button.grow.plain { flex: 1; display: block; }
   overflow: visible;
 }
 .prof-band .avwrap.xl {
-  width: 88px; height: 88px; border-radius: 50%;
+  width: 74px; height: 74px; border-radius: 50%;
 }
 .prof-band .avwrap.xl .avatar.xl {
-  width: 74px; height: 74px; border-radius: 50%;
+  width: 100%; height: 100%; border-radius: 50%;
   box-shadow: 0 0 0 3px var(--bg);
 }
+.prof-band .avwrap.prem.xl {
+  width: 74px; height: 74px;
+}
 .prof-band .avwrap.prem.xl .avatar.xl {
-  width: 72px; height: 72px;
-  /* One gold ring only — the spinning .prem-ring; keep a soft bg seam so it sits on the banner */
+  width: calc(100% - 7px); height: calc(100% - 7px);
+  /* Soft seam on banner; gold rim is .prem-ring only */
   box-shadow: 0 0 0 3px var(--bg);
 }
 .prof-meta { flex: 1; min-width: 0; padding-bottom: 2px; }
@@ -1038,7 +1041,9 @@ button.grow.plain { flex: 1; display: block; }
 .myinfo-av {
   align-self: center; background: none; border: 0; padding: 0; margin: 4px 0 8px;
 }
-.myinfo-av .avwrap.xl, .myinfo-av .avatar.xl { width: 96px; height: 96px; border-radius: 50%; }
+.myinfo-av .avwrap.xl { width: 96px; height: 96px; border-radius: 50%; }
+.myinfo-av .avatar.xl { width: 100%; height: 100%; border-radius: 50%; }
+.myinfo-av .avwrap.prem.xl .avatar.xl { width: calc(100% - 7px); height: calc(100% - 7px); }
 .info-sec { display: grid; gap: 8px; }
 .info-sec-h {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -1084,10 +1089,11 @@ button.grow.plain { flex: 1; display: block; }
   background: radial-gradient(ellipse at 50% 0%, #4c1d95 0%, #1e1b4b 45%, var(--card) 100%);
 }
 .uprof-hero.prem { box-shadow: inset 0 0 40px rgba(167, 139, 250, 0.25); }
-.uprof-avwrap { overflow: visible; padding: 22px; }
-.uprof-avwrap .avwrap.xl { width: 100px; height: 100px; }
-.uprof-avwrap .avwrap.xl .avatar.xl { width: 84px; height: 84px; }
-.uprof-avwrap .avwrap.prem.xl .avatar.xl { width: 84px; height: 84px; }
+.uprof-avwrap { overflow: visible; padding: 14px; }
+.uprof-avwrap .avwrap.xl { width: 84px; height: 84px; }
+.uprof-avwrap .avwrap.xl .avatar.xl { width: 100%; height: 100%; }
+.uprof-avwrap .avwrap.prem.xl { width: 84px; height: 84px; }
+.uprof-avwrap .avwrap.prem.xl .avatar.xl { width: calc(100% - 7px); height: calc(100% - 7px); }
 .uprof-like {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 14px; border-radius: 999px;
@@ -1275,17 +1281,21 @@ html[data-perf="lite"] .live-mini-ph {
 /* ---------- home announcements carousel ---------- */
 .ann-carousel {
   position: relative; width: 100%; margin: 0 0 14px; border-radius: 22px; overflow: hidden;
-  min-height: 0; touch-action: pan-x; contain: layout paint; user-select: none;
-  -webkit-user-select: none;
+  min-height: 0; height: auto; touch-action: pan-x; contain: layout paint; user-select: none;
+  -webkit-user-select: none; background: #0b1220;
 }
-.ann-carousel:not([hidden]) { min-height: 110px; }
+/* Fixed box so media never grows the page / clips outside the rounded carousel */
+.ann-carousel:not([hidden]) {
+  height: 140px; min-height: 140px; max-height: 140px;
+}
 .ann-track {
-  display: flex; width: 100%; will-change: transform;
+  display: flex; width: 100%; height: 100%; will-change: transform;
   transition: transform 0.72s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .ann-track.dragging { transition: none; }
 .ann-slide {
-  flex: 0 0 100%; width: 100%; min-height: 110px; padding: 16px 18px 22px;
+  flex: 0 0 100%; width: 100%; height: 100%; min-height: 100%; max-height: 100%;
+  padding: 16px 18px 22px; box-sizing: border-box;
   display: flex; align-items: center; gap: 12px; text-align: left; color: #fff;
   position: relative; overflow: hidden; border: 0; cursor: grab;
   -webkit-user-drag: none;
@@ -1301,16 +1311,17 @@ html[data-perf="lite"] .live-mini-ph {
 }
 .ann-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ann-media.emoji { font-size: 40px; }
-/* Textless announcement: media fills the whole carousel slide */
+/* Textless announcement: media fits entirely inside the fixed carousel box */
 .ann-slide.media-only {
-  padding: 0; gap: 0; min-height: 110px; background: #0b1220;
+  padding: 0; gap: 0; background: #0b1220;
 }
 .ann-slide.media-only .ann-media {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  border-radius: 0; box-shadow: none; background: transparent;
+  position: absolute; inset: 0; width: 100%; height: 100%; max-width: 100%; max-height: 100%;
+  border-radius: 0; box-shadow: none; background: #0b1220; overflow: hidden;
 }
 .ann-slide.media-only .ann-media img {
-  width: 100%; height: 100%; object-fit: cover; object-position: center;
+  width: 100%; height: 100%; max-width: 100%; max-height: 100%;
+  object-fit: contain; object-position: center; display: block;
 }
 .ann-dots {
   position: absolute; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center; gap: 5px; z-index: 2; pointer-events: none;
@@ -1616,7 +1627,7 @@ h2 .prem-ic { width: 32px; height: 32px; vertical-align: middle; }
 h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 .row .t .prem-ic { margin-left: 8px; flex: none; }
 
-/* Circular avatars + ONE rotating gold Premium RING (rim only — never a solid gold disc) */
+/* Circular avatars + ONE rotating gold Premium RING (rim ≤ avatar wrap — never larger) */
 @keyframes prem-spin { to { transform: rotate(360deg); } }
 .avwrap.circ,
 .avwrap.circ .avatar,
@@ -1628,39 +1639,40 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
   overflow: visible;
 }
 .avwrap .prem-ring {
-  position: absolute; inset: -3px; border-radius: 50%; z-index: 0;
+  /* Same box as wrap — ring sits on the outer edge, not outside it */
+  position: absolute; inset: 0; border-radius: 50%; z-index: 0;
   background: conic-gradient(from 0deg, #b45309, #fde68a, #fbbf24, #f59e0b, #d97706, #fde68a, #b45309);
-  /* Rim thickness tracks avatar size so the ring hugs the circle */
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 1.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 1.5px));
   animation: prem-spin 2.4s linear infinite;
   pointer-events: none;
-  filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.45));
+  filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.4));
 }
 .avwrap.prem .avatar {
   position: relative; z-index: 1;
-  width: 100%; height: 100%; border-radius: 50%;
+  /* Slightly inset so the gold rim reads around the face */
+  width: calc(100% - 5px); height: calc(100% - 5px); border-radius: 50%;
   box-shadow: none;
 }
 .avwrap.prem.xl {
-  width: 88px; height: 88px; border-radius: 50%;
+  width: 72px; height: 72px; border-radius: 50%;
 }
 .avwrap.prem.xl .prem-ring {
-  inset: -4px;
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 2.5px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 2.5px));
+  inset: 0;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
 }
 .avwrap.prem.xl .avatar.xl {
-  width: 100%; height: 100%; border-radius: 50%;
+  width: calc(100% - 7px); height: calc(100% - 7px); border-radius: 50%;
   box-shadow: none;
 }
 .avwrap.prem .dot.on { z-index: 2; right: 0; bottom: 0; }
 .avwrap.circ .dot.on { right: 0; bottom: 0; }
 
-/* Telegram Stars–like twinkles orbiting the premium ring */
+/* Telegram Stars–like twinkles — orbit stays on/near the rim, not outside the wrap */
 .avwrap .prem-spark {
   position: absolute; z-index: 3; pointer-events: none;
-  color: #fff4c2; font-size: 11px; line-height: 1;
+  color: #fff4c2; font-size: 9px; line-height: 1;
   text-shadow:
     0 0 4px rgba(255, 255, 255, 0.95),
     0 0 10px rgba(251, 191, 36, 1),
@@ -1668,14 +1680,14 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
   top: 50%; left: 50%;
   --n: 8;
   --ang: calc(var(--i, 0) * (360deg / var(--n)));
-  --orbit: 26px;
+  --orbit: 20px;
   transform: translate(-50%, -50%) rotate(var(--ang)) translateY(calc(-1 * var(--orbit))) rotate(calc(-1 * var(--ang)));
   animation: tg-star-twinkle 1.8s ease-in-out infinite;
   animation-delay: calc(var(--i, 0) * 0.22s);
 }
 .avwrap.xl .prem-spark {
-  font-size: 13px;
-  --orbit: 52px;
+  font-size: 11px;
+  --orbit: 34px;
   animation-duration: 2.1s;
 }
 @keyframes tg-star-twinkle {

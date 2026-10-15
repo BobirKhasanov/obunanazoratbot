@@ -13,7 +13,7 @@ import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleOpenGame } from './game.js';
 import { renderProfilePage, openUserProfile } from './profile.js';
 import { openScreen, closeScreen, screenOpen } from './screen.js';
-import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel, CAROUSEL_STAGGER_MS } from './announcements.js';
+import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel, stopAnnouncementsHost, announcementsKey, CAROUSEL_STAGGER_MS } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
 
@@ -467,7 +467,18 @@ refreshers.play = async function renderPlay() {
     return;
   }
   playSnap = snap;
-  stopAnnouncementsCarousel();
+
+  // Reuse live carousels when announcement content is unchanged — avoids media flash on soft refresh / taps
+  const annKey = announcementsKey(anns);
+  const pzKey = announcementsKey(puzzleAnns);
+  const prevAnn = playEl?.querySelector('.ann-carousel[data-ann-board="home"]');
+  const prevPz = playEl?.querySelector('.ann-carousel[data-ann-board="puzzle"]');
+  const reuseAnn = !!(prevAnn && prevAnn.dataset.annKey === annKey && prevAnn.querySelector('.ann-track'));
+  const reusePz = !!(prevPz && prevPz.dataset.annKey === pzKey && prevPz.querySelector('.ann-track'));
+  if (reuseAnn) prevAnn.remove();
+  else if (prevAnn) stopAnnouncementsHost(prevAnn);
+  if (reusePz) prevPz.remove();
+  else if (prevPz) stopAnnouncementsHost(prevPz);
 
   const controls = [
     ['1+0', '1+0', 'Bullet'],
@@ -479,14 +490,36 @@ refreshers.play = async function renderPlay() {
   ];
   const modes = h('div.time-grid', controls.map(([id, label, sub]) =>
     h('button.time-option' + (selectedTime === id ? '.selected' : ''), {
-      onclick: () => { selectedTime = id; playSnap = ''; haptic('select'); refresh('play'); }
+      type: 'button',
+      onclick: () => {
+        if (selectedTime === id) return;
+        selectedTime = id;
+        haptic('select');
+        // In-place select — do not remount home (keeps media carousel stable)
+        modes.querySelectorAll('.time-option').forEach((btn, i) => {
+          btn.classList.toggle('selected', controls[i][0] === id);
+        });
+        try {
+          if (playSnap) {
+            const o = JSON.parse(playSnap);
+            o.t = id;
+            playSnap = JSON.stringify(o);
+          }
+        } catch { /* next poll remounts */ }
+      },
     }, h('b', label), h('small', sub))
   ));
   const banner = (cls, emoji, title, sub, fn) => h('button.home-banner.' + cls, { onclick: () => { haptic('light'); fn(); } },
     h('div.home-banner-text', h('b', title), h('small', sub)), h('span.home-banner-art', emoji));
   const card = (emoji, label, fn) => h('button.pcard', { onclick: () => { haptic('light'); fn(); } }, h('span.pcard-art', emoji), h('b', label));
-  const annHost = h('div.ann-carousel', { hidden: true, 'data-noswipe': '' });
-  const puzzleHost = h('div.ann-carousel.ann-puzzle', { hidden: true, 'data-noswipe': '' });
+  const annHost = reuseAnn
+    ? prevAnn
+    : h('div.ann-carousel', { hidden: true, 'data-noswipe': '', 'data-ann-board': 'home' });
+  if (!reuseAnn) annHost.dataset.annBoard = 'home';
+  const puzzleHost = reusePz
+    ? prevPz
+    : h('div.ann-carousel.ann-puzzle', { hidden: true, 'data-noswipe': '', 'data-ann-board': 'puzzle' });
+  if (!reusePz) puzzleHost.dataset.annBoard = 'puzzle';
   const openProfile = (id) => openUserProfile(id, {
     onChallenge: (u) => challenge(u.id),
     refreshHome: () => { playSnap = ''; refresh('play'); },
@@ -585,9 +618,15 @@ refreshers.play = async function renderPlay() {
       }
     };
     const opts = { botUsername: state.meta?.botUsername, userId: state.me?.id, onPage };
-    await mountAnnouncementsCarousel(annHost, anns, opts);
+    if (!reuseAnn) {
+      annHost.dataset.annKey = annKey;
+      await mountAnnouncementsCarousel(annHost, anns, opts);
+    }
     if (puzzleAnns && puzzleAnns.length) {
-      await mountAnnouncementsCarousel(puzzleHost, puzzleAnns, { ...opts, delayMs: CAROUSEL_STAGGER_MS });
+      if (!reusePz) {
+        puzzleHost.dataset.annKey = pzKey;
+        await mountAnnouncementsCarousel(puzzleHost, puzzleAnns, { ...opts, delayMs: CAROUSEL_STAGGER_MS });
+      }
     }
   }
 };

@@ -15,27 +15,42 @@ const DWELL_MS = 6000;
 export const CAROUSEL_STAGGER_MS = 2000;
 const SWIPE_PX = 40;
 
-/** @type {Array<() => void>} */
-const cleanups = [];
-const blobUrls = [];
+/** Per-host cleanup + blob URLs so unused carousels can be torn down without killing reused ones. */
+const hostState = new WeakMap();
 
-export function stopAnnouncementsCarousel() {
-  while (cleanups.length) {
-    try { cleanups.pop()(); } catch { /* ignore */ }
+function stopHost(host) {
+  const st = host && hostState.get(host);
+  if (!st) return;
+  hostState.delete(host);
+  while (st.cleanups.length) {
+    try { st.cleanups.pop()(); } catch { /* ignore */ }
   }
-  while (blobUrls.length) {
-    try { URL.revokeObjectURL(blobUrls.pop()); } catch { /* ignore */ }
+  while (st.blobs.length) {
+    try { URL.revokeObjectURL(st.blobs.pop()); } catch { /* ignore */ }
   }
 }
 
-async function resolveMedia(items) {
+/** Tear down one carousel host (timers + media blobs). */
+export function stopAnnouncementsHost(host) {
+  stopHost(host);
+}
+
+/** Tear down every mounted carousel under root (tab leave / full reset). */
+export function stopAnnouncementsCarousel(root = document) {
+  try {
+    const scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll('.ann-carousel').forEach((el) => stopHost(el));
+  } catch { /* ignore */ }
+}
+
+async function resolveMedia(items, blobs) {
   return Promise.all(items.map(async (a) => {
     if (!a.mediaId) return { ...a, _src: null };
     try {
       const res = await fetch('/api/media/' + a.mediaId, { headers: { 'X-Init-Data': getInitData() } });
       if (!res.ok) return { ...a, _src: null };
       const url = URL.createObjectURL(await res.blob());
-      blobUrls.push(url);
+      blobs.push(url);
       return { ...a, _src: url };
     } catch {
       return { ...a, _src: null };
@@ -163,13 +178,25 @@ function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {
   };
 }
 
+/** Fingerprint for reuse — same content keeps the live carousel (no media reload flicker). */
+export function announcementsKey(items) {
+  return JSON.stringify((items || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]));
+}
+
 /** Mount carousel into host (does not clear other carousels). Returns host or null. */
 export async function mountAnnouncementsCarousel(host, items, { onPage, botUsername, userId, delayMs = 0 } = {}) {
   if (!host) return null;
+  stopHost(host);
   host.replaceChildren();
   if (!items || !items.length) { host.hidden = true; return null; }
-  const resolved = await resolveMedia(items);
-  if (!host.isConnected) return null;
+  const blobs = [];
+  const cleanups = [];
+  hostState.set(host, { blobs, cleanups });
+  const resolved = await resolveMedia(items, blobs);
+  if (!host.isConnected) {
+    stopHost(host);
+    return null;
+  }
   host.hidden = false;
   const opts = { onPage, botUsername, userId };
   const track = h('div.ann-track', resolved.map((a) => slide(a, opts)));
