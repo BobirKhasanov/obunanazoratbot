@@ -44,6 +44,7 @@ assert.ok(profile.includes('5 * 1024 * 1024') || profile.includes('5*1024*1024')
 assert.ok(read('src/server.js').includes('MAX_AVATAR = 5') && read('src/server.js').includes('/api/avatars/'), 'avatar 5MB + public serve');
 assert.ok(profile.includes('openChatWithUser') && profile.includes("from './inbox.js'"), 'friends list opens DM chat');
 assert.ok(app.includes('home_tab_live') && app.includes('home_tab_friends') && app.includes('homePeopleTab'), 'home live/friends tabs');
+assert.ok(app.includes('home-people-list') && app.includes('paintPeopleList'), 'home live/friends swap list in place (no scroll jump)');
 assert.ok(!app.includes("t('puzzle_hint')"), 'puzzle hint/maslahat removed');
 
 assert.ok(screen.includes('export function openScreen'));

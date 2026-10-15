@@ -103,8 +103,15 @@ const page = (name) => $(`.page[data-page="${name}"]`);
 function mount(name, ...nodes) {
   const p = page(name);
   const top = p.scrollTop;
+  // Instant restore — CSS scroll-behavior:smooth would animate from 0 after replaceChildren
+  const prevBeh = p.style.scrollBehavior;
+  p.style.scrollBehavior = 'auto';
   p.replaceChildren(...nodes.flat(Infinity).filter(Boolean));
   p.scrollTop = top;
+  requestAnimationFrame(() => {
+    p.scrollTop = top;
+    p.style.scrollBehavior = prevBeh;
+  });
   p.classList.add('seen');
 }
 const empty = (text, ic) => h('div.empty', ic ? h('div.empty-ic', ic) : null, text);
@@ -346,38 +353,59 @@ refreshers.play = async function renderPlay() {
     onChallenge: (u) => challenge(u.id),
     refreshHome: () => { playSnap = ''; refresh('play'); },
   });
+  // Stable list host so Live/Friends pills swap content without remounting the page (keeps scroll).
+  const peopleListHost = h('div.home-people-list');
+  const paintPeopleList = (tab) => {
+    if (tab === 'friends') {
+      peopleListHost.replaceChildren(friends.length
+        ? h('div.list.home-online', ...friends.map((f) => {
+          const row = { ...f, friend: true, online: !!f.online, discoverable: true };
+          return h('div.row',
+            h('button.plain', { type: 'button', onclick: () => openProfile(f.id) },
+              avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online, round: true })),
+            h('button.grow.plain', { type: 'button', onclick: () => openProfile(f.id) },
+              h('div.t', h('span.name', f.name), f.premium ? premIc() : null, h('span.star', ' ★')),
+              h('div.s', f.invited ? t('challenge_sent') : (f.inGame ? t('in_game') : (f.online ? t('online') : t('offline'))))),
+            challengeAction(row));
+        }))
+        : empty(t('no_friends'), '👋'));
+    } else {
+      peopleListHost.replaceChildren(onlinePlayers.length
+        ? h('div.list.home-online', ...onlinePlayers.map((u) => h('div.row',
+          h('button.plain', { type: 'button', onclick: () => openProfile(u.id) },
+            avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true })),
+          h('button.grow.plain', { type: 'button', onclick: () => openProfile(u.id) },
+            h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
+            h('div.s', u.invited ? t('challenge_sent') : (u.inGame ? t('in_game') : t('online')))),
+          challengeAction(u))))
+        : empty(t('nobody'), '🛰️'));
+    }
+  };
+  const syncPeopleSnap = (tab) => {
+    if (!playSnap) return;
+    try {
+      const o = JSON.parse(playSnap);
+      o.tab = tab;
+      playSnap = JSON.stringify(o);
+    } catch { /* next poll remounts */ }
+  };
   const peopleBar = pillBar(
     [['live', t('home_tab_live')], ['friends', t('home_tab_friends')]],
     homePeopleTab,
-    (v) => { homePeopleTab = v; playSnap = ''; refresh('play'); },
+    (v) => {
+      if (v === homePeopleTab) return;
+      homePeopleTab = v;
+      paintPeopleList(v);
+      syncPeopleSnap(v);
+    },
     { className: 'pill-bar home-people-bar' },
   );
-  const liveList = onlinePlayers.length
-    ? h('div.list.home-online', ...onlinePlayers.map((u) => h('div.row',
-      h('button.plain', { type: 'button', onclick: () => openProfile(u.id) },
-        avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true })),
-      h('button.grow.plain', { type: 'button', onclick: () => openProfile(u.id) },
-        h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
-        h('div.s', u.invited ? t('challenge_sent') : (u.inGame ? t('in_game') : t('online')))),
-      challengeAction(u))))
-    : empty(t('nobody'), '🛰️');
-  const friendsList = friends.length
-    ? h('div.list.home-online', ...friends.map((f) => {
-      const row = { ...f, friend: true, online: !!f.online, discoverable: true };
-      return h('div.row',
-        h('button.plain', { type: 'button', onclick: () => openProfile(f.id) },
-          avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online, round: true })),
-        h('button.grow.plain', { type: 'button', onclick: () => openProfile(f.id) },
-          h('div.t', h('span.name', f.name), f.premium ? premIc() : null, h('span.star', ' ★')),
-          h('div.s', f.invited ? t('challenge_sent') : (f.inGame ? t('in_game') : (f.online ? t('online') : t('offline'))))),
-        challengeAction(row));
-    }))
-    : empty(t('no_friends'), '👋');
+  paintPeopleList(homePeopleTab);
   const onlineBlock = [
     h('div.h2.online-heading', t('online_players'),
       h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
     peopleBar,
-    homePeopleTab === 'friends' ? friendsList : liveList,
+    peopleListHost,
   ];
   const puzzleFallback = banner('violet', '🧩', t('home_puzzle'), t('puzzles_sub'), () => go(TABS.indexOf('puzzles'), true));
   const nodes = [
