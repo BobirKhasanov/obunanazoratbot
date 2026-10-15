@@ -214,6 +214,17 @@ const cleanText = (v, max, code, required = false) => {
   if (required && !s) throw bad('Required', code);
   return s;
 };
+/** `@name` → username search; otherwise first/last name (and digits → Telegram id for admin). */
+function parseUserSearchQuery(raw) {
+  const s = String(raw ?? '').trim().slice(0, 40);
+  if (!s) return { mode: 'empty', q: '' };
+  if (s.includes('@')) {
+    const q = s.replace(/@+/g, '').trim().toLowerCase();
+    if (!q) return { mode: 'empty', q: '' };
+    return { mode: 'username', q };
+  }
+  return { mode: 'name', q: s.toLowerCase() };
+}
 const gameId = () => crypto.randomBytes(6).toString('base64url'); // 8 chars, safe inside a deep link
 
 // ---------- users ----------
@@ -2230,21 +2241,35 @@ api.get('/messages/unread-count', wrap(async (req, res) => {
 }));
 
 api.get('/messages/search', wrap(async (req, res) => {
-  const q = cleanText(req.query && req.query.q, 40, 'bad_request', true).toLowerCase();
+  const raw = cleanText(req.query && req.query.q, 40, 'bad_request', true);
+  const { mode, q } = parseUserSearchQuery(raw);
+  if (!q) throw bad('Enter a name or @username', 'bad_request');
   const uid = req.user.id;
-  // Search any player (not friends-only); starting a chat still requires friendship
-  const rows = await db.prepare(`
-    SELECT u.id, u.first_name, u.last_name, u.username, u.premium, u.premium_until, u.avatar_key
-    FROM users u
-    WHERE u.id <> ? AND u.blocked = 0
-      AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.user_id = ? AND b.blocked_id = u.id) OR (b.user_id = u.id AND b.blocked_id = ?))
-      AND (
-        lower(coalesce(u.first_name,'')) LIKE ? OR lower(coalesce(u.last_name,'')) LIKE ?
-        OR lower(coalesce(u.username,'')) LIKE ?
-      )
-    ORDER BY u.first_name ASC
-    LIMIT 20
-  `).all(uid, uid, uid, `%${q}%`, `%${q}%`, `%${q}%`);
+  const like = `%${q}%`;
+  // @… → username only; otherwise first/last name (not username)
+  const rows = mode === 'username'
+    ? await db.prepare(`
+        SELECT u.id, u.first_name, u.last_name, u.username, u.premium, u.premium_until, u.avatar_key
+        FROM users u
+        WHERE u.id <> ? AND u.blocked = 0
+          AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.user_id = ? AND b.blocked_id = u.id) OR (b.user_id = u.id AND b.blocked_id = ?))
+          AND lower(coalesce(u.username,'')) LIKE ?
+        ORDER BY u.first_name ASC
+        LIMIT 20
+      `).all(uid, uid, uid, like)
+    : await db.prepare(`
+        SELECT u.id, u.first_name, u.last_name, u.username, u.premium, u.premium_until, u.avatar_key
+        FROM users u
+        WHERE u.id <> ? AND u.blocked = 0
+          AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.user_id = ? AND b.blocked_id = u.id) OR (b.user_id = u.id AND b.blocked_id = ?))
+          AND (
+            lower(coalesce(u.first_name,'')) LIKE ?
+            OR lower(coalesce(u.last_name,'')) LIKE ?
+            OR lower(trim(both FROM coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,''))) LIKE ?
+          )
+        ORDER BY u.first_name ASC
+        LIMIT 20
+      `).all(uid, uid, uid, like, like, like);
   res.json({
     users: rows.map((u) => ({
       id: u.id, name: displayName(u), username: u.username || null, premium: isPremiumActive(u),
@@ -2677,16 +2702,39 @@ admin.get('/live', wrap(async (req, res) => {
 }));
 
 admin.get('/users', wrap(async (req, res) => {
-  const q = String(req.query.q || '').trim().slice(0, 40);
-  const like = `%${q.replace(/[%_]/g, '')}%`;
-  const rows = await db.prepare(`
-    SELECT u.id, u.first_name, u.username, u.lang, u.blocked, u.bot_blocked, u.created_at, u.last_seen,
+  const raw = String(req.query.q || '').trim().slice(0, 40);
+  const { mode, q } = parseUserSearchQuery(raw);
+  // Escape LIKE wildcards; keep `_` in usernames (e.g. alice_chess)
+  const like = q ? `%${q.replace(/[%\\]/g, (ch) => `\\${ch}`)}%` : '';
+  const baseSelect = `
+    SELECT u.id, u.first_name, u.last_name, u.username, u.lang, u.blocked, u.bot_blocked, u.created_at, u.last_seen,
       u.present_until, u.diamonds, u.premium, u.premium_until,
       (SELECT COUNT(*) FROM games g WHERE g.status = 'finished' AND (g.white_id = u.id OR g.black_id = u.id)) games
-    FROM users u
-    WHERE ? = '' OR u.first_name ILIKE ? OR u.username ILIKE ? OR CAST(u.id AS TEXT) LIKE ?
-    ORDER BY u.last_seen DESC LIMIT 100
-  `).all(q, like, like, like);
+    FROM users u`;
+  let rows;
+  if (!q) {
+    rows = await db.prepare(`${baseSelect} ORDER BY u.last_seen DESC LIMIT 100`).all();
+  } else if (mode === 'username') {
+    rows = await db.prepare(`
+      ${baseSelect}
+      WHERE lower(coalesce(u.username,'')) LIKE ? ESCAPE '\\'
+      ORDER BY u.last_seen DESC LIMIT 100
+    `).all(like);
+  } else if (/^\d+$/.test(q)) {
+    // Digits without @: Telegram id (admin convenience)
+    rows = await db.prepare(`
+      ${baseSelect}
+      WHERE CAST(u.id AS TEXT) LIKE ? ESCAPE '\\'
+      ORDER BY u.last_seen DESC LIMIT 100
+    `).all(like);
+  } else {
+    rows = await db.prepare(`
+      ${baseSelect}
+      WHERE u.first_name ILIKE ? ESCAPE '\\' OR u.last_name ILIKE ? ESCAPE '\\'
+         OR trim(both FROM coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,'')) ILIKE ? ESCAPE '\\'
+      ORDER BY u.last_seen DESC LIMIT 100
+    `).all(like, like, like);
+  }
   res.json({
     users: rows.map((u) => ({
       ...u,

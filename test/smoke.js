@@ -17,12 +17,12 @@ const ADMIN_ID = 1895441858;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const USERS = {
-  A: { id: 1001, first_name: 'Alice', language_code: 'ru' },
-  B: { id: 1002, first_name: 'Bob' },
-  C: { id: 1003, first_name: 'Cara' },
-  D: { id: 1004, first_name: 'Dan' },
-  E: { id: 1005, first_name: 'Eve' },
-  ADMIN: { id: ADMIN_ID, first_name: 'Boss' },
+  A: { id: 1001, first_name: 'Alice', last_name: 'Anderson', username: 'alice_chess', language_code: 'ru' },
+  B: { id: 1002, first_name: 'Bob', last_name: 'Baker', username: 'bob_chess' },
+  C: { id: 1003, first_name: 'Cara', last_name: 'Cole', username: 'cara_user' },
+  D: { id: 1004, first_name: 'Dan', last_name: 'Diaz', username: 'dan_user' },
+  E: { id: 1005, first_name: 'Eve', last_name: 'Ellis', username: 'eve_user' },
+  ADMIN: { id: ADMIN_ID, first_name: 'Boss', last_name: 'Admin', username: 'boss_admin' },
 };
 const init = (k) => fake.sign(USERS[k], TOKEN);
 
@@ -173,6 +173,13 @@ async function playMoves(game, players, moves, startPly = 0) {
       // Search finds any player (not friends-only); opening chat still requires friendship
       const found = await ok('B', 'GET', `/messages/search?q=${encodeURIComponent('Car')}`);
       assert.ok((found.users || []).some((u) => u.id === USERS.C.id), 'search includes non-friends');
+      // @ → username; without @ → first/last name only
+      const byUser = await ok('B', 'GET', `/messages/search?q=${encodeURIComponent('@cara_user')}`);
+      assert.ok((byUser.users || []).some((u) => u.id === USERS.C.id), '@username finds user');
+      const byLast = await ok('B', 'GET', `/messages/search?q=${encodeURIComponent('Cole')}`);
+      assert.ok((byLast.users || []).some((u) => u.id === USERS.C.id), 'last name search');
+      const noAt = await ok('B', 'GET', `/messages/search?q=${encodeURIComponent('cara_user')}`);
+      assert.ok(!(noAt.users || []).some((u) => u.id === USERS.C.id), 'username without @ does not match');
       await err('B', 'POST', `/messages/threads/${th.id}`, { body: '' }, 400, 'text');
       const meta = (await ok('A', 'GET', '/me')).meta;
       assert.strictEqual(meta.PREMIUM_PRICE, 200);
@@ -838,7 +845,7 @@ async function playMoves(game, players, moves, startPly = 0) {
       const g = (await ok('E', 'POST', '/games')).game;
       assert.strictEqual(g.status, 'open');
       const preview = (await ok('A', 'GET', `/games/${g.id}`)).game;
-      assert.deepStrictEqual([preview.joinable, preview.opponent.name], [true, 'Eve']);
+      assert.deepStrictEqual([preview.joinable, preview.opponent.name], [true, 'Eve Ellis']);
       assert.ok(!(await ok('E', 'GET', '/friends')).friends.some((f) => f.id === USERS.A.id) || true);
       const j = (await ok('D', 'POST', `/games/${g.id}/join`)).game;
       assert.strictEqual(j.status, 'active');
@@ -886,12 +893,12 @@ async function playMoves(game, players, moves, startPly = 0) {
       const lobby = await ok('D', 'GET', '/lobby');
       assert.ok(lobby.online.every((o) => 'avatarKey' in o), 'lobby online rows include avatarKey');
       const names = lobby.online.map((o) => o.name);
-      assert.ok(names.includes('Alice') && names.includes('Cara'), `online: ${names}`);
-      assert.ok(!names.includes('Dan'), 'not listed to yourself');
-      assert.ok(names.includes('Bob'), 'opted-out players still appear in the live list');
-      assert.strictEqual(lobby.online.find((o) => o.name === 'Bob').discoverable, false);
+      assert.ok(names.includes('Alice Anderson') && names.includes('Cara Cole'), `online: ${names}`);
+      assert.ok(!names.some((n) => /^Dan\b/.test(n)), 'not listed to yourself');
+      assert.ok(names.includes('Bob Baker'), 'opted-out players still appear in the live list');
+      assert.strictEqual(lobby.online.find((o) => o.name === 'Bob Baker').discoverable, false);
       assert.ok(lobby.onlineCount >= 4);
-      const asAlice = (await ok('A', 'GET', '/lobby')).online.find((o) => o.name === 'Bob');
+      const asAlice = (await ok('A', 'GET', '/lobby')).online.find((o) => o.name === 'Bob Baker');
       assert.ok(asAlice && asAlice.friend, 'friends are marked in the list');
       await err('D', 'POST', '/games', { opponentId: USERS.B.id }, 404, 'user_unavailable'); // hidden players cannot be challenged
     });
@@ -935,6 +942,12 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok(st.byLang.some((l) => l.lang === 'ru'));
       const found = await ok('ADMIN', 'GET', '/admin/users?q=ali');
       assert.strictEqual(found.users.length, 1);
+      const byAt = await ok('ADMIN', 'GET', `/admin/users?q=${encodeURIComponent('@alice_chess')}`);
+      assert.ok(byAt.users.some((u) => u.id === USERS.A.id), 'admin @username search');
+      const bySurname = await ok('ADMIN', 'GET', '/admin/users?q=Anderson');
+      assert.ok(bySurname.users.some((u) => u.id === USERS.A.id), 'admin last name search');
+      const bareUser = await ok('ADMIN', 'GET', '/admin/users?q=alice_chess');
+      assert.ok(!bareUser.users.some((u) => u.id === USERS.A.id), 'admin username without @ does not match');
       await err('ADMIN', 'POST', `/admin/users/${ADMIN_ID}/block`, { blocked: true }, 400, 'admin_block');
       await ok('ADMIN', 'POST', `/admin/users/${USERS.E.id}/block`, { blocked: true });
       await err('E', 'GET', '/me', null, 403, 'blocked');
