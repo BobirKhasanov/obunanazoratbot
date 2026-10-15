@@ -191,7 +191,10 @@ assert.ok(entry.includes("import('./app.js?v=") && app.includes('export async fu
 assert.ok(html.includes('data-asset=') && entry.includes('assetV'), 'HTML data-asset drives module cache bust');
 assert.ok(entry.includes('chess-syntax-reload') && entry.includes('SyntaxError'), 'syntax load errors trigger one reload');
 assert.ok(read('public/js/ui.js').includes('timeoutMs') && read('public/js/ui.js').includes('AbortController'), 'api supports request timeout');
-assert.ok(html.includes('Doska ochilmoqda') && html.includes('boot-ring') && html.includes('boot-spin'), 'animated boot splash copy');
+assert.ok(html.includes("O'yin yuklanmoqda") && html.includes('boot-orbit') && html.includes('boot-bar'), 'localized boot splash + new animation');
+assert.ok(html.includes('/api/public/boot-splash') && html.includes('chess_lang'), 'splash loads admin copy in selected language');
+assert.ok(admin.includes('openBootSplash') && admin.includes('/admin/boot-splash'), 'admin can edit boot splash');
+assert.ok(css.includes('boot-admin-preview') && css.includes('boot-admin-stage'), 'admin splash preview styles');
 assert.ok(html.includes('failBoot') && html.includes('Juda uzoq kutildi'), 'boot watchdog if splash stalls');
 assert.ok(html.includes('forceLeaveSplash'), 'inline force-leave splash if modules stall');
 assert.ok(!html.includes('rel="modulepreload"'), 'no inbox modulepreload (was false-triggering boot fail UI)');

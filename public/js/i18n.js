@@ -407,7 +407,11 @@ Object.assign(uzc, {
 const DICT = { en, ru, uz, uzc };
 let current = 'en';
 
-export function setLang(l) { current = DICT[l] ? l : 'en'; document.documentElement.lang = current === 'uzc' ? 'uz-Cyrl' : current === 'uz' ? 'uz' : current; }
+export function setLang(l) {
+  current = DICT[l] ? l : 'en';
+  document.documentElement.lang = current === 'uzc' ? 'uz-Cyrl' : current === 'uz' ? 'uz' : current;
+  try { localStorage.setItem('chess_lang', current); } catch { /* ignore */ }
+}
 export const getLang = () => current;
 
 /** t('online_now', {n: 3}) -> "3 online" in the current language */
@@ -825,6 +829,14 @@ Object.assign(en, {
   admin_notif_title_ph: 'Title', admin_notif_body_ph: 'Write the notification…',
   admin_notif_media: 'Image (optional)', admin_notif_media_ok: 'Image attached',
   admin_notif_send: 'Send to everyone', admin_notif_sent: 'Sent to {n} players',
+  boot_title_section: 'Loading screen',
+  boot_menu_sub: 'Splash text and animation while the app opens',
+  boot_sub: 'Shown before the Mini App loads. Edit each language. Title defaults to “Loading game”.',
+  boot_title: 'Title', boot_subtitle: 'Subtitle (optional)',
+  boot_title_ph: 'Loading game', boot_sub_ph: 'Please wait…',
+  boot_animation: 'Animation',
+  boot_anim_orbit: 'Orbit', boot_anim_pulse: 'Pulse', boot_anim_bars: 'Bar',
+  boot_saved: 'Loading screen saved',
 });
 Object.assign(ru, {
   profile_edit: 'Изменить',
@@ -874,6 +886,14 @@ Object.assign(ru, {
   admin_notif_title_ph: 'Заголовок', admin_notif_body_ph: 'Текст уведомления…',
   admin_notif_media: 'Картинка (необязательно)', admin_notif_media_ok: 'Картинка прикреплена',
   admin_notif_send: 'Отправить всем', admin_notif_sent: 'Отправлено {n} игрокам',
+  boot_title_section: 'Экран загрузки',
+  boot_menu_sub: 'Текст и анимация при открытии приложения',
+  boot_sub: 'Показывается до загрузки Mini App. Редактируйте каждый язык. Заголовок по умолчанию — «Игра загружается».',
+  boot_title: 'Заголовок', boot_subtitle: 'Подзаголовок (необязательно)',
+  boot_title_ph: 'Игра загружается', boot_sub_ph: 'Подождите…',
+  boot_animation: 'Анимация',
+  boot_anim_orbit: 'Орбита', boot_anim_pulse: 'Пульс', boot_anim_bars: 'Полоса',
+  boot_saved: 'Экран загрузки сохранён',
 });
 Object.assign(uz, {
   profile_edit: 'Tahrirlash',
@@ -923,6 +943,14 @@ Object.assign(uz, {
   admin_notif_title_ph: 'Sarlavha', admin_notif_body_ph: 'Bildirishnoma matni…',
   admin_notif_media: 'Rasm (ixtiyoriy)', admin_notif_media_ok: 'Rasm biriktirildi',
   admin_notif_send: 'Hammaga yuborish', admin_notif_sent: '{n} o‘yinchiga yuborildi',
+  boot_title_section: 'Yuklash ekrani',
+  boot_menu_sub: 'Ilova ochilgandagi matn va animatsiya',
+  boot_sub: 'Mini App yuklanishidan oldin ko‘rinadi. Har bir tilni alohida tahrirlang. Sarlavha: «O‘yin yuklanmoqda».',
+  boot_title: 'Sarlavha', boot_subtitle: 'Pastki matn (ixtiyoriy)',
+  boot_title_ph: "O'yin yuklanmoqda", boot_sub_ph: 'Iltimos kuting…',
+  boot_animation: 'Animatsiya',
+  boot_anim_orbit: 'Orbit', boot_anim_pulse: 'Puls', boot_anim_bars: 'Chiziq',
+  boot_saved: 'Yuklash ekrani saqlandi',
 });
 Object.assign(uzc, {
   profile_edit: 'Таҳрирлаш',
@@ -972,6 +1000,14 @@ Object.assign(uzc, {
   admin_notif_title_ph: 'Сарлавҳа', admin_notif_body_ph: 'Билдиришнома матни…',
   admin_notif_media: 'Расм (ихтиёрий)', admin_notif_media_ok: 'Расм бириктирилди',
   admin_notif_send: 'Ҳаммага юбориш', admin_notif_sent: '{n} ўйинчига юборилди',
+  boot_title_section: 'Юклаш экрани',
+  boot_menu_sub: 'Илова очилгандаги матн ва анимация',
+  boot_sub: 'Mini App юкланишидан олдин кўринади. Ҳар бир тилни алоҳида таҳрирланг. Сарлавҳа: «Ўйин юкланмоқда».',
+  boot_title: 'Сарлавҳа', boot_subtitle: 'Пастки матн (ихтиёрий)',
+  boot_title_ph: 'Ўйин юкланмоқда', boot_sub_ph: 'Илтимос кутинг…',
+  boot_animation: 'Анимация',
+  boot_anim_orbit: 'Орбита', boot_anim_pulse: 'Пулс', boot_anim_bars: 'Чизиқ',
+  boot_saved: 'Юклаш экрани сақланди',
 });
 
 Object.assign(en, {

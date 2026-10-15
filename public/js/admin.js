@@ -1011,6 +1011,100 @@ export function openAdmin(onClose) {
     ];
   });
 
+  // ----- boot splash (Mini App loading screen) -----
+  const bootHost = h('div');
+  let bootCfg = null;
+  let bootLang = 'uz';
+  const bootAnims = ['orbit', 'pulse', 'bars'];
+  const bootTitle = h('input.input', {
+    maxlength: 80, placeholder: t('boot_title_ph'),
+    oninput: (e) => { if (bootCfg && bootCfg[bootLang]) bootCfg[bootLang].title = e.target.value; drawBootPreview(); },
+  });
+  const bootSub = h('input.input', {
+    maxlength: 120, placeholder: t('boot_sub_ph'),
+    oninput: (e) => { if (bootCfg && bootCfg[bootLang]) bootCfg[bootLang].subtitle = e.target.value; drawBootPreview(); },
+  });
+  const bootPreview = h('div.boot-admin-preview');
+
+  function drawBootPreview() {
+    if (!bootCfg) return;
+    const entry = bootCfg[bootLang] || { title: '', subtitle: '' };
+    const anim = bootCfg.animation || 'orbit';
+    bootPreview.replaceChildren(
+      h('div.boot-admin-stage', { 'data-anim': anim },
+        h('div.boot-mark',
+          h('div.boot-glow'),
+          anim === 'orbit' ? h('div.boot-orbit', h('i'), h('i'), h('i')) : null,
+          h('div.boot-ic', '♟')),
+        h('p.boot-label', entry.title || '…'),
+        entry.subtitle ? h('p.boot-sub', entry.subtitle) : null,
+        h('div.boot-bar', h('i'))),
+    );
+  }
+
+  function applyBootLang(code) {
+    bootLang = code;
+    const entry = (bootCfg && bootCfg[code]) || { title: '', subtitle: '' };
+    bootTitle.value = entry.title || '';
+    bootSub.value = entry.subtitle || '';
+    drawBootPreview();
+  }
+
+  async function loadBootSplash() {
+    try {
+      const r = await api('GET', '/admin/boot-splash');
+      bootCfg = r.splash || {};
+      applyBootLang(bootLang);
+    } catch (e) { fail(e); }
+  }
+
+  function renderBootHost() {
+    if (!bootCfg) bootCfg = { animation: 'orbit' };
+    const langSeg = seg(LANGS.map((l) => [l, LANG_NAMES[l].slice(0, 3)]), bootLang, (v) => { applyBootLang(v); });
+    const animSeg = seg(
+      bootAnims.map((a) => [a, t('boot_anim_' + a)]),
+      bootCfg.animation || 'orbit',
+      (v) => { bootCfg.animation = v; drawBootPreview(); },
+    );
+    const saveBtn = h('button.btn', {
+      onclick: async () => {
+        try {
+          if (!bootCfg[bootLang]) bootCfg[bootLang] = { title: '', subtitle: '' };
+          bootCfg[bootLang].title = bootTitle.value;
+          bootCfg[bootLang].subtitle = bootSub.value;
+          const r = await api('PATCH', '/admin/boot-splash', {
+            lang: bootLang,
+            title: bootTitle.value,
+            subtitle: bootSub.value,
+            animation: bootCfg.animation,
+          });
+          bootCfg = r.splash || bootCfg;
+          toast(t('boot_saved')); haptic('success');
+          drawBootPreview();
+        } catch (e) { fail(e); }
+      },
+    }, icon('check', 18), t('save'));
+    bootHost.replaceChildren(
+      h('p.muted', t('boot_sub')),
+      h('div.label', t('language')), langSeg,
+      h('div.label', t('boot_title')), bootTitle,
+      h('div.label', t('boot_subtitle')), bootSub,
+      h('div.label', t('boot_animation')), animSeg,
+      h('div.label', t('preview')), bootPreview,
+      saveBtn,
+    );
+    drawBootPreview();
+  }
+
+  const openBootSplash = () => openScreen((close) => {
+    loadBootSplash().then(() => renderBootHost());
+    renderBootHost();
+    return [
+      ...subTop(t('boot_title_section'), close),
+      bootHost,
+    ];
+  });
+
   const openStyle = () => openScreen((close) => {
     drawStyle();
     return [
@@ -1173,6 +1267,7 @@ export function openAdmin(onClose) {
     menuCard(
       menuRow({ ic: 'send', title: t('composer'), sub: t('admin_sec_broadcast_sub'), onClick: openBroadcast }),
       menuRow({ ic: 'play', title: t('welcome_title'), sub: t('welcome_menu_sub'), onClick: openWelcome }),
+      menuRow({ ic: 'cpu', title: t('boot_title_section'), sub: t('boot_menu_sub'), onClick: openBootSplash }),
       menuRow({ ic: 'bell', title: t('admin_notif'), sub: t('admin_notif_menu_sub'), onClick: openInAppNotif }),
       menuRow({ ic: 'image', title: t('admin_banner'), sub: t('admin_banner_menu_sub'), onClick: openBanner }),
       menuRow({ ic: 'gear', title: t('admin_style'), sub: t('admin_style_sub'), onClick: openStyle }),

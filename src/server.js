@@ -27,6 +27,12 @@ const {
   normalizeConfig, generateMedalSvg, titleFor, DEFAULT_CONFIG, FONT_KEYS, PIECE_KEYS,
 } = require('./medals');
 const { loadWelcomeConfig, saveWelcomeLang, sendWelcome } = require('./welcome');
+const {
+  ANIMATIONS: BOOT_ANIMS,
+  loadBootSplashConfig,
+  saveBootSplashLang,
+  saveBootSplashConfig,
+} = require('./boot-splash');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
@@ -150,6 +156,13 @@ async function profileBannerMeta() {
       : '/img/profile-banner.png',
   };
 }
+
+// Boot splash copy (admin-editable). Public — splash paints before Telegram auth.
+app.get('/api/public/boot-splash', wrap(async (req, res) => {
+  const splash = await loadBootSplashConfig();
+  res.set('Cache-Control', 'public, max-age=30, must-revalidate');
+  res.json({ splash, langs: LANGS, animations: BOOT_ANIMS });
+}));
 
 // Profile header banner (admin-replaceable). No auth so <img> / CSS can load it.
 app.get('/api/public/profile-banner', wrap(async (req, res) => {
@@ -2620,6 +2633,27 @@ admin.patch('/profile-banner', wrap(async (req, res) => {
   if (row.kind === 'video') throw bad('Use JPG, PNG or GIF', 'media_type');
   await setSetting('profile_banner_media_id', id);
   res.json(await profileBannerMeta());
+}));
+
+admin.get('/boot-splash', wrap(async (req, res) => {
+  const splash = await loadBootSplashConfig();
+  res.json({ splash, langs: LANGS, animations: BOOT_ANIMS });
+}));
+
+admin.patch('/boot-splash', wrap(async (req, res) => {
+  const b = req.body || {};
+  if (b.splash && typeof b.splash === 'object') {
+    const splash = await saveBootSplashConfig(b.splash);
+    return res.json({ splash });
+  }
+  const lang = LANGS.includes(b.lang) ? b.lang : null;
+  if (!lang) throw bad('Pick a language', 'bad_request');
+  const splash = await saveBootSplashLang(lang, {
+    title: b.title,
+    subtitle: b.subtitle,
+    animation: b.animation,
+  });
+  res.json({ splash });
 }));
 
 admin.get('/welcome', wrap(async (req, res) => {

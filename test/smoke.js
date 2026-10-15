@@ -435,6 +435,34 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok(meB.eloBullet > meA.eloBullet);
     });
 
+    await step('boot splash public + admin edit', async () => {
+      const pub = await fetch(`${BASE}/api/public/boot-splash`);
+      assert.strictEqual(pub.status, 200);
+      const pubBody = await pub.json();
+      assert.ok(pubBody.splash && pubBody.splash.uz);
+      assert.strictEqual(pubBody.splash.uz.title, "O'yin yuklanmoqda");
+      assert.ok((pubBody.animations || []).includes('orbit'));
+      const got = await ok('ADMIN', 'GET', '/admin/boot-splash');
+      assert.ok(got.splash.animation);
+      const saved = await ok('ADMIN', 'PATCH', '/admin/boot-splash', {
+        lang: 'uz',
+        title: "O'yin yuklanmoqda",
+        subtitle: 'Test subtitle',
+        animation: 'pulse',
+      });
+      assert.strictEqual(saved.splash.animation, 'pulse');
+      assert.strictEqual(saved.splash.uz.subtitle, 'Test subtitle');
+      const pub2 = await (await fetch(`${BASE}/api/public/boot-splash`)).json();
+      assert.strictEqual(pub2.splash.animation, 'pulse');
+      assert.strictEqual(pub2.splash.uz.subtitle, 'Test subtitle');
+      await ok('ADMIN', 'PATCH', '/admin/boot-splash', {
+        lang: 'uz',
+        title: "O'yin yuklanmoqda",
+        subtitle: 'Iltimos kuting…',
+        animation: 'orbit',
+      });
+    });
+
     await step('medal generator: admin preview, award, avatar select', async () => {
       const cfg = await ok('ADMIN', 'GET', '/admin/medals');
       assert.ok(cfg.config && cfg.config.botHandle);

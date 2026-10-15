@@ -1,77 +1,96 @@
 <!doctype html>
-<html lang="en" data-theme="dark" data-asset="20261015u">
+<html lang="en" data-theme="dark" data-asset="20261015v">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#111827">
   <title>Chess</title>
-  <link rel="stylesheet" href="/styles.css?v=20261015u">
+  <link rel="stylesheet" href="/styles.css?v=20261015v">
   <style>
     /* Inline boot splash — always visible until JS reveals gate/app (never a blank black WebView) */
     html, body { margin: 0; min-height: 100%; min-height: 100dvh; background: radial-gradient(ellipse at 50% 42%, #1a2740 0%, #111827 62%, #0b1220 100%); color: var(--text, #fff); }
     #boot {
       position: fixed; inset: 0; z-index: 1000;
-      display: grid; place-content: center; justify-items: center; gap: 18px;
+      display: grid; place-content: center; justify-items: center; gap: 16px;
       background: radial-gradient(ellipse at 50% 42%, #1a2740 0%, #111827 62%, #0b1220 100%);
       color: #e5e7eb; font-family: system-ui, -apple-system, sans-serif;
       padding: 24px;
     }
     #boot[hidden] { display: none !important; }
     #boot .boot-mark {
-      position: relative; width: 88px; height: 88px;
+      position: relative; width: 96px; height: 96px;
       display: grid; place-items: center;
     }
-    #boot .boot-ring {
+    #boot .boot-glow {
+      position: absolute; inset: 8px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(84,164,247,0.35) 0%, transparent 70%);
+      animation: boot-glow 2.2s ease-in-out infinite;
+    }
+    #boot .boot-orbit {
       position: absolute; inset: 0; border-radius: 50%;
-      border: 3px solid rgba(84, 164, 247, 0.18);
-      border-top-color: #54a4f7;
-      border-right-color: rgba(84, 164, 247, 0.55);
-      animation: boot-spin 0.9s linear infinite;
+      animation: boot-orbit 2.4s linear infinite;
     }
-    #boot .boot-ring::after {
-      content: ""; position: absolute; inset: 7px; border-radius: 50%;
-      border: 2px solid transparent;
-      border-bottom-color: rgba(251, 191, 36, 0.7);
-      animation: boot-spin 1.35s linear infinite reverse;
+    #boot .boot-orbit i {
+      position: absolute; top: 2px; left: 50%; width: 8px; height: 8px; margin-left: -4px;
+      border-radius: 50%; background: #54a4f7;
+      box-shadow: 0 0 10px rgba(84,164,247,0.9);
     }
+    #boot .boot-orbit i:nth-child(2) { top: auto; bottom: 2px; background: #fbbf24; box-shadow: 0 0 10px rgba(251,191,36,0.85); }
+    #boot .boot-orbit i:nth-child(3) { top: 50%; left: 2px; margin: -4px 0 0; background: #34d399; box-shadow: 0 0 10px rgba(52,211,153,0.85); }
     #boot .boot-ic {
       position: relative; z-index: 1;
-      width: 58px; height: 58px; border-radius: 18px;
+      width: 62px; height: 62px; border-radius: 20px;
       background: linear-gradient(160deg, #6bb4ff 0%, #3b82f6 48%, #2563eb 100%);
-      display: grid; place-items: center; font-size: 28px; line-height: 1;
-      box-shadow: 0 10px 28px rgba(37, 99, 235, 0.45), 0 1px 0 rgba(255,255,255,0.25) inset;
-      animation: boot-pulse 1.6s ease-in-out infinite;
+      display: grid; place-items: center; font-size: 30px; line-height: 1;
+      box-shadow: 0 12px 32px rgba(37, 99, 235, 0.45), 0 1px 0 rgba(255,255,255,0.25) inset;
+      animation: boot-float 1.8s ease-in-out infinite;
     }
     #boot .boot-label {
-      margin: 0; font-weight: 750; font-size: 16px; letter-spacing: -0.01em;
-      color: #e5e7eb;
+      margin: 4px 0 0; font-weight: 750; font-size: 17px; letter-spacing: -0.01em;
+      color: #e5e7eb; text-align: center;
     }
     #boot .boot-sub {
-      margin: -8px 0 0; font-size: 13px; font-weight: 600; color: #94a3b8;
+      margin: -6px 0 0; font-size: 13px; font-weight: 600; color: #94a3b8; text-align: center;
     }
-    #boot .boot-dots { display: flex; gap: 6px; height: 10px; align-items: center; }
-    #boot .boot-dots i {
-      width: 7px; height: 7px; border-radius: 50%; background: #54a4f7;
-      opacity: 0.35; animation: boot-dot 1.2s ease-in-out infinite;
+    #boot .boot-bar {
+      width: min(180px, 48vw); height: 3px; border-radius: 99px;
+      background: rgba(148, 163, 184, 0.18); overflow: hidden; margin-top: 2px;
     }
-    #boot .boot-dots i:nth-child(2) { animation-delay: 0.15s; }
-    #boot .boot-dots i:nth-child(3) { animation-delay: 0.3s; }
+    #boot .boot-bar > i {
+      display: block; height: 100%; width: 42%; border-radius: 99px;
+      background: linear-gradient(90deg, #54a4f7, #93c5fd, #fbbf24);
+      animation: boot-bar 1.15s ease-in-out infinite;
+    }
+    /* animation variants (admin-selectable) */
+    #boot[data-anim="pulse"] .boot-orbit { display: none; }
+    #boot[data-anim="pulse"] .boot-ic { animation: boot-pulse 1.4s ease-in-out infinite; }
+    #boot[data-anim="bars"] .boot-orbit { display: none; }
+    #boot[data-anim="bars"] .boot-glow { animation: none; opacity: 0.55; }
+    #boot[data-anim="bars"] .boot-ic { animation: none; }
     #boot.boot-fail { cursor: pointer; }
-    #boot.boot-fail .boot-ring { animation: none; border-color: rgba(248, 113, 113, 0.35); border-top-color: #f87171; }
+    #boot.boot-fail .boot-orbit, #boot.boot-fail .boot-glow, #boot.boot-fail .boot-bar > i { animation: none; }
     #boot.boot-fail .boot-ic {
       animation: none;
       background: linear-gradient(160deg, #64748b, #334155);
       box-shadow: none;
     }
-    @keyframes boot-spin { to { transform: rotate(360deg); } }
+    @keyframes boot-orbit { to { transform: rotate(360deg); } }
+    @keyframes boot-float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
     @keyframes boot-pulse {
       0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.05); }
+      50% { transform: scale(1.07); }
     }
-    @keyframes boot-dot {
-      0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
-      40% { opacity: 1; transform: translateY(-3px); }
+    @keyframes boot-glow {
+      0%, 100% { opacity: 0.45; transform: scale(0.92); }
+      50% { opacity: 1; transform: scale(1.08); }
+    }
+    @keyframes boot-bar {
+      0% { transform: translateX(-110%); }
+      100% { transform: translateX(260%); }
     }
   </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -89,14 +108,15 @@
   </script>
 </head>
 <body>
-  <div id="boot" role="status" aria-live="polite">
+  <div id="boot" role="status" aria-live="polite" data-anim="orbit">
     <div class="boot-mark" aria-hidden="true">
-      <div class="boot-ring"></div>
+      <div class="boot-glow"></div>
+      <div class="boot-orbit"><i></i><i></i><i></i></div>
       <div class="boot-ic">♟</div>
     </div>
-    <p class="boot-label">Doska ochilmoqda…</p>
-    <p class="boot-sub">Shaxmat tayyorlanmoqda</p>
-    <div class="boot-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+    <p class="boot-label" id="boot-label">O'yin yuklanmoqda</p>
+    <p class="boot-sub" id="boot-sub">Iltimos kuting…</p>
+    <div class="boot-bar" aria-hidden="true"><i></i></div>
   </div>
 
   <div id="gate" class="gate" hidden>
@@ -128,9 +148,54 @@
     <div id="toast" role="status"></div>
   </main>
   <!-- Light entry: /me + hide splash, then dynamic-import heavy app.js -->
-  <script type="module" src="/js/entry.js?v=20261015u"></script>
+  <script type="module" src="/js/entry.js?v=20261015v"></script>
   <script>
     (function () {
+      var DEFAULTS = {
+        en: { title: 'Loading game', subtitle: 'Please wait…' },
+        ru: { title: 'Игра загружается', subtitle: 'Подождите…' },
+        uz: { title: "O'yin yuklanmoqda", subtitle: 'Iltimos kuting…' },
+        uzc: { title: 'Ўйин юкланмоқда', subtitle: 'Илтимос кутинг…' }
+      };
+      function detectLang() {
+        try {
+          var saved = localStorage.getItem('chess_lang');
+          if (saved && DEFAULTS[saved]) return saved;
+        } catch (e) {}
+        try {
+          var tw = window.Telegram && window.Telegram.WebApp;
+          var code = (tw && tw.initDataUnsafe && tw.initDataUnsafe.user && tw.initDataUnsafe.user.language_code) || '';
+          code = String(code).toLowerCase();
+          if (code.indexOf('ru') === 0) return 'ru';
+          if (code.indexOf('uz') === 0) return 'uz';
+        } catch (e) {}
+        return 'uz';
+      }
+      function applyCopy(entry, anim) {
+        var b = document.getElementById('boot');
+        if (!b || b.classList.contains('boot-fail')) return;
+        var label = document.getElementById('boot-label');
+        var sub = document.getElementById('boot-sub');
+        if (label && entry && entry.title) label.textContent = entry.title;
+        if (sub) {
+          if (entry && entry.subtitle) { sub.textContent = entry.subtitle; sub.hidden = false; }
+          else { sub.textContent = ''; sub.hidden = true; }
+        }
+        if (anim) b.setAttribute('data-anim', anim);
+      }
+      var lang = detectLang();
+      applyCopy(DEFAULTS[lang] || DEFAULTS.uz, 'orbit');
+      try {
+        fetch('/api/public/boot-splash', { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.splash) return;
+            var entry = data.splash[lang] || data.splash.uz || data.splash.en;
+            applyCopy(entry, data.splash.animation || 'orbit');
+          })
+          .catch(function () {});
+      } catch (e) {}
+
       function bootEl() { return document.getElementById('boot'); }
       function bootStillUp() {
         var b = bootEl();
@@ -162,12 +227,11 @@
         if (!b || !bootStillUp() || b.classList.contains('boot-fail')) return;
         b.classList.add('boot-fail');
         b.innerHTML =
-          '<div class="boot-mark" aria-hidden="true"><div class="boot-ring"></div><div class="boot-ic">♟</div></div>' +
+          '<div class="boot-mark" aria-hidden="true"><div class="boot-glow"></div><div class="boot-ic">♟</div></div>' +
           '<p class="boot-label">' + (msg || 'Ilova ochilmadi') + '</p>' +
           '<p class="boot-sub">Qayta urinish uchun bosing</p>';
         b.onclick = function () { location.reload(); };
       }
-      // Never sit on "Doska ochilmoqda…" — leave splash even if ES modules stall
       setTimeout(forceLeaveSplash, 2500);
       setTimeout(forceLeaveSplash, 6000);
       window.addEventListener('error', function (ev) {
