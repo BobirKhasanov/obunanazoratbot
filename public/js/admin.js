@@ -234,7 +234,7 @@ export function openAdmin(onClose) {
   };
   const annMediaBox = h('div.media-box');
   const annFile = h('input', {
-    type: 'file', accept: 'image/jpeg,image/png,image/gif', hidden: true,
+    type: 'file', accept: 'image/jpeg,image/png,image/gif,video/mp4', hidden: true,
     onchange: async (e) => {
       const f = e.target.files[0]; e.target.value = '';
       if (!f) return;
@@ -246,7 +246,7 @@ export function openAdmin(onClose) {
           body: f,
         });
         const d = await res.json();
-        if (!res.ok) throw Object.assign(new Error(d.error), { code: d.code });
+        if (!res.ok) throw Object.assign(new Error(d.error || d.message || 'upload'), { code: d.code });
         annForm.mediaId = d.id;
         annForm.mediaPreview = URL.createObjectURL(f);
         drawAnnMedia(); haptic('success');

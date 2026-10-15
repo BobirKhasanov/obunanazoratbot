@@ -991,6 +991,30 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual((await call('ADMIN', 'POST', '/admin/upload', null, big)).data.code, 'media_big');
     });
 
+    await step('announcements: media-only publish works on home and puzzle boards', async () => {
+      const ends = '2099-12-31T23:59';
+      await err('ADMIN', 'POST', '/admin/announcements', { title: '', body: '', endsAtTashkent: ends }, 400, 'text');
+      for (const board of ['home', 'puzzle']) {
+        const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(48, board === 'home' ? 2 : 3)]);
+        const up = await call('ADMIN', 'POST', '/admin/upload', null, png);
+        assert.strictEqual(up.status, 201, `upload ${board}`);
+        const mid = up.data.id;
+        const created = await ok('ADMIN', 'POST', '/admin/announcements', {
+          board, title: '', body: '', mediaId: mid, endsAtTashkent: ends, linkType: 'none',
+        });
+        assert.ok(created.announcement && created.announcement.id, `${board} created`);
+        assert.strictEqual(created.announcement.mediaId, mid);
+        assert.strictEqual(created.announcement.title, '');
+        assert.strictEqual(created.announcement.body, '');
+        assert.strictEqual(created.announcement.board, board);
+        const pub = await ok('A', 'GET', board === 'home' ? '/announcements' : '/announcements?board=puzzle');
+        assert.ok((pub.announcements || []).some((a) => a.id === created.announcement.id && a.mediaId === mid), `${board} listed`);
+        const img = await fetch(`${BASE}/api/media/${mid}`, { headers: { 'X-Init-Data': init('A') } });
+        assert.strictEqual(img.status, 200, `${board} media bytes`);
+        assert.ok((await img.arrayBuffer()).byteLength > 8);
+      }
+    });
+
     const buttons = [
       { text: '♟ Play now', type: 'app', color: 'success' },
       { text: 'Our channel', type: 'url', url: 'https://t.me/example', color: 'primary' },

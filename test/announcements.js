@@ -70,6 +70,9 @@ assert.ok(!storage.includes('SUPABASE'), 'storage.js must not use Supabase');
 assert.ok(storage.includes('BYTEA') || storage.includes('bytea') || /INSERT INTO media[\s\S]*data/.test(storage), 'media stored as BYTEA');
 assert.ok(!envEx.includes('SUPABASE'), '.env.example has no Supabase vars');
 assert.ok(server.includes('SELECT id, mime, data, size FROM media'), 'media endpoint selects BYTEA columns');
+const storageSrc = read('src/storage.js');
+assert.ok(storageSrc.includes('path') && storageSrc.includes('INSERT INTO media'), 'saveMedia sets legacy path for Neon/Supabase dumps');
+assert.ok(db.includes('ALTER COLUMN path DROP NOT NULL') || db.includes("path TEXT DEFAULT ''"), 'schema relaxes legacy path NOT NULL');
 
 // Pure Tashkent parse/format mirrors (same rules as server)
 function parseTashkentEnd(s) {

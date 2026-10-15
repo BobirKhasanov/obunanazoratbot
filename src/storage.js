@@ -1,10 +1,17 @@
 /**
  * Admin media stored as Postgres BYTEA on Neon.
+ * Legacy Supabase schemas may still have a NOT NULL `path` column — always set it.
  */
 const db = require('./db');
 
+const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'video/mp4': 'mp4' };
+
 /** Always false — kept for API response shape (`storage: false`). */
 const storageEnabled = () => false;
+
+function objectPath(id, mime) {
+  return `${id}.${EXT[mime] || 'bin'}`;
+}
 
 /**
  * Persist uploaded bytes. Returns DB row fields.
@@ -12,10 +19,28 @@ const storageEnabled = () => false;
  */
 async function saveMedia({ id, kind, mime, buf, adminId }) {
   const size = buf.length;
-  await db.prepare(
-    'INSERT INTO media (id, kind, mime, data, size, admin_id) VALUES (?, ?, ?, ?, ?, ?)',
-  ).run(id, kind, mime, buf, size, adminId);
-  return { id, kind, mime, size, storagePath: null };
+  const path = objectPath(id, mime);
+  const attempts = [
+    () => db.prepare(
+      'INSERT INTO media (id, kind, mime, data, size, admin_id, path, storage_path) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)',
+    ).run(id, kind, mime, buf, size, adminId, path),
+    () => db.prepare(
+      'INSERT INTO media (id, kind, mime, data, size, admin_id, path) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(id, kind, mime, buf, size, adminId, path),
+    () => db.prepare(
+      'INSERT INTO media (id, kind, mime, data, size, admin_id) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(id, kind, mime, buf, size, adminId),
+  ];
+  let last;
+  for (const attempt of attempts) {
+    try {
+      await attempt();
+      return { id, kind, mime, size, storagePath: null };
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last;
 }
 
 /** Load media bytes for HTTP serve or Telegram upload (Neon BYTEA → Buffer). */

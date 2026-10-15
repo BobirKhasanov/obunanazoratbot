@@ -3241,8 +3241,12 @@ admin.post('/upload', express.raw({ type: () => true, limit: '26mb' }), wrap(asy
   try {
     await saveMedia({ id, kind, mime, buf, adminId: req.user.id });
   } catch (e) {
+    console.error('[upload]', e && e.message ? e.message : e);
     throw bad(e.message || 'Upload failed', 'media');
   }
+  // Confirm row is readable (BYTEA path) before the client attaches it to an announcement
+  const stored = await db.prepare('SELECT id FROM media WHERE id = ?').get(id);
+  if (!stored) throw bad('Media not found, upload it again', 'media');
   res.status(201).json({ id, kind, size: buf.length, storage: storageEnabled() });
 }));
 

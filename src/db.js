@@ -159,7 +159,8 @@ CREATE TABLE IF NOT EXISTS media (
   size INTEGER NOT NULL,
   file_id TEXT,
   admin_id BIGINT NOT NULL,
-  storage_path TEXT,                        -- legacy; unused (was external object key)
+  path TEXT DEFAULT '',                     -- legacy Supabase column (was NOT NULL)
+  storage_path TEXT,                        -- legacy external object key
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -209,7 +210,14 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS white_ms BIGINT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS black_ms BIGINT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS turn_started_at TIMESTAMPTZ;
 ALTER TABLE media ADD COLUMN IF NOT EXISTS storage_path TEXT;
+ALTER TABLE media ADD COLUMN IF NOT EXISTS path TEXT;
 ALTER TABLE media ALTER COLUMN data DROP NOT NULL;
+-- Restored Supabase dumps keep path NOT NULL; BYTEA-only inserts must not require Storage keys
+DO $$ BEGIN
+  ALTER TABLE media ALTER COLUMN path DROP NOT NULL;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+ALTER TABLE media ALTER COLUMN path SET DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS elo INTEGER NOT NULL DEFAULT 1200;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_bullet INTEGER NOT NULL DEFAULT 1200;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_blitz INTEGER NOT NULL DEFAULT 1200;
