@@ -118,6 +118,11 @@ assert.ok(playflow.includes('preferredColor') && playflow.includes('TIME_GROUPS'
 assert.ok(playflow.includes('round.back') && playflow.includes('searching'), 'matchmaking keeps back button');
 assert.ok(app.includes('chess-game-active') && playflow.includes('chess-game-active'), 'wait screens mark joined before cancel');
 assert.ok(read('public/js/ui.js').includes("k === 'value'") && read('public/js/ui.js').includes('el.value'), 'h() sets input/textarea .value');
+assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a game destroys Board window listeners');
+assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
+assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
+assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
+assert.ok(/data-asset="20261015ac"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261015ac'), 'HTML data-asset matches entry cache bust');
 assert.ok(read('public/js/live.js').includes('openLiveTournaments') && playflow.includes('openLiveTournaments'), 'tournaments menu opens Halqaro');
 assert.ok(!playflow.includes('variant_960') && !playflow.includes('Chess960'), 'Chess960 stub removed from play flow');
 assert.ok(playflow.includes('search_elo_window') || playflow.includes('eloDelta'), 'search UI shows expanding Elo window');

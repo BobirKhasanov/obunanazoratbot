@@ -1,7 +1,7 @@
 // Profile hub: sectioned menu + slide-in subpages (friends, premium, settings, …).
 import { h, icon, haptic, toast, api, fail, avBlock, premIc, shareUrl, confirmSheet, toggle, tg, sheet, getInitData, ApiError } from './ui.js';
 import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
-import { openScreen } from './screen.js';
+import { openScreen, closeScreen } from './screen.js';
 import { openAdmin } from './admin.js';
 import { openUserProfile } from './userprofile.js';
 import { openChatWithUser } from './inbox.js';
@@ -117,6 +117,8 @@ export function renderProfilePage(ctx) {
   // Deep-link from announcement carousel → profile subpages
   const onProfileOpen = (e) => {
     const page = e.detail;
+    // Drop any open subpage first so deep-links do not stack (friends → premium)
+    try { closeScreen(true); } catch { /* ignore */ }
     if (page === 'premium') openPremium();
     else if (page === 'diamonds' || page === 'gems') openDiamonds();
     else if (page === 'friends') openFriends();

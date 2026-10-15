@@ -1303,6 +1303,11 @@ export function openAdmin(onClose) {
     const listBox = h('div.list');
     const mediaBox = h('div.admin-notif-media');
     const actionBtn = h('button.btn');
+    const cancelEditBtn = h('button.btn.ghost', {
+      type: 'button',
+      hidden: true,
+      onclick: () => resetForm(),
+    }, t('cancel'));
     const file = h('input', {
       type: 'file', accept: 'image/jpeg,image/png,image/gif', hidden: true,
       onchange: async (e) => {
@@ -1357,6 +1362,7 @@ export function openAdmin(onClose) {
         icon(editingId ? 'check' : 'bell', 18),
         editingId ? t('admin_notif_save') : t('admin_notif_send'),
       );
+      cancelEditBtn.hidden = !editingId;
       actionBtn.onclick = async () => {
         const ttlTitle = title.value.trim();
         const txt = body.value.trim();
@@ -1458,9 +1464,7 @@ export function openAdmin(onClose) {
       h('div.field', h('label', t('admin_notif_ttl')), ttlSelect),
       h('div.field', h('label', t('admin_notif_media')), mediaBox),
       actionBtn,
-      editingId
-        ? h('button.btn.ghost', { type: 'button', onclick: () => resetForm() }, t('cancel'))
-        : null,
+      cancelEditBtn,
       h('div.h2', t('admin_notif_list')),
       listBox,
     ];

@@ -585,6 +585,8 @@ function closeNow() {
   clearInterval(ctx.poll);
   ctx.token = null; clearTimeout(ctx.emoteT);
   ctx.chat = []; ctx.chatOpen = false;
+  try { if (ctx.board) ctx.board.destroy(); } catch { /* ignore */ }
+  ctx.board = null;
   const root = $('#game');
   root.classList.remove('show'); root.setAttribute('aria-hidden', 'true');
   try { const bb = window.Telegram.WebApp.BackButton; bb.offClick(closeGame); bb.hide(); } catch { /* ignore */ }

@@ -117,6 +117,8 @@ async function main() {
         }
       } catch (err) { /* ignore */ }
     }
+    // showApp() already hid the gate — recover so the user is not stuck on an empty shell
+    showGate(errText(e));
     try {
       const ui = await import('./ui.js?v=' + encodeURIComponent(v));
       ui.fail(e);

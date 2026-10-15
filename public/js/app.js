@@ -576,8 +576,12 @@ refreshers.play = async function renderPlay() {
     const onPage = (page) => {
       if (['play', 'puzzles', 'rankings', 'live', 'profile'].includes(page)) go(TABS.indexOf(page), true);
       else if (page === 'premium' || page === 'friends' || page === 'settings' || page === 'diamonds' || page === 'gems' || page === 'stats') {
-        go(TABS.indexOf('profile'), true);
-        setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: page })), 520);
+        const idx = TABS.indexOf('profile');
+        const already = state.index === idx;
+        go(idx, true);
+        // go() only closeScreens on tab change — clear stack when already on profile
+        if (already) closeScreen(true);
+        setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: page })), already ? 60 : 520);
       }
     };
     const opts = { botUsername: state.meta?.botUsername, userId: state.me?.id, onPage };
