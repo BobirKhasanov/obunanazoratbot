@@ -225,7 +225,10 @@ const touchPresent = db.prepare(`
   WHERE id = ?
 `);
 const clearPresent = db.prepare('UPDATE users SET present_until = NULL WHERE id = ?');
-const nameOf = db.prepare('SELECT first_name, last_name, username, present_until FROM users WHERE id = ?');
+const nameOf = db.prepare(`
+  SELECT first_name, last_name, username, present_until, avatar_key, premium, premium_until
+  FROM users WHERE id = ?
+`);
 
 function displayName(u) {
   if (!u) return 'Player';
@@ -320,7 +323,14 @@ async function ensureAuthedUser(tg) {
 async function person(id) {
   if (!id) return null;
   const u = (await nameOf.get(id)) || {};
-  return { id, name: displayName(u), username: u.username || '', online: isUserOnline(id, u.present_until) };
+  return {
+    id,
+    name: displayName(u),
+    username: u.username || '',
+    online: isUserOnline(id, u.present_until),
+    premium: isPremiumActive(u),
+    avatarKey: u.avatar_key || null,
+  };
 }
 
 /** Active Premium: unexpired premium_until, or legacy premium=1 with no expiry. */
@@ -2800,10 +2810,40 @@ admin.patch('/notifications/:id', wrap(async (req, res) => {
   res.json({ campaign: mapCampaign(await db.prepare('SELECT * FROM notification_campaigns WHERE id = ?').get(id)) });
 }));
 
+/** Delete a broadcast by one recipient copy id (admin inbox → delete for everyone). */
+admin.delete('/notifications/by-copy/:id', wrap(async (req, res) => {
+  const copyId = intParam(req.params.id);
+  const row = await db.prepare('SELECT id, kind, title, body, meta, campaign_id, created_at FROM notifications WHERE id = ?').get(copyId);
+  if (!row || row.kind !== 'admin') throw bad('Not found', 'notfound');
+  let meta = row.meta;
+  if (typeof meta === 'string') {
+    try { meta = JSON.parse(meta); } catch { meta = null; }
+  }
+  const campaignId = row.campaign_id || (meta && meta.campaignId) || null;
+  if (campaignId) {
+    await db.prepare('DELETE FROM notifications WHERE campaign_id = ?::uuid').run(campaignId);
+    await db.prepare(`DELETE FROM notifications WHERE kind = 'admin' AND meta->>'campaignId' = ?`).run(String(campaignId));
+    await db.prepare('DELETE FROM notification_campaigns WHERE id = ?').run(campaignId);
+  } else {
+    // Orphan admin blast: same title/body around the same second
+    await db.prepare(`
+      DELETE FROM notifications
+      WHERE kind = 'admin' AND title = ? AND body = ?
+        AND created_at BETWEEN (?::timestamptz - interval '2 seconds') AND (?::timestamptz + interval '2 seconds')
+    `).run(row.title, row.body || '', row.created_at, row.created_at);
+  }
+  res.json({ ok: true });
+}));
+
 admin.delete('/notifications/:id', wrap(async (req, res) => {
   const id = String(req.params.id || '');
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw bad('Not found', 'notfound');
   await db.prepare('DELETE FROM notifications WHERE campaign_id = ?::uuid').run(id);
+  // Also clear copies that only stored campaignId inside meta (legacy / partial writes)
+  await db.prepare(`
+    DELETE FROM notifications
+    WHERE kind = 'admin' AND meta->>'campaignId' = ?
+  `).run(id);
   const r = await db.prepare('DELETE FROM notification_campaigns WHERE id = ?').run(id);
   if (!r.changes) throw bad('Not found', 'notfound');
   res.json({ ok: true });

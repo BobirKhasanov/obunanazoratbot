@@ -10,7 +10,9 @@ function hideShell() {
   el.classList.remove('show');
   el.setAttribute('aria-hidden', 'true');
   try { tg.BackButton.hide(); } catch { /* ignore */ }
-  setTimeout(() => { if (!el.classList.contains('show')) el.replaceChildren(); }, 820);
+  const android = document.documentElement.dataset.android === '1'
+    || document.documentElement.dataset.perf === 'lite';
+  setTimeout(() => { if (!el.classList.contains('show')) el.replaceChildren(); }, android ? 360 : 820);
 }
 
 function bindBack(close) {

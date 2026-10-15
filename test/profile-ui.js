@@ -77,6 +77,12 @@ assert.ok(css.includes('.char-grid') && css.includes('.char-tile'), 'character a
 assert.ok(admin.includes("['invite', t('btn_invite')]") || admin.includes("['invite', t(\"btn_invite\")]") || (admin.includes("btn_invite") && admin.includes("'invite'")), 'composer has invite/referral button type');
 assert.ok(admin.includes('/admin/message-stats') && admin.includes('msg_stats_title'), 'admin message stats screen');
 assert.ok(read('src/server.js').includes("admin.get('/message-stats'") && read('src/server.js').includes('personalizeBroadcastPost'), 'message stats + invite personalization');
+assert.ok(read('public/js/ui.js').includes('hasTgBack'), 'Telegram BackButton helper');
+assert.ok(profile.includes('hasTgBack') && admin.includes('hasTgBack'), 'subpages avoid double back');
+assert.ok(!app.includes("h('span.star', ' ★')"), 'home live/friends no friend star glyph');
+assert.ok(read('src/server.js').includes('/notifications/by-copy/'), 'admin delete notif by copy');
+assert.ok(css.includes('data-android="1"') && css.includes('0.38s'), 'Android snappier screen transitions');
+assert.ok(read('public/js/pieces.js').includes('linearGradient') && read('public/js/pieces.js').includes('neo-'), 'neo pieces use shaded gradients');
 assert.ok(ui.includes("CustomEvent('open-premium')") && ui.includes('button.prem-ic'), 'premIc is a tappable button');
 assert.ok(css.includes('prem-ring') && css.includes('prem-spin'), 'rotating premium avatar ring');
 assert.ok(css.includes('mask:') || css.includes('-webkit-mask:'), 'premium ring is rim-only (not solid gold disc)');

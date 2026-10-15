@@ -96,6 +96,11 @@ export const icon = (name, size = 24, sw = 1.9) => h('span.ic', {
   html: `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`,
 });
 
+/** True when Telegram provides a native BackButton (avoid duplicate in-app + TG chrome). */
+export function hasTgBack() {
+  try { return !!(tg && tg.BackButton && typeof tg.BackButton.show === 'function'); } catch { return false; }
+}
+
 export const haptic = (kind = 'light') => {
   try {
     if (!tg || !tg.HapticFeedback) return;

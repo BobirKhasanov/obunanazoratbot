@@ -1,5 +1,5 @@
 // In-app messages (DM search + chat) and notifications (admin → users; feedback → admins).
-import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData, onWs } from './ui.js';
+import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData, onWs, hasTgBack, confirmSheet } from './ui.js';
 import { t } from './i18n.js';
 import { openScreen } from './screen.js';
 
@@ -7,11 +7,14 @@ import { openScreen } from './screen.js';
 let activeThreadId = null;
 
 function inboxHead(title, close, emoji) {
-  return h('div.top.inbox-head',
-    h('button.round.back', {
+  const back = hasTgBack()
+    ? h('span.inbox-head-spacer', { 'aria-hidden': 'true' })
+    : h('button.round.back', {
       type: 'button', 'aria-label': t('back'),
       onclick: () => { haptic('light'); close(); },
-    }, icon('back', 22)),
+    }, icon('back', 22));
+  return h('div.top.inbox-head',
+    back,
     h('h1', (emoji ? emoji + ' ' : '') + title),
     h('span.inbox-head-spacer', { 'aria-hidden': 'true' }));
 }
@@ -204,6 +207,25 @@ function openNotifDetail(n, onBack) {
       }, t('notif_reply_send'));
       return h('div.notif-reply', h('p.muted', t('notif_reply_sub')), area, send);
     })() : null;
+    const campaignId = n.meta && n.meta.campaignId;
+    const delHost = h('div');
+    if (n.kind === 'admin') {
+      api('GET', '/me').then((r) => {
+        if (!(r.user && r.user.isAdmin)) return;
+        delHost.replaceChildren(h('button.btn.ghost', {
+          type: 'button',
+          onclick: async () => {
+            if (!(await confirmSheet(t('admin_notif_delete_confirm'), t('admin_notif_delete'), true))) return;
+            try {
+              if (campaignId) await api('DELETE', `/admin/notifications/${campaignId}`);
+              else await api('DELETE', `/admin/notifications/by-copy/${n.id}`);
+              toast(t('admin_notif_deleted')); haptic('success');
+              goBack();
+            } catch (e) { fail(e); }
+          },
+        }, icon('trash', 18), t('admin_notif_delete')));
+      }).catch(() => {});
+    }
     return [
       inboxHead(n.title || t('xabarnoma'), goBack),
       h('div.card.notif-detail',
@@ -215,6 +237,7 @@ function openNotifDetail(n, onBack) {
         notifMediaEl(n),
       ),
       replyBox,
+      delHost,
     ].filter(Boolean);
   });
 }

@@ -1007,6 +1007,19 @@ async function playMoves(game, players, moves, startPly = 0) {
       await err('A', 'GET', '/admin/message-stats', null, 404, 'notfound');
     });
 
+    await step('admin can delete notification by copy id', async () => {
+      const sent = await ok('ADMIN', 'POST', '/admin/notifications', {
+        title: 'DeleteMe', body: 'bye', ttl: 'permanent',
+      });
+      assert.ok(sent.campaign && sent.campaign.id);
+      const notifs = await ok('A', 'GET', '/notifications');
+      const copy = (notifs.notifications || []).find((n) => n.title === 'DeleteMe');
+      assert.ok(copy, 'recipient has copy');
+      await ok('ADMIN', 'DELETE', `/admin/notifications/by-copy/${copy.id}`);
+      const after = await ok('A', 'GET', '/notifications');
+      assert.ok(!(after.notifications || []).some((n) => n.title === 'DeleteMe'));
+    });
+
     await step('post composer: falls back to plain buttons if Telegram rejects colours', async () => {
       tg.state.rejectStyle = true;
       tg.calls.length = 0;

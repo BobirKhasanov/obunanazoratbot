@@ -67,6 +67,17 @@ export function pieceSvg(colour, type, setOverride) {
   if (cache[key]) return cache[key];
   const sw = STROKE[set] || '1.6';
   const body = `stroke-linejoin="round" stroke-linecap="round" stroke-width="${sw}"`;
-  cache[key] = `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} aria-hidden="true">${shapes[type] || OUTLINE.p}</svg>`;
+  const shape = shapes[type] || OUTLINE.p;
+  // Neo: soft interior shading like modern vector sets (cream board reference)
+  if (set === 'neo') {
+    const gid = `neo-${colour}${type}`;
+    const defs = colour === 'w'
+      ? `<linearGradient id="${gid}" x1="0.15" y1="0.05" x2="0.9" y2="0.95"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#f8fafc"/><stop offset="100%" stop-color="#dbe3ee"/></linearGradient>`
+      : `<linearGradient id="${gid}" x1="0.15" y1="0.05" x2="0.9" y2="0.95"><stop offset="0%" stop-color="#334155"/><stop offset="45%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient>`;
+    const stroke = colour === 'w' ? '#334155' : '#020617';
+    cache[key] = `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} stroke="${stroke}" aria-hidden="true"><defs>${defs}</defs><g fill="url(#${gid})">${shape}</g></svg>`;
+  } else {
+    cache[key] = `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} aria-hidden="true">${shape}</svg>`;
+  }
   return cache[key];
 }

@@ -331,7 +331,7 @@ function aiSheet() {
 const playerRow = (u, close) => h('div.row',
   avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true }),
   h('div.grow',
-    h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
+    h('div.t', h('span.name', u.name), u.premium ? premIc() : null),
     h('div.s', u.inGame ? t('in_game') : t('online'))),
   u.invited && u.inviteGameId
     ? h('button.mini', { onclick: () => cancelChallenge(u.inviteGameId) }, t('cancel'))
@@ -474,7 +474,7 @@ refreshers.play = async function renderPlay() {
             h('button.plain', { type: 'button', onclick: () => openProfile(f.id) },
               avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online, round: true })),
             h('button.grow.plain', { type: 'button', onclick: () => openProfile(f.id) },
-              h('div.t', h('span.name', f.name), f.premium ? premIc() : null, h('span.star', ' ★')),
+              h('div.t', h('span.name', f.name), f.premium ? premIc() : null),
               h('div.s', f.invited ? t('challenge_sent') : (f.inGame ? t('in_game') : (f.online ? t('online') : t('offline'))))),
             challengeAction(row));
         }))
@@ -485,7 +485,7 @@ refreshers.play = async function renderPlay() {
           h('button.plain', { type: 'button', onclick: () => openProfile(u.id) },
             avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true })),
           h('button.grow.plain', { type: 'button', onclick: () => openProfile(u.id) },
-            h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
+            h('div.t', h('span.name', u.name), u.premium ? premIc() : null),
             h('div.s', u.invited ? t('challenge_sent') : (u.inGame ? t('in_game') : t('online')))),
           challengeAction(u))))
         : empty(t('nobody'), '🛰️'));

@@ -1,5 +1,5 @@
 // Admin panel: sectioned hub (live, announcements, users/grants, shop, broadcast, style).
-import { h, icon, haptic, toast, api, fail, getInitData, avatar, confirmSheet, seg } from './ui.js';
+import { h, icon, haptic, toast, api, fail, getInitData, avatar, confirmSheet, seg, hasTgBack } from './ui.js';
 import { t, LANGS, LANG_NAMES } from './i18n.js';
 import { restyleBoards } from './board.js';
 import { restyleOpenGame } from './game.js';
@@ -29,10 +29,13 @@ function menuRow({ ic, title, sub, onClick }) {
 }
 
 function subTop(title, close) {
-  return [
-    h('button.back', { type: 'button', onclick: () => close() }, icon('back', 20), t('back')),
-    h('div.top', h('h1', title)),
-  ];
+  const back = hasTgBack()
+    ? h('span.inbox-head-spacer', { 'aria-hidden': 'true' })
+    : h('button.round.back', {
+      type: 'button', 'aria-label': t('back'),
+      onclick: () => { haptic('light'); close(); },
+    }, icon('back', 20));
+  return [h('div.top.sub-top', back, h('h1', title), h('span.inbox-head-spacer', { 'aria-hidden': 'true' }))];
 }
 
 export function openAdmin(onClose) {
@@ -43,7 +46,7 @@ export function openAdmin(onClose) {
     try {
       const [live, st] = await Promise.all([api('GET', '/admin/live'), api('GET', '/admin/stats')]);
       liveHead.replaceChildren(h('i.dot.on'), h('b', String(live.count)), h('span.muted', ' ' + t('live_users')));
-      liveBox.replaceChildren(liveHead, live.users.length ? h('div.livelist', live.users.map((u) => h('div.chipuser', avatar(u.name, u.id, 'sm'), h('span', u.name), u.inGame ? h('em', '♟') : null, u.isAdmin ? h('em', '★') : null))) : h('div.muted', t('nobody_live')));
+      liveBox.replaceChildren(liveHead, live.users.length ? h('div.livelist', live.users.map((u) => h('div.chipuser', avatar(u.name, u.id, 'sm'), h('span', u.name), u.inGame ? h('em', '♟') : null))) : h('div.muted', t('nobody_live')));
       const k = (label, v) => h('div.kpi', h('small.muted', label), h('b', String(v)));
       kpis.replaceChildren(k(t('k_users'), st.users), k(t('k_new'), st.newToday), k(t('k_active'), st.active7d), k(t('k_games_live'), st.gamesLive), k(t('k_games_played'), st.gamesPlayed), k(t('k_unreachable'), st.unreachable));
       const max = Math.max(1, ...st.signups.map((d) => d.count));
@@ -58,7 +61,7 @@ export function openAdmin(onClose) {
         h('div.avwrap', avatar(u.first_name, u.id), u.online ? h('i.dot.on') : null),
         h('div.grow',
           h('div.t', u.first_name || 'Player', u.isAdmin ? h('span.pill', ' ' + t('admin_tag')) : null),
-          h('div.s', `${u.username ? '@' + u.username + ' · ' : ''}${u.id} · 💎${u.diamonds || 0}${u.premium ? ' · ★' : ''} · ♟${u.games}`)),
+          h('div.s', `${u.username ? '@' + u.username + ' · ' : ''}${u.id} · 💎${u.diamonds || 0}${u.premium ? ' · Premium' : ''} · ♟${u.games}`)),
         h('button.mini', {
           title: t('admin_grant_diamonds'),
           onclick: async () => {

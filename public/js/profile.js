@@ -1,5 +1,5 @@
 // Profile hub: sectioned menu + slide-in subpages (friends, premium, settings, …).
-import { h, icon, haptic, toast, api, fail, avBlock, premIc, shareUrl, confirmSheet, toggle, tg, sheet, getInitData, ApiError } from './ui.js';
+import { h, icon, haptic, toast, api, fail, avBlock, premIc, shareUrl, confirmSheet, toggle, tg, sheet, getInitData, ApiError, hasTgBack } from './ui.js';
 import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
 import { openScreen } from './screen.js';
 import { openAdmin } from './admin.js';
@@ -57,10 +57,13 @@ function canStyleChess(me) {
 }
 
 function subTop(title, close) {
-  return [
-    h('button.back', { type: 'button', onclick: () => close() }, icon('back', 20), t('back')),
-    h('div.top', h('h1', title)),
-  ];
+  const back = hasTgBack()
+    ? h('span.inbox-head-spacer', { 'aria-hidden': 'true' })
+    : h('button.round.back', {
+      type: 'button', 'aria-label': t('back'),
+      onclick: () => { haptic('light'); close(); },
+    }, icon('back', 20));
+  return [h('div.top.sub-top', back, h('h1', title), h('span.inbox-head-spacer', { 'aria-hidden': 'true' }))];
 }
 
 /** @param {object} ctx { state, mount helpers via callbacks } */
@@ -589,7 +592,9 @@ export function renderProfilePage(ctx) {
       });
       host.replaceChildren(
         h('div.char-preview',
-          avBlock(meNow.firstName, meNow.id, { size: 'xl', round: true, avatarKey: cur }),
+          h('div.char-preview-av', avBlock(meNow.firstName, meNow.id, {
+            size: 'xl', round: true, avatarKey: cur, premium: !!(meNow.premium),
+          })),
           h('div.char-preview-meta',
             h('div.char-name-badge',
               h('div.t', selectedChar ? selectedChar.name : (isPhoto ? t('avatar_photo') : (!cur ? t('avatar_letter') : t('avatar_title')))),

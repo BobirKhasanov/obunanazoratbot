@@ -1,6 +1,6 @@
 // Game screen: vs computer (local engine in a Web Worker) and online / friend games (server-authoritative over WebSocket).
 import { Chess } from '/vendor/chess.js';
-import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatEmoji, rain, avatar, sleep, shareUrl, copyText, playMoveSound, unlockAudio } from './ui.js';
+import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatEmoji, rain, avatar, avBlock, sleep, shareUrl, copyText, playMoveSound, unlockAudio, hasTgBack } from './ui.js';
 import { t, getLang } from './i18n.js';
 import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
@@ -75,7 +75,9 @@ export function openGame(opts, onClose) {
   const moveStrip = h('div.moves');
   const boardHost = h('div.board-host');
   const banner = h('div.gbanner'); banner.hidden = true;
-  const back = h('button.round.back', { 'aria-label': t('back'), onclick: () => closeGame() }, icon('back', 22));
+  const back = hasTgBack()
+    ? h('span.ghead-spacer', { 'aria-hidden': 'true' })
+    : h('button.round.back', { 'aria-label': t('back'), onclick: () => closeGame() }, icon('back', 22));
   const title = h('div.gtitle');
   const act = (ic, label, fn) => h('button.act', { onclick: fn, 'aria-label': label }, icon(ic, 22), h('span', label));
   const actions = h('div.actions');
@@ -102,20 +104,33 @@ export function openGame(opts, onClose) {
   const meName = () => (S.meta.me && S.meta.me.name) || t('you');
 
   function names() {
-    if (S.kind === 'ai') return { me: { name: meName(), id: S.meta.me ? S.meta.me.id : 1 }, opp: { name: `${t('computer')} · ${t('lvl' + S.level)}`, id: 7 + S.level, ai: true } };
+    const meMeta = S.meta.me || {};
+    if (S.kind === 'ai') {
+      return {
+        me: { name: meName(), id: meMeta.id || 1, premium: !!meMeta.premium, avatarKey: meMeta.avatarKey || null },
+        opp: { name: `${t('computer')} · ${t('lvl' + S.level)}`, id: 7 + S.level, ai: true },
+      };
+    }
     if (S.kind === 'spectate') {
       const g = S.game || {};
       const w = g.white || {}, b = g.black || {};
       return {
-        me: { name: w.name || t('white'), id: w.id || 1, online: w.online },
-        opp: { name: b.name || t('black'), id: b.id || 2, online: b.online },
+        me: { name: w.name || t('white'), id: w.id || 1, online: w.online, premium: !!w.premium, avatarKey: w.avatarKey || null },
+        opp: { name: b.name || t('black'), id: b.id || 2, online: b.online, premium: !!b.premium, avatarKey: b.avatarKey || null },
       };
     }
     const g = S.game; const o = g.opponent || {};
     const waitingFriend = g && g.mode === 'friend' && g.status === 'open' && !o.id;
     return {
-      me: { name: meName(), id: S.meta.me ? S.meta.me.id : 1 },
-      opp: { name: o.name || (waitingFriend ? t('friend_slot') : '…'), id: o.id || 0, online: o.online },
+      me: {
+        name: meName(), id: meMeta.id || 1,
+        premium: !!meMeta.premium, avatarKey: meMeta.avatarKey || null,
+      },
+      opp: {
+        name: o.name || (waitingFriend ? t('friend_slot') : '…'),
+        id: o.id || 0, online: o.online,
+        premium: !!o.premium, avatarKey: o.avatarKey || null,
+      },
     };
   }
 
@@ -131,7 +146,14 @@ export function openGame(opts, onClose) {
   }
 
   function fillBar(b, p, colour, cap, ai) {
-    b.av.replaceChildren(ai ? h('div.avatar.ai', icon('cpu', 22)) : avatar(p.name, p.id));
+    b.av.replaceChildren(ai
+      ? h('div.avatar.ai', icon('cpu', 22))
+      : avBlock(p.name, p.id, {
+        premium: !!p.premium,
+        online: !!p.online,
+        round: true,
+        avatarKey: p.avatarKey || null,
+      }));
     b.name.textContent = p.name;
     const clock = sideClock(colour);
     const ms = S.game && S.game.clock && S.game.status === 'active'
@@ -238,8 +260,6 @@ export function openGame(opts, onClose) {
     fillBar(topIsOpp ? bot : top, me, S.colour, cap, false);
     top.el.classList.toggle('turn', !S.over && c.turn() === (topIsOpp ? oppCol : S.colour));
     bot.el.classList.toggle('turn', !S.over && c.turn() === (topIsOpp ? S.colour : oppCol));
-    top.av.classList.toggle('online', !!(topIsOpp && opp.online));
-    bot.av.classList.toggle('online', !topIsOpp ? !!opp.online : false);
 
     if (S.kind === 'ai') title.textContent = t('vs_computer');
     else if (S.kind === 'spectate') title.textContent = `${me.name} – ${opp.name}`;
