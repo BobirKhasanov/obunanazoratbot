@@ -456,12 +456,21 @@ function normalizePremiumPlans(raw, fallbackMonthPrice) {
   ));
 }
 
+const PUZZLE_DAILY_REWARD_FALLBACK = 1;
+
+function normalizePuzzleDailyReward(raw) {
+  const n = Math.floor(Number(raw));
+  if (!(n >= 0 && n <= 1_000_000)) return PUZZLE_DAILY_REWARD_FALLBACK;
+  return n;
+}
+
 async function getShopSettings() {
-  const [priceRaw, plansRaw, packsRaw, payRaw] = await Promise.all([
+  const [priceRaw, plansRaw, packsRaw, payRaw, puzzleRewardRaw] = await Promise.all([
     getSetting('premium_price_diamonds', String(PREMIUM_PRICE_FALLBACK)),
     getSetting('premium_plans', JSON.stringify(DEFAULT_PREMIUM_PLANS)),
     getSetting('diamond_packs', JSON.stringify(DEFAULT_DIAMOND_PACKS)),
     getSetting('pay_username', DEFAULT_PAY_USERNAME),
+    getSetting('puzzle_daily_reward', String(PUZZLE_DAILY_REWARD_FALLBACK)),
   ]);
   let premiumPriceDiamonds = Math.floor(Number(priceRaw));
   if (!(premiumPriceDiamonds >= 1 && premiumPriceDiamonds <= 1_000_000)) {
@@ -478,6 +487,7 @@ async function getShopSettings() {
     premiumPlans,
     diamondPacks: normalizeDiamondPacks(packsRaw),
     payUsername,
+    puzzleDailyReward: normalizePuzzleDailyReward(puzzleRewardRaw),
   };
 }
 
@@ -628,6 +638,7 @@ api.get('/me', wrap(async (req, res) => {
       premiumPlans: shop.premiumPlans,
       diamondPacks: shop.diamondPacks,
       payUsername: shop.payUsername,
+      puzzleDailyReward: shop.puzzleDailyReward,
       botUsername: await getBotUsername(),
       profileBannerUrl: banner.url,
       profileBannerMediaId: banner.mediaId,
@@ -1248,7 +1259,7 @@ api.post('/games/:id/chat', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-/** Award +1 💎 once per Tashkent day when the user finishes all 10 daily puzzles. */
+/** Award puzzle_daily_reward 💎 once per Tashkent day when the user finishes all 10 daily puzzles. */
 function tashkentDateKey(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -1257,17 +1268,21 @@ function tashkentDateKey(date = new Date()) {
 api.post('/puzzles/claim-daily', wrap(async (req, res) => {
   const uid = req.user.id;
   const day = tashkentDateKey();
+  const shop = await getShopSettings();
+  const amount = shop.puzzleDailyReward;
   try {
     await db.prepare('INSERT INTO puzzle_daily_claims (user_id, day) VALUES (?, ?)').run(uid, day);
   } catch {
     const u = await getUser.get(uid);
-    return res.json({ ok: true, awarded: 0, diamonds: Number(u.diamonds || 0), day });
+    return res.json({ ok: true, awarded: 0, amount, diamonds: Number(u.diamonds || 0), day });
   }
-  await db.prepare('UPDATE users SET diamonds = diamonds + 1 WHERE id = ?').run(uid);
+  if (amount > 0) {
+    await db.prepare('UPDATE users SET diamonds = diamonds + ? WHERE id = ?').run(amount, uid);
+  }
   const u = await getUser.get(uid);
   const diamonds = Number(u.diamonds || 0);
   realtime.send(uid, { t: 'wallet', diamonds });
-  res.json({ ok: true, awarded: 1, diamonds, day });
+  res.json({ ok: true, awarded: amount, amount, diamonds, day });
 }));
 
 // ---------- computer games (played in the browser, only the result is reported) ----------
@@ -2322,6 +2337,11 @@ admin.patch('/shop', wrap(async (req, res) => {
     const name = String(b.payUsername || '').replace(/^@/, '').trim();
     if (!/^[A-Za-z0-9_]{5,64}$/.test(name)) throw bad('Invalid Telegram username', 'bad_request');
     await setSetting('pay_username', name);
+  }
+  if (b.puzzleDailyReward !== undefined) {
+    const n = Math.floor(Number(b.puzzleDailyReward));
+    if (!(n >= 0 && n <= 1_000_000)) throw bad('Puzzle reward must be 0…1000000 diamonds', 'bad_request');
+    await setSetting('puzzle_daily_reward', String(n));
   }
   res.json({ shop: await getShopSettings() });
 }));

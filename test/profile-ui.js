@@ -77,7 +77,9 @@ assert.ok(read('public/js/userprofile.js').includes('filter(Boolean)'), 'user pr
 assert.ok(profile.includes('.filter(Boolean)') && profile.includes('host.replaceChildren'), 'my info does not append null text nodes');
 assert.ok(read('public/js/userprofile.js').includes('uprof-statgrid.wdl'), 'profile W/D/L is a full 3-col row');
 assert.ok(css.includes('.uprof-statgrid.wdl'), 'W/D/L grid style');
-assert.ok(!app.includes('headerInboxBtnsSafe') && !app.includes('loadInbox') && !app.includes('openInbox'), 'home header mail/bell removed');
+assert.ok(!app.includes('headerInboxBtnsSafe') && !app.includes('loadInbox') && !app.includes('openInbox') && !app.includes('refreshInboxBadgesSafe'), 'home header mail/bell removed');
+assert.ok(app.includes('puzzleDailyReward') || app.includes('puzzleRewardN'), 'puzzles use admin-configured diamond reward');
+assert.ok(admin.includes('puzzleDailyReward') && admin.includes('admin_puzzle_reward'), 'admin shop controls puzzle reward');
 assert.ok(read('src/server.js').includes('premium_flag') && read('src/server.js').includes('mapPremium'), 'rankings API maps premium');
 assert.ok(profile.includes("t('delete_account')") && profile.includes("DELETE', '/me'"), 'profile settings can delete account');
 assert.ok(read('src/server.js').includes("api.delete('/me'") && read('src/server.js').includes('DELETE FROM games WHERE'), 'account delete wipes user games + row');
@@ -87,13 +89,15 @@ assert.ok(profile.includes('premiumPlans') || profile.includes('premium_plans'))
 assert.ok(app.includes("t === 'wallet'") || app.includes('m.t === \'wallet\''));
 assert.ok(app.includes('dailyPuzzles') && app.includes('claim-daily') && app.includes('puzzle_diff'), 'daily 1–10 puzzles + diamond claim');
 const gameJs = read('public/js/game.js');
+assert.ok(read('public/js/ui.js').includes('unlockAudio') && gameJs.includes('unlockAudio'), 'move sound unlocks on board gesture');
 assert.ok(gameJs.includes('playMoveSound') && gameJs.includes('/chat') && gameJs.includes('gchat'), 'in-game move sound + ephemeral chat');
 assert.ok(gameJs.includes('pclk') && gameJs.includes('categoryOf'), 'clocks styled by time-control category');
 assert.ok(read('public/js/ui.js').includes('playMoveSound') && /floatup 3\.4s/.test(css), 'slower emoji float + move sound helper');
 assert.ok(admin.includes('admin_pack_sum') || admin.includes('admin_pack_diamonds'), 'admin validates diamond packs before save');
 assert.ok(read('src/server.js').includes('parseDiamondPacksStrict') && read('src/server.js').includes('/puzzles/claim-daily') && read('src/server.js').includes('/games/:id/chat'), 'server shop/chat/puzzle endpoints');
+assert.ok(read('src/server.js').includes('puzzle_daily_reward') && read('src/server.js').includes('puzzleDailyReward'), 'server stores puzzle daily reward setting');
 
-for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward']) {
+for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward']) {
   assert.ok(i18n.includes(k + ':'), `i18n ${k}`);
 }
 

@@ -455,14 +455,17 @@ async function playMoves(game, players, moves, startPly = 0) {
       await err('B', 'POST', `/games/${g.id}/chat`, { text: '   ' }, 400, 'bad_request');
     });
 
-    await step('daily puzzle claim awards 1 diamond once per Tashkent day', async () => {
+    await step('daily puzzle claim awards admin-configured diamonds once per Tashkent day', async () => {
+      await ok('ADMIN', 'PATCH', '/admin/shop', { puzzleDailyReward: 3 });
+      assert.strictEqual((await ok('D', 'GET', '/me')).meta.puzzleDailyReward, 3);
       const before = (await ok('D', 'GET', '/me')).user.diamonds;
       const r1 = await ok('D', 'POST', '/puzzles/claim-daily');
-      assert.strictEqual(r1.awarded, 1);
-      assert.strictEqual(r1.diamonds, before + 1);
+      assert.strictEqual(r1.awarded, 3);
+      assert.strictEqual(r1.diamonds, before + 3);
       const r2 = await ok('D', 'POST', '/puzzles/claim-daily');
       assert.strictEqual(r2.awarded, 0);
-      assert.strictEqual(r2.diamonds, before + 1);
+      assert.strictEqual(r2.diamonds, before + 3);
+      await ok('ADMIN', 'PATCH', '/admin/shop', { puzzleDailyReward: 1 });
     });
 
     await step('admin diamond pack save rejects invalid packs', async () => {

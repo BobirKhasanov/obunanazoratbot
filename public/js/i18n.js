@@ -470,9 +470,12 @@ Object.assign(en, {
   admin_pack_diamonds: 'Pack diamonds must be 1…1000000',
   admin_pack_sum: 'Pack price must be at least 1000 so\'m',
   game_chat: 'Chat', game_chat_ph: 'Message…', game_chat_send: 'Send',
-  puzzles_daily_sub: 'New puzzles every day · 1 easy → 10 hard · finish all 10 for +1 💎',
-  puzzle_diff: 'Level {n}', puzzle_daily_reward: '+1 💎 for today’s puzzles!',
-  puzzle_daily_done: 'All 10 solved today — diamond claimed',
+  puzzles_daily_sub: 'New puzzles every day · 1 easy → 10 hard · finish all 10 for +{n} 💎',
+  puzzle_diff: 'Level {n}', puzzle_daily_reward: '+{n} 💎 for today’s puzzles!',
+  puzzle_daily_done: 'All 10 solved today — +{n} 💎 claimed',
+  admin_puzzle_reward: 'Daily puzzles reward (diamonds)',
+  admin_puzzle_reward_sub: 'Given once per day when a user solves all 10 puzzles. Shown in the Puzzles tab.',
+  admin_puzzle_reward_bad: 'Puzzle reward must be 0…1000000',
 });
 
 Object.assign(ru, {
@@ -489,9 +492,12 @@ Object.assign(ru, {
   admin_pack_diamonds: 'Алмазы в пакете: 1…1000000',
   admin_pack_sum: 'Цена пакета от 1000 сум',
   game_chat: 'Чат', game_chat_ph: 'Сообщение…', game_chat_send: 'Отправить',
-  puzzles_daily_sub: 'Новые задачи каждый день · 1 легко → 10 сложно · все 10 = +1 💎',
-  puzzle_diff: 'Уровень {n}', puzzle_daily_reward: '+1 💎 за сегодняшние задачи!',
-  puzzle_daily_done: 'Все 10 решены сегодня — алмаз получен',
+  puzzles_daily_sub: 'Новые задачи каждый день · 1 легко → 10 сложно · все 10 = +{n} 💎',
+  puzzle_diff: 'Уровень {n}', puzzle_daily_reward: '+{n} 💎 за сегодняшние задачи!',
+  puzzle_daily_done: 'Все 10 решены сегодня — +{n} 💎 получено',
+  admin_puzzle_reward: 'Награда за ежедневные задачи (алмазы)',
+  admin_puzzle_reward_sub: 'Один раз в день, когда пользователь решит все 10 задач. Текст на вкладке задач обновляется.',
+  admin_puzzle_reward_bad: 'Награда должна быть 0…1000000',
 });
 
 Object.assign(uz, {
@@ -508,9 +514,12 @@ Object.assign(uz, {
   admin_pack_diamonds: 'Paket olmoslari 1…1000000 bo‘lsin',
   admin_pack_sum: 'Paket narxi kamida 1000 so‘m',
   game_chat: 'Chat', game_chat_ph: 'Xabar…', game_chat_send: 'Yuborish',
-  puzzles_daily_sub: 'Har kuni yangi masalalar · 1 oson → 10 qiyin · 10 tasini yechsangiz +1 💎',
-  puzzle_diff: '{n}-daraja', puzzle_daily_reward: 'Bugungi masalalar uchun +1 💎!',
-  puzzle_daily_done: 'Bugun 10 tasi yechildi — olmos olindi',
+  puzzles_daily_sub: 'Har kuni yangi masalalar · 1 oson → 10 qiyin · 10 tasini yechsangiz +{n} 💎',
+  puzzle_diff: '{n}-daraja', puzzle_daily_reward: 'Bugungi masalalar uchun +{n} 💎!',
+  puzzle_daily_done: 'Bugun 10 tasi yechildi — +{n} 💎 olindi',
+  admin_puzzle_reward: 'Kunlik masalalar mukofoti (olmos)',
+  admin_puzzle_reward_sub: 'User 10 ta masalani yechganda bir marta beriladi. Boshqotirma yozuvida ham shu son ko‘rinadi.',
+  admin_puzzle_reward_bad: 'Mukofot 0…1000000 bo‘lsin',
 });
 
 Object.assign(uzc, {
@@ -527,9 +536,12 @@ Object.assign(uzc, {
   admin_pack_diamonds: 'Пакет олмослари 1…1000000 бўлсин',
   admin_pack_sum: 'Пакет нархи камида 1000 сўм',
   game_chat: 'Чат', game_chat_ph: 'Хабар…', game_chat_send: 'Юбориш',
-  puzzles_daily_sub: 'Ҳар куни янги масалалар · 1 осон → 10 қийин · 10 тасини ечсангиз +1 💎',
-  puzzle_diff: '{n}-даража', puzzle_daily_reward: 'Бугунги масалалар учун +1 💎!',
-  puzzle_daily_done: 'Бугун 10 таси ечилди — олмос олинди',
+  puzzles_daily_sub: 'Ҳар куни янги масалалар · 1 осон → 10 қийин · 10 тасини ечсангиз +{n} 💎',
+  puzzle_diff: '{n}-даража', puzzle_daily_reward: 'Бугунги масалалар учун +{n} 💎!',
+  puzzle_daily_done: 'Бугун 10 таси ечилди — +{n} 💎 олинди',
+  admin_puzzle_reward: 'Кунлик масалалар мукофоти (олмос)',
+  admin_puzzle_reward_sub: 'Фойдаланувчи 10 та масалани ечганда бир марта берилади. Ёзувда ҳам шу сон кўринади.',
+  admin_puzzle_reward_bad: 'Мукофот 0…1000000 бўлсин',
 });
 
 Object.assign(en, {

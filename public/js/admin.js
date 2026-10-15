@@ -351,6 +351,7 @@ export function openAdmin(onClose) {
     ],
     diamondPacks: [],
     payUsername: 'hasanovbobur',
+    puzzleDailyReward: 1,
   };
   const shopHost = h('div');
 
@@ -363,9 +364,15 @@ export function openAdmin(onClose) {
         { months: 12, diamonds: 1600 },
       ];
     }
+    if (shop.puzzleDailyReward == null) shop.puzzleDailyReward = 1;
     const payIn = h('input.input', {
       value: shop.payUsername, maxlength: 64,
       oninput: (e) => { shop.payUsername = e.target.value.replace(/^@/, ''); },
+    });
+    const puzzleRewardIn = h('input.input', {
+      type: 'number', value: String(shop.puzzleDailyReward ?? 1), min: '0', max: '1000000',
+      style: { maxWidth: '120px' },
+      oninput: (e) => { shop.puzzleDailyReward = Math.floor(Number(e.target.value) || 0); },
     });
     const plansBox = h('div.list');
     const redrawPlans = () => {
@@ -403,6 +410,9 @@ export function openAdmin(onClose) {
         h('p.muted', t('admin_shop_sub')),
         h('div.label', t('admin_premium_plans')), plansBox,
         h('div.label', t('admin_pay_user')), payIn,
+        h('div.label', t('admin_puzzle_reward')), 
+        h('div.row', puzzleRewardIn, h('span.muted', '💎')),
+        h('p.muted', t('admin_puzzle_reward_sub')),
         h('div.label', t('shop_packs')), packsBox,
         h('button.btn.ghost.sm', {
           onclick: () => {
@@ -423,11 +433,17 @@ export function openAdmin(onClose) {
                 if (!(p.diamonds >= 1 && p.diamonds <= 1_000_000)) { toast(t('admin_pack_diamonds'), true); return; }
                 if (!(p.sum >= 1000 && p.sum <= 1_000_000_000)) { toast(t('admin_pack_sum'), true); return; }
               }
+              const puzzleDailyReward = Math.floor(Number(shop.puzzleDailyReward) || 0);
+              if (!(puzzleDailyReward >= 0 && puzzleDailyReward <= 1_000_000)) {
+                toast(t('admin_puzzle_reward_bad'), true); return;
+              }
               shop.diamondPacks = packs;
+              shop.puzzleDailyReward = puzzleDailyReward;
               const r = await api('PATCH', '/admin/shop', {
                 premiumPlans: shop.premiumPlans,
                 diamondPacks: packs,
                 payUsername: shop.payUsername,
+                puzzleDailyReward,
               });
               shop = r.shop;
               toast(t('admin_shop_saved')); haptic('success');

@@ -1,6 +1,6 @@
 // Game screen: vs computer (local engine in a Web Worker) and online / friend games (server-authoritative over WebSocket).
 import { Chess } from '/vendor/chess.js';
-import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatEmoji, rain, avatar, sleep, shareUrl, copyText, playMoveSound } from './ui.js';
+import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatEmoji, rain, avatar, sleep, shareUrl, copyText, playMoveSound, unlockAudio } from './ui.js';
 import { t, getLang } from './i18n.js';
 import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
@@ -95,6 +95,9 @@ export function openGame(opts, onClose) {
     status, top.el, boardHost, bot.el, moveStrip, banner, reactBar, chatPanel, actions,
   );
   const board = S.board = new Board(boardHost, { onMove: (f, to, p) => humanMove(f, to, p) });
+  // Telegram WebView blocks audio until a gesture — unlock on first board touch
+  const unlockOnce = () => { unlockAudio(); boardHost.removeEventListener('pointerdown', unlockOnce); };
+  boardHost.addEventListener('pointerdown', unlockOnce, { passive: true });
 
   const orientation = () => ((S.colour === 'b') !== S.flipped ? 'b' : 'w');
   const meName = () => (S.meta.me && S.meta.me.name) || t('you');
@@ -352,6 +355,7 @@ export function openGame(opts, onClose) {
   // ----- moves -----
   async function humanMove(from, to, promotion) {
     if (S.over || S.kind === 'spectate') return;
+    unlockAudio(); // ensure Telegram WebView allows sound on this gesture
     if (S.kind === 'ai') {
       try { S.chess.move({ from, to, promotion }); } catch { return render(); }
       playMoveSound();
@@ -459,12 +463,13 @@ export function openGame(opts, onClose) {
     const prev = S.game; S.game = g;
     const moves = g.moves || [];
     if (S.kind !== 'spectate') S.colour = g.you || S.colour;
-    const grew = moves.length !== S.moves.length || force;
-    const oppMoved = grew && moves.length > S.moves.length && S.kind !== 'spectate'
-      && prev && prev.status === 'active';
+    const prevLen = S.moves.length;
+    const grew = moves.length !== prevLen || force;
+    const oppMoved = moves.length > prevLen && S.kind !== 'spectate' && prev && prev.status === 'active';
     S.moves = moves;
     if (grew) S.chess = build(moves);
-    if (oppMoved && moves.length && S.chess.turn() === S.colour) playMoveSound();
+    // Opponent just moved (our own click already played sound in humanMove)
+    if (oppMoved && S.chess.turn() === S.colour) playMoveSound();
     const was = prev && prev.status;
     if (g.status === 'finished' && was !== 'finished') {
       S.over = true; S.chat = []; S.chatOpen = false; render(grew);

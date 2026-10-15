@@ -293,7 +293,6 @@ refreshers.play = async function renderPlay() {
     if (pill) pill.replaceChildren(h('i.dot'), t('online_now', { n: l.onlineCount }));
     const gem = playEl.querySelector('.gempill');
     if (gem) gem.textContent = '💎 ' + (state.me.diamonds || 0);
-    refreshInboxBadgesSafe(playEl);
     return;
   }
   playSnap = snap;
@@ -492,6 +491,10 @@ const markSolved = (id) => {
   persistPuzzleDay(st);
   return st;
 };
+const puzzleRewardN = () => {
+  const n = Math.floor(Number(state.meta && state.meta.puzzleDailyReward));
+  return n >= 0 ? n : 1;
+};
 async function maybeClaimDailyReward() {
   const st = puzzleDayState();
   const list = dailyPuzzles(st.day);
@@ -502,7 +505,7 @@ async function maybeClaimDailyReward() {
     persistPuzzleDay(st);
     if (r.awarded > 0) {
       if (state.me) state.me.diamonds = r.diamonds;
-      toast(t('puzzle_daily_reward'));
+      toast(t('puzzle_daily_reward', { n: r.awarded }));
       haptic('success');
     }
   } catch (e) { fail(e); }
@@ -514,16 +517,17 @@ function puzzleList() {
   const list = dailyPuzzles(day);
   const done = solvedSet();
   const nDone = list.filter((p) => done.has(p.id)).length;
+  const reward = puzzleRewardN();
   mount('puzzles',
     h('div.top', h('h1', '🧩 ' + t('puzzles_title')), h('div.livepill', t('puzzle_solved_count', { a: nDone, b: list.length }))),
-    h('div.muted.pz-sub', t('puzzles_daily_sub')),
+    h('div.muted.pz-sub', t('puzzles_daily_sub', { n: reward })),
     h('div.list', list.map((p, i) => rowBtn({ onclick: () => { haptic('light'); openPuzzle(i); } },
       h('div.pz-num' + (done.has(p.id) ? '.done' : ''), done.has(p.id) ? icon('check', 18) : String(i + 1)),
       h('div.grow',
         h('div.t', t('puzzle_n', { n: i + 1 })),
         h('div.s', t('puzzle_diff', { n: p.diff }) + ' · ' + t('mate_in', { n: p.n }) + ' · ' + (new Chess(p.fen).turn() === 'w' ? t('puzzle_white') : t('puzzle_black')))),
       icon('arrow', 18)))),
-    nDone >= list.length ? h('div.card.pz-reward', '💎 ' + t('puzzle_daily_done')) : null);
+    nDone >= list.length ? h('div.card.pz-reward', '💎 ' + t('puzzle_daily_done', { n: reward })) : null);
 }
 
 function openPuzzle(i) {

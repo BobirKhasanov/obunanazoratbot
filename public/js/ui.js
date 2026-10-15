@@ -262,25 +262,85 @@ export function floatEmoji(emoji, x, y) {
   setTimeout(() => el.remove(), 3600);
 }
 
-/** Short soft click when a piece moves. */
+/** Build a short piece-click WAV blob URL (Telegram WebView–friendly). */
+function moveWavUrl() {
+  const sr = 22050;
+  const n = Math.floor(sr * 0.08);
+  const samples = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = i / sr;
+    const env = Math.exp(-t * 48);
+    samples[i] = (Math.sin(2 * Math.PI * 760 * t) * env * 0.55) * 32767;
+  }
+  const bytes = new ArrayBuffer(44 + samples.length * 2);
+  const v = new DataView(bytes);
+  const ascii = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  ascii(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true); ascii(8, 'WAVE');
+  ascii(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  ascii(36, 'data'); v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, samples[i], true);
+  return URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+}
+
+let moveAudioEl = null;
 let moveAudioCtx = null;
+let moveWav = null;
+
+function ensureMoveAudio() {
+  if (moveAudioEl) return moveAudioEl;
+  moveWav = moveWav || moveWavUrl();
+  moveAudioEl = new Audio(moveWav);
+  moveAudioEl.preload = 'auto';
+  moveAudioEl.volume = 0.5;
+  return moveAudioEl;
+}
+
+/** Call from a user gesture so later move sounds are allowed. */
+export function unlockAudio() {
+  try {
+    const el = ensureMoveAudio();
+    const p = el.play();
+    if (p && p.then) p.then(() => { try { el.pause(); el.currentTime = 0; } catch { /* ignore */ } }).catch(() => {});
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      moveAudioCtx = moveAudioCtx || new AC();
+      if (moveAudioCtx.state === 'suspended') moveAudioCtx.resume().catch(() => {});
+    }
+  } catch { /* ignore */ }
+}
+
+/** Short soft click when a piece moves (timed + untimed + AI). */
 export function playMoveSound() {
+  try {
+    const el = ensureMoveAudio();
+    el.currentTime = 0;
+    const played = el.play();
+    if (played && played.catch) played.catch(() => playMoveSoundOsc());
+  } catch {
+    playMoveSoundOsc();
+  }
+}
+
+function playMoveSoundOsc() {
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     moveAudioCtx = moveAudioCtx || new AC();
-    if (moveAudioCtx.state === 'suspended') moveAudioCtx.resume().catch(() => {});
-    const t0 = moveAudioCtx.currentTime;
-    const o = moveAudioCtx.createOscillator();
-    const g = moveAudioCtx.createGain();
-    o.type = 'triangle';
-    o.frequency.setValueAtTime(520, t0);
-    o.frequency.exponentialRampToValueAtTime(280, t0 + 0.06);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(0.1, t0 + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
-    o.connect(g); g.connect(moveAudioCtx.destination);
-    o.start(t0); o.stop(t0 + 0.1);
+    const run = () => {
+      const t0 = moveAudioCtx.currentTime;
+      const o = moveAudioCtx.createOscillator();
+      const g = moveAudioCtx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(620, t0);
+      o.frequency.exponentialRampToValueAtTime(280, t0 + 0.07);
+      g.gain.setValueAtTime(0.12, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.09);
+      o.connect(g); g.connect(moveAudioCtx.destination);
+      o.start(t0); o.stop(t0 + 0.1);
+    };
+    if (moveAudioCtx.state === 'suspended') moveAudioCtx.resume().then(run).catch(() => {});
+    else run();
   } catch { /* autoplay / old WebView */ }
 }
 
