@@ -1,6 +1,6 @@
 // Main app: boot, swipe pager, pages, deep links.
 import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, shareUrl, copyText } from './ui.js';
-import { openDmThread, refreshInboxBadges, headerInboxBtns } from './inbox.js';
+import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -1018,6 +1018,8 @@ export async function start(me) {
     else if (m.t === 'friend') { haptic('success'); if (m.reward) { state.me.diamonds = (state.me.diamonds || 0) + m.reward; toast(t('friend_reward', { n: m.reward })); } refresh(); }
     else if (m.t === 'dm') {
       try { refreshInboxBadges(); } catch { /* ignore */ }
+      // Already in that chat — inbox.js appends live; no toast spam
+      if (isViewingDmThread(m.threadId)) return;
       haptic('success');
       toast(t('msg_new_from', { name: (m.from && m.from.name) || '…' }));
     }

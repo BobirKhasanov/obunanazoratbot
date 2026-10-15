@@ -170,6 +170,10 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok(dmNotif, 'recipient got DM notification');
       assert.ok(/salom/i.test(dmNotif.body || ''));
       await err('B', 'POST', '/messages/threads', { userId: USERS.C.id }, 400, 'friends_only');
+      // Search finds any player (not friends-only); opening chat still requires friendship
+      const found = await ok('B', 'GET', `/messages/search?q=${encodeURIComponent('Car')}`);
+      assert.ok((found.users || []).some((u) => u.id === USERS.C.id), 'search includes non-friends');
+      await err('B', 'POST', `/messages/threads/${th.id}`, { body: '' }, 400, 'text');
       const meta = (await ok('A', 'GET', '/me')).meta;
       assert.strictEqual(meta.PREMIUM_PRICE, 200);
       assert.ok(Array.isArray(meta.diamondPacks) && meta.diamondPacks.length >= 1);

@@ -328,6 +328,14 @@ button.row:active { transform: scale(0.98); }
   scroll-padding-top: 8px;
 }
 .screen.show { transform: none; visibility: visible; opacity: 1; }
+/* DM chat fills the sheet — compose sits above the keyboard / home indicator */
+#screen:has(.chat-screen) {
+  display: flex; flex-direction: column;
+  padding-bottom: 0; overflow: hidden;
+}
+#screen:has(.chat-screen) .chat-screen {
+  flex: 1; min-height: 0; width: 100%;
+}
 .back { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--blue); margin: 4px 0 14px; padding: 6px 4px; }
 .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kpi { background: var(--card); border-radius: 20px; padding: 14px 16px; }
@@ -1429,26 +1437,49 @@ button.rating-tile:active { transform: scale(0.98); }
   background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.4);
 }
 :root[data-theme="light"] .inbox-head h1 { color: var(--text); }
-.chat-log {
-  display: flex; flex-direction: column; gap: 8px; min-height: 42dvh; max-height: 58dvh;
-  overflow-y: auto; padding: 8px 2px 16px; scroll-behavior: smooth; overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch; transform: translateZ(0); will-change: scroll-position;
+/* Full-height DM layout inside #screen (matches game / subpage shell) */
+.chat-screen {
+  display: flex; flex-direction: column;
+  min-height: calc(100dvh - var(--safe-t) - var(--safe-b) - 28px);
+  margin: 0 -2px;
 }
+.chat-screen .inbox-head { margin-bottom: 8px; flex: none; }
+.chat-log {
+  flex: 1 1 auto; min-height: 180px;
+  display: flex; flex-direction: column; gap: 8px;
+  overflow-y: auto; padding: 8px 4px 12px; scroll-behavior: smooth; overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch; transform: translateZ(0);
+}
+.chat-empty {
+  margin: auto; text-align: center; color: var(--muted);
+  padding: 24px 12px; font-size: 15px; line-height: 1.45;
+}
+.chat-empty .empty-ic { font-size: 36px; margin-bottom: 6px; opacity: 0.85; }
 .chat-bubble {
   align-self: flex-start; max-width: 82%; padding: 10px 14px; border-radius: 16px 16px 16px 6px;
-  background: var(--card); font-size: 15px; line-height: 1.4;
+  background: var(--card); font-size: 15px; line-height: 1.4; word-break: break-word;
 }
 .chat-bubble.mine {
   align-self: flex-end; border-radius: 16px 16px 6px 16px;
   background: linear-gradient(180deg, #3a7be8, #2f68d3); color: #fff;
 }
+.chat-bubble-text { white-space: pre-wrap; }
 .chat-bubble small { display: block; margin-top: 4px; opacity: 0.65; font-size: 11px; }
 .chat-compose {
-  display: flex; align-items: center; gap: 10px; position: sticky; bottom: 0;
-  padding: 8px 0 calc(8px + var(--safe-b)); background: linear-gradient(to top, var(--bg) 70%, transparent);
+  flex: none; display: flex; align-items: center; gap: 10px;
+  padding: 10px 2px calc(10px + var(--safe-b));
+  background: var(--bg-radial);
+  border-top: 1px solid var(--line);
 }
-.chat-compose .chat-input { flex: 1; margin: 0; min-height: 48px; }
-.chat-send { flex: none; background: var(--blue); color: #fff; }
+.chat-compose .chat-input {
+  flex: 1; margin: 0; min-height: 44px; height: 44px;
+  padding: 10px 14px; border-radius: 22px;
+}
+.chat-send {
+  flex: none; width: 44px; height: 44px; background: var(--blue); color: #fff;
+  display: grid; place-items: center;
+}
+.chat-send:disabled { opacity: 0.55; }
 .rank-empty { padding: 18px 8px; text-align: center; color: var(--muted); font-size: 14px; }
 .gems { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 4px; }
 .gems-top { display: flex; align-items: center; justify-content: space-between; }

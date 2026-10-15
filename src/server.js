@@ -2159,6 +2159,7 @@ api.get('/messages/unread-count', wrap(async (req, res) => {
 api.get('/messages/search', wrap(async (req, res) => {
   const q = cleanText(req.query && req.query.q, 40, 'bad_request', true).toLowerCase();
   const uid = req.user.id;
+  // Search any player (not friends-only); starting a chat still requires friendship
   const rows = await db.prepare(`
     SELECT u.id, u.first_name, u.last_name, u.username, u.premium, u.premium_until
     FROM users u
@@ -2204,7 +2205,7 @@ api.get('/messages/threads', wrap(async (req, res) => {
 }));
 
 api.post('/messages/threads', wrap(async (req, res) => {
-  const uid = req.user.id;
+  const uid = Number(req.user.id);
   const other = intParam(req.body && req.body.userId);
   if (other === uid) throw bad('Invalid user', 'bad_request');
   const u = await getUser.get(other);
@@ -2215,20 +2216,24 @@ api.post('/messages/threads', wrap(async (req, res) => {
   let row = await db.prepare('SELECT id FROM dm_threads WHERE user_a = ? AND user_b = ?').get(a, b);
   if (!row) {
     const ins = await db.prepare('INSERT INTO dm_threads (user_a, user_b) VALUES (?, ?) RETURNING id').run(a, b);
-    row = { id: ins.rows?.[0]?.id || ins.id };
+    const id = ins.rows?.[0]?.id;
+    if (!id) throw bad('Could not open chat', 'server');
+    row = { id };
   }
   res.status(201).json({
-    id: row.id,
+    id: Number(row.id),
     peer: { id: u.id, name: displayName(u), username: u.username || null, premium: isPremiumActive(u) },
   });
 }));
 
 api.get('/messages/threads/:id', wrap(async (req, res) => {
-  const uid = req.user.id;
+  const uid = Number(req.user.id);
   const tid = intParam(req.params.id);
   const th = await db.prepare('SELECT * FROM dm_threads WHERE id = ?').get(tid);
-  if (!th || (th.user_a !== uid && th.user_b !== uid)) throw new HttpError(404, 'Not found', 'notfound');
-  const otherId = th.user_a === uid ? th.user_b : th.user_a;
+  if (!th || (Number(th.user_a) !== uid && Number(th.user_b) !== uid)) {
+    throw new HttpError(404, 'Not found', 'notfound');
+  }
+  const otherId = Number(th.user_a) === uid ? Number(th.user_b) : Number(th.user_a);
   const other = await getUser.get(otherId);
   await db.prepare(`
     UPDATE dm_messages SET read_at = now()
@@ -2243,22 +2248,27 @@ api.get('/messages/threads/:id', wrap(async (req, res) => {
       ? { id: other.id, name: displayName(other), username: other.username || null, premium: isPremiumActive(other) }
       : { id: otherId, name: 'Player' },
     messages: msgs.map((m) => ({
-      id: m.id, body: m.body, mine: m.sender_id === uid, createdAt: m.created_at,
+      id: m.id, body: m.body, mine: Number(m.sender_id) === uid, createdAt: m.created_at,
     })),
   });
 }));
 
 api.post('/messages/threads/:id', wrap(async (req, res) => {
-  const uid = req.user.id;
+  const uid = Number(req.user.id);
   const tid = intParam(req.params.id);
   const body = cleanText(req.body && req.body.body, 1000, 'text', true);
   const th = await db.prepare('SELECT * FROM dm_threads WHERE id = ?').get(tid);
-  if (!th || (th.user_a !== uid && th.user_b !== uid)) throw new HttpError(404, 'Not found', 'notfound');
-  const other = th.user_a === uid ? th.user_b : th.user_a;
+  if (!th || (Number(th.user_a) !== uid && Number(th.user_b) !== uid)) {
+    throw new HttpError(404, 'Not found', 'notfound');
+  }
+  const other = Number(th.user_a) === uid ? Number(th.user_b) : Number(th.user_a);
   if (await blockedEither(uid, other)) throw bad('Blocked', 'blocked');
+  if (!(await areFriends(uid, other))) throw bad('Friends only', 'friends_only');
   const ins = await db.prepare(`
     INSERT INTO dm_messages (thread_id, sender_id, body) VALUES (?, ?, ?) RETURNING id, created_at
   `).run(tid, uid, body);
+  const row = ins.rows?.[0];
+  if (!row) throw bad('Could not send', 'server');
   await db.prepare('UPDATE dm_threads SET updated_at = now() WHERE id = ?').run(tid);
 
   const me = await person(uid);
@@ -2280,6 +2290,7 @@ api.post('/messages/threads/:id', wrap(async (req, res) => {
     t: 'dm',
     threadId: tid,
     from: { id: uid, name: me.name },
+    body,
     preview,
   });
   // Telegram push when recipient is not live in the Mini App
@@ -2288,10 +2299,10 @@ api.post('/messages/threads/:id', wrap(async (req, res) => {
   }
 
   res.status(201).json({
-    id: ins.rows?.[0]?.id || ins.id,
+    id: row.id,
     body,
     mine: true,
-    createdAt: ins.rows?.[0]?.created_at || new Date().toISOString(),
+    createdAt: row.created_at || new Date().toISOString(),
   });
 }));
 

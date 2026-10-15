@@ -1,7 +1,10 @@
 // In-app messages (DM search + chat) and notifications (admin → users; feedback → admins).
-import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData } from './ui.js';
+import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData, onWs } from './ui.js';
 import { t } from './i18n.js';
 import { openScreen } from './screen.js';
+
+/** Thread currently open in the chat UI (suppresses toast spam for that chat). */
+let activeThreadId = null;
 
 function inboxHead(title, close, emoji) {
   return h('div.top.inbox-head',
@@ -115,6 +118,11 @@ export async function refreshInboxBadges(root) {
   } catch { /* ignore badge errors */ }
 }
 
+/** True when the open chat matches this thread (used by app.js to skip toast). */
+export function isViewingDmThread(threadId) {
+  return activeThreadId != null && Number(activeThreadId) === Number(threadId);
+}
+
 export function openNotifications() {
   openScreen((close) => {
     const list = h('div.notif-list', h('div.skeleton'), h('div.skeleton'));
@@ -145,7 +153,6 @@ export function openNotifications() {
               try { if (!n.read) await api('POST', `/notifications/${n.id}/read`); } catch { /* ignore */ }
               n.read = true;
               if (isDm) {
-                // Smooth slide into the thread (stacked over the bell list)
                 openChat(n.meta.threadId, n.meta.peer || {
                   id: n.meta.fromUserId,
                   name: n.meta.fromName || n.title || t('messages'),
@@ -242,7 +249,7 @@ export function openMessages() {
           th.unread ? h('span.count-pill', String(th.unread)) : h('span.msg-time', fmtTime(th.updatedAt)),
         )));
         refreshInboxBadges();
-      } catch (e) { fail(e); threadsHost.replaceChildren(h('div.empty', t('msg_empty'))); }
+      } catch (e) { fail(e); threadsHost.replaceChildren(h('div.empty', h('div.empty-ic', '✉️'), t('msg_empty'))); }
     };
 
     searchInput.addEventListener('input', () => {
@@ -306,53 +313,123 @@ export async function openDmThread(threadId, peerHint) {
   } catch (e) { fail(e); }
 }
 
+function bubbleEl(m) {
+  return h('div.chat-bubble' + (m.mine ? '.mine' : ''),
+    h('div.chat-bubble-text', m.body),
+    h('small', fmtTime(m.createdAt)));
+}
+
 function openChat(threadId, peer) {
+  const tid = Number(threadId);
   openScreen((close) => {
-    const log = h('div.chat-log', h('div.skeleton'));
-    const input = h('input.input.chat-input', { type: 'text', maxlength: 1000, placeholder: t('msg_ph') });
+    activeThreadId = tid;
+    const log = h('div.chat-log');
+    const input = h('input.input.chat-input', {
+      type: 'text',
+      maxlength: 1000,
+      placeholder: t('msg_ph'),
+      enterKeyHint: 'send',
+      autocomplete: 'off',
+    });
     const sendBtn = h('button.round.chat-send', {
       type: 'button',
       'aria-label': t('msg_send'),
-      onclick: send,
+      onclick: () => { send(); },
     }, icon('send', 18));
+    let sending = false;
+    let knownIds = new Set();
+
+    function paint(msgs) {
+      const list = msgs || [];
+      knownIds = new Set(list.map((m) => m.id).filter((x) => x != null));
+      if (!list.length) {
+        log.replaceChildren(h('div.chat-empty', h('div.empty-ic', '💬'), t('msg_start')));
+        return;
+      }
+      log.replaceChildren(...list.map(bubbleEl));
+      requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
+    }
+
+    function appendMsg(m) {
+      if (m.id != null && knownIds.has(m.id)) return;
+      if (m.id != null) knownIds.add(m.id);
+      const empty = log.querySelector('.chat-empty');
+      if (empty) log.replaceChildren();
+      log.append(bubbleEl(m));
+      requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
+    }
 
     async function load() {
       try {
-        const r = await api('GET', `/messages/threads/${threadId}`);
-        const msgs = r.messages || [];
-        if (!msgs.length) {
-          log.replaceChildren(h('div.empty', t('msg_start')));
-        } else {
-          log.replaceChildren(...msgs.map((m) => h('div.chat-bubble' + (m.mine ? '.mine' : ''),
-            h('div', m.body),
-            h('small', fmtTime(m.createdAt)))));
-          requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
-        }
+        const r = await api('GET', `/messages/threads/${tid}`);
+        paint(r.messages || []);
         refreshInboxBadges();
       } catch (e) { fail(e); }
     }
 
     async function send() {
       const body = input.value.trim();
-      if (!body) return;
+      if (!body || sending) return;
+      sending = true;
+      sendBtn.disabled = true;
       input.value = '';
       try {
-        await api('POST', `/messages/threads/${threadId}`, { body });
-        await load();
+        const r = await api('POST', `/messages/threads/${tid}`, { body });
+        appendMsg({
+          id: r.id,
+          body: r.body || body,
+          mine: true,
+          createdAt: r.createdAt || new Date().toISOString(),
+        });
         haptic('light');
-      } catch (e) { fail(e); }
+      } catch (e) {
+        input.value = body;
+        fail(e);
+      } finally {
+        sending = false;
+        sendBtn.disabled = false;
+        try { input.focus(); } catch { /* ignore */ }
+      }
     }
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); send(); }
     });
 
+    const offWs = onWs((m) => {
+      if (m.t !== 'dm' || Number(m.threadId) !== tid) return;
+      if (m.body) {
+        appendMsg({
+          id: m.id,
+          body: m.body,
+          mine: false,
+          createdAt: m.createdAt || new Date().toISOString(),
+        });
+        refreshInboxBadges();
+      } else {
+        load();
+      }
+    });
+
     load();
-    const poll = setInterval(load, 4000);
+    const poll = setInterval(load, 5000);
+    const finish = () => {
+      clearInterval(poll);
+      try { offWs(); } catch { /* ignore */ }
+      if (activeThreadId === tid) activeThreadId = null;
+      close();
+    };
+
     return [
-      inboxHead(peer?.name || t('messages'), () => { clearInterval(poll); close(); }),
-      log,
-      h('div.chat-compose', input, sendBtn),
+      h('div.chat-screen',
+        inboxHead(peer?.name || t('messages'), finish),
+        log,
+        h('div.chat-compose', input, sendBtn)),
     ];
-  }, { onClose: () => refreshInboxBadges() });
+  }, {
+    onClose: () => {
+      if (activeThreadId === tid) activeThreadId = null;
+      refreshInboxBadges();
+    },
+  });
 }
