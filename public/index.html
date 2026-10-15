@@ -6,7 +6,8 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#111827">
   <title>Chess</title>
-  <link rel="stylesheet" href="/styles.css?v=20261015e">
+  <link rel="stylesheet" href="/styles.css?v=20261015f">
+  <link rel="modulepreload" href="/js/inbox.js?v=20261015f">
   <style>
     /* Inline boot splash — always visible until JS reveals gate/app (never a blank black WebView) */
     html, body { margin: 0; min-height: 100%; min-height: 100dvh; background: var(--bg, #111827); color: var(--text, #fff); }
@@ -115,7 +116,7 @@
     <div id="sheet-root"></div>
     <div id="toast" role="status"></div>
   </main>
-  <script type="module" src="/js/app.js?v=20261015e"></script>
+  <script type="module" src="/js/app.js?v=20261015f"></script>
   <script>
     (function () {
       function failBoot(msg) {

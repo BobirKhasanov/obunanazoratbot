@@ -91,7 +91,10 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
   // Always revalidate (cheap 304s) so a new deploy reaches players immediately
   setHeaders(res, file) {
     res.set('Cache-Control', 'no-cache');
-    if (file.endsWith('.mjs')) res.set('Content-Type', 'text/javascript; charset=utf-8');
+    // Explicit MIME so Telegram WebView accepts ES module scripts (incl. inbox.js)
+    if (file.endsWith('.mjs') || file.endsWith('.js')) {
+      res.set('Content-Type', 'text/javascript; charset=utf-8');
+    }
   },
 }));
 app.get('/healthz', (req, res) => res.json({ ok: true }));

@@ -11,37 +11,21 @@ import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleOpenGame } from './game.js';
 import { renderProfilePage, openUserProfile } from './profile.js';
 import { closeScreen } from './screen.js';
+import {
+  openMessages,
+  openNotifications,
+  refreshInboxBadges,
+  headerInboxBtns,
+} from './inbox.js';
 
-/** Lazy inbox — must not block app boot if the chunk fails to load. */
-let inboxMod = null;
-let inboxPromise = null;
-function loadInbox() {
-  if (inboxMod) return Promise.resolve(inboxMod);
-  if (!inboxPromise) {
-    inboxPromise = import('./inbox.js?v=20261015e')
-      .then((m) => { inboxMod = m; return m; })
-      .catch((e) => {
-        console.warn('[inbox]', e);
-        inboxPromise = null;
-        return null;
-      });
-  }
-  return inboxPromise;
-}
-function openInbox(kind) {
-  const go = async () => {
-    haptic('light');
-    const m = await loadInbox();
-    if (!m) { toast(t('msg_unavailable')); return; }
-    try {
-      if (kind === 'messages') m.openMessages();
-      else m.openNotifications();
-    } catch (e) { console.warn('[inbox]', e); fail(e); }
-  };
-  go();
-}
+/** Home header mail/bell — direct imports (dynamic import+query was failing in Telegram). */
 function headerInboxBtnsSafe() {
-  const bind = (el, kind) => {
+  try {
+    return headerInboxBtns();
+  } catch (e) {
+    console.warn('[inbox] headerInboxBtns', e);
+  }
+  const bind = (el, open) => {
     let last = 0;
     el.addEventListener('pointerdown', (e) => { e.stopPropagation(); }, { passive: true });
     const onTap = (e) => {
@@ -50,7 +34,8 @@ function headerInboxBtnsSafe() {
       const now = Date.now();
       if (now - last < 450) return;
       last = now;
-      openInbox(kind);
+      haptic('light');
+      try { open(); } catch (err) { console.warn('[inbox]', err); fail(err); }
     };
     el.addEventListener('pointerup', onTap);
     el.addEventListener('click', onTap);
@@ -65,14 +50,14 @@ function headerInboxBtnsSafe() {
     'aria-label': t('xabarnoma'),
     'data-noswipe': '',
   }, icon('bell', 20), h('span.hdr-badge-slot'));
-  bind(mail, 'messages');
-  bind(bell, 'notifications');
+  bind(mail, openMessages);
+  bind(bell, openNotifications);
   const wrap = h('div.hdr-inbox', { 'data-noswipe': '' }, mail, bell);
   refreshInboxBadgesSafe(wrap);
   return wrap;
 }
 function refreshInboxBadgesSafe(root) {
-  loadInbox().then((m) => { try { m && m.refreshInboxBadges(root); } catch { /* ignore */ } });
+  try { refreshInboxBadges(root); } catch { /* ignore */ }
 }
 import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel, CAROUSEL_STAGGER_MS } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
@@ -862,8 +847,7 @@ async function boot() {
     console.error('[boot] refresh', e);
     fail(e);
   }
-  // Warm inbox in the background (never blocks boot)
-  loadInbox();
+  try { refreshInboxBadges(); } catch { /* ignore */ }
 }
 boot().catch((e) => {
   console.error('[boot]', e);
