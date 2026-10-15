@@ -1,5 +1,5 @@
 // Admin panel: sectioned hub (live, announcements, users/grants, shop, broadcast, style).
-import { h, icon, haptic, toast, api, fail, getInitData, avatar, confirmSheet, seg, hasTgBack } from './ui.js';
+import { h, icon, haptic, toast, api, fail, getInitData, avatar, confirmSheet, seg } from './ui.js';
 import { t, LANGS, LANG_NAMES } from './i18n.js';
 import { restyleBoards } from './board.js';
 import { restyleOpenGame } from './game.js';
@@ -29,13 +29,16 @@ function menuRow({ ic, title, sub, onClick }) {
 }
 
 function subTop(title, close) {
-  const back = hasTgBack()
-    ? h('span.inbox-head-spacer', { 'aria-hidden': 'true' })
-    : h('button.round.back', {
-      type: 'button', 'aria-label': t('back'),
-      onclick: () => { haptic('light'); close(); },
-    }, icon('back', 20));
-  return [h('div.top.sub-top', back, h('h1', title), h('span.inbox-head-spacer', { 'aria-hidden': 'true' }))];
+  return [
+    h('div.top.sub-top',
+      h('button.round.back', {
+        type: 'button', 'aria-label': t('back'),
+        onclick: () => { haptic('light'); close(); },
+      }, icon('back', 20)),
+      h('h1', title),
+      h('span.inbox-head-spacer', { 'aria-hidden': 'true' }),
+    ),
+  ];
 }
 
 export function openAdmin(onClose) {

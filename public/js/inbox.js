@@ -1,5 +1,5 @@
 // In-app messages (DM search + chat) and notifications (admin → users; feedback → admins).
-import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData, onWs, hasTgBack, confirmSheet } from './ui.js';
+import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData, onWs, confirmSheet } from './ui.js';
 import { t } from './i18n.js';
 import { openScreen } from './screen.js';
 
@@ -7,14 +7,11 @@ import { openScreen } from './screen.js';
 let activeThreadId = null;
 
 function inboxHead(title, close, emoji) {
-  const back = hasTgBack()
-    ? h('span.inbox-head-spacer', { 'aria-hidden': 'true' })
-    : h('button.round.back', {
+  return h('div.top.inbox-head',
+    h('button.round.back', {
       type: 'button', 'aria-label': t('back'),
       onclick: () => { haptic('light'); close(); },
-    }, icon('back', 22));
-  return h('div.top.inbox-head',
-    back,
+    }, icon('back', 22)),
     h('h1', (emoji ? emoji + ' ' : '') + title),
     h('span.inbox-head-spacer', { 'aria-hidden': 'true' }));
 }

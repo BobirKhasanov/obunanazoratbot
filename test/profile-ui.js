@@ -77,8 +77,12 @@ assert.ok(css.includes('.char-grid') && css.includes('.char-tile'), 'character a
 assert.ok(admin.includes("['invite', t('btn_invite')]") || admin.includes("['invite', t(\"btn_invite\")]") || (admin.includes("btn_invite") && admin.includes("'invite'")), 'composer has invite/referral button type');
 assert.ok(admin.includes('/admin/message-stats') && admin.includes('msg_stats_title'), 'admin message stats screen');
 assert.ok(read('src/server.js').includes("admin.get('/message-stats'") && read('src/server.js').includes('personalizeBroadcastPost'), 'message stats + invite personalization');
-assert.ok(read('public/js/ui.js').includes('hasTgBack'), 'Telegram BackButton helper');
-assert.ok(profile.includes('hasTgBack') && admin.includes('hasTgBack'), 'subpages avoid double back');
+assert.ok(profile.includes('round.back') && admin.includes('round.back'), 'subpages keep in-app back');
+assert.ok(read('public/js/inbox.js').includes('round.back') && read('public/js/game.js').includes('round.back'), 'inbox/game keep in-app back');
+assert.ok(!read('public/js/ui.js').includes('hasTgBack'), 'in-app back always shown (no hasTgBack hide)');
+assert.ok(read('public/js/board.js').includes('promo-col') && css.includes('.promo.promo-col'), 'Chess.com-style promotion column');
+assert.ok(read('public/js/board.js').includes('this.selected === sq'), 'tap same piece deselects');
+assert.ok(read('public/js/game.js').includes('S.busy = true'), 'online moves lock board until server ack');
 assert.ok(!app.includes("h('span.star', ' ★')"), 'home live/friends no friend star glyph');
 assert.ok(read('src/server.js').includes('/notifications/by-copy/'), 'admin delete notif by copy');
 assert.ok(css.includes('data-android="1"') && css.includes('0.38s'), 'Android snappier screen transitions');
@@ -105,6 +109,7 @@ assert.ok(app.includes("t('online_players')") && app.includes('home-online'), 'h
 const playflow = read('public/js/playflow.js');
 assert.ok(playflow.includes('openSearching') && playflow.includes('/games/quick'), 'play flow searching + quick match');
 assert.ok(playflow.includes('preferredColor') && playflow.includes('TIME_GROUPS'), 'time/color setup in play flow');
+assert.ok(playflow.includes('round.back') && playflow.includes('searching'), 'matchmaking keeps back button');
 assert.ok(!playflow.includes('variant_960') && !playflow.includes('Chess960'), 'Chess960 stub removed from play flow');
 assert.ok(playflow.includes('search_elo_window') || playflow.includes('eloDelta'), 'search UI shows expanding Elo window');
 assert.ok(app.includes('themeShellBg'), 'app syncs radial shell bg');

@@ -19,6 +19,12 @@ function replay(moves) {
 function applyMove(moves, from, to, promotion) {
   const chess = replay(moves);
   const turn = chess.turn();
+  const cand = chess.moves({ square: from, verbose: true }).filter((m) => m.to === to);
+  if (!cand.length) throw bad('Illegal move', 'illegal_move');
+  // Pawn promotion must name the piece (Chess.com / FIDE) — refuse bare to-rank moves
+  if (cand.some((m) => m.promotion) && !PROMO.includes(promotion)) {
+    throw bad('Illegal move', 'illegal_move');
+  }
   try {
     chess.move({ from, to, promotion: PROMO.includes(promotion) ? promotion : undefined });
   } catch {

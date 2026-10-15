@@ -235,6 +235,13 @@ export function createPlayFlow(deps) {
       });
 
       return [
+        h('div.top',
+          h('button.round.back', {
+            type: 'button',
+            'aria-label': t('back'),
+            onclick: async () => { haptic('light'); await cancelGame(); close(); },
+          }, icon('back', 22)),
+          h('h1', t('searching'))),
         h('div.pf-search',
           h('div.pf-search-art', '♟️'),
           h('h2', t('searching')),

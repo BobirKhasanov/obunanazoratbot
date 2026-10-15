@@ -1,5 +1,5 @@
 // Profile hub: sectioned menu + slide-in subpages (friends, premium, settings, …).
-import { h, icon, haptic, toast, api, fail, avBlock, premIc, shareUrl, confirmSheet, toggle, tg, sheet, getInitData, ApiError, hasTgBack } from './ui.js';
+import { h, icon, haptic, toast, api, fail, avBlock, premIc, shareUrl, confirmSheet, toggle, tg, sheet, getInitData, ApiError } from './ui.js';
 import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
 import { openScreen } from './screen.js';
 import { openAdmin } from './admin.js';
@@ -57,13 +57,16 @@ function canStyleChess(me) {
 }
 
 function subTop(title, close) {
-  const back = hasTgBack()
-    ? h('span.inbox-head-spacer', { 'aria-hidden': 'true' })
-    : h('button.round.back', {
-      type: 'button', 'aria-label': t('back'),
-      onclick: () => { haptic('light'); close(); },
-    }, icon('back', 20));
-  return [h('div.top.sub-top', back, h('h1', title), h('span.inbox-head-spacer', { 'aria-hidden': 'true' }))];
+  return [
+    h('div.top.sub-top',
+      h('button.round.back', {
+        type: 'button', 'aria-label': t('back'),
+        onclick: () => { haptic('light'); close(); },
+      }, icon('back', 20)),
+      h('h1', title),
+      h('span.inbox-head-spacer', { 'aria-hidden': 'true' }),
+    ),
+  ];
 }
 
 /** @param {object} ctx { state, mount helpers via callbacks } */

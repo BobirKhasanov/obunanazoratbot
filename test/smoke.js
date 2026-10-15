@@ -788,6 +788,29 @@ async function playMoves(game, players, moves, startPly = 0) {
       await ok('C', 'POST', `/games/${open.id}/resign`);
     });
 
+    await step('quick match honours joiner preferred colour when creator is random', async () => {
+      const open = (await ok('C', 'POST', '/games/quick', { timeControl: '3+0' })).game;
+      assert.strictEqual(open.status, 'open');
+      const joined = (await ok('D', 'POST', '/games/quick', { timeControl: '3+0', preferredColor: 'w' })).game;
+      assert.strictEqual(joined.id, open.id);
+      assert.strictEqual(joined.status, 'active');
+      assert.strictEqual(joined.you, 'w', 'joiner asked for white');
+      const creator = (await ok('C', 'GET', `/games/${open.id}`)).game;
+      assert.strictEqual(creator.you, 'b');
+      await ok('D', 'POST', `/games/${open.id}/resign`);
+    });
+
+    await step('compatible colour prefs give each player their colour', async () => {
+      const open = (await ok('C', 'POST', '/games/quick', { timeControl: '5+0', preferredColor: 'b' })).game;
+      assert.strictEqual(open.status, 'open');
+      const joined = (await ok('D', 'POST', '/games/quick', { timeControl: '5+0', preferredColor: 'w' })).game;
+      assert.strictEqual(joined.id, open.id);
+      assert.strictEqual(joined.you, 'w');
+      const creator = (await ok('C', 'GET', `/games/${open.id}`)).game;
+      assert.strictEqual(creator.you, 'b', 'creator asked for black');
+      await ok('C', 'POST', `/games/${open.id}/resign`);
+    });
+
     await step('quick match skips far Elo until the search window grows', async () => {
       await pg.q('UPDATE users SET elo_bullet = 1200, elo = 1200 WHERE id = $1', USERS.C.id);
       await pg.q('UPDATE users SET elo_bullet = 1600, elo = 1600 WHERE id = $1', USERS.D.id);

@@ -139,6 +139,13 @@ export class Board {
     if (!sq) return;
     if (this.selected && this.legal.some((m) => m.to === sq)) { this.tryMove(this.selected, sq); return; } // tap-to-move
     if (this.canTouch(sq)) {
+      // Chess.com: tap the same piece again to deselect
+      if (this.selected === sq) {
+        this.deselect();
+        this.drawHighlights();
+        haptic('select');
+        return;
+      }
       this.select(sq); haptic('select');
       const p = this.pieces.get(sq);
       if (p) { this.drag = { sq, el: p.el, sx: e.clientX, sy: e.clientY, moved: false }; }
@@ -176,15 +183,32 @@ export class Board {
   }
   askPromotion(from, to, colour) {
     const p = this.pieces.get(from); if (p) this.place(p.el, from);
-    const { x } = this.xy(to);
-    const down = this.xy(to).y === 0; // promotion square at the top: list grows downward
-    const box = h('div.promo', { style: { left: `${Math.min(Math.max(x, 0), 4) * 12.5 + (x > 4 ? 0 : 0)}%` } });
+    const { x, y } = this.xy(to);
+    // Chess.com: vertical Q/N/R/B column on the promotion file, starting at the promo square
+    const growDown = y === 0;
     const opts = ['q', 'n', 'r', 'b'];
-    const wrap = h('div.promo-wrap', h('div.promo-title', t('promote_to')), box);
-    box.style.left = '12.5%'; box.style.right = '12.5%';
-    box.style.top = down ? '25%' : '25%';
-    for (const o of opts) box.append(h('button.promo-btn', { onclick: (ev) => { ev.stopPropagation(); this.closePromo(); this.commit(from, to, o); }, html: pieceSvg(colour, o) }));
-    wrap.addEventListener('pointerdown', (ev) => { if (ev.target === wrap) { this.closePromo(); this.drawHighlights(); } });
+    const box = h('div.promo.promo-col', {
+      style: {
+        left: `${x * 12.5}%`,
+        top: growDown ? '0%' : '50%',
+        flexDirection: growDown ? 'column' : 'column-reverse',
+      },
+      role: 'listbox',
+      'aria-label': t('promote_to'),
+    });
+    const wrap = h('div.promo-wrap', box);
+    for (const o of opts) {
+      box.append(h('button.promo-btn', {
+        type: 'button',
+        role: 'option',
+        'aria-label': o,
+        onclick: (ev) => { ev.stopPropagation(); this.closePromo(); this.commit(from, to, o); },
+        html: pieceSvg(colour, o),
+      }));
+    }
+    wrap.addEventListener('pointerdown', (ev) => {
+      if (ev.target === wrap) { this.closePromo(); this.drawHighlights(); }
+    });
     this.promo = wrap; this.el.append(wrap);
     requestAnimationFrame(() => wrap.classList.add('show'));
   }

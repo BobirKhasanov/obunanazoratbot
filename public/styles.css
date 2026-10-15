@@ -546,12 +546,25 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .coords b { position: absolute; font-size: 9px; font-weight: 800; opacity: 0.7; color: var(--pc-stroke); }
 .coords .cf { bottom: 1px; margin-left: 10.2%; }
 .coords .cr { left: 2px; margin-top: 0.4%; }
-.promo-wrap { position: absolute; inset: 0; background: rgba(5, 8, 14, 0.55); z-index: 10; opacity: 0; transition: opacity 0.25s; pointer-events: auto; display: grid; place-items: center; }
+/* Chess.com-style promotion: dim board + vertical Q/N/R/B on the promo file */
+.promo-wrap {
+  position: absolute; inset: 0; background: rgba(0, 0, 0, 0.42); z-index: 10;
+  opacity: 0; transition: opacity 0.15s ease; pointer-events: auto;
+}
 .promo-wrap.show { opacity: 1; }
-.promo-title { position: absolute; top: 14%; left: 0; right: 0; text-align: center; font-weight: 800; color: #fff; font-size: 14px; }
-.promo { position: absolute; display: flex; gap: 6px; padding: 8px; border-radius: 18px; background: var(--card); }
-.promo-btn { flex: 1; aspect-ratio: 1; border-radius: 12px; background: var(--card-soft); padding: 4px; transition: transform 0.2s var(--ease); }
-.promo-btn:active { transform: scale(0.92); }
+.promo.promo-col {
+  position: absolute; width: 12.5%; display: flex; padding: 0; gap: 0;
+  border-radius: 3px; overflow: hidden; background: #fff;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+}
+.promo.promo-col .promo-btn {
+  width: 100%; aspect-ratio: 1; border-radius: 0; border: 0;
+  background: #fff; padding: 3%; transition: background 0.12s ease;
+}
+.promo.promo-col .promo-btn:nth-child(even) { background: #efefef; }
+.promo.promo-col .promo-btn:active,
+.promo.promo-col .promo-btn:focus-visible { background: #81b64c; outline: none; }
+:root[data-theme="light"] .promo-wrap { background: rgba(15, 23, 42, 0.35); }
 .moves { display: flex; gap: 8px; overflow-x: auto; white-space: nowrap; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; scrollbar-width: none; min-height: 20px; padding: 0 2px; }
 .moves::-webkit-scrollbar { display: none; }
 .moves .cur { color: var(--text); font-weight: 800; }

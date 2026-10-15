@@ -1289,10 +1289,25 @@ async function claimStartParamReferral(inviteeId, startParam) {
   return { ...paid, inviterId };
 }
 
-/** Seat the joiner next to the creator (honour preferred_color when set) and start the game. Only one joiner can win the race. */
-async function startGame(row, joinerId) {
-  const pref = row.preferred_color === 'w' || row.preferred_color === 'b' ? row.preferred_color : null;
-  const creatorWhite = pref === 'w' ? true : pref === 'b' ? false : Math.random() < 0.5;
+/**
+ * Seat the joiner next to the creator and start the game.
+ * Colour resolution matches Chess.com: honour both prefs when compatible;
+ * if only one side chose a colour, give them that; if both want the same, coin-flip.
+ * Only one joiner can win the race.
+ */
+async function startGame(row, joinerId, joinerPreferred = null) {
+  const creatorPref = row.preferred_color === 'w' || row.preferred_color === 'b' ? row.preferred_color : null;
+  const joinerPref = joinerPreferred === 'w' || joinerPreferred === 'b' ? joinerPreferred : null;
+  let creatorWhite;
+  if (creatorPref && joinerPref) {
+    creatorWhite = creatorPref !== joinerPref ? creatorPref === 'w' : Math.random() < 0.5;
+  } else if (creatorPref) {
+    creatorWhite = creatorPref === 'w';
+  } else if (joinerPref) {
+    creatorWhite = joinerPref === 'b'; // joiner wants white → creator is black
+  } else {
+    creatorWhite = Math.random() < 0.5;
+  }
   const tc = normalizeTimeControl(row.time_control);
   const spec = presetOf(tc);
   const whiteId = creatorWhite ? row.creator_id : joinerId;
@@ -1396,7 +1411,7 @@ api.post('/games/quick', wrap(async (req, res) => {
     const allowed = Math.max(eloDelta, expandingEloDelta(theirSince));
     if (Math.abs(theirElo - myElo) > allowed) continue;
     try {
-      return res.json({ game: await gameFor(await startGame(g, uid), uid) });
+      return res.json({ game: await gameFor(await startGame(g, uid, preferredColor), uid) });
     } catch (e) {
       if (e && e.code === 'game_unavailable') continue;
       throw e;
@@ -1495,7 +1510,8 @@ api.post('/games/:id/join', wrap(async (req, res) => {
   const allowed = row.status === 'open' || await isInvitee(row, uid);
   if (!allowed) throw bad('This game is no longer available', 'game_unavailable');
   await ensureRoom(uid);
-  res.json({ game: await gameFor(await startGame(row, uid), uid) });
+  const preferredColor = parsePreferredColor(req.body && req.body.preferredColor);
+  res.json({ game: await gameFor(await startGame(row, uid, preferredColor), uid) });
 }));
 
 api.post('/games/:id/decline', wrap(async (req, res) => {

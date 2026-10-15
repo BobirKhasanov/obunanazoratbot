@@ -1,6 +1,6 @@
 // Game screen: vs computer (local engine in a Web Worker) and online / friend games (server-authoritative over WebSocket).
 import { Chess } from '/vendor/chess.js';
-import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatEmoji, rain, avatar, avBlock, sleep, shareUrl, copyText, playMoveSound, unlockAudio, hasTgBack } from './ui.js';
+import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatEmoji, rain, avatar, avBlock, sleep, shareUrl, copyText, playMoveSound, unlockAudio } from './ui.js';
 import { t, getLang } from './i18n.js';
 import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
@@ -75,9 +75,7 @@ export function openGame(opts, onClose) {
   const moveStrip = h('div.moves');
   const boardHost = h('div.board-host');
   const banner = h('div.gbanner'); banner.hidden = true;
-  const back = hasTgBack()
-    ? h('span.ghead-spacer', { 'aria-hidden': 'true' })
-    : h('button.round.back', { 'aria-label': t('back'), onclick: () => closeGame() }, icon('back', 22));
+  const back = h('button.round.back', { 'aria-label': t('back'), onclick: () => closeGame() }, icon('back', 22));
   const title = h('div.gtitle');
   const act = (ic, label, fn) => h('button.act', { onclick: fn, 'aria-label': label }, icon(ic, 22), h('span', label));
   const actions = h('div.actions');
@@ -251,7 +249,7 @@ export function openGame(opts, onClose) {
     const lastMoves = c.history({ verbose: true }); const lm = lastMoves[lastMoves.length - 1];
     const myTurn = S.kind === 'ai' ? (!S.over && !S.thinking && c.turn() === S.colour)
       : S.kind === 'spectate' ? false
-      : (S.game.status === 'active' && S.game.you && c.turn() === S.game.you);
+      : (!S.busy && S.game.status === 'active' && S.game.you && c.turn() === S.game.you);
     const mine = !S.over && myTurn ? S.colour : null;
     board.set(c, { lastMove: lm ? { from: lm.from, to: lm.to } : null, orientation: ori, mine, animate });
     const oppCol = S.colour === 'w' ? 'b' : 'w';
@@ -397,20 +395,28 @@ export function openGame(opts, onClose) {
 
   // ----- moves -----
   async function humanMove(from, to, promotion) {
-    if (S.over || S.kind === 'spectate') return;
+    if (S.over || S.kind === 'spectate' || S.busy || S.thinking) return;
     unlockAudio(); // ensure Telegram WebView allows sound on this gesture
     if (S.kind === 'ai') {
       try { S.chess.move({ from, to, promotion }); } catch { return render(); }
       playMoveSound();
       S.moves.push([from, to, promotion]); afterMove(true);
     } else {
-      const g = S.game; const before = S.chess.fen();
+      const before = S.chess.fen();
       try { S.chess.move({ from, to, promotion }); } catch { return render(); }
       playMoveSound();
-      render();
-      try { const r = await api('POST', `/games/${S.id}/move`, { from, to, promotion }); applyServer(r.game); }
-      catch (e) { fail(e); try { applyServer((await api('GET', `/games/${S.id}`)).game, true); } catch { S.chess = new Chess(before); render(false); } }
-      void g;
+      S.busy = true;
+      render(); // lock board while waiting for server (Chess.com-style)
+      try {
+        const r = await api('POST', `/games/${S.id}/move`, { from, to, promotion });
+        S.busy = false;
+        applyServer(r.game);
+      } catch (e) {
+        S.busy = false;
+        fail(e);
+        try { applyServer((await api('GET', `/games/${S.id}`)).game, true); }
+        catch { S.chess = new Chess(before); render(false); }
+      }
     }
   }
 
@@ -431,7 +437,8 @@ export function openGame(opts, onClose) {
     if (c.isCheckmate()) { outcome = c.turn() === S.colour ? 'loss' : 'win'; reason = 'checkmate'; }
     else if (c.isInsufficientMaterial()) reason = 'insufficient';
     else if (c.isThreefoldRepetition()) reason = 'repetition';
-    else if (c.isDraw() && !c.isStalemate()) reason = 'fifty';
+    else if (typeof c.isDrawByFiftyMoves === 'function' ? c.isDrawByFiftyMoves() : (c.isDraw() && !c.isStalemate())) reason = 'fifty';
+    else if (c.isStalemate()) reason = 'stalemate';
     saveAi(null);
     // Vs-computer never updates server stats / Elo
     setTimeout(() => { render(); showResult(outcome, reason); }, 650);
@@ -503,6 +510,7 @@ export function openGame(opts, onClose) {
   // ----- server updates (online) -----
   function applyServer(g, force) {
     if (!ctx || ctx !== S || g.id !== S.id) return;
+    S.busy = false;
     const prev = S.game; S.game = g;
     const moves = g.moves || [];
     if (S.kind !== 'spectate') S.colour = g.you || S.colour;
