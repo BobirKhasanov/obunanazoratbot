@@ -806,7 +806,7 @@ api.patch('/me', wrap(async (req, res) => {
   res.json({ user: publicUser(next, req.isAdmin) });
 }));
 
-const MAX_AVATAR = 2 * 1024 * 1024;
+const MAX_AVATAR = 5 * 1024 * 1024;
 const AVATAR_MIME = {
   'image/jpeg': 'photo',
   'image/png': 'photo',
@@ -832,8 +832,8 @@ async function releaseAvatarMedia(prevKey, nextKey) {
   await db.prepare('DELETE FROM media WHERE id = ?').run(id).catch(() => {});
 }
 
-/** Premium (or admin): upload a custom avatar photo (JPG/PNG/GIF ≤ 2 MB). */
-api.post('/me/avatar', express.raw({ type: () => true, limit: '3mb' }), wrap(async (req, res) => {
+/** Premium (or admin): upload a custom avatar photo (JPG/PNG/GIF ≤ 5 MB). */
+api.post('/me/avatar', express.raw({ type: () => true, limit: '6mb' }), wrap(async (req, res) => {
   const u = req.user;
   if (!isPremiumActive(u) && !req.isAdmin) throw new HttpError(403, 'Premium required', 'premium_required');
   const buf = req.body;
@@ -1985,6 +1985,7 @@ api.post('/messages/threads', wrap(async (req, res) => {
   const u = await getUser.get(other);
   if (!u || u.blocked) throw new HttpError(404, 'Player not found', 'notfound');
   if (await blockedEither(uid, other)) throw bad('Blocked', 'blocked');
+  if (!(await areFriends(uid, other))) throw bad('Friends only', 'friends_only');
   const [a, b] = dmPair(uid, other);
   let row = await db.prepare('SELECT id FROM dm_threads WHERE user_a = ? AND user_b = ?').get(a, b);
   if (!row) {
@@ -2057,7 +2058,8 @@ api.get('/friends', wrap(async (req, res) => {
   });
 }));
 
-// Called when someone opens a friend-invite link (t.me/<bot>?start=i<inviterId> or startapp)
+// Called when someone opens a friend-invite link (t.me/<bot>?start=i<inviterId> or startapp).
+// Any user (new or existing) gets referral diamonds once; inviter is always added as a friend.
 api.post('/friends/join', wrap(async (req, res) => {
   const uid = req.user.id;
   const other = intParam(req.body && req.body.userId);
@@ -2065,23 +2067,25 @@ api.post('/friends/join', wrap(async (req, res) => {
   if (other === uid || !u || u.blocked) throw new HttpError(404, 'Player not found', 'user_unavailable');
   const already = await areFriends(uid, other);
   await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(uid);
-  // Always attempt referral pay (PK gates once-ever); works even if already friends via a game
   const { reward, inviteeReward } = await applyReferralPay(uid, other);
-  if (!already || reward) {
+  const nowFriends = await areFriends(uid, other);
+  if ((!already && nowFriends) || reward) {
     const me = (await person(uid)).name;
     realtime.send(other, { t: 'friend', id: uid, reward });
     notify.toUser(other, (T) => T.friendJoined(me) + (reward ? ` 💎 +${reward}` : ''));
   }
   const meRow = inviteeReward || reward ? await getUser.get(uid) : null;
+  if (meRow) memoUser(meRow);
   res.json({
     friend: await person(other),
-    already,
+    already: already && !reward && !inviteeReward,
     inviteeReward,
+    reward,
     user: meRow ? publicUser(meRow, req.isAdmin) : undefined,
   });
 }));
 
-// Spend diamonds on Premium (1 / 3 / 6 / 12 Tashkent months); renewals extend from current expiry
+// Spend diamonds on Premium (1 / 3 / 6 / 12 Tashkent months). Active Premium cannot be extended — buy again after it ends.
 api.post('/premium/buy', wrap(async (req, res) => {
   const shop = await getShopSettings();
   const months = Math.floor(Number((req.body && req.body.months) ?? 1));
@@ -2089,11 +2093,9 @@ api.post('/premium/buy', wrap(async (req, res) => {
   if (!plan) throw bad('Choose 1, 3, 6 or 12 months', 'bad_request');
   const price = plan.diamonds;
   const u = await getUser.get(req.user.id);
+  if (isPremiumActive(u)) throw bad('You already have Premium', 'premium_owned');
   if (Number(u.diamonds || 0) < price) throw bad('Not enough diamonds', 'no_diamonds');
-  const base = (u.premium_until && new Date(u.premium_until).getTime() > Date.now())
-    ? new Date(u.premium_until)
-    : new Date();
-  const until = addMonthsTashkent(base, months);
+  const until = addMonthsTashkent(new Date(), months);
   const r = await db.prepare(`
     UPDATE users SET diamonds = diamonds - ?, premium = 1, premium_until = ?
     WHERE id = ? AND diamonds >= ?

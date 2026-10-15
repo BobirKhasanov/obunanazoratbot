@@ -30,6 +30,10 @@ assert.ok(!app.includes("h('div.h2', t('recent'))"), 'recent games removed from 
 assert.ok(profile.includes('openStats'));
 assert.ok(profile.includes("t('recent')"));
 assert.ok(admin.includes('ann_publish') || admin.includes('/admin/announcements'));
+assert.ok(admin.includes("PATCH', `/admin/announcements/") || admin.includes('PATCH\', `/admin/announcements/'), 'admin can edit announcements');
+assert.ok(admin.includes('beginEditAnn') || admin.includes('editingAnnId'), 'admin edit mode for active announcements');
+assert.ok(admin.includes('ann_save_edit') && admin.includes('ann_updated'), 'edit save copy');
+assert.ok(server.includes("admin.patch('/announcements/:id'"), 'server PATCH announcements');
 assert.ok(ann.includes('translate3d'));
 assert.ok(ann.includes("linkType === 'invite'") || ann.includes('linkType === "invite"') || ann.includes("a.linkType === 'invite'"));
 assert.ok(server.includes("b.linkType === 'invite'"));

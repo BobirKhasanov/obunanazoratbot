@@ -720,6 +720,8 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
   position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
   color: #f5c542; font-size: 14px;
 }
+.home-people-bar { margin: 0 0 10px; }
+.ann-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .medal-preview { width: 88px; height: 88px; border-radius: 20px; margin: 0 auto 8px; }
 .prof-av { background: none; border: 0; padding: 0; }
 .avatar-pick {

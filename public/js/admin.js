@@ -200,6 +200,7 @@ export function openAdmin(onClose) {
   // ----- home announcements -----
   const annList = h('div.list');
   let annBoard = 'home';
+  let editingAnnId = null;
   const annForm = {
     title: '', body: '', titleColor: '#ffffff', bodyColor: '#fbbf24',
     bgFrom: '#3b82f6', bgTo: '#6366f1', fontFamily: 'system', fontSize: 18,
@@ -241,6 +242,15 @@ export function openAdmin(onClose) {
   const titleIn = h('input.input', { placeholder: t('ann_title'), maxlength: 80, oninput: (e) => { annForm.title = e.target.value; } });
   const bodyIn = h('input.input', { placeholder: t('ann_body'), maxlength: 160, oninput: (e) => { annForm.body = e.target.value; } });
   const endsIn = h('input.input', { type: 'datetime-local', oninput: (e) => { annForm.endsAtTashkent = e.target.value; } });
+  const colorInputs = {};
+  const colorRow = (label, key, def) => {
+    const inp = h('input', {
+      type: 'color', value: def,
+      oninput: (e) => { annForm[key] = e.target.value; },
+    });
+    colorInputs[key] = inp;
+    return h('div.ann-color', h('span', label), inp);
+  };
   const fontSeg = seg([['system', 'Aa'], ['rounded', 'Rd'], ['serif', 'Se'], ['mono', 'Mo']], 'system', (v) => { annForm.fontFamily = v; });
   const linkSeg = seg([
     ['none', t('ann_link_none')],
@@ -270,12 +280,98 @@ export function openAdmin(onClose) {
   }
   drawAnnLink();
 
-  const colorRow = (label, key, def) => h('div.ann-color',
-    h('span', label),
-    h('input', {
-      type: 'color', value: def,
-      oninput: (e) => { annForm[key] = e.target.value; },
-    }));
+  function syncAnnFormInputs() {
+    titleIn.value = annForm.title || '';
+    bodyIn.value = annForm.body || '';
+    endsIn.value = annForm.endsAtTashkent || '';
+    for (const [k, inp] of Object.entries(colorInputs)) {
+      if (annForm[k]) inp.value = annForm[k];
+    }
+    if (fontSeg && fontSeg.set) fontSeg.set(annForm.fontFamily || 'system');
+    if (linkSeg && linkSeg.set) linkSeg.set(annForm.linkType || 'none');
+    drawAnnLink();
+    drawAnnMedia();
+    syncAnnSaveBtn();
+  }
+
+  function resetAnnForm(keepEnds) {
+    const ends = keepEnds ? annForm.endsAtTashkent : '';
+    editingAnnId = null;
+    Object.assign(annForm, {
+      title: '', body: '', titleColor: '#ffffff', bodyColor: '#fbbf24',
+      bgFrom: '#3b82f6', bgTo: '#6366f1', fontFamily: 'system', fontSize: 18,
+      mediaId: null, mediaPreview: null, linkType: 'none', linkUrl: '', linkPage: 'play',
+      endsAtTashkent: ends,
+    });
+    syncAnnFormInputs();
+  }
+
+  function beginEditAnn(a) {
+    editingAnnId = a.id;
+    Object.assign(annForm, {
+      title: a.title || '',
+      body: a.body || '',
+      titleColor: a.titleColor || '#ffffff',
+      bodyColor: a.bodyColor || '#fbbf24',
+      bgFrom: a.bgFrom || '#3b82f6',
+      bgTo: a.bgTo || '#6366f1',
+      fontFamily: a.fontFamily || 'system',
+      fontSize: a.fontSize || 18,
+      mediaId: a.mediaId || null,
+      mediaPreview: a.mediaUrl || null,
+      linkType: a.linkType || 'none',
+      linkUrl: a.linkUrl || '',
+      linkPage: a.linkPage || 'play',
+      endsAtTashkent: (a.endsAtTashkent || '').slice(0, 16),
+    });
+    syncAnnFormInputs();
+    try { titleIn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* ignore */ }
+  }
+
+  const saveAnn = h('button.btn', { type: 'button' }, icon('plus', 18), t('ann_publish'));
+  const cancelEditAnn = h('button.btn.ghost', {
+    type: 'button',
+    hidden: true,
+    onclick: () => resetAnnForm(true),
+  }, t('cancel'));
+  function syncAnnSaveBtn() {
+    saveAnn.replaceChildren(
+      icon(editingAnnId ? 'check' : 'plus', 18),
+      editingAnnId ? t('ann_save_edit') : t('ann_publish'),
+    );
+    cancelEditAnn.hidden = !editingAnnId;
+  }
+  syncAnnSaveBtn();
+  saveAnn.onclick = async () => {
+    const payload = {
+      board: annBoard,
+      title: annForm.title,
+      body: annForm.body,
+      titleColor: annForm.titleColor,
+      bodyColor: annForm.bodyColor,
+      bgFrom: annForm.bgFrom,
+      bgTo: annForm.bgTo,
+      fontFamily: annForm.fontFamily,
+      fontSize: annForm.fontSize,
+      mediaId: annForm.mediaId || null,
+      linkType: annForm.linkType,
+      linkUrl: annForm.linkUrl,
+      linkPage: annForm.linkPage,
+      endsAtTashkent: annForm.endsAtTashkent,
+    };
+    try {
+      if (editingAnnId) {
+        await api('PATCH', `/admin/announcements/${editingAnnId}`, payload);
+        toast(t('ann_updated'));
+      } else {
+        await api('POST', '/admin/announcements', payload);
+        toast(t('ann_saved'));
+      }
+      haptic('success');
+      resetAnnForm(true);
+      loadAnnouncements();
+    } catch (e) { fail(e); }
+  };
 
   async function loadAnnouncements() {
     try {
@@ -290,52 +386,39 @@ export function openAdmin(onClose) {
         annForm.endsAtTashkent = `${y}-${m}-${day}T23:59`;
         endsIn.value = annForm.endsAtTashkent;
       }
-      annList.replaceChildren(...(r.announcements || []).map((a) => h('div.row',
+      const active = (r.announcements || []).filter((a) => {
+        const end = a.endsAt ? new Date(a.endsAt).getTime() : 0;
+        return !end || end > Date.now();
+      });
+      annList.replaceChildren(...active.map((a) => h('div.row',
         h('div.grow',
           h('div.t', a.title || a.body || '—'),
-          h('div.s', `${t('ann_until')}: ${a.endsAtTashkent.replace('T', ' ')} (Tashkent)`)),
+          h('div.s', `${t('ann_until')}: ${(a.endsAtTashkent || '').replace('T', ' ')} (Tashkent)`)),
         h('button.mini', {
+          type: 'button',
+          title: t('ann_edit'),
+          onclick: () => { haptic('select'); beginEditAnn(a); },
+        }, icon('pencil', 16)),
+        h('button.mini', {
+          type: 'button',
           onclick: async () => {
             if (!(await confirmSheet(t('ann_delete_confirm'), t('remove'), true))) return;
-            try { await api('DELETE', `/admin/announcements/${a.id}`); loadAnnouncements(); toast(t('ann_deleted')); } catch (e) { fail(e); }
+            try {
+              await api('DELETE', `/admin/announcements/${a.id}`);
+              if (editingAnnId === a.id) resetAnnForm(true);
+              loadAnnouncements();
+              toast(t('ann_deleted'));
+            } catch (e) { fail(e); }
           },
-        }, icon('trash', 16)))));
-      if (!(r.announcements || []).length) annList.append(h('div.muted', t('ann_empty')));
+        }, icon('trash', 16))));
+      if (!active.length) annList.append(h('div.muted', t('ann_empty')));
     } catch (e) { fail(e); }
   }
-
-  const saveAnn = h('button.btn', {
-    onclick: async () => {
-      try {
-        await api('POST', '/admin/announcements', {
-          board: annBoard,
-          title: annForm.title,
-          body: annForm.body,
-          titleColor: annForm.titleColor,
-          bodyColor: annForm.bodyColor,
-          bgFrom: annForm.bgFrom,
-          bgTo: annForm.bgTo,
-          fontFamily: annForm.fontFamily,
-          fontSize: annForm.fontSize,
-          mediaId: annForm.mediaId || undefined,
-          linkType: annForm.linkType,
-          linkUrl: annForm.linkUrl,
-          linkPage: annForm.linkPage,
-          endsAtTashkent: annForm.endsAtTashkent,
-        });
-        toast(t('ann_saved')); haptic('success');
-        annForm.title = ''; annForm.body = ''; annForm.mediaId = null; annForm.mediaPreview = null;
-        titleIn.value = ''; bodyIn.value = '';
-        drawAnnMedia();
-        loadAnnouncements();
-      } catch (e) { fail(e); }
-    },
-  }, icon('plus', 18), t('ann_publish'));
 
   const boardSeg = seg(
     [['home', t('ann_board_home')], ['puzzle', t('ann_board_puzzle')]],
     'home',
-    (v) => { annBoard = v; loadAnnouncements(); },
+    (v) => { annBoard = v; if (editingAnnId) resetAnnForm(true); loadAnnouncements(); },
   );
 
   const annCard = h('div.card',
@@ -353,7 +436,7 @@ export function openAdmin(onClose) {
     h('div.label', t('ann_media')), annMediaBox, annFile,
     h('div.label', t('ann_link')), linkSeg, linkExtra,
     h('div.label', t('ann_ends') + ' · Tashkent (UTC+5)'), endsIn,
-    saveAnn);
+    h('div.ann-actions', saveAnn, cancelEditAnn));
 
   // ----- shop settings -----
   let shop = {

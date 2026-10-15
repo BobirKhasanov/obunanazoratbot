@@ -4,6 +4,7 @@ import { t, setLang, getLang, LANGS, LANG_NAMES } from './i18n.js';
 import { openScreen } from './screen.js';
 import { openAdmin } from './admin.js';
 import { openUserProfile } from './userprofile.js';
+import { openChatWithUser } from './inbox.js';
 export { openUserProfile };
 import { stylePickerCard } from './style-ui.js';
 import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
@@ -203,7 +204,13 @@ export function renderProfilePage(ctx) {
         },
           h('div.t', h('span.name', f.name), f.premium ? premIc() : null),
           h('div.s', f.inGame ? t('in_game') : f.online ? t('online') : t('offline'))),
-        challengeAction({ ...f, online: f.online }),
+        h('button.mini', {
+          type: 'button',
+          'aria-label': t('msg_send'),
+          title: t('msg_send'),
+          onclick: () => { haptic('select'); openChatWithUser(f.id, { id: f.id, name: f.name, premium: !!f.premium }); },
+        }, icon('chat', 18)),
+        challengeAction({ ...f, friend: true, online: f.online, discoverable: true }),
         h('button.mini', { 'aria-label': t('remove_friend'), onclick: async () => {
           if (await confirmSheet(`${t('remove_friend')}: ${f.name}?`, t('remove_friend'), true)) {
             try { await api('DELETE', `/friends/${f.id}`); state.friends = (await api('GET', '/friends')).friends; openFriends(); } catch (e) { fail(e); }
@@ -249,17 +256,19 @@ export function renderProfilePage(ctx) {
         h('div.h2', t('premium_unlocks')),
         h('ul.prem-feats', feats.map((line) => h('li', line))),
         h('div.h2', t('premium_plans')),
-        h('div.list', plans.map((p) => {
-          const can = have >= p.diamonds;
-          return h('div.row',
-            h('div.grow',
-              h('div.t', planLabel(p.months)),
-              h('div.s', `${p.diamonds} 💎`)),
-            h('button.mini.ok', {
-              disabled: !can,
-              onclick: () => buy(p.months),
-            }, can ? t('premium_buy_short') : t('premium_need_short', { n: p.diamonds - have })));
-        })),
+        u.premium
+          ? h('p.muted', t('premium_wait_expiry'))
+          : h('div.list', plans.map((p) => {
+            const can = have >= p.diamonds;
+            return h('div.row',
+              h('div.grow',
+                h('div.t', planLabel(p.months)),
+                h('div.s', `${p.diamonds} 💎`)),
+              h('button.mini.ok', {
+                disabled: !can,
+                onclick: () => buy(p.months),
+              }, can ? t('premium_buy_short') : t('premium_need_short', { n: p.diamonds - have })));
+          })),
         h('button.btn.ghost', { type: 'button', onclick: () => openDiamonds() }, t('shop_get_diamonds')),
       ];
     };
@@ -504,7 +513,7 @@ export function renderProfilePage(ctx) {
             document.dispatchEvent(new CustomEvent('open-premium'));
             return;
           }
-          if (file.size > 2 * 1024 * 1024) return toast(t('e_media_big'), true);
+          if (file.size > 5 * 1024 * 1024) return toast(t('e_media_big'), true);
           try {
             const res = await fetch('/api/me/avatar', {
               method: 'POST',

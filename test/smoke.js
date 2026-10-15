@@ -146,6 +146,24 @@ async function playMoves(game, players, moves, startPly = 0) {
       await ok('B', 'POST', '/friends/join', { userId: USERS.A.id }); // opening the link again must not pay again
       assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 20);
       assert.strictEqual((await ok('B', 'GET', '/me')).user.diamonds, 10);
+
+      // Existing user C also gets referral bonus + auto-friend
+      await ok('C', 'GET', '/me');
+      const beforeC = (await ok('C', 'GET', '/me')).user.diamonds;
+      const jc = await ok('C', 'POST', '/friends/join', { userId: USERS.A.id });
+      assert.strictEqual(jc.inviteeReward, 10);
+      assert.ok((await ok('A', 'GET', '/friends')).friends.some((f) => f.id === USERS.C.id));
+      assert.ok((await ok('C', 'GET', '/friends')).friends.some((f) => f.id === USERS.A.id));
+      assert.strictEqual((await ok('C', 'GET', '/me')).user.diamonds, beforeC + 10);
+      assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 40, 'second invitee also pays inviter');
+
+      // Friend chat
+      const th = await ok('A', 'POST', '/messages/threads', { userId: USERS.B.id });
+      assert.ok(th.id);
+      await ok('A', 'POST', `/messages/threads/${th.id}`, { body: 'salom' });
+      const chat = await ok('B', 'GET', `/messages/threads/${th.id}`);
+      assert.ok((chat.messages || []).some((m) => m.body === 'salom'));
+      await err('B', 'POST', '/messages/threads', { userId: USERS.C.id }, 400, 'friends_only');
       const meta = (await ok('A', 'GET', '/me')).meta;
       assert.strictEqual(meta.PREMIUM_PRICE, 200);
       assert.ok(Array.isArray(meta.diamondPacks) && meta.diamondPacks.length >= 1);
@@ -165,10 +183,13 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.deepStrictEqual([r.user.premium, r.user.diamonds, r.months], [true, 0, 1]);
       assert.ok(r.user.premiumUntil, 'premium_until set');
       await pg.q('UPDATE users SET diamonds = 500 WHERE id = $1', USERS.A.id);
+      await err('A', 'POST', '/premium/buy', { months: 3 }, 400, 'premium_owned');
+      // After expiry, buy starts a new period from now
+      await pg.q('UPDATE users SET premium_until = now() - interval \'1 day\', premium = 0 WHERE id = $1', USERS.A.id);
       const r2 = await ok('A', 'POST', '/premium/buy', { months: 3 });
       assert.strictEqual(r2.user.premium, true);
       assert.strictEqual(r2.months, 3);
-      assert.ok(new Date(r2.user.premiumUntil) > new Date(r.user.premiumUntil), '3 months extends further');
+      assert.ok(new Date(r2.user.premiumUntil) > Date.now());
     });
 
     await step('admin shop settings + grant diamonds with notify', async () => {

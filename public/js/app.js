@@ -149,7 +149,9 @@ function challengeAction(u) {
   if (u.invited && u.inviteGameId) {
     return h('button.mini', { onclick: () => cancelChallenge(u.inviteGameId) }, t('cancel'));
   }
-  const blocked = !!u.inGame || u.online === false || u.discoverable === false;
+  // Friends can always be challenged when online; strangers need discoverable.
+  const blocked = !!u.inGame || u.online === false
+    || (!u.friend && u.discoverable === false);
   return h('button.mini.ok', { disabled: blocked, onclick: () => challenge(u.id) }, t('challenge'));
 }
 async function openById(id) {
@@ -267,24 +269,29 @@ const resultText = (g) => {
 };
 
 let playSnap = '';
+let homePeopleTab = 'live'; // 'live' | 'friends'
 refreshers.play = async function renderPlay() {
-  const [l, anns, puzzleAnns] = await Promise.all([
+  const [l, , anns, puzzleAnns] = await Promise.all([
     loadLobby(),
+    loadFriends().catch(() => { state.friends = state.friends || []; }),
     loadAnnouncements(api, 'home'),
     loadAnnouncements(api, 'puzzle'),
   ]);
   const saved = savedAiGame();
   // Full lobby list (free + in-game), same people as the Online sheet
   const onlinePlayers = l.online || [];
+  const friends = state.friends || [];
   // Skip full remount when nothing visible changed — stops home-page flicker every poll.
   const snap = JSON.stringify({
     t: selectedTime,
+    tab: homePeopleTab,
     d: state.me.diamonds || 0,
     o: l.onlineCount,
     inv: (l.games.invites || []).map((g) => g.id),
     act: (l.games.active || []).map((g) => [g.id, g.turn, g.you]),
     wait: (l.games.waiting || []).map((g) => g.id),
     on: onlinePlayers.map((u) => [u.id, !!u.invited, !!u.inGame, !!u.friend, !!u.premium]),
+    fr: friends.map((f) => [f.id, !!f.online, !!f.inGame, !!f.invited, !!f.premium]),
     sav: saved ? [saved.level, saved.fen] : null,
     ann: (anns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
     pz: (puzzleAnns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
@@ -322,18 +329,38 @@ refreshers.play = async function renderPlay() {
     onChallenge: (u) => challenge(u.id),
     refreshHome: () => { playSnap = ''; refresh('play'); },
   });
+  const peopleBar = pillBar(
+    [['live', t('home_tab_live')], ['friends', t('home_tab_friends')]],
+    homePeopleTab,
+    (v) => { homePeopleTab = v; playSnap = ''; refresh('play'); },
+    { className: 'pill-bar home-people-bar' },
+  );
+  const liveList = onlinePlayers.length
+    ? h('div.list.home-online', ...onlinePlayers.map((u) => h('div.row',
+      h('button.plain', { type: 'button', onclick: () => openProfile(u.id) },
+        avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true })),
+      h('button.grow.plain', { type: 'button', onclick: () => openProfile(u.id) },
+        h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
+        h('div.s', u.invited ? t('challenge_sent') : (u.inGame ? t('in_game') : t('online')))),
+      challengeAction(u))))
+    : empty(t('nobody'), '🛰️');
+  const friendsList = friends.length
+    ? h('div.list.home-online', ...friends.map((f) => {
+      const row = { ...f, friend: true, online: !!f.online, discoverable: true };
+      return h('div.row',
+        h('button.plain', { type: 'button', onclick: () => openProfile(f.id) },
+          avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online, round: true })),
+        h('button.grow.plain', { type: 'button', onclick: () => openProfile(f.id) },
+          h('div.t', h('span.name', f.name), f.premium ? premIc() : null, h('span.star', ' ★')),
+          h('div.s', f.invited ? t('challenge_sent') : (f.inGame ? t('in_game') : (f.online ? t('online') : t('offline'))))),
+        challengeAction(row));
+    }))
+    : empty(t('no_friends'), '👋');
   const onlineBlock = [
     h('div.h2.online-heading', t('online_players'),
       h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
-    onlinePlayers.length
-      ? h('div.list.home-online', ...onlinePlayers.map((u) => h('div.row',
-        h('button.plain', { type: 'button', onclick: () => openProfile(u.id) },
-          avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true })),
-        h('button.grow.plain', { type: 'button', onclick: () => openProfile(u.id) },
-          h('div.t', h('span.name', u.name), u.premium ? premIc() : null, u.friend ? h('span.star', ' ★') : null),
-          h('div.s', u.invited ? t('challenge_sent') : (u.inGame ? t('in_game') : t('online')))),
-        challengeAction(u))))
-      : empty(t('nobody'), '🛰️'),
+    peopleBar,
+    homePeopleTab === 'friends' ? friendsList : liveList,
   ];
   const puzzleFallback = banner('violet', '🧩', t('home_puzzle'), t('puzzles_sub'), () => go(TABS.indexOf('puzzles'), true));
   const nodes = [
@@ -548,8 +575,11 @@ function openPuzzle(i) {
   const draw = (lastMove) => board.set(chess, { orientation: colour, mine: state2.locked ? null : colour, lastMove, animate: true });
   const buttons = (solved) => actions.replaceChildren(
     h('button.btn.ghost.sm', { onclick: () => openPuzzle(i) }, t('puzzle_retry')),
-    solved ? (i + 1 < list.length ? h('button.btn.sm', { onclick: () => openPuzzle(i + 1) }, t('puzzle_next')) : h('button.btn.sm', { onclick: closePuzzle }, t('puzzle_back')))
-      : h('button.btn.ghost.sm', { onclick: () => { const g = goodMoves(chess, state2.left)[0]; if (g) board.showHint({ from: g.from, to: g.to }); } }, t('puzzle_hint')));
+    solved
+      ? (i + 1 < list.length
+        ? h('button.btn.sm', { onclick: () => openPuzzle(i + 1) }, t('puzzle_next'))
+        : h('button.btn.sm', { onclick: closePuzzle }, t('puzzle_back')))
+      : null);
   const onMove = async (from, to, promotion) => {
     if (state2.locked) return;
     unlockAudio();

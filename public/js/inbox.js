@@ -276,6 +276,14 @@ export function openMessages() {
   }, { onClose: () => refreshInboxBadges() });
 }
 
+/** Open (or create) a DM thread with a friend and show the chat screen. */
+export async function openChatWithUser(userId, peerHint) {
+  try {
+    const th = await api('POST', '/messages/threads', { userId });
+    openChat(th.id, th.peer || peerHint || { id: userId, name: 'Player' });
+  } catch (e) { fail(e); }
+}
+
 function openChat(threadId, peer) {
   openScreen((close) => {
     const log = h('div.chat-log', h('div.skeleton'));
