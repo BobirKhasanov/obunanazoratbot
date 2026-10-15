@@ -1119,14 +1119,18 @@ async function applyReferralPay(inviteeId, inviterId) {
   };
 }
 
-/** Claim bot-stored pending inviter (Menu Button open without ?p=). */
+async function referralRowExists(inviteeId) {
+  return !!(await db.prepare('SELECT 1 AS ok FROM referrals WHERE invitee_id = ?').get(inviteeId));
+}
+
+/** Claim bot-stored pending inviter (Menu Button / welcome Open). */
 async function claimPendingReferral(inviteeId) {
   const row = await db.prepare('SELECT pending_inviter_id FROM users WHERE id = ?').get(inviteeId);
   const inviterId = row && row.pending_inviter_id ? Number(row.pending_inviter_id) : 0;
   if (!inviterId) return { reward: 0, inviteeReward: 0, inviterId: null };
   const paid = await applyReferralPay(inviteeId, inviterId);
-  // Clear only after pay attempt so a transient failure can retry on next /me
-  if (paid.reward || paid.inviteeReward || await areFriends(inviteeId, inviterId)) {
+  // Clear only when paid or referral row exists — NOT merely because they became friends via a game
+  if (paid.reward || paid.inviteeReward || await referralRowExists(inviteeId)) {
     await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(inviteeId);
   }
   return { ...paid, inviterId };
@@ -1139,7 +1143,7 @@ async function claimStartParamReferral(inviteeId, startParam) {
   const inviterId = Number(m[1]);
   if (!inviterId || inviterId === inviteeId) return { reward: 0, inviteeReward: 0, inviterId: null };
   const paid = await applyReferralPay(inviteeId, inviterId);
-  if (paid.reward || paid.inviteeReward || await areFriends(inviteeId, inviterId)) {
+  if (paid.reward || paid.inviteeReward || await referralRowExists(inviteeId)) {
     await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(inviteeId);
   }
   return { ...paid, inviterId };
@@ -2111,6 +2115,8 @@ api.get('/messages/threads/:id', wrap(async (req, res) => {
   const tid = intParam(req.params.id);
   const th = await db.prepare('SELECT * FROM dm_threads WHERE id = ?').get(tid);
   if (!th || (th.user_a !== uid && th.user_b !== uid)) throw new HttpError(404, 'Not found', 'notfound');
+  const otherId = th.user_a === uid ? th.user_b : th.user_a;
+  const other = await getUser.get(otherId);
   await db.prepare(`
     UPDATE dm_messages SET read_at = now()
     WHERE thread_id = ? AND sender_id <> ? AND read_at IS NULL
@@ -2120,6 +2126,9 @@ api.get('/messages/threads/:id', wrap(async (req, res) => {
     WHERE thread_id = ? ORDER BY created_at ASC LIMIT 200
   `).all(tid);
   res.json({
+    peer: other
+      ? { id: other.id, name: displayName(other), username: other.username || null, premium: isPremiumActive(other) }
+      : { id: otherId, name: 'Player' },
     messages: msgs.map((m) => ({
       id: m.id, body: m.body, mine: m.sender_id === uid, createdAt: m.created_at,
     })),
@@ -2138,6 +2147,33 @@ api.post('/messages/threads/:id', wrap(async (req, res) => {
     INSERT INTO dm_messages (thread_id, sender_id, body) VALUES (?, ?, ?) RETURNING id, created_at
   `).run(tid, uid, body);
   await db.prepare('UPDATE dm_threads SET updated_at = now() WHERE id = ?').run(tid);
+
+  const me = await person(uid);
+  const preview = body.length > 120 ? `${body.slice(0, 117)}…` : body;
+  const peerMeta = {
+    threadId: tid,
+    fromUserId: uid,
+    fromName: me.name,
+    peer: { id: uid, name: me.name, premium: isPremiumActive(req.user) },
+  };
+  try {
+    await db.prepare(`
+      INSERT INTO notifications (user_id, kind, title, body, meta) VALUES (?, 'dm', ?, ?, ?::jsonb)
+    `).run(other, me.name, preview, JSON.stringify(peerMeta));
+  } catch (e) {
+    console.error('[dm] notif', e.message || e);
+  }
+  realtime.send(other, {
+    t: 'dm',
+    threadId: tid,
+    from: { id: uid, name: me.name },
+    preview,
+  });
+  // Telegram push when recipient is not live in the Mini App
+  if (!realtime.isOnline(other)) {
+    notify.toUser(other, (T) => T.dmReceived(me.name, preview), { dmThreadId: tid });
+  }
+
   res.status(201).json({
     id: ins.rows?.[0]?.id || ins.id,
     body,
@@ -2175,8 +2211,8 @@ api.post('/friends/join', wrap(async (req, res) => {
   if (other === uid || !u || u.blocked) throw new HttpError(404, 'Player not found', 'user_unavailable');
   const already = await areFriends(uid, other);
   const { reward, inviteeReward } = await applyReferralPay(uid, other);
-  // Clear pending invite after successful claim (or already-friends)
-  if (reward || inviteeReward || already || await areFriends(uid, other)) {
+  // Clear pending only once referral is recorded (not merely because a game made them friends)
+  if (reward || inviteeReward || await referralRowExists(uid)) {
     await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(uid);
   }
   const nowFriends = await areFriends(uid, other);

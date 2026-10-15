@@ -158,12 +158,17 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual((await ok('C', 'GET', '/me')).user.diamonds, beforeC + 10);
       assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 40, 'second invitee also pays inviter');
 
-      // Friend chat
+      // Friend chat + in-app DM notification
       const th = await ok('A', 'POST', '/messages/threads', { userId: USERS.B.id });
       assert.ok(th.id);
       await ok('A', 'POST', `/messages/threads/${th.id}`, { body: 'salom' });
       const chat = await ok('B', 'GET', `/messages/threads/${th.id}`);
       assert.ok((chat.messages || []).some((m) => m.body === 'salom'));
+      assert.ok(chat.peer && chat.peer.id === USERS.A.id, 'thread returns peer for deep link open');
+      const notifs = await ok('B', 'GET', '/notifications');
+      const dmNotif = (notifs.notifications || []).find((n) => n.kind === 'dm' && n.meta && n.meta.threadId === th.id);
+      assert.ok(dmNotif, 'recipient got DM notification');
+      assert.ok(/salom/i.test(dmNotif.body || ''));
       await err('B', 'POST', '/messages/threads', { userId: USERS.C.id }, 400, 'friends_only');
       const meta = (await ok('A', 'GET', '/me')).meta;
       assert.strictEqual(meta.PREMIUM_PRICE, 200);

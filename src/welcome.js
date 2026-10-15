@@ -147,17 +147,15 @@ async function saveWelcomeLang(lang, patch) {
 
 function openAppUrl(webAppUrl, payload) {
   const u = new URL(webAppUrl);
-  // Only game deep links (g…) belong on the Open button. Friend invites (i…) must not —
-  // the welcome message stays in chat forever; re-tapping would re-run the invite deep link.
-  // Referral bonuses are stored as pending_inviter_id on /start and claimed on first /me.
+  // Friend invite (i…) and game (g…) deep links. Client ignores i… once already friends.
   const p = String(payload || '');
-  if (/^g[\w-]{4,20}$/.test(p)) u.searchParams.set('p', p);
+  if (/^i\d{1,15}$/.test(p) || /^g[\w-]{4,20}$/.test(p)) u.searchParams.set('p', p);
   return u.toString();
 }
 
 function referralShareUrl(botUsername, userId, shareText) {
-  // Prefer ?start= so /start stores pending_inviter_id; Mini App /me also claims start_param
-  const link = `https://t.me/${botUsername}?start=i${userId}`;
+  // startapp → Mini App with signed start_param (claimed on /me); also works after bot /start i…
+  const link = `https://t.me/${botUsername}?startapp=i${userId}`;
   return `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText || '')}`;
 }
 

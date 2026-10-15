@@ -1,5 +1,6 @@
 // Main app: boot, swipe pager, pages, deep links.
 import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo } from './ui.js';
+import { openDmThread, refreshInboxBadges, headerInboxBtns } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -337,6 +338,7 @@ refreshers.play = async function renderPlay() {
     if (pill) pill.replaceChildren(h('i.dot'), t('online_now', { n: l.onlineCount }));
     const gem = playEl.querySelector('.gempill');
     if (gem) gem.textContent = '💎 ' + (state.me.diamonds || 0);
+    try { refreshInboxBadges(playEl); } catch { /* ignore */ }
     return;
   }
   playSnap = snap;
@@ -423,6 +425,7 @@ refreshers.play = async function renderPlay() {
     h('div.top',
       h('h1', '♟ ' + t('app')),
       h('div.pills',
+        headerInboxBtns(),
         h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)))),
     annHost,
     puzzleAnns && puzzleAnns.length ? puzzleHost : puzzleFallback,
@@ -833,8 +836,14 @@ function readStartParam() {
 }
 
 async function handleDeepLink() {
+  let gid = null;
+  let dmId = null;
+  try {
+    const q = new URLSearchParams(location.search);
+    gid = q.get('game');
+    dmId = q.get('dm');
+  } catch { /* ignore */ }
   const p = readStartParam();
-  const gid = (() => { try { return new URLSearchParams(location.search).get('game'); } catch { return null; } })();
   try { history.replaceState(null, '', location.pathname); } catch { /* ignore */ }
   if (/^i\d{1,15}$/.test(p)) {
     try {
@@ -851,6 +860,9 @@ async function handleDeepLink() {
     } catch (e) { fail(e); }
   } else if (/^g[\w-]{4,20}$/.test(p)) await joinGame(p.slice(1));
   else if (gid && /^[\w-]{4,20}$/.test(gid)) await openById(gid);
+  else if (dmId && /^\d{1,18}$/.test(dmId)) {
+    try { await openDmThread(Number(dmId)); } catch (e) { fail(e); }
+  }
 }
 
 // ---------- start (called from entry.js AFTER splash is already dismissed) ----------
@@ -900,6 +912,11 @@ export async function start(me) {
   onWs((m) => {
     if (m.t === 'invite') { showInvite(m.game, m.ttl || 10000); refresh('play'); }
     else if (m.t === 'friend') { haptic('success'); if (m.reward) { state.me.diamonds = (state.me.diamonds || 0) + m.reward; toast(t('friend_reward', { n: m.reward })); } refresh(); }
+    else if (m.t === 'dm') {
+      try { refreshInboxBadges(); } catch { /* ignore */ }
+      haptic('success');
+      toast(t('msg_new_from', { name: (m.from && m.from.name) || '…' }));
+    }
     else if (m.t === 'wallet' && m.user) {
       state.me = { ...state.me, ...m.user };
       const g = m.granted || {};

@@ -37,7 +37,7 @@ assert.ok(server.includes("admin.patch('/announcements/:id'"), 'server PATCH ann
 assert.ok(ann.includes('translate3d'));
 assert.ok(ann.includes("linkType === 'invite'") || ann.includes('linkType === "invite"') || ann.includes("a.linkType === 'invite'"));
 assert.ok(server.includes("b.linkType === 'invite'"));
-assert.ok(ann.includes('startapp=i') || ann.includes('?start=i'));
+assert.ok(ann.includes('startapp=i'));
 assert.ok(ann.includes('replaceChildren(track)'), 'must not append null dots');
 assert.ok(!ann.includes('host.append(track, dots)'));
 assert.ok(ann.includes('DWELL_MS') && /DWELL_MS\s*=\s*6000\b/.test(ann), 'dwell = 6s');

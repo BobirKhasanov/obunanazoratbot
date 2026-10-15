@@ -138,16 +138,26 @@ export function openNotifications() {
           const feedbackHint = n.kind === 'feedback' && n.meta?.username
             ? '@' + n.meta.username
             : (n.kind === 'feedback' && n.meta?.fromName ? n.meta.fromName : '');
+          const isDm = n.kind === 'dm' && n.meta && n.meta.threadId;
           nodes.push(h('button.notif-row' + (n.read ? '' : '.unread'), {
             type: 'button',
             onclick: async () => {
               try { if (!n.read) await api('POST', `/notifications/${n.id}/read`); } catch { /* ignore */ }
               n.read = true;
+              if (isDm) {
+                // Smooth slide into the thread (stacked over the bell list)
+                openChat(n.meta.threadId, n.meta.peer || {
+                  id: n.meta.fromUserId,
+                  name: n.meta.fromName || n.title || t('messages'),
+                });
+                refreshInboxBadges();
+                return;
+              }
               openNotifDetail(n, () => { load(); refreshInboxBadges(); });
             },
           },
-            h('div.notif-ic' + (n.kind === 'feedback' ? '.feedback' : ''),
-              icon(n.kind === 'feedback' ? 'help' : 'bell', 18)),
+            h('div.notif-ic' + (n.kind === 'feedback' ? '.feedback' : n.kind === 'dm' ? '.dm' : ''),
+              icon(n.kind === 'feedback' ? 'help' : n.kind === 'dm' ? 'mail' : 'bell', 18)),
             h('div.notif-body',
               h('div.notif-head', h('b', n.title), h('span.notif-time', fmtTime(n.createdAt))),
               bodyPreview ? h('div.notif-snippet', bodyPreview) : null,
@@ -281,6 +291,18 @@ export async function openChatWithUser(userId, peerHint) {
   try {
     const th = await api('POST', '/messages/threads', { userId });
     openChat(th.id, th.peer || peerHint || { id: userId, name: 'Player' });
+  } catch (e) { fail(e); }
+}
+
+/** Open an existing thread (deep link / notification). Fetches peer if missing. */
+export async function openDmThread(threadId, peerHint) {
+  try {
+    let peer = peerHint;
+    if (!peer || !peer.name) {
+      const r = await api('GET', `/messages/threads/${threadId}`);
+      peer = r.peer || peerHint || { name: t('messages') };
+    }
+    openChat(threadId, peer);
   } catch (e) { fail(e); }
 }
 

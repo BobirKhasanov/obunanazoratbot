@@ -19,7 +19,7 @@ assert.ok(welcomeSrc.includes('SHAXMAT BOTIGA XUSH KELIBSIZ'));
 assert.ok(welcomeSrc.includes('Ilovani ochish'));
 assert.ok(welcomeSrc.includes("Do'stni taklif qilish"));
 assert.ok(welcomeSrc.includes("type: 'invite'"));
-assert.ok(welcomeSrc.includes('start=i') || welcomeSrc.includes('startapp=i'));
+assert.ok(welcomeSrc.includes('startapp=i'));
 assert.ok(welcomeSrc.includes('function resolveButtons'));
 assert.ok(welcomeSrc.includes('function mergeWelcomeConfig'));
 assert.ok(botSrc.includes('sendWelcome'));

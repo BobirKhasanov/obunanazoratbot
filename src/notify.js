@@ -1,5 +1,5 @@
 // Telegram chat notifications. Every message carries a web_app button that opens the Mini App
-// (straight into a specific game when a gameId is given).
+// (straight into a specific game or DM thread when given).
 const { InputFile } = require('grammy');
 const db = require('./db');
 const { tr } = require('./i18n');
@@ -15,10 +15,19 @@ function init(b, webAppUrl) {
   baseUrl = webAppUrl || '';
 }
 
-function appUrl(gameId) {
-  if (!baseUrl.startsWith('https://')) return null; // Telegram only accepts https for web_app buttons
+/**
+ * Build Mini App URL. Accepts legacy appUrl(gameId) or appUrl({ gameId, dmThreadId }).
+ */
+function appUrl(opts) {
+  if (!baseUrl.startsWith('https://')) return null;
   const u = new URL(baseUrl);
-  if (gameId) u.searchParams.set('game', gameId);
+  if (opts != null && (typeof opts === 'string' || typeof opts === 'number')) {
+    u.searchParams.set('game', String(opts));
+    return u.toString();
+  }
+  const o = opts && typeof opts === 'object' ? opts : {};
+  if (o.gameId) u.searchParams.set('game', String(o.gameId));
+  if (o.dmThreadId) u.searchParams.set('dm', String(o.dmThreadId));
   return u.toString();
 }
 
@@ -28,15 +37,18 @@ const getUser = db.prepare('SELECT lang, notify_enabled, bot_blocked, blocked FR
  * Sends `build(T)` (T = the user's language strings) to a user, with an "Open" button.
  * Never throws. Returns true when Telegram accepted the message.
  */
-async function toUser(userId, build, { gameId, effect, force } = {}) {
+async function toUser(userId, build, { gameId, dmThreadId, effect, force } = {}) {
   if (!bot) return false;
   const u = await getUser.get(userId);
   if (!u || u.blocked || u.bot_blocked) return false;
   if (!u.notify_enabled && !force) return false;
 
   const T = tr(u.lang);
-  const url = appUrl(gameId);
-  const extra = url ? { reply_markup: { inline_keyboard: [[{ text: gameId ? T.openGame : T.open, web_app: { url } }]] } } : {};
+  const url = appUrl({ gameId, dmThreadId });
+  let btn = T.open;
+  if (gameId) btn = T.openGame;
+  else if (dmThreadId) btn = T.openChat || T.open;
+  const extra = url ? { reply_markup: { inline_keyboard: [[{ text: btn, web_app: { url } }]] } } : {};
   const text = build(T);
 
   try {

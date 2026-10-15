@@ -57,14 +57,14 @@ const fake = require('./helpers/fake-telegram');
     assert.strictEqual(rows[0][0].web_app.url, 'https://chess.example.test/', 'Open button launches the Mini App');
     assert.strictEqual(rows[1][0].text, inviteBtn);
     assert.ok(rows[1][0].url.includes('t.me/share/url'), 'Invite opens Telegram share');
-    assert.ok(decodeURIComponent(rows[1][0].url).includes('start=i501'), 'Invite uses personal referral');
+    assert.ok(decodeURIComponent(rows[1][0].url).includes('startapp=i501'), 'Invite uses personal referral');
     assert.ok(welcome.body.message_effect_id, 'welcome has the confetti effect');
     const u = await db.prepare('SELECT lang, lang_set FROM users WHERE id = 501').get();
     assert.deepStrictEqual({ ...u }, { lang: code, lang_set: 1 });
   }
   step('each language choice stores the language and sends a localized welcome with Open + Invite');
 
-  // 3. invite deep link is remembered for referral pay, but Open button stays clean (no sticky ?p=i…)
+  // 3. invite deep link is remembered + Open carries ?p=i (client ignores once already friends)
   tg.calls.length = 0;
   await say(502, '/start i501', 'ru');
   kb = tg.to(502)[0].body.reply_markup.inline_keyboard.flat();
@@ -72,11 +72,10 @@ const fake = require('./helpers/fake-telegram');
   await press(502, 'lang:ru:i501', 'ru');
   const w = tg.to(502).pop();
   const openUrl = w.body.reply_markup.inline_keyboard[0][0].web_app.url;
-  assert.ok(openUrl.startsWith('https://chess.example.test'), 'Open launches Mini App');
-  assert.ok(!/[?&]p=i501\b/.test(openUrl), 'friend invite must not stick on welcome Open button');
+  assert.ok(openUrl.includes('p=i501'), 'welcome Open carries invite for first claim');
   const pending = await db.prepare('SELECT pending_inviter_id FROM users WHERE id = 502').get();
   assert.strictEqual(Number(pending.pending_inviter_id), 501, 'invite stored for /me claim');
-  step('friend-invite is stored as pending_inviter; welcome Open has no sticky ?p=i');
+  step('friend-invite stored as pending_inviter and on welcome Open button');
 
   tg.calls.length = 0;
   await say(503, '/start gAbC_123-x', 'en');

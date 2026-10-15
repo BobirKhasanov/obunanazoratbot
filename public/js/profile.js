@@ -231,8 +231,8 @@ export function renderProfilePage(ctx) {
   document.addEventListener('profile-open', onProfileOpen);
 
   const openFriends = () => openScreen((close) => {
-    // start= sets pending_inviter via bot; startapp also works (server reads signed start_param on /me)
-    const link = `https://t.me/${state.meta.botUsername}?start=i${state.me.id}`;
+    // startapp opens Mini App with signed start_param → /me pays both sides once
+    const link = `https://t.me/${state.meta.botUsername}?startapp=i${state.me.id}`;
     const list = state.friends || [];
     return [
       ...subTop(t('friends_title'), close),

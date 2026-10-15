@@ -46,7 +46,7 @@ assert.ok(profile.includes('openChatWithUser') && profile.includes("from './inbo
 assert.ok(app.includes('home_tab_live') && app.includes('home_tab_friends') && app.includes('homePeopleTab'), 'home live/friends tabs');
 assert.ok(app.includes('home-people-list') && app.includes('paintPeopleList'), 'home live/friends swap list in place (no scroll jump)');
 assert.ok(app.includes('r.already') && app.includes('game_ended'), 'stale invite/game deep links do not reopen boards');
-assert.ok(read('src/welcome.js').includes("g[\\w-]{4,20}") || read('src/welcome.js').includes('g[\\w-]'), 'welcome Open strips friend-invite payloads');
+assert.ok(read('src/welcome.js').includes('startapp=i'), 'invite share uses startapp for Mini App claim');
 assert.ok(!app.includes("t('puzzle_hint')"), 'puzzle hint/maslahat removed');
 
 assert.ok(screen.includes('export function openScreen'));
@@ -108,7 +108,10 @@ assert.ok(read('public/js/userprofile.js').includes('filter(Boolean)'), 'user pr
 assert.ok(profile.includes('.filter(Boolean)') && profile.includes('host.replaceChildren'), 'my info does not append null text nodes');
 assert.ok(read('public/js/userprofile.js').includes('uprof-statgrid.wdl'), 'profile W/D/L is a full 3-col row');
 assert.ok(css.includes('.uprof-statgrid.wdl'), 'W/D/L grid style');
-assert.ok(!app.includes('headerInboxBtnsSafe') && !app.includes('loadInbox') && !app.includes('openInbox') && !app.includes('refreshInboxBadgesSafe'), 'home header mail/bell removed');
+assert.ok(app.includes('headerInboxBtns'), 'home header mail/bell for DMs + notifications');
+assert.ok(app.includes("m.t === 'dm'") || app.includes('t === \'dm\''), 'live DM toast + badge refresh');
+assert.ok(read('src/server.js').includes("kind, title, body, meta) VALUES (?, 'dm'") || read('src/server.js').includes("'dm'"), 'DM creates in-app notification');
+assert.ok(read('src/server.js').includes('referralRowExists'), 'pending invite cleared only after referral pay');
 assert.ok(app.includes('puzzleDailyReward') || app.includes('puzzleRewardN'), 'puzzles use admin-configured diamond reward');
 assert.ok(admin.includes('puzzleDailyReward') && admin.includes('admin_puzzle_reward'), 'admin shop controls puzzle reward');
 assert.ok(read('src/server.js').includes('premium_flag') && read('src/server.js').includes('mapPremium'), 'rankings API maps premium');
