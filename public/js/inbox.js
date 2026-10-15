@@ -67,18 +67,34 @@ function notifMediaEl(n) {
 
 /** Squircle mail + bell for the home header (reference style). */
 export function headerInboxBtns() {
+  const bind = (el, open) => {
+    // Stop home pager from stealing the gesture; debounce so pointerup+click don't double-open.
+    let last = 0;
+    el.addEventListener('pointerdown', (e) => { e.stopPropagation(); }, { passive: true });
+    const go = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const now = Date.now();
+      if (now - last < 450) return;
+      last = now;
+      haptic('light');
+      try { open(); } catch (err) { console.warn('[inbox]', err); fail(err); }
+    };
+    el.addEventListener('pointerup', go);
+    el.addEventListener('click', go);
+  };
   const mail = h('button.hdr-ic', {
     type: 'button',
     'aria-label': t('messages'),
     'data-noswipe': '',
-    onclick: () => { haptic('light'); openMessages(); },
   }, icon('mail', 20), h('span.hdr-badge-slot'));
   const bell = h('button.hdr-ic', {
     type: 'button',
     'aria-label': t('xabarnoma'),
     'data-noswipe': '',
-    onclick: () => { haptic('light'); openNotifications(); },
   }, icon('bell', 20), h('span.hdr-badge-slot'));
+  bind(mail, openMessages);
+  bind(bell, openNotifications);
   const wrap = h('div.hdr-inbox', { 'data-noswipe': '' }, mail, bell);
   refreshInboxBadges(wrap);
   return wrap;

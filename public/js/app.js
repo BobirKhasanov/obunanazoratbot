@@ -1,45 +1,42 @@
 // Main app: boot, swipe pager, pages, deep links.
 import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, setInitData, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep } from './ui.js';
 import { t, setLang } from './i18n.js';
+import { openMessages, openNotifications, refreshInboxBadges, headerInboxBtns } from './inbox.js';
 
-/** Lazy inbox — a missing/404 asset must never blank the whole Mini App. */
-let inboxMod = null;
-async function loadInbox() {
-  if (inboxMod) return inboxMod;
-  try { inboxMod = await import('./inbox.js?v=20261015c'); } catch (e) { console.warn('[inbox]', e); inboxMod = null; }
-  return inboxMod;
-}
-async function openInbox(kind) {
-  haptic('light');
-  const m = await loadInbox();
-    if (!m) { toast(t('msg_unavailable')); return; }
-  try {
-    if (kind === 'messages') m.openMessages();
-    else m.openNotifications();
-  } catch (e) { console.warn('[inbox]', e); fail(e); }
-}
+/** Wire header mail/bell so Telegram WebView taps always open (no lazy-import race). */
 function headerInboxBtnsSafe() {
-  const stop = (e) => { e.stopPropagation(); };
+  try {
+    return headerInboxBtns();
+  } catch (e) {
+    console.warn('[inbox] header fallback', e);
+  }
+  const bind = (el, open) => {
+    el.addEventListener('pointerdown', (e) => { e.stopPropagation(); }, { passive: true });
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      haptic('light');
+      try { open(); } catch (err) { console.warn('[inbox]', err); fail(err); }
+    });
+  };
   const mail = h('button.hdr-ic', {
     type: 'button',
     'aria-label': t('messages'),
     'data-noswipe': '',
-    onpointerdown: stop,
-    onclick: (e) => { stop(e); openInbox('messages'); },
   }, icon('mail', 20), h('span.hdr-badge-slot'));
   const bell = h('button.hdr-ic', {
     type: 'button',
     'aria-label': t('xabarnoma'),
     'data-noswipe': '',
-    onpointerdown: stop,
-    onclick: (e) => { stop(e); openInbox('notifications'); },
   }, icon('bell', 20), h('span.hdr-badge-slot'));
+  bind(mail, openMessages);
+  bind(bell, openNotifications);
   const wrap = h('div.hdr-inbox', { 'data-noswipe': '' }, mail, bell);
-  refreshInboxBadgesSafe(wrap);
+  try { refreshInboxBadges(wrap); } catch { /* ignore */ }
   return wrap;
 }
 function refreshInboxBadgesSafe(root) {
-  loadInbox().then((m) => { try { m && m.refreshInboxBadges(root); } catch { /* ignore */ } });
+  try { refreshInboxBadges(root); } catch { /* ignore */ }
 }
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -838,8 +835,7 @@ async function boot() {
     console.error('[boot] refresh', e);
     fail(e);
   }
-  // Warm inbox module in the background (non-blocking)
-  loadInbox();
+  try { refreshInboxBadges(); } catch { /* ignore */ }
 }
 boot().catch((e) => {
   console.error('[boot]', e);

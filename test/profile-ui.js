@@ -77,7 +77,7 @@ assert.ok(read('public/js/userprofile.js').includes('filter(Boolean)'), 'user pr
 assert.ok(profile.includes('.filter(Boolean)') && profile.includes('host.replaceChildren'), 'my info does not append null text nodes');
 assert.ok(read('public/js/userprofile.js').includes('uprof-statgrid.wdl'), 'profile W/D/L is a full 3-col row');
 assert.ok(css.includes('.uprof-statgrid.wdl'), 'W/D/L grid style');
-assert.ok(app.includes('openInbox') && app.includes("data-noswipe"), 'mail/bell open inbox and ignore pager swipe');
+assert.ok((app.includes('openMessages') || app.includes('headerInboxBtns')) && (app.includes("data-noswipe") || read('public/js/inbox.js').includes("data-noswipe")), 'mail/bell open inbox and ignore pager swipe');
 assert.ok(read('src/server.js').includes('premium_flag') && read('src/server.js').includes('mapPremium'), 'rankings API maps premium');
 assert.ok(profile.includes("t('delete_account')") && profile.includes("DELETE', '/me'"), 'profile settings can delete account');
 assert.ok(read('src/server.js').includes("api.delete('/me'") && read('src/server.js').includes('DELETE FROM games WHERE'), 'account delete wipes user games + row');
@@ -125,7 +125,8 @@ assert.ok(css.includes('pill-thumb') && ui.includes('pillBar'), 'sliding pill ba
 assert.ok((app.includes('headerInboxBtns') || app.includes('headerInboxBtnsSafe')) && app.includes('rank-board-bar'), 'home inbox + ranking bars');
 assert.ok(app.includes("online-heading") && app.includes("t('online_now'") && !/gempill[\s\S]{0,180}livepill/.test(app), 'online count sits by Online players, not in gem header');
 assert.ok(app.includes('hdr-ic') && app.includes("t('messages')") && app.includes("t('xabarnoma')"), 'header shows mail + notifications');
-assert.ok(app.includes("import('./inbox.js") || app.includes('loadInbox'), 'inbox loaded lazily so a missing asset cannot blank the app');
+assert.ok(app.includes("from './inbox.js'") || app.includes('loadInbox') || app.includes("import('./inbox.js"), 'inbox module wired into app');
+assert.ok(app.includes('openMessages') && app.includes('openNotifications'), 'header can open messages + notifications');
 assert.ok(app.includes('showApp') && app.includes('showGate') && app.includes('#boot'), 'boot never leaves a blank black screen');
 const inbox = read('public/js/inbox.js');
 assert.ok(inbox.includes('openNotifications') && inbox.includes('openMessages'), 'inbox screens');

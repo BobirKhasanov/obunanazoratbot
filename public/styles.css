@@ -1234,14 +1234,20 @@ button.rating-tile:active { transform: scale(0.98); }
 .gempill:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3); }
 
 /* Home header: messages + notifications (squircle reference) */
-.hdr-inbox { display: flex; align-items: center; gap: 8px; }
+.hdr-inbox {
+  position: relative; z-index: 5;
+  display: flex; align-items: center; gap: 8px;
+  pointer-events: auto;
+}
 .hdr-ic {
-  position: relative; width: 44px; height: 44px; border-radius: 14px;
+  position: relative; z-index: 1; width: 44px; height: 44px; border-radius: 14px;
   background: var(--card); color: var(--muted);
   display: grid; place-items: center; place-content: center;
+  pointer-events: auto; touch-action: manipulation; cursor: pointer;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 4px 0 rgba(0, 0, 0, 0.28);
   transition: transform 0.18s var(--ease), box-shadow 0.18s;
 }
+.hdr-ic .ic, .hdr-ic svg { pointer-events: none; }
 .hdr-ic:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 1px 0 rgba(0, 0, 0, 0.28); }
 .hdr-ic .ic { display: grid; line-height: 0; }
 .hdr-badge-slot { position: absolute; top: -4px; right: -4px; pointer-events: none; }
