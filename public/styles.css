@@ -623,6 +623,16 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .me .big { background: none; }
 .invite-card { text-align: center; display: grid; gap: 6px; justify-items: center; }
 .invite-card .btn { margin-top: 10px; }
+.promo-hero { margin-bottom: 12px; }
+.promo-hero .emoji-big { font-size: 42px; line-height: 1; }
+.promo-hero b { font-size: 20px; font-weight: 800; }
+.promo-hero p { margin: 0; max-width: 28em; }
+.promo-form { display: grid; gap: 4px; }
+.promo-form .field { margin-top: 0; }
+.promo-form .btn { margin-top: 14px; }
+.promo-result { margin-top: 12px; }
+.promo-ok { text-align: center; display: grid; gap: 8px; justify-items: center; }
+.promo-ok b { font-size: 16px; font-weight: 800; }
 .emoji-big { font-size: 44px; }
 .label { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin: 16px 0 8px 2px; }
 .levels { display: grid; gap: 8px; }

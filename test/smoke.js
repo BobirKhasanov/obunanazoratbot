@@ -856,11 +856,15 @@ async function playMoves(game, players, moves, startPly = 0) {
 
     // ---------------------------------------------------------------- notifications for offline players
     await step('"your move" goes to Telegram only when the opponent is offline, once per move', async () => {
-      // Dan and Cara have no websocket; wait out REST presence (PRESENCE_REST_MS=5000) so isOnline is false
+      // Need a live WS to create the challenge, then drop sockets so both count as offline
+      const wsCInvite = await connect('C'); sockets.push(wsCInvite);
       const g = (await ok('D', 'POST', '/games', { opponentId: USERS.C.id })).game;
       const j = (await ok('C', 'POST', `/games/${g.id}/join`)).game;
       const p = colours(j, 'C', 'D');
-      await sleep(5200);
+      for (const s of sockets) {
+        try { s.ws.close(); } catch { /* ignore */ }
+      }
+      await sleep(5200); // outlast PRESENCE_REST_MS so isOnline is false
       const other = p.b; // black moves next, so black is the one to be notified
       const before = tg.to(USERS[other].id).length;
       await ok(p.w, 'POST', `/games/${g.id}/move`, { from: 'e2', to: 'e4' });
@@ -889,7 +893,7 @@ async function playMoves(game, players, moves, startPly = 0) {
       await ok('B', 'PATCH', '/me', { discoverable: false });
       await ok('E', 'PATCH', '/me', { discoverable: true });
       const wsC = await connect('C'); sockets.push(wsC);
-      await ok('A', 'GET', '/me'); await ok('B', 'GET', '/me');
+      await ok('A', 'GET', '/me'); await ok('B', 'GET', '/me'); await ok('E', 'GET', '/me');
       const lobby = await ok('D', 'GET', '/lobby');
       assert.ok(lobby.online.every((o) => 'avatarKey' in o), 'lobby online rows include avatarKey');
       const names = lobby.online.map((o) => o.name);
@@ -905,7 +909,9 @@ async function playMoves(game, players, moves, startPly = 0) {
       await ok('E', 'POST', '/bye');
       const afterBye = await ok('D', 'GET', '/lobby');
       assert.ok(!afterBye.online.some((o) => o.id === USERS.E.id), 'bye removes user from lobby online');
-      await ok('E', 'GET', '/me'); // back online for later tests
+      // Closed Mini App (no WS) must not accept challenges even if a stale present_until remains
+      await err('D', 'POST', '/games', { opponentId: USERS.E.id }, 409, 'user_offline');
+      await ok('E', 'GET', '/me'); // back soft-online for later tests
     });
 
     await step('computer results validated but never counted in stats/rating', async () => {
@@ -1162,7 +1168,8 @@ async function playMoves(game, players, moves, startPly = 0) {
 
     // ---------------------------------------------------------------- account deletion + static files
     await step('deleting an account closes its games and removes its data', async () => {
-      await ok('D', 'GET', '/me'); // Dan must look online to be challenged
+      const wsD = await connect('D'); sockets.push(wsD); // live WS required to challenge
+      await ok('D', 'GET', '/me');
       const g = (await ok('E', 'POST', '/games', { opponentId: USERS.D.id })).game;
       await ok('D', 'POST', `/games/${g.id}/join`);
       await ok('E', 'DELETE', '/me');
@@ -1172,8 +1179,16 @@ async function playMoves(game, players, moves, startPly = 0) {
     });
 
     await step('challenges: offline players cannot be challenged; unanswered ones expire and cannot be accepted', async () => {
+      // Drop any leftover sockets (e.g. Dan from account-delete step) so offline checks are real
+      for (const s of sockets) {
+        try { s.ws.close(); } catch { /* ignore */ }
+      }
       await sleep(5200); // outlast PRESENCE_REST_MS so Dan counts as offline
       await err('A', 'POST', '/games', { opponentId: USERS.D.id }, 409, 'user_offline');
+      // REST-only presence (no WS) must not accept challenges — invites are WS-pushed
+      await ok('D', 'GET', '/me');
+      await err('A', 'POST', '/games', { opponentId: USERS.D.id }, 409, 'user_offline');
+      const wsB2 = await connect('B'); sockets.push(wsB2);
       const g = (await ok('A', 'POST', '/games', { opponentId: USERS.B.id })).game;
       await pg.q("UPDATE games SET updated_at = now() - interval '120 seconds' WHERE id = $1", g.id);
       assert.ok(!(await ok('B', 'GET', '/lobby')).games.invites.some((x) => x.id === g.id), 'expired invite is hidden');
@@ -1184,6 +1199,8 @@ async function playMoves(game, players, moves, startPly = 0) {
     });
 
     await step('one request to several players: the first to accept plays, the others are released', async () => {
+      const wsD2 = await connect('D'); sockets.push(wsD2);
+      const wsB3 = await connect('B'); sockets.push(wsB3);
       await ok('D', 'GET', '/me'); await ok('B', 'GET', '/me');
       const g = (await ok('A', 'POST', '/games', { opponentIds: [USERS.B.id, USERS.D.id] })).game;
       assert.strictEqual(g.status, 'invited');

@@ -239,6 +239,13 @@ export const fail = (e) => toast(errText(e), true);
 /** Drop from the live online list (Mini App closed / backgrounded). */
 export function sendBye() {
   try {
+    // Close WS first so server leave clears present_until and pings cannot re-touch presence.
+    clearTimeout(wsTimer);
+    wsOpen = false;
+    if (ws) {
+      try { ws.onclose = null; ws.close(); } catch { /* ignore */ }
+      ws = null;
+    }
     fetch('/api/bye', {
       method: 'POST',
       headers: { 'X-Init-Data': initData },
@@ -277,7 +284,10 @@ export function connectWs(onState) {
   };
   ws.onerror = () => { try { ws.close(); } catch { /* ignore */ } };
 }
-setInterval(() => { if (wsOpen) try { ws.send(JSON.stringify({ t: 'ping' })); } catch { /* ignore */ } }, 25000);
+setInterval(() => {
+  if (!wsOpen || document.hidden) return;
+  try { ws.send(JSON.stringify({ t: 'ping' })); } catch { /* ignore */ }
+}, 25000);
 
 // ---------- emoji effects ----------
 /** Floating emoji rising from a point (reactions) — slow so the emoji is readable */

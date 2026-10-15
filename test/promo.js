@@ -27,8 +27,13 @@ assert.ok(server.includes('FOR UPDATE'), 'redeem locks promo row');
 assert.ok(admin.includes('openPromos') && admin.includes('/admin/promos'));
 assert.ok(admin.includes("['promo', t('promo_title')]") || admin.includes("'promo'"), 'announcement page chip for promo');
 assert.ok(profile.includes('openPromo') && profile.includes('/promo/redeem'));
+assert.ok(profile.includes('promo-form') && profile.includes('promo-hero'), 'promo page has hero + form UI');
 assert.ok(profile.includes("page === 'promo'"), 'profile-open handles promo');
 assert.ok(app.includes("'promo'") || app.includes('"promo"'), 'home carousel deep-link opens promo');
 assert.ok(i18n.includes('promo_title:') && i18n.includes('e_promo_expired:'));
+
+const ui = read('public/js/ui.js');
+assert.ok(ui.includes('ws.close()') && ui.includes("fetch('/api/bye'"), 'bye closes websocket before leave');
+assert.ok(server.includes('userIsChallengeable') || server.includes('hasSocket'), 'challenges require live socket');
 
 console.log('ok  promo (schema, admin, redeem, carousel link)');

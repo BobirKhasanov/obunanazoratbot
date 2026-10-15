@@ -40,7 +40,11 @@ const markRest = (id) => lastRest.set(id, Date.now());
 /** Mini App closed (/bye) — drop REST presence immediately. */
 const clearRest = (id) => lastRest.delete(id);
 
-const isOnline = (id) => sockets.has(id) || Date.now() - (lastRest.get(id) || 0) < REST_ONLINE_MS;
+/** Live WebSocket only — required for in-app challenges (invite push). */
+const hasSocket = (id) => sockets.has(id);
+
+/** Soft online: open WS or a very recent authenticated HTTP request. */
+const isOnline = (id) => hasSocket(id) || Date.now() - (lastRest.get(id) || 0) < REST_ONLINE_MS;
 
 function onlineIds() {
   const ids = new Set(sockets.keys());
@@ -49,12 +53,17 @@ function onlineIds() {
   return [...ids];
 }
 
+/** @returns {boolean} true if at least one open socket received the payload */
 function send(userId, payload) {
   const set = sockets.get(userId);
   if (!set) return false;
   const text = JSON.stringify(payload);
-  for (const ws of set) if (ws.readyState === 1) ws.send(text);
-  return true;
+  let ok = false;
+  for (const ws of set) {
+    if (ws.readyState !== 1) continue;
+    try { ws.send(text); ok = true; } catch { /* ignore */ }
+  }
+  return ok;
 }
 
 function attach(server, botToken, hooks) {
@@ -113,6 +122,6 @@ function attach(server, botToken, hooks) {
 }
 
 module.exports = {
-  attach, send, isOnline, onlineIds, markRest, clearRest, presenceMs: REST_ONLINE_MS,
+  attach, send, isOnline, hasSocket, onlineIds, markRest, clearRest, presenceMs: REST_ONLINE_MS,
   connectionCount, maxConnections: MAX_WS,
 };

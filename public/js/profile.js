@@ -120,13 +120,20 @@ export function renderProfilePage(ctx) {
       maxlength: 32,
       autocomplete: 'off',
       autocapitalize: 'characters',
+      spellcheck: 'false',
     });
-    const result = h('div');
-    const submit = h('button.cta', {
+    const result = h('div.promo-result');
+    let busy = false;
+    const submit = h('button.btn', {
       type: 'button',
       onclick: async () => {
+        if (busy) return;
+        const code = String(input.value || '').trim();
+        if (!code) { toast(t('e_promo_invalid'), true); return; }
+        busy = true;
+        submit.disabled = true;
         try {
-          const r = await api('POST', '/promo/redeem', { code: input.value });
+          const r = await api('POST', '/promo/redeem', { code });
           state.me = r.user;
           const rw = r.reward || {};
           let msg = t('promo_ok');
@@ -142,18 +149,27 @@ export function renderProfilePage(ctx) {
               d: (rw.premiumUntilTashkent || '').replace('T', ' '),
             });
           }
-          result.replaceChildren(h('div.card', h('b', msg)));
+          result.replaceChildren(h('div.card.promo-ok', h('div.emoji-big', '🎁'), h('b', msg)));
           input.value = '';
           toast(msg);
           haptic('success');
           refresh();
         } catch (e) { fail(e); }
+        finally { busy = false; submit.disabled = false; }
       },
     }, t('promo_redeem'));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submit.click(); }
+    });
     return [
       ...subTop(t('promo_title'), close),
-      h('p.muted', t('promo_sub')),
-      h('div.card', input, submit),
+      h('div.card.invite-card.promo-hero',
+        h('div.emoji-big', '🎟️'),
+        h('b', t('promo_title')),
+        h('p.muted', t('promo_sub'))),
+      h('div.card.promo-form',
+        h('div.field', h('label', t('promo_title')), input),
+        submit),
       result,
     ];
   });

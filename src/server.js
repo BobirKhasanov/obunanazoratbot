@@ -273,6 +273,11 @@ async function userIsOnline(id) {
   return stillPresent(u && u.present_until);
 }
 
+/** Challengeable only with a live Mini App WebSocket (invites are pushed in-app). */
+function userIsChallengeable(id) {
+  return realtime.hasSocket(id);
+}
+
 /** Throttle present_until writes — every HTTP used to UPDATE users (too heavy at ~2.5k live). */
 const lastPresenceWrite = new Map();
 const PRESENCE_WRITE_MIN_MS = Math.max(
@@ -1403,7 +1408,7 @@ async function nearbyOnlineOpponents(uid, eloCol, myElo, limit = 5, maxDelta = 4
     ORDER BY ABS(u.${eloCol} - ?) ASC, RANDOM()
     LIMIT 40
   `).all(uid, myElo, maxDelta, uid, myElo);
-  return rows.filter((r) => !busy.has(r.id)).slice(0, limit);
+  return rows.filter((r) => !busy.has(r.id) && realtime.hasSocket(r.id)).slice(0, limit);
 }
 
 /** Ping nearby online browsers with an in-app challenge (open games stay joinable by other searchers). */
@@ -1513,8 +1518,9 @@ api.post('/games', wrap(async (req, res) => {
   for (const opp of wanted) {
     const other = await getUser.get(opp);
     if (opp === uid || !other || other.blocked) { failure = failure || new HttpError(404, 'Player not found', 'user_unavailable'); continue; }
-    if (!(await userIsOnline(opp))) { failure = new HttpError(409, 'Player is offline', 'user_offline'); continue; }
     if (!await areFriends(uid, opp) && !other.discoverable) { failure = failure || new HttpError(404, 'Player not found', 'user_unavailable'); continue; }
+    // Soft-online (REST present_until) is not enough — left Mini Apps must not receive hanging invites.
+    if (!userIsChallengeable(opp)) { failure = new HttpError(409, 'Player is offline', 'user_offline'); continue; }
     targets.push(opp);
   }
   if (!targets.length) throw failure;
@@ -1532,9 +1538,21 @@ api.post('/games', wrap(async (req, res) => {
   const friend = targets.length === 1 && await areFriends(uid, targets[0]);
   await db.prepare("INSERT INTO games (id, creator_id, invited_id, status, mode, time_control) VALUES (?, ?, ?, 'invited', ?, ?)")
     .run(id, uid, targets[0], friend ? 'friend' : 'online', timeControl);
-  for (const t of targets) await db.prepare('INSERT INTO game_invites (game_id, user_id) VALUES (?, ?)').run(id, t);
+  const delivered = [];
+  for (const t of targets) {
+    await db.prepare('INSERT INTO game_invites (game_id, user_id) VALUES (?, ?)').run(id, t);
+    const payload = { t: 'invite', game: await gameFor(await getGame.get(id), t), ttl: POPUP_MS };
+    if (realtime.send(t, payload)) delivered.push(t);
+    else await db.prepare('DELETE FROM game_invites WHERE game_id = ? AND user_id = ?').run(id, t);
+  }
+  if (!delivered.length) {
+    await db.prepare("UPDATE games SET status = 'cancelled', updated_at = now() WHERE id = ?").run(id);
+    throw new HttpError(409, 'Player is offline', 'user_offline');
+  }
+  if (delivered[0] !== targets[0]) {
+    await db.prepare('UPDATE games SET invited_id = ? WHERE id = ?').run(delivered[0], id);
+  }
   const row = await getGame.get(id);
-  for (const t of targets) realtime.send(t, { t: 'invite', game: await gameFor(row, t), ttl: POPUP_MS }); // in-app only
   res.status(201).json({ game: await gameFor(row, uid) });
 }));
 
@@ -1946,7 +1964,9 @@ api.get('/lobby', wrap(async (req, res) => {
     ORDER BY present_until DESC
     LIMIT 40
   `).all(uid, uid, uid);
+  // Drop ghost rows: present_until alone is not enough after a closed Mini App (WS/REST must still be live).
   const online = rows
+    .filter((r) => realtime.isOnline(r.id))
     .map((r) => ({
       id: r.id, name: displayName(r), inGame: busy.has(r.id), friend: friendIds.has(r.id),
       premium: isPremiumActive(r), discoverable: !!r.discoverable || friendIds.has(r.id),
@@ -3777,7 +3797,11 @@ app.use((err, req, res, next) => {
 realtime.attach(server, BOT_TOKEN, {
   getUser: (id) => getUser.get(id),
   touch: (id) => refreshPresence(id),
-  leave: (id) => clearPresent.run(id).catch(() => {}),
+  leave: (id) => {
+    realtime.clearRest(id);
+    lastPresenceWrite.delete(id);
+    clearPresent.run(id).catch(() => {});
+  },
 });
 
 async function boot() {
