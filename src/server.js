@@ -21,7 +21,7 @@ const {
 const lichess = require('./lichess');
 const { cacheGet, cacheSet, cacheDel, cacheEnabled, incr } = require('./cache');
 const { saveMedia, loadMediaBytes, storageEnabled, deleteMediaObject } = require('./storage');
-const { DEFAULT_ELO, pairUpdate, scoresForResult, eloColumn } = require('./elo');
+const { DEFAULT_ELO, pairUpdate, scoresForResult, eloColumn, expandingEloDelta } = require('./elo');
 const {
   monthKey, monthLabelEn, seasonLabel, previousMonthKey, tashkentDay, monthsForYear,
   normalizeConfig, generateMedalSvg, titleFor, DEFAULT_CONFIG, FONT_KEYS, PIECE_KEYS,
@@ -1128,7 +1128,9 @@ async function nearbyOnlineOpponents(uid, eloCol, myElo, limit = 5, maxDelta = 4
 
 /** Ping nearby online browsers with an in-app challenge (open games stay joinable by other searchers). */
 async function nudgeNearbyForQuick(row, uid, eloCol, myElo) {
-  const targets = await nearbyOnlineOpponents(uid, eloCol, myElo, 3, 400);
+  const since = row.created_at ? new Date(row.created_at).getTime() : Date.now();
+  const delta = expandingEloDelta(since);
+  const targets = await nearbyOnlineOpponents(uid, eloCol, myElo, 3, delta);
   if (!targets.length) return;
   const payloadBase = await getGame.get(row.id);
   for (const t of targets) {
@@ -1140,7 +1142,8 @@ async function nudgeNearbyForQuick(row, uid, eloCol, myElo) {
   await db.prepare('UPDATE games SET updated_at = now() WHERE id = ?').run(row.id);
 }
 
-// Online match-making: pair with a waiting searcher (closest Elo), else wait + challenge nearby online players
+// Online match-making: pair with a waiting searcher (closest Elo within expanding window),
+// else wait + challenge nearby online players (window grows while searching).
 api.post('/games/quick', wrap(async (req, res) => {
   const uid = req.user.id;
   const body = req.body || {};
@@ -1150,9 +1153,16 @@ api.post('/games/quick', wrap(async (req, res) => {
   if (!ELO_COLS.has(eloCol)) throw bad('Bad time control', 'bad_request');
   const myElo = Number(req.user[eloCol] || req.user.elo || DEFAULT_ELO);
 
-  // 1) Join another searcher on the same time control, preferring closest Elo
+  // Existing open search (if any) defines how wide our Elo window is
+  let mine = await db.prepare(
+    "SELECT * FROM games WHERE status = 'open' AND mode = 'online' AND time_control = ? AND creator_id = ? LIMIT 1",
+  ).get(timeControl, uid);
+  const searchSince = mine && mine.created_at ? new Date(mine.created_at).getTime() : Date.now();
+  const eloDelta = expandingEloDelta(searchSince);
+
+  // 1) Join another searcher on the same time control, closest Elo within window
   const candidates = await db.prepare(`
-    SELECT g.*
+    SELECT g.*, u.${eloCol} AS creator_elo, g.created_at AS wait_since
     FROM games g
     JOIN users u ON u.id = g.creator_id
     WHERE g.status = 'open' AND g.mode = 'online' AND g.time_control = ?
@@ -1162,9 +1172,14 @@ api.post('/games/quick', wrap(async (req, res) => {
         SELECT 1 FROM games g2 WHERE g2.creator_id = u.id AND g2.status = 'open' AND g2.mode = 'online'
       ))
     ORDER BY ABS(u.${eloCol} - ?) ASC, g.created_at ASC
-    LIMIT 20
+    LIMIT 40
   `).all(timeControl, uid, myElo);
   for (const g of candidates) {
+    const theirElo = Number(g.creator_elo || DEFAULT_ELO);
+    const theirSince = g.wait_since ? new Date(g.wait_since).getTime() : Date.now();
+    // Allow match if either side has waited long enough for this Elo gap
+    const allowed = Math.max(eloDelta, expandingEloDelta(theirSince));
+    if (Math.abs(theirElo - myElo) > allowed) continue;
     try {
       return res.json({ game: await gameFor(await startGame(g, uid), uid) });
     } catch (e) {
@@ -1174,7 +1189,6 @@ api.post('/games/quick', wrap(async (req, res) => {
   }
 
   // 2) Keep or open my search slot
-  let mine = await db.prepare("SELECT * FROM games WHERE status = 'open' AND mode = 'online' AND time_control = ? AND creator_id = ? LIMIT 1").get(timeControl, uid);
   let created = false;
   if (mine) {
     if (preferredColor && mine.preferred_color !== preferredColor) {
@@ -1189,14 +1203,14 @@ api.post('/games/quick', wrap(async (req, res) => {
     created = true;
   }
 
-  // 3) Challenge random nearby-Elo players who are in the app (even if not searching)
+  // 3) Challenge nearby-Elo players in the app (window expands with search age)
   const lastNudge = mine.updated_at ? new Date(mine.updated_at).getTime() : 0;
   if (created || Date.now() - lastNudge > 4_000) {
     await nudgeNearbyForQuick(mine, uid, eloCol, myElo);
     mine = await getGame.get(mine.id);
   }
 
-  res.status(created ? 201 : 200).json({ game: await gameFor(mine, uid) });
+  res.status(created ? 201 : 200).json({ game: await gameFor(mine, uid), eloDelta: expandingEloDelta(mine.created_at ? new Date(mine.created_at).getTime() : Date.now()) });
 }));
 
 // Create a game: with opponentIds = challenge sent to several online players (first to accept plays),
@@ -1210,7 +1224,8 @@ api.post('/games', wrap(async (req, res) => {
 
   if (!wanted.length) {
     const id = gameId();
-    await db.prepare("INSERT INTO games (id, creator_id, status, mode, time_control) VALUES (?, ?, 'open', 'friend', ?)").run(id, uid, timeControl);
+    const preferredColor = parsePreferredColor(b.preferredColor);
+    await db.prepare("INSERT INTO games (id, creator_id, status, mode, time_control, preferred_color) VALUES (?, ?, 'open', 'friend', ?, ?)").run(id, uid, timeControl, preferredColor);
     return res.status(201).json({ game: await gameFor(await getGame.get(id), uid) });
   }
 

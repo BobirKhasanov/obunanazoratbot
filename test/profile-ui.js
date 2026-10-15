@@ -72,7 +72,8 @@ assert.ok(css.includes('border-radius: 50%') && (css.includes('.avwrap.circ') ||
 assert.ok(css.includes('.avwrap.xl'), 'profile xl avatar wrap sized correctly');
 assert.ok(profile.includes('prof-gem') && profile.includes('💎') && !profile.includes("prof-star-ic', '★'"), 'diamonds badge uses gem not star');
 assert.ok(!css.includes('.prof-cover') || /prof-cover[\s\S]{0,220}overflow:\s*visible/.test(css), 'profile cover does not clip sparkles');
-assert.ok(/\.page\[data-page="profile"\][\s\S]{0,120}background:\s*var\(--bg\)/.test(css), 'profile page solid bg (no black void)');
+assert.ok(/\.page\[data-page="profile"\][\s\S]{0,120}background:\s*var\(--bg-radial\)/.test(css), 'profile page radial bg (no black void)');
+assert.ok(css.includes('--bg-radial') && css.includes('background: var(--bg-radial)') && css.includes('#app { position: fixed'), 'app shell uses boot-like radial bg');
 assert.ok(/prof-banner[\s\S]{0,200}var\(--safe-t\)/.test(css), 'profile banner covers Telegram safe area');
 assert.ok(app.includes('viewportChanged') && app.includes('syncTgChrome'), 're-sync Telegram chrome on expand');
 assert.ok(!css.includes('.mini.back svg { transform: rotate(180deg)'), 'live back no longer flipped chevron');
@@ -85,6 +86,9 @@ assert.ok(app.includes("t('online_players')") && app.includes('home-online'), 'h
 const playflow = read('public/js/playflow.js');
 assert.ok(playflow.includes('openSearching') && playflow.includes('/games/quick'), 'play flow searching + quick match');
 assert.ok(playflow.includes('preferredColor') && playflow.includes('TIME_GROUPS'), 'time/color setup in play flow');
+assert.ok(!playflow.includes('variant_960') && !playflow.includes('Chess960'), 'Chess960 stub removed from play flow');
+assert.ok(playflow.includes('search_elo_window') || playflow.includes('eloDelta'), 'search UI shows expanding Elo window');
+assert.ok(app.includes('themeShellBg'), 'app syncs radial shell bg');
 assert.ok(live.includes('backBtn') && !live.includes('syncTgBack'), 'single in-app back, no Telegram BackButton duplicate');
 assert.ok(live.includes("role: 'button'") && live.includes('live-game-card'), 'live game cards scroll-friendly');
 assert.ok(live.includes('bindTap') && live.includes('data-noswipe') && live.includes('paintMiniFen'), 'intl cards tap + in-place FEN');
@@ -164,7 +168,7 @@ assert.ok(admin.includes('referralReward') && admin.includes('admin_referral_rew
 const html = read('public/index.html');
 assert.ok(html.includes('id="play-sticky"') && html.includes('id="dock"'), 'Play mount lives inside dock markup');
 assert.ok(html.includes('id="boot"'), 'boot splash in HTML');
-assert.ok(html.includes('var(--text') && html.includes('var(--bg'), 'boot splash uses theme vars (light text not stuck white)');
+assert.ok(html.includes('var(--text') && (html.includes('var(--bg') || html.includes('radial-gradient')), 'boot splash uses theme vars / radial (light text not stuck white)');
 assert.ok(css.includes('pill-thumb') && ui.includes('pillBar'), 'sliding pill bars for section selection');
 assert.ok(app.includes('rank-board-bar'), 'ranking bars on home/rankings');
 assert.ok(app.includes("online-heading") && app.includes("t('online_now'") && !/gempill[\s\S]{0,180}livepill/.test(app), 'online count sits by Online players, not in gem header');

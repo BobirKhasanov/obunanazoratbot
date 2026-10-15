@@ -277,13 +277,34 @@ export function openGame(opts, onClose) {
           if (await copyText(link)) toast(t('link_copied'));
         };
         const tcHint = g.timeControl && g.timeControl !== 'classic' ? ` · ${g.timeControl}` : '';
+        const meId = S.meta && S.meta.me ? S.meta.me.id : null;
+        const iAmCreator = meId != null && Number(g.creator) === Number(meId);
+        const iAmInvitee = g.status === 'invited' && !iAmCreator;
         banner.append(
-          h('b', g.status === 'invited' ? t('wait_invite', { name: (g.opponent || {}).name || '' }) : (g.mode === 'online' ? t('searching') : t('wait_friend'))),
-          h('small', (g.status === 'invited' ? t('wait_invite_sub') : (g.mode === 'online' ? t('searching_sub') : t('wait_friend_sub'))) + tcHint),
+          h('b', iAmInvitee
+            ? t('invites')
+            : (g.status === 'invited' ? t('wait_invite', { name: (g.opponent || {}).name || '' }) : (g.mode === 'online' ? t('searching') : t('wait_friend')))),
+          h('small', (iAmInvitee
+            ? ((g.opponent || {}).name || '')
+            : (g.status === 'invited' ? t('wait_invite_sub') : (g.mode === 'online' ? t('searching_sub') : t('wait_friend_sub')))) + tcHint),
           h('div.row2',
-            g.mode === 'friend' && g.status === 'open' ? h('button.btn.sm', { onclick: shareFriend }, icon('share', 18), t('share_link')) : null,
-            g.mode === 'friend' && g.status === 'open' ? h('button.btn.sm.ghost', { onclick: copyFriend }, icon('link', 18), t('copy_link')) : null,
-            h('button.btn.sm.ghost', { onclick: async () => { try { await api('DELETE', `/games/${g.id}`); } catch (e) { return fail(e); } closeGame(); } }, t('cancel'))),
+            iAmInvitee ? h('button.btn.sm', {
+              onclick: async () => {
+                try {
+                  const r = await api('POST', `/games/${g.id}/join`);
+                  S.game = r.game; render(true);
+                } catch (e) { fail(e); closeGame(); }
+              },
+            }, t('accept')) : null,
+            iAmInvitee ? h('button.btn.sm.ghost', {
+              onclick: async () => {
+                try { await api('POST', `/games/${g.id}/decline`); } catch (e) { return fail(e); }
+                closeGame();
+              },
+            }, t('decline')) : null,
+            !iAmInvitee && g.mode === 'friend' && g.status === 'open' ? h('button.btn.sm', { onclick: shareFriend }, icon('share', 18), t('share_link')) : null,
+            !iAmInvitee && g.mode === 'friend' && g.status === 'open' ? h('button.btn.sm.ghost', { onclick: copyFriend }, icon('link', 18), t('copy_link')) : null,
+            !iAmInvitee ? h('button.btn.sm.ghost', { onclick: async () => { try { await api('DELETE', `/games/${g.id}`); } catch (e) { return fail(e); } closeGame(); } }, t('cancel')) : null),
         );
       } else if (g.status === 'active' && g.drawBy && g.drawBy !== g.you) {
         banner.classList.remove('wait'); banner.classList.add('draw'); banner.hidden = false;

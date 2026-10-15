@@ -91,7 +91,8 @@ async function playMoves(game, players, moves, startPly = 0) {
     cwd: path.join(__dirname, '..'),
     env: {
       ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', PORT: String(PORT), DATABASE_URL: pg.url, ADMIN_IDS: String(ADMIN_ID),
-      TG_API_ROOT: tg.url, WEBAPP_URL: 'https://chess.example.test', PRESENCE_REST_MS: '5000', INVITE_TTL_MS: '60000', SCHEDULER_MS: '300', NODE_NO_WARNINGS: '1',
+      TG_API_ROOT: tg.url, WEBAPP_URL: 'https://chess.example.test', PRESENCE_REST_MS: '5000', INVITE_TTL_MS: '60000', SCHEDULER_MS: '300',
+      USER_MEMO_MS: '1', NODE_NO_WARNINGS: '1',
     },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
@@ -569,8 +570,10 @@ async function playMoves(game, players, moves, startPly = 0) {
 
     // ---------------------------------------------------------------- match-making + invite links
     await step('online match-making pairs two waiting players', async () => {
-      const first = (await ok('C', 'POST', '/games/quick')).game;
+      const firstRes = await ok('C', 'POST', '/games/quick');
+      const first = firstRes.game;
       assert.strictEqual(first.status, 'open');
+      assert.ok(firstRes.eloDelta >= 80 && firstRes.eloDelta <= 800, 'expanding Elo window on search');
       assert.strictEqual((await ok('C', 'POST', '/games/quick')).game.id, first.id, 'waiting twice keeps the same search');
       const second = (await ok('D', 'POST', '/games/quick')).game;
       assert.strictEqual(second.id, first.id);
@@ -590,6 +593,20 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual(creator.you, 'w', 'creator asked for white');
       assert.strictEqual(joined.you, 'b');
       await ok('C', 'POST', `/games/${open.id}/resign`);
+    });
+
+    await step('quick match skips far Elo until the search window grows', async () => {
+      await pg.q('UPDATE users SET elo_bullet = 1200, elo = 1200 WHERE id = $1', USERS.C.id);
+      await pg.q('UPDATE users SET elo_bullet = 1600, elo = 1600 WHERE id = $1', USERS.D.id);
+      await new Promise((r) => setTimeout(r, 20)); // USER_MEMO_MS=1 in test env
+      const a = (await ok('C', 'POST', '/games/quick', { timeControl: '1+0' })).game;
+      assert.strictEqual(a.status, 'open');
+      const b = (await ok('D', 'POST', '/games/quick', { timeControl: '1+0' })).game;
+      assert.strictEqual(b.status, 'open', '400 Elo gap stays unmatched at ±80');
+      assert.notStrictEqual(b.id, a.id);
+      await ok('C', 'DELETE', `/games/${a.id}`);
+      await ok('D', 'DELETE', `/games/${b.id}`);
+      await pg.q('UPDATE users SET elo_bullet = 1200, elo = 1200 WHERE id = $1', USERS.D.id);
     });
 
     await step('an open game can be cancelled; a cancelled game cannot be joined', async () => {

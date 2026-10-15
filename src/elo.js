@@ -46,6 +46,18 @@ function eloColumn(category) {
   return 'elo_classic';
 }
 
+/**
+ * Quick-match Elo window: start ±80, +80 every 5s of waiting, cap ±800.
+ * @param {number} sinceMs  search start (Date.now() ms)
+ * @param {number} [nowMs]
+ */
+function expandingEloDelta(sinceMs, nowMs = Date.now()) {
+  const t0 = Number(sinceMs) || nowMs;
+  const waited = Math.max(0, nowMs - t0);
+  const steps = Math.floor(waited / 5_000);
+  return Math.min(800, 80 + steps * 80);
+}
+
 module.exports = {
-  DEFAULT_ELO, CATS, expectedScore, kFactor, pairUpdate, scoresForResult, eloColumn,
+  DEFAULT_ELO, CATS, expectedScore, kFactor, pairUpdate, scoresForResult, eloColumn, expandingEloDelta,
 };

@@ -451,31 +451,31 @@ Object.assign(uzc, { play_btn: 'Ўйнаш', any_time: 'Исталган', any_t
 
 Object.assign(en, {
   nav_game: 'Game', choose_time_title: 'Select time', pick_color: 'Choose piece color',
-  game_variant: 'Game variant', variant_standard: 'Standard', variant_960: 'Chess960',
   tc_bullet: 'Bullet', tc_blitz: 'Blitz', tc_rapid: 'Rapid',
   time_min: '{n} min', time_daq: '{n} min', go_back: 'Go back',
   tournaments_menu: 'Tournaments', live_players: 'Live players: {n}', live_games_n: 'Live games: {n}',
+  search_elo_window: 'Elo ±{n}',
 });
 Object.assign(ru, {
   nav_game: 'Игра', choose_time_title: 'Выберите время', pick_color: 'Выберите цвет',
-  game_variant: 'Вариант игры', variant_standard: 'Стандарт', variant_960: 'Chess960',
   tc_bullet: 'Пуля', tc_blitz: 'Блиц', tc_rapid: 'Рапид',
   time_min: '{n} мин', time_daq: '{n} мин', go_back: 'Назад',
   tournaments_menu: 'Турниры', live_players: 'Игроки онлайн: {n}', live_games_n: 'Партий онлайн: {n}',
+  search_elo_window: 'Эло ±{n}',
 });
 Object.assign(uz, {
   nav_game: "O'yin", choose_time_title: 'Vaqtni tanlang', pick_color: 'Dona rangini tanlang',
-  game_variant: "O'yin varianti", variant_standard: 'Standard', variant_960: 'Chess960',
   tc_bullet: 'Tezkor', tc_blitz: 'Blitz', tc_rapid: 'Rapid',
   time_min: '{n} min', time_daq: '{n} daq', go_back: 'Ortga qaytish',
   tournaments_menu: 'Turnirlar', live_players: 'Jonli o\'yinchilar: {n}', live_games_n: 'Jonli o\'yinlar: {n}',
+  search_elo_window: 'Elo ±{n}',
 });
 Object.assign(uzc, {
   nav_game: 'Ўйин', choose_time_title: 'Вақтни танланг', pick_color: 'Дона рангини танланг',
-  game_variant: 'Ўйин варианти', variant_standard: 'Standard', variant_960: 'Chess960',
   tc_bullet: 'Тезкор', tc_blitz: 'Блиц', tc_rapid: 'Рапид',
   time_min: '{n} мин', time_daq: '{n} дақ', go_back: 'Ортга қайтиш',
   tournaments_menu: 'Турнирлар', live_players: 'Жонли ўйинчилар: {n}', live_games_n: 'Жонли ўйинлар: {n}',
+  search_elo_window: 'Эло ±{n}',
 });
 
 Object.assign(en, { diamonds: 'Diamonds', gems_title: 'Your diamonds', gems_sub: 'Invite anyone with your link: you get {n} 💎, they get {m} 💎 (once per person)', premium: 'Premium', premium_buy: '1 month Premium · {n} 💎', premium_renew: 'Extend 1 month · {n} 💎', premium_have: 'Premium active', premium_until: 'Active until {d} (Tashkent)', premium_month_sub: '1 month = {n} 💎', premium_need: '{n} more diamonds for Premium', premium_bought: 'Premium unlocked! 🎉', friend_reward: '+{n} 💎 for inviting a friend', invitee_reward: '+{n} 💎 welcome! You and {name} are now friends', e_no_diamonds: 'Not enough diamonds', e_premium_owned: 'You already have Premium', shop_sub: 'Buy diamonds, then ask the admin to credit them after payment.', shop_packs: 'Diamond packs', shop_empty: 'No packs available.', shop_pay_hint: 'Pay via Telegram, then wait for the admin to add diamonds: {user}', shop_pay_btn: 'Pay · {user}', shop_get_diamonds: 'Buy diamonds', save: 'Save', admin_sec_overview: 'Overview', admin_sec_economy: 'Economy', admin_sec_content: 'Content', admin_sec_live: 'Live & stats', admin_sec_live_sub: 'Online users and KPIs', admin_sec_ann_sub: 'Home banners (Tashkent end date)', admin_sec_shop: 'Shop prices', admin_shop_sub: 'Diamond packs, Premium price, payment username', admin_sec_broadcast_sub: 'Send posts to users', admin_users_sub: 'Search users and grant diamonds after payment', admin_grant_diamonds: 'Grant diamonds', admin_grant_prompt: 'Diamonds for {name} (+ or −)', admin_grant_ok: 'Updated by {n} 💎', admin_premium_price: 'Premium price (diamonds / month)', admin_pay_user: 'Payment Telegram username', admin_add_pack: 'Add pack', admin_shop_saved: 'Shop settings saved' });

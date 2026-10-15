@@ -1,5 +1,6 @@
 :root {
   --bg: #111827;
+  --bg-radial: radial-gradient(ellipse at 50% 42%, #1a2740 0%, #111827 62%, #0b1220 100%);
   --card: #2a3342;
   --card-2: #3a4456;
   --card-soft: #1b2434;
@@ -31,7 +32,9 @@
 }
 
 :root[data-theme="light"] {
-  --bg: #f3f5f9; --card: #ffffff; --card-2: #e6ebf2; --card-soft: #eef1f6;
+  --bg: #f3f5f9;
+  --bg-radial: radial-gradient(ellipse at 50% 40%, #ffffff 0%, #f3f5f9 55%, #e8edf5 100%);
+  --card: #ffffff; --card-2: #e6ebf2; --card-soft: #eef1f6;
   --line: rgba(15, 23, 42, 0.1); --text: #0f172a; --muted: #64748b;
   --nav-bg: rgba(255, 255, 255, 0.85); --sheet-bg: #ffffff; --ink: #0f172a;
   --sq-lt: #eef2f8; --sq-dk: #8aa0c0; --pc-w: #ffffff; --pc-b: #1e293b; --pc-stroke: #0f172a;
@@ -60,7 +63,7 @@ html {
 }
 html, body {
   margin: 0; height: 100%; min-height: 100%; min-height: 100dvh;
-  background: var(--bg); color: var(--text);
+  background: var(--bg-radial); color: var(--text);
   overflow: hidden; overscroll-behavior: none;
 }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
@@ -69,7 +72,7 @@ h1, h2, h3, p { margin: 0; }
 [hidden] { display: none !important; }
 
 /* ---------- pager ---------- */
-#app { position: fixed; inset: 0; background: var(--bg); }
+#app { position: fixed; inset: 0; background: var(--bg-radial); }
 #pager { position: absolute; inset: 0; overflow: hidden; touch-action: pan-y; background: transparent; }
 #track { display: flex; height: 100%; width: 100%; will-change: transform; transform: translate3d(0, 0, 0); }
 #track.settle { transition: transform 0.95s var(--ease-scroll); }
@@ -86,10 +89,9 @@ h1, h2, h3, p { margin: 0; }
 }
 /* Extra room for dock + Play CTA stacked above the nav */
 .page[data-page="play"] { padding-bottom: calc(190px + var(--safe-b)); }
-/* Profile: solid page bg so expand gaps / chess backdrop never read as black void */
+/* Profile: radial shell so expand gaps never read as black void */
 .page[data-page="profile"] {
-  background: var(--bg);
-  background-image: none;
+  background: var(--bg-radial);
 }
 .page::-webkit-scrollbar { display: none; }
 .page > * { animation: rise 0.58s var(--ease) both; }
@@ -315,7 +317,7 @@ button.row:active { transform: scale(0.98); }
 
 /* ---------- admin / profile subpages ---------- */
 .screen {
-  position: absolute; inset: 0; z-index: 30; background: var(--bg); overflow-y: auto;
+  position: absolute; inset: 0; z-index: 30; background: var(--bg-radial); overflow-y: auto;
   padding: calc(var(--safe-t) + 14px) 14px calc(40px + var(--safe-b));
   transform: translateX(108%) translateZ(0);
   transition: transform 0.95s var(--ease-scroll), opacity 0.55s var(--ease-scroll);
@@ -343,7 +345,7 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 }
 #toast.show { transform: translate(-50%, 0); opacity: 1; }
 #toast.err { background: var(--red); color: #fff; }
-.gate { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--bg); z-index: 900; }
+.gate { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--bg-radial); z-index: 900; }
 .gate-card { text-align: center; max-width: 320px; }
 .gate-icon { width: 72px; height: 72px; border-radius: 24px; background: var(--blue); display: grid; place-items: center; font-size: 32px; margin: 0 auto 18px; }
 .gate h1 { font-size: 24px; margin-bottom: 8px; }
@@ -1118,7 +1120,7 @@ button.grow.plain { flex: 1; display: block; }
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 70%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 70%, transparent 100%); }
 #bg::before { content: ''; position: absolute; left: -60%; right: -60%; top: -10%; bottom: -40%;
   background: conic-gradient(var(--sq) 25%, transparent 0 50%, var(--sq) 0 75%, transparent 0) 0 0 / 130px 130px;
-  filter: blur(1.6px); opacity: 0.75;
+  filter: blur(1.6px); opacity: 0.28;
   transform: perspective(700px) rotateX(52deg) translate3d(0, 0, 0); transform-origin: 50% 0;
   will-change: transform;
   animation: bgdrift 42s linear infinite;
@@ -1302,7 +1304,6 @@ button.rating-tile:active { transform: scale(0.98); }
 .pf-color:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,.32); }
 .pf-color.on { background: var(--blue); color: #fff; box-shadow: 0 4px 0 rgba(20,60,150,.7); }
 .pf-color .pawn { font-size: 32px; line-height: 1; }
-.pf-variants { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .pf-search {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 14px; text-align: center; min-height: min(72dvh, 520px); padding: 24px 12px;
@@ -1533,8 +1534,8 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 .prof-me .avatar.xl { width: 72px; height: 72px; border-radius: 50%; }
 
 /* Screens always match app chrome (no black flash on expand) */
-.screen, .game { background-color: var(--bg); }
-.gate { background: var(--bg); }
+.screen, .game { background: var(--bg-radial); }
+.gate { background: var(--bg-radial); }
 
 /* ---------- light / day theme polish ---------- */
 :root[data-theme="light"] #nav {

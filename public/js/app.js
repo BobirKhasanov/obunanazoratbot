@@ -4,7 +4,7 @@ import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
 import { Board, restyleBoards } from './board.js';
-import { goodMoves } from './puzzles.js';
+import { goodMoves, mateIn } from './puzzles.js';
 import { normalizeTimeControl, formatTashkentWhen } from './time.js';
 import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
 import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
@@ -60,18 +60,26 @@ function themeBg(theme) {
   return theme === 'light' ? '#f3f5f9' : '#111827';
 }
 
+/** Boot-style radial shell (Telegram chrome stays flat themeBg). */
+function themeShellBg(theme) {
+  return theme === 'light'
+    ? 'radial-gradient(ellipse at 50% 40%, #ffffff 0%, #f3f5f9 55%, #e8edf5 100%)'
+    : 'radial-gradient(ellipse at 50% 42%, #1a2740 0%, #111827 62%, #0b1220 100%)';
+}
+
 function syncTgChrome(theme = document.documentElement.dataset.theme || 'dark') {
   const bg = themeBg(theme);
+  const shell = themeShellBg(theme);
   try {
     tg.setHeaderColor(bg);
     tg.setBackgroundColor(bg);
     if (tg.setBottomBarColor) tg.setBottomBarColor(bg);
   } catch { /* old client */ }
-  // Keep DOM shells in sync — Telegram expand otherwise flashes native black
-  document.documentElement.style.background = bg;
-  document.body.style.background = bg;
+  // Radial shell like boot splash; Telegram bars use flat bg
+  document.documentElement.style.background = shell;
+  document.body.style.background = shell;
   const app = $('#app');
-  if (app) app.style.background = bg;
+  if (app) app.style.background = shell;
 }
 
 function applyTheme(theme) {
@@ -127,10 +135,16 @@ const rankingCategory = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapid', clas
 let selectedRankingBoard = 'elo';
 let selectedRanking = 'bullet';
 async function startQuick() {
-  try { const r = await api('POST', '/games/quick', { timeControl: selectedPreset() }); openOnline(r.game); } catch (e) { fail(e); }
+  // Same path as Play CTA: time/color setup → expanding-Elo quick match
+  ensurePlayFlow().openTimeSetup();
 }
-async function startFriendGame() {
-  try { const r = await api('POST', '/games', { timeControl: selectedPreset() }); openOnline(r.game); } catch (e) { fail(e); }
+async function startFriendGame(opts = {}) {
+  try {
+    const timeControl = opts.timeControl || selectedPreset();
+    const preferredColor = opts.preferredColor === 'w' || opts.preferredColor === 'b' ? opts.preferredColor : null;
+    const r = await api('POST', '/games', { timeControl, preferredColor });
+    openOnline(r.game);
+  } catch (e) { fail(e); }
 }
 async function challenge(id) {
   try {
@@ -158,7 +172,11 @@ async function openById(id) {
   try {
     const r = await api('GET', `/games/${id}`);
     if (r.game.joinable) return joinGame(id);
-    if (r.game.status === 'invited' && r.game.invitedId === state.me.id) { go(0, true); return refresh('play'); }
+    // Invitee (primary invited_id or game_invites): open board with Accept, not dead-end wait
+    if (r.game.status === 'invited' && r.game.creator !== state.me.id) {
+      openOnline(r.game);
+      return;
+    }
     if (r.game.status === 'cancelled') return toast(t('join_failed'), true);
     openOnline(r.game);
   } catch (e) { fail(e); }
@@ -600,7 +618,15 @@ function openPuzzle(i) {
     say(t('puzzle_continue'), 'ok'); haptic('light');
     await sleep(550);
     const replies = chess.moves({ verbose: true });
-    const r = replies[Math.floor(Math.random() * replies.length)];
+    // Keep a forced mate line (random defense can soft-lock mate-in-2+)
+    let r = replies[0];
+    for (const cand of replies) {
+      chess.move(cand);
+      const ok = state2.left <= 1 ? chess.isCheckmate() : mateIn(chess, state2.left - 1);
+      chess.undo();
+      if (ok) { r = cand; break; }
+    }
+    if (!r) { say(t('puzzle_wrong'), 'bad'); state2.locked = false; draw(); return; }
     chess.move(r); state2.left -= 1; state2.locked = false; draw({ from: r.from, to: r.to });
     playMoveSound();
     say(t(colour === 'w' ? 'puzzle_white' : 'puzzle_black'));

@@ -74,7 +74,13 @@ export function createPlayFlow(deps) {
           }, t('play_btn')),
           h('button.pf-menu-row', {
             type: 'button',
-            onclick: () => { haptic('light'); close(); deps.startFriendGame(); },
+            onclick: () => {
+              haptic('light');
+              deps.setSelectedTime(flowTime);
+              const preferredColor = flowColour === 'w' || flowColour === 'b' ? flowColour : null;
+              close();
+              deps.startFriendGame({ timeControl: normalizeTimeControl(flowTime), preferredColor });
+            },
           }, h('span.art', '🤝'), t('play_card_friend')),
           h('button.pf-menu-row', {
             type: 'button',
@@ -114,14 +120,6 @@ export function createPlayFlow(deps) {
                   type: 'button',
                   onclick: () => { flowColour = id; haptic('select'); draw(); },
                 }, h('span.pawn', art), label)))),
-          h('div.pf-sec',
-            h('div.pf-sec-h', t('game_variant')),
-            h('div.pf-variants',
-              h('button.pf-chip.on', { type: 'button' }, t('variant_standard')),
-              h('button.pf-chip', {
-                type: 'button',
-                onclick: () => haptic('light'),
-              }, t('variant_960')))),
           h('button.cta', {
             type: 'button',
             onclick: () => { haptic('medium'); startMatch(); },
@@ -202,12 +200,14 @@ export function createPlayFlow(deps) {
       const refreshStats = async () => {
         try {
           // Re-run quick match: join another searcher or nudge nearby-Elo players
+          let eloDelta = null;
           try {
             const q = await api('POST', '/games/quick', {
               timeControl: game.timeControl || flowTime,
               preferredColor: flowColour === 'w' || flowColour === 'b' ? flowColour : null,
             });
             if (!alive) return;
+            if (q.eloDelta != null) eloDelta = q.eloDelta;
             if (q.game) {
               if (q.game.id !== game.id) game = q.game;
               matched(q.game);
@@ -217,11 +217,13 @@ export function createPlayFlow(deps) {
 
           const l = await api('GET', '/lobby');
           if (!alive) return;
-          const active = (l.games?.active || [])[0];
+          // Only enter an active game that is this search (or replaced by match) — never an unrelated game
+          const active = (l.games?.active || []).find((g) => g && g.id === game.id);
           if (active) { matched(active); return; }
           stats.replaceChildren(
             h('div', '👥 ' + t('live_players', { n: l.onlineCount || 0 })),
             h('div', '🎮 ' + t('live_games_n', { n: Number(l.liveGames || 0) })),
+            eloDelta != null ? h('div', '🎯 ' + t('search_elo_window', { n: eloDelta })) : null,
           );
         } catch { /* ignore */ }
       };
