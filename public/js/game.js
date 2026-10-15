@@ -95,9 +95,8 @@ export function openGame(opts, onClose) {
     status, top.el, boardHost, bot.el, moveStrip, banner, reactBar, chatPanel, actions,
   );
   const board = S.board = new Board(boardHost, { onMove: (f, to, p) => humanMove(f, to, p) });
-  // Telegram WebView blocks audio until a gesture — unlock on first board touch
-  const unlockOnce = () => { unlockAudio(); boardHost.removeEventListener('pointerdown', unlockOnce); };
-  boardHost.addEventListener('pointerdown', unlockOnce, { passive: true });
+  // Telegram/iOS: unlock on every board touch (drag can outlive a one-shot unlock)
+  boardHost.addEventListener('pointerdown', () => unlockAudio(), { passive: true });
 
   const orientation = () => ((S.colour === 'b') !== S.flipped ? 'b' : 'w');
   const meName = () => (S.meta.me && S.meta.me.name) || t('you');

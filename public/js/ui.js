@@ -264,10 +264,57 @@ export function floatEmoji(emoji, x, y) {
   setTimeout(() => el.remove(), 3600);
 }
 
-/** Soft wooden piece-on-board thud (quiet; Web Audio so overlaps never glitch). */
+/**
+ * Move sound: HTMLAudio + short WAV (Telegram WebView–reliable).
+ * Pure Web Audio alone often stays silent after drag gestures on iOS TG.
+ */
+let moveWavUrlCached = null;
+let moveAudioProto = null;
 let moveAudioCtx = null;
-let moveBuf = null;
+let moveAudioReady = false;
 let lastMoveSoundAt = 0;
+
+/** Soft wood piece-drop WAV (blob: allowed by CSP media-src). */
+function moveWavUrl() {
+  if (moveWavUrlCached) return moveWavUrlCached;
+  const sr = 22050;
+  const n = Math.floor(sr * 0.1);
+  const samples = new Int16Array(n);
+  let n0 = 0;
+  let n1 = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / sr;
+    const thud = Math.sin(2 * Math.PI * 170 * t) * Math.exp(-t * 36);
+    const knock = Math.sin(2 * Math.PI * 390 * t) * Math.exp(-t * 58) * 0.45;
+    n0 = n0 * 0.72 + (Math.random() * 2 - 1) * 0.28;
+    n1 = n1 * 0.55 + n0 * 0.45;
+    const noise = n1 * Math.exp(-t * 80) * 0.28;
+    const env = Math.exp(-t * 40);
+    // Peak ~0.7 so phone speakers hear it; HTMLAudio.volume softens further
+    const v = (thud * 0.75 + knock + noise) * env * 0.72;
+    samples[i] = Math.max(-1, Math.min(1, v)) * 32767;
+  }
+  const bytes = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(bytes);
+  const ascii = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  ascii(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); ascii(8, 'WAVE');
+  ascii(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, sr, true); view.setUint32(28, sr * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  ascii(36, 'data'); view.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) view.setInt16(44 + i * 2, samples[i], true);
+  moveWavUrlCached = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+  return moveWavUrlCached;
+}
+
+function ensureMoveAudio() {
+  if (moveAudioProto) return moveAudioProto;
+  const el = new Audio(moveWavUrl());
+  el.preload = 'auto';
+  el.volume = 0.55;
+  try { el.load(); } catch { /* ignore */ }
+  moveAudioProto = el;
+  return el;
+}
 
 function ensureMoveCtx() {
   const AC = window.AudioContext || window.webkitAudioContext;
@@ -276,58 +323,76 @@ function ensureMoveCtx() {
   return moveAudioCtx;
 }
 
-function buildMoveBuffer(ctx) {
-  const sr = ctx.sampleRate || 44100;
-  const n = Math.floor(sr * 0.11);
-  const buf = ctx.createBuffer(1, n, sr);
-  const d = buf.getChannelData(0);
-  let n0 = 0;
-  let n1 = 0;
-  for (let i = 0; i < n; i++) {
-    const t = i / sr;
-    // Soft wood: low thud + short mid knock + tiny filtered noise (not a beep)
-    const thud = Math.sin(2 * Math.PI * 165 * t) * Math.exp(-t * 38);
-    const knock = Math.sin(2 * Math.PI * 380 * t) * Math.exp(-t * 62) * 0.4;
-    n0 = n0 * 0.7 + (Math.random() * 2 - 1) * 0.3;
-    n1 = n1 * 0.55 + n0 * 0.45;
-    const noise = n1 * Math.exp(-t * 85) * 0.22;
-    const env = Math.exp(-t * 42);
-    d[i] = (thud * 0.7 + knock + noise) * env * 0.48;
-  }
-  return buf;
-}
-
-/** Call from a user gesture so later move sounds are allowed in Telegram WebView. */
+/** Must run inside a user gesture (board pointerdown). Unlocks HTMLAudio + WebAudio for Telegram. */
 export function unlockAudio() {
   try {
+    const el = ensureMoveAudio();
+    // volume 0 play+pause unlocks autoplay without an audible click
+    const prev = el.volume;
+    el.volume = 0;
+    const p = el.play();
+    const reset = () => {
+      try {
+        el.pause();
+        el.currentTime = 0;
+        el.volume = prev || 0.55;
+        moveAudioReady = true;
+      } catch { moveAudioReady = true; }
+    };
+    if (p && typeof p.then === 'function') p.then(reset).catch(reset);
+    else reset();
     const ctx = ensureMoveCtx();
-    if (!ctx) return;
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    if (!moveBuf) moveBuf = buildMoveBuffer(ctx);
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
   } catch { /* ignore */ }
 }
 
-/** Quiet realistic piece-drop when a move lands (player, opponent, AI). */
+function playMoveSoundOsc() {
+  try {
+    const ctx = ensureMoveCtx();
+    if (!ctx) return;
+    const run = () => {
+      const t0 = ctx.currentTime;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(220, t0);
+      o.frequency.exponentialRampToValueAtTime(90, t0 + 0.08);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.1);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0); o.stop(t0 + 0.11);
+    };
+    if (ctx.state === 'suspended') ctx.resume().then(run).catch(() => {});
+    else run();
+  } catch { /* ignore */ }
+}
+
+/** Piece-drop when a move lands (player, opponent, AI, puzzles). */
 export function playMoveSound() {
   try {
     const now = performance.now();
-    if (now - lastMoveSoundAt < 45) return; // ignore double-fire from pointer+click
+    if (now - lastMoveSoundAt < 40) return;
     lastMoveSoundAt = now;
-    const ctx = ensureMoveCtx();
-    if (!ctx) return;
-    if (!moveBuf) moveBuf = buildMoveBuffer(ctx);
-    const start = () => {
-      const src = ctx.createBufferSource();
-      const g = ctx.createGain();
-      src.buffer = moveBuf;
-      g.gain.value = 0.22; // keep soft in phone speakers / WebView
-      src.connect(g);
-      g.connect(ctx.destination);
-      src.start(0);
-    };
-    if (ctx.state === 'suspended') ctx.resume().then(start).catch(() => {});
-    else start();
-  } catch { /* autoplay / old WebView */ }
+    // Fresh element per move — avoids currentTime/play races in WebView
+    const el = new Audio(moveWavUrl());
+    el.volume = 0.55;
+    const played = el.play();
+    if (played && typeof played.catch === 'function') {
+      played.catch(() => {
+        // Gesture may have ended — try shared element, then oscillator
+        try {
+          const shared = ensureMoveAudio();
+          shared.volume = 0.55;
+          shared.currentTime = 0;
+          const again = shared.play();
+          if (again && again.catch) again.catch(() => playMoveSoundOsc());
+        } catch { playMoveSoundOsc(); }
+      });
+    }
+  } catch {
+    playMoveSoundOsc();
+  }
 }
 
 /** Emoji rain (victory) */

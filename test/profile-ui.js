@@ -98,7 +98,7 @@ const gameJs = read('public/js/game.js');
 assert.ok(read('public/js/ui.js').includes('unlockAudio') && gameJs.includes('unlockAudio'), 'move sound unlocks on board gesture');
 assert.ok(gameJs.includes('playMoveSound') && gameJs.includes('/chat') && gameJs.includes('gchat'), 'in-game move sound + ephemeral chat');
 assert.ok(gameJs.includes('pclk') && gameJs.includes('categoryOf'), 'clocks styled by time-control category');
-assert.ok(read('public/js/ui.js').includes('playMoveSound') && read('public/js/ui.js').includes('buildMoveBuffer') && /floatup 3\.4s/.test(css), 'wood move buffer + slower emoji float');
+assert.ok(read('public/js/ui.js').includes('playMoveSound') && read('public/js/ui.js').includes('moveWavUrl') && read('public/js/ui.js').includes('audio/wav') && /floatup 3\.4s/.test(css), 'WAV move sound + slower emoji float');
 assert.ok(app.includes("button.round.back") && app.includes("icon('back', 22)") && app.includes('closePuzzle'), 'puzzle uses circular back like other pages');
 assert.ok(!gameJs.includes("POST', '/results'") && !gameJs.includes('"/results"'), 'AI games do not post results to stats');
 assert.ok(profile.includes('stats_online_only') && !profile.includes("t('vs_pc')"), 'stats page online-only, no vs-pc totals');
