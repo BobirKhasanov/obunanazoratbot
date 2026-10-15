@@ -858,11 +858,19 @@ async function boot() {
 
   let me;
   try {
-    // Abort + Promise.race — some WebViews ignore fetch AbortController
-    const timed = new Promise((_, reject) => {
-      setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'net' })), 8_000);
+    // AbortController timeout; also clear a backup timer so it never rejects later
+    // (a dangling Promise.race reject was flashing "Yuklashda xato" via unhandledrejection).
+    const req = api('GET', '/me', undefined, { timeoutMs: 8_000 });
+    req.catch(() => {}); // if backup wins, ignore late abort noise
+    let timer;
+    const backup = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'net' })), 8_500);
     });
-    me = await Promise.race([api('GET', '/me', undefined, { timeoutMs: 7_500 }), timed]);
+    try {
+      me = await Promise.race([req, backup]);
+    } finally {
+      clearTimeout(timer);
+    }
   } catch (e) {
     let msg = 'Open from Telegram';
     try { const { errText } = await import('./i18n.js'); msg = errText(e); } catch { /* ignore */ }

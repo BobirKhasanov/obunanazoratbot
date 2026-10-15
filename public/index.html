@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#111827">
   <title>Chess</title>
-  <link rel="stylesheet" href="/styles.css?v=20261015r">
+  <link rel="stylesheet" href="/styles.css?v=20261015s">
   <style>
     /* Inline boot splash — always visible until JS reveals gate/app (never a blank black WebView) */
     html, body { margin: 0; min-height: 100%; min-height: 100dvh; background: radial-gradient(ellipse at 50% 42%, #1a2740 0%, #111827 62%, #0b1220 100%); color: var(--text, #fff); }
@@ -127,13 +127,13 @@
     <div id="sheet-root"></div>
     <div id="toast" role="status"></div>
   </main>
-  <script type="module" src="/js/app.js?v=20261015r"></script>
+  <script type="module" src="/js/app.js?v=20261015s"></script>
   <script>
     (function () {
       function bootEl() { return document.getElementById('boot'); }
       function bootStillUp() {
         var b = bootEl();
-        return !!(b && !b.hidden && b.style.display !== 'none');
+        return !!(b && !b.hidden && b.style.display !== 'none' && document.body.contains(b));
       }
       function failBoot(msg) {
         var b = bootEl();
@@ -145,23 +145,22 @@
           '<p class="boot-sub">Qayta urinish uchun bosing</p>';
         b.onclick = function () { location.reload(); };
       }
-      // Any /js/*.js module failure while splash is up is fatal (not only app.js)
+      // Only hard-fail when the app entry module itself fails to load.
+      // Do NOT treat unhandledrejection as fatal — Telegram SDK / raced timers
+      // often reject after a successful boot and were flashing "Yuklashda xato".
       window.addEventListener('error', function (ev) {
         if (!bootStillUp()) return;
         var src = '';
         try {
           src = String((ev && ev.filename) || (ev && ev.target && (ev.target.src || ev.target.href)) || '');
         } catch (e) { src = ''; }
-        if (src.indexOf('/js/') === -1 && src.indexOf('/vendor/') === -1) return;
+        if (src.indexOf('/js/app.js') === -1) return;
         failBoot('Yuklashda xato');
       }, true);
-      window.addEventListener('unhandledrejection', function () {
-        if (bootStillUp()) failBoot('Yuklashda xato');
-      });
       // Last-resort watchdog (boot() should hide splash well before this)
       setTimeout(function () {
         if (bootStillUp()) failBoot('Juda uzoq kutildi');
-      }, 10000);
+      }, 15000);
     })();
   </script>
 </body>

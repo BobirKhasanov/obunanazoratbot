@@ -178,7 +178,8 @@ assert.ok(read('public/js/ui.js').includes('timeoutMs') && read('public/js/ui.js
 assert.ok(html.includes('Doska ochilmoqda') && html.includes('boot-ring') && html.includes('boot-spin'), 'animated boot splash copy');
 assert.ok(html.includes('failBoot') && html.includes('Juda uzoq kutildi'), 'boot watchdog if splash stalls');
 assert.ok(!html.includes('rel="modulepreload"'), 'no inbox modulepreload (was false-triggering boot fail UI)');
-assert.ok(html.includes('/js/') && html.includes('unhandledrejection'), 'boot fails on any JS module error while splash up');
+assert.ok(html.includes('/js/app.js') && html.includes('failBoot'), 'boot fails only when app.js load errors');
+assert.ok(!html.includes("addEventListener('unhandledrejection'"), 'boot does not treat unhandledrejection as fatal');
 assert.ok(read('src/server.js').includes("file.endsWith('.js')") && read('src/server.js').includes('text/javascript'), 'JS modules served with correct MIME');
 assert.ok(read('src/server.js').includes('getMe timeout'), 'getMe for /me is time-capped');
 assert.ok(read('public/js/app.js').includes("getElementById('boot')"), 'hideBoot forcefully removes splash');
