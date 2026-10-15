@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#111827">
   <title>Chess</title>
-  <link rel="stylesheet" href="/styles.css?v=20261015i">
+  <link rel="stylesheet" href="/styles.css?v=20261015j">
   <style>
     /* Inline boot splash — always visible until JS reveals gate/app (never a blank black WebView) */
     html, body { margin: 0; min-height: 100%; min-height: 100dvh; background: var(--bg, #111827); color: var(--text, #fff); }
@@ -75,6 +75,18 @@
     }
   </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    /* Earliest possible ready/expand — don't wait for app.js or /me */
+    (function () {
+      try {
+        var tw = window.Telegram && window.Telegram.WebApp;
+        if (!tw) return;
+        tw.ready();
+        try { tw.expand(); } catch (e) {}
+        try { if (tw.disableVerticalSwipes) tw.disableVerticalSwipes(); } catch (e) {}
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <div id="boot" role="status" aria-live="polite">
@@ -115,7 +127,7 @@
     <div id="sheet-root"></div>
     <div id="toast" role="status"></div>
   </main>
-  <script type="module" src="/js/app.js?v=20261015i"></script>
+  <script type="module" src="/js/app.js?v=20261015j"></script>
   <script>
     (function () {
       function failBoot(msg) {

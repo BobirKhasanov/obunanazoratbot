@@ -14,6 +14,7 @@ import { closeScreen } from './screen.js';
 import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel, CAROUSEL_STAGGER_MS } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
+import { applyPerfMode } from './perf.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
 let selectedTime = 'any';
@@ -763,10 +764,13 @@ function showApp() {
 }
 
 async function boot() {
-  // Paint Telegram chrome immediately so expand never flashes pure black
+  // Lite CSS before first paint of heavy UI (Android LOW only; iOS unchanged)
+  applyPerfMode();
+
+  // ready/expand already called from index.html; keep idempotent chrome sync here
   try {
     if (tg) {
-      tg.ready();
+      try { tg.ready(); } catch { /* ignore */ }
       try { tg.expand(); } catch { /* ignore */ }
       try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch { /* old client */ }
       syncTgChrome('dark');
@@ -828,11 +832,13 @@ async function boot() {
       else if (m.game.id !== openGameId()) refresh();
     } else if (m.t === 'invite_gone') { clearInvitePop(); refresh(); }
   });
+  // Background tab refresh — slightly slower on lite Android
+  const tabRefreshMs = document.documentElement.dataset.perf === 'lite' ? 10_000 : 6_000;
   setInterval(() => {
     if (document.hidden || openGameId()) return;
     if (state.tab === 'live' && liveBlocksAutoRefresh()) return;
     if (['live', 'play', 'rankings', 'profile'].includes(state.tab)) refresh();
-  }, 6_000);
+  }, tabRefreshMs);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) sendBye();
     else refresh();

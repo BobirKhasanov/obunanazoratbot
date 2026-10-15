@@ -1089,6 +1089,25 @@ button.grow.plain { flex: 1; display: block; }
 @media (prefers-reduced-motion: reduce) {
   #bg::before { animation: none; }
 }
+/* Lite (weak Android): drop expensive backdrop / glow / bg animation — iOS stays data-perf=full */
+html[data-perf="lite"] #bg { display: none; }
+html[data-perf="lite"] #dock,
+html[data-perf="lite"] #nav,
+html[data-perf="lite"] .sheet,
+html[data-perf="lite"] .prof-banner {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-perf="lite"] .prem-spark,
+html[data-perf="lite"] .prem-sparkle,
+html[data-perf="lite"] .float-emoji { display: none !important; }
+html[data-perf="lite"] .prem-ring { animation: none !important; }
+html[data-perf="lite"] .live-mini-ph {
+  background:
+    repeating-conic-gradient(#769656 0% 25%, #eeeed2 0% 50%) 0 0 / 25% 25%;
+  border-radius: 8px;
+  opacity: 0.85;
+}
 #pager, #dock { z-index: 1; }
 #dock { z-index: 20; }
 

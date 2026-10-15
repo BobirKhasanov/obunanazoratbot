@@ -4,6 +4,7 @@ import { h, icon, haptic, api, fail, avatar, tg, pillBar } from './ui.js';
 import { t } from './i18n.js';
 import { Board } from './board.js';
 import { openGame } from './game.js';
+import { liveRoundPollMs, liveGamePollMs, liveClockTickMs, liveMiniBoardBudget, isLite } from './perf.js';
 
 /** In-app circular back only (do not also show Telegram.BackButton — that doubles the control). */
 function backBtn(onClick) {
@@ -396,15 +397,25 @@ function miniBoard(fen, lastMove, gameId) {
   return host;
 }
 
+/** Lightweight stand-in when lite mode skips mounting many Board instances. */
+function miniBoardPlaceholder() {
+  return h('div.live-mini-board.live-mini-ph', { 'aria-hidden': 'true' });
+}
+
 function paintMiniFen(gameId, fen, lastMove) {
   const board = boardById.get(gameId);
   if (!board || !fen) return;
   const chess = new Chess();
   try { chess.load(fen); } catch { return; }
-  board.set(chess, { lastMove: lastMoveObj(lastMove), mine: null, orientation: 'w', animate: true });
+  board.set(chess, {
+    lastMove: lastMoveObj(lastMove),
+    mine: null,
+    orientation: 'w',
+    animate: !isLite(),
+  });
 }
 
-function gameCard(g, onOpen) {
+function gameCard(g, onOpen, useMiniBoard) {
   const white = (g.players && g.players[0]) || {};
   const black = (g.players && g.players[1]) || {};
   const done = g.status && g.status !== '*';
@@ -421,7 +432,7 @@ function gameCard(g, onOpen) {
       h('span.fed', white.fed || ''),
       h('span.name', playerLabel(white)),
       h('span.clk.w', fmtClockMs(liveSideMs(ck, 'w')))),
-    miniBoard(g.fen || 'start', g.lastMove, g.id),
+    useMiniBoard ? miniBoard(g.fen || 'start', g.lastMove, g.id) : miniBoardPlaceholder(),
     h('div.live-gc-player',
       h('span.fed', black.fed || ''),
       h('span.name', playerLabel(black)),
@@ -504,8 +515,13 @@ async function renderRound(mount, onRefresh) {
     onRefresh();
   };
 
+  let miniLeft = liveMiniBoardBudget();
   const grid = shown.length
-    ? h('div.live-game-grid', shown.map((g) => gameCard(g, openGameCard)))
+    ? h('div.live-game-grid', shown.map((g) => {
+      const useMini = miniLeft > 0;
+      if (useMini) miniLeft -= 1;
+      return gameCard(g, openGameCard, useMini);
+    }))
     : empty(filter === 'uz' ? t('live_no_uz') : t('live_no_games'), '♟');
 
   mount([
@@ -542,9 +558,9 @@ async function renderRound(mount, onRefresh) {
       if (w) w.textContent = fmtClockMs(liveSideMs(st, 'w'));
       if (b) b.textContent = fmtClockMs(liveSideMs(st, 'b'));
     }
-  }, 250);
+  }, liveClockTickMs());
 
-  // Soft poll: clocks + mini-board FEN in place (no full remount — that was killing taps)
+  // Soft poll: clocks + mini-board FEN in place (slower on Android / lite)
   pollTimer = setInterval(async () => {
     if (section !== 'intl' || nav.view !== 'round') return clearPoll();
     try {
@@ -571,7 +587,7 @@ async function renderRound(mount, onRefresh) {
         }
       }
     } catch { /* ignore transient poll errors — keep last good UI */ }
-  }, 3000);
+  }, liveRoundPollMs());
 }
 
 function parsePgnMoves(pgn) {
@@ -775,10 +791,11 @@ async function renderGame(mount, onRefresh) {
   clockTimer = setInterval(() => {
     if (section !== 'intl' || nav.view !== 'game' || gen !== renderGen) return clearPoll();
     paintClocks();
-  }, 200);
+  }, liveClockTickMs());
 
-  // Board/clock snapshots via short-cached API (~2.5s server cache)
+  // Board/clock snapshots (Android / lite poll slower; iOS stays ~2s)
   let polls = 0;
+  const gamePoll = liveGamePollMs();
   pollTimer = setInterval(async () => {
     if (section !== 'intl' || nav.view !== 'game' || gen !== renderGen) return clearPoll();
     polls += 1;
@@ -786,10 +803,10 @@ async function renderGame(mount, onRefresh) {
       const round = await api('GET', roundApi('', { fresh: false }));
       const g = (round.games || []).find((x) => x.id === nav.gameId);
       if (g) applySnap(g);
-      // PGN every ~6s without fresh=1
-      if (polls % 3 === 0) refreshPgn(false);
+      // PGN less often on slow devices
+      if (polls % (isLite() ? 4 : 3) === 0) refreshPgn(false);
     } catch { /* ignore transient errors */ }
-  }, 2000);
+  }, gamePoll);
 }
 
 /**
