@@ -16,7 +16,7 @@ const css = read('public/styles.css');
 assert.ok(app.includes("from './profile.js'"), 'app imports profile');
 assert.ok(app.includes('renderProfilePage'), 'app mounts profile hub');
 assert.ok(app.includes('closeScreen'), 'app closes subpages on tab change');
-assert.ok(app.includes("behavior: animate ? 'smooth'"), 'smooth scroll on tab change');
+assert.ok(app.includes('smoothScrollTo'), 'high-smooth scroll on tab change');
 assert.ok(app.includes('applyPerfMode'), 'boot applies device perf mode');
 const indexHtml = read('public/index.html');
 assert.ok(indexHtml.includes('tw.ready()') || indexHtml.includes('.ready()'), 'WebApp.ready() early in HTML');
@@ -125,7 +125,7 @@ assert.ok(admin.includes('admin_pack_sum') || admin.includes('admin_pack_diamond
 assert.ok(read('src/server.js').includes('parseDiamondPacksStrict') && read('src/server.js').includes('/puzzles/claim-daily') && read('src/server.js').includes('/games/:id/chat'), 'server shop/chat/puzzle endpoints');
 assert.ok(read('src/server.js').includes('puzzle_daily_reward') && read('src/server.js').includes('puzzleDailyReward'), 'server stores puzzle daily reward setting');
 
-for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down', 'stats_online_only', 'admin_delete_user', 'admin_delete_confirm', 'admin_user_deleted', 'premium_unlocks', 'premium_feat_avatar', 'premium_feat_style', 'premium_feat_bio', 'premium_feat_badge', 'avatar_photo', 'avatar_photo_premium', 'premium_wait_expiry', 'home_tab_live', 'home_tab_friends', 'ann_edit', 'ann_save_edit', 'ann_updated', 'e_friends_only']) {
+for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down', 'stats_online_only', 'admin_delete_user', 'admin_delete_confirm', 'admin_user_deleted', 'premium_unlocks', 'premium_feat_avatar', 'premium_feat_style', 'premium_feat_bio', 'premium_feat_badge', 'avatar_photo', 'avatar_photo_premium', 'premium_wait_expiry', 'home_tab_live', 'home_tab_friends', 'ann_edit', 'ann_save_edit', 'ann_updated', 'e_friends_only', 'admin_referral_rewards', 'admin_referral_inviter', 'admin_referral_invitee', 'admin_referral_sub', 'admin_referral_bad']) {
   assert.ok(i18n.includes(k + ':'), `i18n ${k}`);
 }
 
@@ -149,14 +149,18 @@ assert.ok(i18n.includes('profile_edit:') && i18n.includes('admin_banner:') && i1
 const server = read('src/server.js');
 assert.ok(server.includes('/api/public/profile-banner') && server.includes('profile_banner_media_id'), 'public banner + setting');
 assert.ok(server.includes('username_readonly') && server.includes('last_name'), 'username locked + last_name field');
+assert.ok(server.includes('referral_reward') && server.includes('referralInviteeReward'), 'shop stores referral rewards');
 assert.ok(fs.existsSync(path.join(root, 'public/img/profile-banner.png')), 'default banner asset');
-assert.ok(/\.screen[\s\S]{0,280}0\.78s/.test(css), 'smooth screen page transition');
-assert.ok(css.includes('#track.settle') && /#track\.settle[^}]*0\.78s/.test(css), 'smooth pager settle');
+assert.ok(/\.screen[\s\S]{0,280}0\.95s/.test(css), 'smooth screen page transition');
+assert.ok(css.includes('#track.settle') && /#track\.settle[^}]*0\.95s/.test(css), 'smooth pager settle');
 assert.ok(/#dock[\s\S]{0,200}flex-direction:\s*column/.test(css), 'dock stacks Play above nav');
 assert.ok(css.includes('#play-sticky') && css.includes('order: -1'), 'Play CTA ordered above nav in dock');
 assert.ok(/#play-sticky\.show[\s\S]{0,220}overflow:\s*visible/.test(css), 'Play CTA edges/shadow not clipped');
-assert.ok(/#nav-ind\s*\{[^}]*0\.78s/.test(css), 'nav indicator matches pager timing');
+assert.ok(/#nav-ind\s*\{[^}]*0\.95s/.test(css), 'nav indicator matches pager timing');
 assert.ok(css.includes('overscroll-behavior-y: contain'), 'pages contain overscroll for smoother feel');
+assert.ok(css.includes('--ease-scroll') && css.includes('will-change: scroll-position'), 'high-smooth scroll tuning');
+assert.ok(ui.includes('smoothScrollTo') && app.includes('smoothScrollTo'), 'programmatic high-smooth scroll');
+assert.ok(admin.includes('referralReward') && admin.includes('admin_referral_rewards'), 'admin can edit referral bonuses');
 const html = read('public/index.html');
 assert.ok(html.includes('id="play-sticky"') && html.includes('id="dock"'), 'Play mount lives inside dock markup');
 assert.ok(html.includes('id="boot"'), 'boot splash in HTML');

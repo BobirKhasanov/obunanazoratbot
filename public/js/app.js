@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, setInitData, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep, unlockAudio, playMoveSound } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, setInitData, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo } from './ui.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -692,10 +692,13 @@ function initPager() {
     ind.style.transform = `translateX(${state.index * 100}%)`;
     btns.forEach((b, j) => b.classList.toggle('active', j === state.index));
     requestAnimationFrame(() => setPlaySticky(state.tab === 'play'));
-    // smooth scroll pages to top when switching tabs
+    // high-smooth scroll pages to top when switching tabs
     if (state.index !== prev) {
       const p = page(state.tab);
-      if (p) p.scrollTo({ top: 0, behavior: animate ? 'smooth' : 'auto' });
+      if (p) {
+        if (animate) smoothScrollTo(p, 0, 560);
+        else p.scrollTop = 0;
+      }
       refresh();
     }
   };

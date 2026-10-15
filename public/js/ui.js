@@ -31,6 +31,25 @@ export const $ = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** High-smooth programmatic scroll (longer ease than browser default). */
+export function smoothScrollTo(el, top = 0, ms = 520) {
+  if (!el) return;
+  const reduce = typeof matchMedia === 'function'
+    && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce || ms <= 0) { el.scrollTop = top; return; }
+  const from = el.scrollTop;
+  const dist = top - from;
+  if (Math.abs(dist) < 1) return;
+  const t0 = performance.now();
+  const ease = (t) => 1 - Math.pow(1 - t, 3); // ease-out cubic
+  const tick = (now) => {
+    const p = Math.min(1, (now - t0) / ms);
+    el.scrollTop = from + dist * ease(p);
+    if (p < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
 const P = {
   play: '<path d="M7 20h10M9 20l1-6-2-2c0-3 1.5-5 4-6 2.5 1 4 3 4 6l-2 2 1 6"/><circle cx="12" cy="4.5" r="1.6"/>',
   live: '<circle cx="12" cy="12" r="2.2"/><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.6 4.6a10.5 10.5 0 0 0 0 14.8M19.4 4.6a10.5 10.5 0 0 1 0 14.8"/>',

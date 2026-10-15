@@ -514,6 +514,11 @@ Object.assign(en, {
   admin_puzzle_reward: 'Daily puzzles reward (diamonds)',
   admin_puzzle_reward_sub: 'Given once per day when a user solves all 10 puzzles. Shown in the Puzzles tab.',
   admin_puzzle_reward_bad: 'Puzzle reward must be 0…1000000',
+  admin_referral_rewards: 'Referral bonuses (diamonds)',
+  admin_referral_inviter: 'Inviter',
+  admin_referral_invitee: 'Invitee',
+  admin_referral_sub: 'Paid once when someone opens your invite link. Inviter and invitee amounts.',
+  admin_referral_bad: 'Referral bonuses must be 0…1000000',
 });
 
 Object.assign(ru, {
@@ -546,6 +551,11 @@ Object.assign(ru, {
   admin_puzzle_reward: 'Награда за ежедневные задачи (алмазы)',
   admin_puzzle_reward_sub: 'Один раз в день, когда пользователь решит все 10 задач. Текст на вкладке задач обновляется.',
   admin_puzzle_reward_bad: 'Награда должна быть 0…1000000',
+  admin_referral_rewards: 'Бонусы за рефералов (алмазы)',
+  admin_referral_inviter: 'Пригласивший',
+  admin_referral_invitee: 'Приглашённый',
+  admin_referral_sub: 'Один раз при открытии вашей ссылки. Суммы для пригласившего и приглашённого.',
+  admin_referral_bad: 'Бонусы реферала: 0…1000000',
 });
 
 Object.assign(uz, {
@@ -578,6 +588,11 @@ Object.assign(uz, {
   admin_puzzle_reward: 'Kunlik masalalar mukofoti (olmos)',
   admin_puzzle_reward_sub: 'User 10 ta masalani yechganda bir marta beriladi. Boshqotirma yozuvida ham shu son ko‘rinadi.',
   admin_puzzle_reward_bad: 'Mukofot 0…1000000 bo‘lsin',
+  admin_referral_rewards: 'Referral bonuslar (olmos)',
+  admin_referral_inviter: 'Taklif qiluvchi',
+  admin_referral_invitee: 'Taklif qilingan',
+  admin_referral_sub: 'Havola ochilganda bir marta beriladi. Taklif qiluvchi va taklif qilingan uchun summalar.',
+  admin_referral_bad: 'Referral bonus 0…1000000 bo‘lsin',
 });
 
 Object.assign(uzc, {
@@ -610,6 +625,11 @@ Object.assign(uzc, {
   admin_puzzle_reward: 'Кунлик масалалар мукофоти (олмос)',
   admin_puzzle_reward_sub: 'Фойдаланувчи 10 та масалани ечганда бир марта берилади. Ёзувда ҳам шу сон кўринади.',
   admin_puzzle_reward_bad: 'Мукофот 0…1000000 бўлсин',
+  admin_referral_rewards: 'Реферал бонуслар (олмос)',
+  admin_referral_inviter: 'Таклиф қилувчи',
+  admin_referral_invitee: 'Таклиф қилинган',
+  admin_referral_sub: 'Ҳавола очилганда бир марта берилади. Таклиф қилувчи ва таклиф қилинган учун суммалар.',
+  admin_referral_bad: 'Реферал бонус 0…1000000 бўлсин',
 });
 
 Object.assign(en, {

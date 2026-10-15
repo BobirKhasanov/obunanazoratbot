@@ -195,6 +195,8 @@ async function playMoves(game, players, moves, startPly = 0) {
     await step('admin shop settings + grant diamonds with notify', async () => {
       const shop = await ok('ADMIN', 'GET', '/admin/shop');
       assert.strictEqual(shop.shop.premiumPriceDiamonds, 200);
+      assert.strictEqual(shop.shop.referralReward, 20);
+      assert.strictEqual(shop.shop.referralInviteeReward, 10);
       const patched = await ok('ADMIN', 'PATCH', '/admin/shop', {
         premiumPlans: [
           { months: 1, diamonds: 150 },
@@ -204,9 +206,16 @@ async function playMoves(game, players, moves, startPly = 0) {
         ],
         diamondPacks: [{ diamonds: 100, sum: 100000 }, { diamonds: 200, sum: 200000 }],
         payUsername: 'hasanovbobur',
+        referralReward: 25,
+        referralInviteeReward: 15,
       });
       assert.strictEqual(patched.shop.premiumPriceDiamonds, 150);
-      assert.strictEqual((await ok('B', 'GET', '/me')).meta.PREMIUM_PRICE, 150);
+      assert.strictEqual(patched.shop.referralReward, 25);
+      assert.strictEqual(patched.shop.referralInviteeReward, 15);
+      const metaB = (await ok('B', 'GET', '/me')).meta;
+      assert.strictEqual(metaB.PREMIUM_PRICE, 150);
+      assert.strictEqual(metaB.REFERRAL_REWARD, 25);
+      assert.strictEqual(metaB.REFERRAL_INVITEE_REWARD, 15);
       const before = (await ok('B', 'GET', '/me')).user.diamonds;
       const bBefore = tg.to(USERS.B.id).length;
       const g = await ok('ADMIN', 'POST', `/admin/users/${USERS.B.id}/diamonds`, { amount: 100 });
@@ -222,7 +231,7 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok(cara, 'C should appear in lobby online list');
       assert.strictEqual(cara.premium, true);
       await pg.q('UPDATE users SET premium = 0, premium_until = NULL WHERE id = $1', USERS.C.id);
-      // restore default plans for later steps
+      // restore default plans + referral for later steps
       await ok('ADMIN', 'PATCH', '/admin/shop', {
         premiumPlans: [
           { months: 1, diamonds: 200 },
@@ -230,6 +239,8 @@ async function playMoves(game, players, moves, startPly = 0) {
           { months: 6, diamonds: 900 },
           { months: 12, diamonds: 1600 },
         ],
+        referralReward: 20,
+        referralInviteeReward: 10,
       });
     });
 

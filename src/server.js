@@ -551,15 +551,30 @@ function normalizePuzzleDailyReward(raw) {
   return n;
 }
 
+function normalizeReferralAmount(raw, fallback) {
+  const n = Math.floor(Number(raw));
+  if (!(n >= 0 && n <= 1_000_000)) return fallback;
+  return n;
+}
+
 async function getShopSettings() {
   const cached = await cacheGet('shop:settings', 30_000);
-  if (cached) return cached;
-  const [priceRaw, plansRaw, packsRaw, payRaw, puzzleRewardRaw] = await Promise.all([
+  if (cached) {
+    return {
+      ...cached,
+      referralReward: normalizeReferralAmount(cached.referralReward, REFERRAL_REWARD),
+      referralInviteeReward: normalizeReferralAmount(cached.referralInviteeReward, REFERRAL_INVITEE_REWARD),
+      puzzleDailyReward: normalizePuzzleDailyReward(cached.puzzleDailyReward),
+    };
+  }
+  const [priceRaw, plansRaw, packsRaw, payRaw, puzzleRewardRaw, referralRaw, inviteeRaw] = await Promise.all([
     getSetting('premium_price_diamonds', String(PREMIUM_PRICE_FALLBACK)),
     getSetting('premium_plans', JSON.stringify(DEFAULT_PREMIUM_PLANS)),
     getSetting('diamond_packs', JSON.stringify(DEFAULT_DIAMOND_PACKS)),
     getSetting('pay_username', DEFAULT_PAY_USERNAME),
     getSetting('puzzle_daily_reward', String(PUZZLE_DAILY_REWARD_FALLBACK)),
+    getSetting('referral_reward', String(REFERRAL_REWARD)),
+    getSetting('referral_invitee_reward', String(REFERRAL_INVITEE_REWARD)),
   ]);
   let premiumPriceDiamonds = Math.floor(Number(priceRaw));
   if (!(premiumPriceDiamonds >= 1 && premiumPriceDiamonds <= 1_000_000)) {
@@ -577,6 +592,8 @@ async function getShopSettings() {
     diamondPacks: normalizeDiamondPacks(packsRaw),
     payUsername,
     puzzleDailyReward: normalizePuzzleDailyReward(puzzleRewardRaw),
+    referralReward: normalizeReferralAmount(referralRaw, REFERRAL_REWARD),
+    referralInviteeReward: normalizeReferralAmount(inviteeRaw, REFERRAL_INVITEE_REWARD),
   };
   await cacheSet('shop:settings', shop, 30_000);
   return shop;
@@ -716,7 +733,8 @@ api.get('/me', wrap(async (req, res) => {
     meta: {
       LANGS, THEMES, PIECE_SETS, BOARD_THEMES, COLORS, REACTIONS,
       PREMIUM_PRICE: shop.premiumPriceDiamonds,
-      REFERRAL_REWARD, REFERRAL_INVITEE_REWARD,
+      REFERRAL_REWARD: shop.referralReward,
+      REFERRAL_INVITEE_REWARD: shop.referralInviteeReward,
       premiumPlans: shop.premiumPlans,
       diamondPacks: shop.diamondPacks,
       payUsername: shop.payUsername,
@@ -1012,12 +1030,15 @@ const makeFriends = db.prepare('INSERT INTO friends (user_id, friend_id) VALUES 
 const befriend = async (a, b) => { await makeFriends.run(a, b); await makeFriends.run(b, a); };
 const areFriends = async (a, b) => !!(await db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(a, b));
 
-/** Pay referral diamonds once per invitee (referrals PK). Works even if already friends. */
+/** Pay referral diamonds once per invitee (referrals PK). Amounts from admin shop settings. */
 async function applyReferralPay(inviteeId, inviterId) {
   if (!inviteeId || !inviterId || inviteeId === inviterId) return { reward: 0, inviteeReward: 0 };
   const inviter = await getUser.get(inviterId);
   if (!inviter || inviter.blocked) return { reward: 0, inviteeReward: 0 };
   await befriend(inviteeId, inviterId);
+  const shop = await getShopSettings();
+  const inviterAmt = shop.referralReward;
+  const inviteeAmt = shop.referralInviteeReward;
   const paid = await db.prepare(`
     WITH r AS (
       INSERT INTO referrals (invitee_id, inviter_id) VALUES (?, ?)
@@ -1032,14 +1053,14 @@ async function applyReferralPay(inviteeId, inviterId) {
     SELECT
       (SELECT COUNT(*)::int FROM pay_inviter) AS inviter_paid,
       (SELECT COUNT(*)::int FROM pay_invitee) AS invitee_paid
-  `).get(inviteeId, inviterId, REFERRAL_REWARD, REFERRAL_INVITEE_REWARD);
+  `).get(inviteeId, inviterId, inviterAmt, inviteeAmt);
   if (paid && (paid.inviter_paid || paid.invitee_paid)) {
     invalidateUserCache(inviterId);
     invalidateUserCache(inviteeId);
   }
   return {
-    reward: paid && paid.inviter_paid ? REFERRAL_REWARD : 0,
-    inviteeReward: paid && paid.invitee_paid ? REFERRAL_INVITEE_REWARD : 0,
+    reward: paid && paid.inviter_paid ? inviterAmt : 0,
+    inviteeReward: paid && paid.invitee_paid ? inviteeAmt : 0,
   };
 }
 
@@ -2536,6 +2557,16 @@ admin.patch('/shop', wrap(async (req, res) => {
     const n = Math.floor(Number(b.puzzleDailyReward));
     if (!(n >= 0 && n <= 1_000_000)) throw bad('Puzzle reward must be 0…1000000 diamonds', 'bad_request');
     await setSetting('puzzle_daily_reward', String(n));
+  }
+  if (b.referralReward !== undefined) {
+    const n = Math.floor(Number(b.referralReward));
+    if (!(n >= 0 && n <= 1_000_000)) throw bad('Referral reward must be 0…1000000 diamonds', 'bad_request');
+    await setSetting('referral_reward', String(n));
+  }
+  if (b.referralInviteeReward !== undefined) {
+    const n = Math.floor(Number(b.referralInviteeReward));
+    if (!(n >= 0 && n <= 1_000_000)) throw bad('Invitee reward must be 0…1000000 diamonds', 'bad_request');
+    await setSetting('referral_invitee_reward', String(n));
   }
   await cacheDel('shop:settings');
   res.json({ shop: await getShopSettings() });
