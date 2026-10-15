@@ -36,6 +36,9 @@ assert.ok(admin.includes('openScreen'));
 assert.ok(admin.includes('admin_sec_shop') || admin.includes('/admin/shop'));
 assert.ok(admin.includes('admin_grant') || admin.includes('/diamonds'));
 assert.ok(!admin.includes('admin_grant_premium_prompt'), 'diamond grant must not ask for Premium months');
+assert.ok(admin.includes("DELETE', `/admin/users/") || admin.includes('DELETE\', `/admin/users/'), 'admin can purge users');
+assert.ok(admin.includes('admin_delete_confirm') && admin.includes('confirmSheet'), 'admin delete asks once');
+assert.ok(read('src/server.js').includes('purgeUser') && read('src/server.js').includes("admin.delete('/users/:id'"), 'server admin purge endpoint');
 assert.ok(admin.includes('menu-card') || admin.includes('menuCard'));
 assert.ok(app.includes('avBlock') && app.includes('premIc'), 'online list premium badge + ring');
 assert.ok(app.includes('!!u.premium') || app.includes('u.premium ? premIc'), 'online row shows premIc when premium');
@@ -104,7 +107,7 @@ assert.ok(admin.includes('admin_pack_sum') || admin.includes('admin_pack_diamond
 assert.ok(read('src/server.js').includes('parseDiamondPacksStrict') && read('src/server.js').includes('/puzzles/claim-daily') && read('src/server.js').includes('/games/:id/chat'), 'server shop/chat/puzzle endpoints');
 assert.ok(read('src/server.js').includes('puzzle_daily_reward') && read('src/server.js').includes('puzzleDailyReward'), 'server stores puzzle daily reward setting');
 
-for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down', 'stats_online_only']) {
+for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down', 'stats_online_only', 'admin_delete_user', 'admin_delete_confirm', 'admin_user_deleted']) {
   assert.ok(i18n.includes(k + ':'), `i18n ${k}`);
 }
 

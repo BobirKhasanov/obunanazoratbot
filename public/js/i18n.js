@@ -62,12 +62,15 @@ const en = {
   audience: 'Audience', all_users: 'Everyone', send_test: 'Send test to me', send_all: 'Send to users',
   sending: 'Sending to {n} users…', test_sent: 'Test sent to you', preview: 'Preview', history: 'Recent posts',
   users_list: 'Users', search: 'Search name, @username or ID', block: 'Block', unblock: 'Unblock', admin_tag: 'Admin',
+  admin_delete_user: 'Delete user',
+  admin_delete_confirm: 'Delete {name} permanently? All their data will be wiped. If they rejoin (or via referral), they start as a new user.',
+  admin_user_deleted: 'User deleted',
   confirm_send: 'Send this post to {n} users?', up_to: 'Up to 6 buttons', uploading: 'Uploading…',
   e_text: 'Write a message or add media', e_text_long: 'The text is too long', e_button_text: 'Every button needs a text',
   e_button_url: 'Button links must start with https://', e_buttons: 'Up to 6 buttons', e_media: 'Media not found, add it again',
   e_media_type: 'Use a JPG, PNG, GIF or MP4 file', e_media_big: 'The file is too large', e_busy: 'A broadcast is already running',
   e_tg_error: 'Telegram refused the post', e_no_app_url: 'The app address is not configured', e_admin_block: 'Admins cannot be blocked',
-  e_admin_delete: 'Admins cannot delete their account here', status_done: 'done', status_sending: 'sending', status_interrupted: 'interrupted',
+  e_admin_delete: 'Admins cannot be deleted', status_done: 'done', status_sending: 'sending', status_interrupted: 'interrupted',
 };
 
 const ru = {
@@ -127,12 +130,15 @@ const ru = {
   audience: 'Аудитория', all_users: 'Все', send_test: 'Тест мне', send_all: 'Отправить',
   sending: 'Отправка {n} пользователям…', test_sent: 'Тест отправлен вам', preview: 'Предпросмотр', history: 'Последние посты',
   users_list: 'Пользователи', search: 'Имя, @username или ID', block: 'Блок', unblock: 'Разблок.', admin_tag: 'Админ',
+  admin_delete_user: 'Удалить',
+  admin_delete_confirm: 'Удалить {name} навсегда? Все данные будут стёрты. При повторном входе (или по рефералу) это будет новый пользователь.',
+  admin_user_deleted: 'Пользователь удалён',
   confirm_send: 'Отправить пост {n} пользователям?', up_to: 'До 6 кнопок', uploading: 'Загрузка…',
   e_text: 'Напишите текст или добавьте медиа', e_text_long: 'Текст слишком длинный', e_button_text: 'У каждой кнопки должен быть текст',
   e_button_url: 'Ссылка должна начинаться с https://', e_buttons: 'До 6 кнопок', e_media: 'Медиа не найдено, добавьте снова',
   e_media_type: 'Нужен файл JPG, PNG, GIF или MP4', e_media_big: 'Файл слишком большой', e_busy: 'Рассылка уже идёт',
   e_tg_error: 'Telegram отклонил пост', e_no_app_url: 'Адрес приложения не настроен', e_admin_block: 'Админов нельзя блокировать',
-  e_admin_delete: 'Админ не может удалить аккаунт здесь', status_done: 'готово', status_sending: 'отправка', status_interrupted: 'прервано',
+  e_admin_delete: 'Админов нельзя удалять', status_done: 'готово', status_sending: 'отправка', status_interrupted: 'прервано',
 };
 
 const uz = {
@@ -192,12 +198,15 @@ const uz = {
   audience: 'Auditoriya', all_users: 'Hamma', send_test: 'Menga test', send_all: 'Yuborish',
   sending: '{n} foydalanuvchiga yuborilmoqda…', test_sent: 'Test sizga yuborildi', preview: "Ko'rinishi", history: "So'nggi postlar",
   users_list: 'Foydalanuvchilar', search: 'Ism, @username yoki ID', block: 'Bloklash', unblock: 'Blokdan chiqarish', admin_tag: 'Admin',
+  admin_delete_user: "O'chirish",
+  admin_delete_confirm: "{name} ni butunlay o'chirilsinmi? Barcha ma'lumotlari o'chadi. Qayta qo'shilsa (yoki referal orqali) yangi user bo'ladi.",
+  admin_user_deleted: "Foydalanuvchi o'chirildi",
   confirm_send: 'Post {n} foydalanuvchiga yuborilsinmi?', up_to: '6 tagacha tugma', uploading: 'Yuklanmoqda…',
   e_text: "Xabar yozing yoki media qo'shing", e_text_long: 'Matn juda uzun', e_button_text: "Har bir tugmada matn bo'lishi kerak",
   e_button_url: 'Havola https:// bilan boshlanishi kerak', e_buttons: '6 tagacha tugma', e_media: "Media topilmadi, qayta qo'shing",
   e_media_type: 'JPG, PNG, GIF yoki MP4 fayl kerak', e_media_big: 'Fayl juda katta', e_busy: 'Xabar yuborish allaqachon ketmoqda',
   e_tg_error: 'Telegram postni rad etdi', e_no_app_url: 'Ilova manzili sozlanmagan', e_admin_block: 'Adminlarni bloklab bo\'lmaydi',
-  e_admin_delete: "Admin bu yerda hisobini o'chira olmaydi", status_done: 'tayyor', status_sending: 'yuborilmoqda', status_interrupted: "to'xtatildi",
+  e_admin_delete: "Adminlarni o'chirib bo'lmaydi", status_done: 'tayyor', status_sending: 'yuborilmoqda', status_interrupted: "to'xtatildi",
 };
 
 const uzc = {
@@ -257,12 +266,15 @@ const uzc = {
   audience: 'Аудитория', all_users: 'Ҳамма', send_test: 'Менга тест', send_all: 'Юбориш',
   sending: '{n} фойдаланувчига юборилмоқда…', test_sent: 'Тест сизга юборилди', preview: 'Кўриниши', history: 'Сўнгги постлар',
   users_list: 'Фойдаланувчилар', search: 'Исм, @username ёки ID', block: 'Блоклаш', unblock: 'Блокдан чиқариш', admin_tag: 'Админ',
+  admin_delete_user: 'Ўчириш',
+  admin_delete_confirm: '{name} ни бутунлай ўчирилсинми? Барча маълумотлари ўчади. Қайта қўшилса (ёки реферал орқали) янги user бўлади.',
+  admin_user_deleted: 'Фойдаланувчи ўчирилди',
   confirm_send: 'Пост {n} фойдаланувчига юборилсинми?', up_to: '6 тагача тугма', uploading: 'Юкланмоқда…',
   e_text: 'Хабар ёзинг ёки медиа қўшинг', e_text_long: 'Матн жуда узун', e_button_text: 'Ҳар бир тугмада матн бўлиши керак',
   e_button_url: 'Ҳавола https:// билан бошланиши керак', e_buttons: '6 тагача тугма', e_media: 'Медиа топилмади, қайта қўшинг',
   e_media_type: 'JPG, PNG, GIF ёки MP4 файл керак', e_media_big: 'Файл жуда катта', e_busy: 'Хабар юбориш аллақачон кетмоқда',
   e_tg_error: 'Телеграм постни рад этди', e_no_app_url: 'Илова манзили созланмаган', e_admin_block: 'Админларни блоклаб бўлмайди',
-  e_admin_delete: 'Админ бу ерда ҳисобини ўчира олмайди', status_done: 'тайёр', status_sending: 'юборилмоқда', status_interrupted: 'тўхтатилди',
+  e_admin_delete: 'Админларни ўчириб бўлмайди', status_done: 'тайёр', status_sending: 'юборилмоқда', status_interrupted: 'тўхтатилди',
 };
 
 Object.assign(en, { challenge_from: '{name} challenges you', challenge_to: 'Challenge sent to {name}', pick_player: 'Choose a player', random_opp: 'Random opponent', e_user_offline: 'This player just went offline', sec_left: '{n}s', challenge_expired: 'No answer, the challenge expired' });

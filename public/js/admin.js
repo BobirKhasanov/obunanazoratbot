@@ -75,10 +75,25 @@ export function openAdmin(onClose) {
           },
         }, '💎'),
         u.isAdmin ? null : h('button.mini' + (u.blocked ? '.ok' : ''), {
+          type: 'button',
           onclick: async () => {
             try { await api('POST', `/admin/users/${u.id}/block`, { blocked: !u.blocked }); loadUsers(q); } catch (e) { fail(e); }
           },
-        }, u.blocked ? t('unblock') : t('block')))));
+        }, u.blocked ? t('unblock') : t('block')),
+        u.isAdmin ? null : h('button.mini.danger', {
+          type: 'button',
+          title: t('admin_delete_user'),
+          onclick: async () => {
+            const name = u.first_name || String(u.id);
+            if (!(await confirmSheet(t('admin_delete_confirm', { name }), t('admin_delete_user'), true))) return;
+            try {
+              await api('DELETE', `/admin/users/${u.id}`);
+              toast(t('admin_user_deleted'));
+              haptic('success');
+              loadUsers(q);
+            } catch (e) { fail(e); }
+          },
+        }, icon('trash', 16)))));
     } catch (e) { fail(e); }
   }
 

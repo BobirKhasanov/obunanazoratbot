@@ -640,6 +640,28 @@ async function playMoves(game, players, moves, startPly = 0) {
       await ok('E', 'GET', '/me');
     });
 
+    await step('admin purge user wipes data; rejoin is a fresh user (referral works again)', async () => {
+      await err('ADMIN', 'DELETE', `/admin/users/${ADMIN_ID}`, null, 400, 'admin_delete');
+      await err('A', 'DELETE', `/admin/users/${USERS.E.id}`, null, 404, 'notfound');
+      await ok('ADMIN', 'POST', `/admin/users/${USERS.E.id}/diamonds`, { amount: 50 });
+      assert.ok((await ok('E', 'GET', '/me')).user.diamonds >= 50);
+      await ok('ADMIN', 'DELETE', `/admin/users/${USERS.E.id}`);
+      const listed = await ok('ADMIN', 'GET', `/admin/users?q=${USERS.E.id}`);
+      assert.ok(!listed.users.some((u) => u.id === USERS.E.id), 'purged user gone from search');
+      const fresh = await ok('E', 'GET', '/me');
+      assert.strictEqual(fresh.user.diamonds, 0, 'fresh account has 0 diamonds');
+      assert.strictEqual(fresh.user.elo, 1200);
+      assert.deepStrictEqual(
+        [fresh.stats.online.w, fresh.stats.online.d, fresh.stats.online.l],
+        [0, 0, 0],
+      );
+      const aBefore = (await ok('A', 'GET', '/me')).user.diamonds;
+      const join = await ok('E', 'POST', '/friends/join', { userId: USERS.A.id });
+      assert.strictEqual(join.already, false);
+      assert.strictEqual((await ok('E', 'GET', '/me')).user.diamonds, 10, 'invitee reward again after purge');
+      assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, aBefore + 20, 'inviter reward again after purge');
+    });
+
     let mediaId;
     await step('post composer: media upload checks the real file type and size', async () => {
       await err('ADMIN', 'POST', '/admin/upload', null, 400, 'media');

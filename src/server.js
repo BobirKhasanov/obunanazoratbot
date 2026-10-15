@@ -705,10 +705,13 @@ api.patch('/me', wrap(async (req, res) => {
   res.json({ user: publicUser(await getUser.get(u.id), req.isAdmin) });
 }));
 
-api.delete('/me', wrap(async (req, res) => {
-  if (req.isAdmin) throw bad('Admins cannot delete their account here', 'admin_delete');
-  const uid = req.user.id;
-  // Notify opponents in active games, then wipe everything tied to this user
+/**
+ * Wipe a user from the DB.
+ * @param {number} uid
+ * @param {{ keepFinishedGames?: boolean }} [opts] self-delete keeps finished PvP games for opponents;
+ *   admin purge removes every game so rejoin starts clean (stats/referrals/Elo).
+ */
+async function purgeUser(uid, { keepFinishedGames = false } = {}) {
   for (const g of await db.prepare("SELECT * FROM games WHERE status = 'active' AND (white_id = ? OR black_id = ?)").all(uid, uid)) {
     const result = g.white_id === uid ? '0-1' : '1-0';
     await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = 'resign', updated_at = now() WHERE id = ?").run(result, g.id);
@@ -716,11 +719,16 @@ api.delete('/me', wrap(async (req, res) => {
   }
   await db.prepare("UPDATE games SET status = 'cancelled' WHERE status IN ('open', 'invited') AND (creator_id = ? OR invited_id = ?)").run(uid, uid);
   await db.prepare('DELETE FROM game_invites WHERE user_id = ? OR game_id IN (SELECT id FROM games WHERE creator_id = ? OR white_id = ? OR black_id = ? OR invited_id = ?)').run(uid, uid, uid, uid, uid);
-  // Drop unfinished / cancelled games; keep finished ones so the opponent can still open the result
-  await db.prepare(`DELETE FROM games WHERE (creator_id = ? OR white_id = ? OR black_id = ? OR invited_id = ?)
-    AND status != 'finished'`).run(uid, uid, uid, uid);
+  if (keepFinishedGames) {
+    await db.prepare(`DELETE FROM games WHERE (creator_id = ? OR white_id = ? OR black_id = ? OR invited_id = ?)
+      AND status != 'finished'`).run(uid, uid, uid, uid);
+  } else {
+    await db.prepare('DELETE FROM games WHERE creator_id = ? OR white_id = ? OR black_id = ? OR invited_id = ?')
+      .run(uid, uid, uid, uid);
+  }
   await clearPresent.run(uid).catch(() => {});
-  await db.prepare('DELETE FROM users WHERE id = ?').run(uid); // friends, results, DMs, medals, referrals cascade
+  // friends, results, DMs, medals, referrals, likes, blocks, scores, puzzle claims cascade
+  await db.prepare('DELETE FROM users WHERE id = ?').run(uid);
   await Promise.all([
     cacheDel('lobby:busy'),
     ...['bullet', 'blitz', 'rapid', 'classic', 'all'].flatMap((c) => [
@@ -728,6 +736,12 @@ api.delete('/me', wrap(async (req, res) => {
       cacheDel(`rankings:v2:monthly:${c}:${monthKey()}`),
     ]),
   ]);
+  try { realtime.send(uid, { t: 'account_deleted' }); } catch { /* ignore */ }
+}
+
+api.delete('/me', wrap(async (req, res) => {
+  if (req.isAdmin) throw bad('Admins cannot delete their account here', 'admin_delete');
+  await purgeUser(req.user.id, { keepFinishedGames: true });
   res.json({ ok: true });
 }));
 
@@ -2147,6 +2161,15 @@ admin.post('/users/:id/block', wrap(async (req, res) => {
   const blocked = req.body && req.body.blocked ? 1 : 0;
   if (!(await db.prepare('UPDATE users SET blocked = ? WHERE id = ?').run(blocked, id)).changes) throw new HttpError(404, 'User not found', 'notfound');
   res.json({ ok: true, blocked: !!blocked });
+}));
+
+/** Permanently wipe a user (admin search). Rejoin via bot/referral creates a fresh account. */
+admin.delete('/users/:id', wrap(async (req, res) => {
+  const id = intParam(req.params.id);
+  if (isAdmin(id)) throw bad('Admins cannot be deleted', 'admin_delete');
+  if (!(await getUser.get(id))) throw new HttpError(404, 'User not found', 'notfound');
+  await purgeUser(id, { keepFinishedGames: false });
+  res.json({ ok: true });
 }));
 
 /** In-app notification: one user or everyone (except blocked). Optional mediaId for image preview. */
