@@ -5,6 +5,8 @@
 
 const PREFIX = 'obunanazorat:';
 const memory = new Map(); // key -> { at, data, maxAge }
+/** Soft cap so in-process cache cannot grow without bound under load (~2.5k users). */
+const MEM_MAX = Math.max(500, Number(process.env.CACHE_MEM_MAX || 8_000));
 
 const url = () => String(process.env.UPSTASH_REDIS_REST_URL || '').replace(/\/$/, '');
 const token = () => String(process.env.UPSTASH_REDIS_REST_TOKEN || '');
@@ -41,6 +43,15 @@ function memGet(key, maxAge) {
 }
 
 function memSet(key, data, maxAge) {
+  if (memory.size >= MEM_MAX) {
+    // Drop oldest ~10% (Map insertion order)
+    const n = Math.max(1, Math.floor(MEM_MAX * 0.1));
+    let i = 0;
+    for (const k of memory.keys()) {
+      memory.delete(k);
+      if (++i >= n) break;
+    }
+  }
   memory.set(key, { at: Date.now(), data, maxAge });
   return data;
 }

@@ -8,20 +8,32 @@ const { validateInitData } = require('./auth');
 
 const sockets = new Map();   // userId -> Set<ws>
 const lastRest = new Map();  // userId -> ms of the last HTTP request (fallback when WebSocket is unavailable)
-// Short window: home polls ~6s; closing the Mini App clears present_until immediately via /bye + WS leave.
+// Short window: home polls ~6–8s; closing the Mini App clears present_until immediately via /bye + WS leave.
 const REST_ONLINE_MS = Number(process.env.PRESENCE_REST_MS || 30_000); // env override is for tests
+/** Soft cap on concurrent WS sockets (multi-tab counts). Default sized for ~2.5k live users. */
+const MAX_WS = Math.max(100, Number(process.env.MAX_WS_CONNECTIONS || 4_000));
 
-const add = (id, ws) => { if (!sockets.has(id)) sockets.set(id, new Set()); sockets.get(id).add(ws); };
+let socketCount = 0;
+const add = (id, ws) => {
+  if (!sockets.has(id)) sockets.set(id, new Set());
+  sockets.get(id).add(ws);
+  socketCount += 1;
+};
 function remove(id, ws, onLeave) {
   const set = sockets.get(id);
   if (!set) return;
-  set.delete(ws);
+  if (set.has(ws)) {
+    set.delete(ws);
+    socketCount = Math.max(0, socketCount - 1);
+  }
   if (!set.size) {
     sockets.delete(id);
     lastRest.delete(id); // gone immediately, not after a timeout
     if (onLeave) onLeave(id);
   }
 }
+
+const connectionCount = () => socketCount;
 
 /** Called for every authenticated HTTP request. */
 const markRest = (id) => lastRest.set(id, Date.now());
@@ -47,6 +59,11 @@ function attach(server, botToken, hooks) {
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 4096 });
 
   wss.on('connection', (ws) => {
+    // wss.clients already includes this socket
+    if (wss.clients.size > MAX_WS) {
+      try { ws.close(1013, 'try again'); } catch { /* ignore */ }
+      return;
+    }
     let userId = null;
     ws.isAlive = true;
     const authTimer = setTimeout(() => ws.close(4001, 'auth timeout'), 8000);
@@ -93,4 +110,7 @@ function attach(server, botToken, hooks) {
   return wss;
 }
 
-module.exports = { attach, send, isOnline, onlineIds, markRest, presenceMs: REST_ONLINE_MS };
+module.exports = {
+  attach, send, isOnline, onlineIds, markRest, presenceMs: REST_ONLINE_MS,
+  connectionCount, maxConnections: MAX_WS,
+};

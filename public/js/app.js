@@ -832,8 +832,8 @@ async function boot() {
       else if (m.game.id !== openGameId()) refresh();
     } else if (m.t === 'invite_gone') { clearInvitePop(); refresh(); }
   });
-  // Background tab refresh — slightly slower on lite Android
-  const tabRefreshMs = document.documentElement.dataset.perf === 'lite' ? 10_000 : 6_000;
+  // Background tab refresh — tuned for ~2.5k concurrent (lite Android slower)
+  const tabRefreshMs = document.documentElement.dataset.perf === 'lite' ? 12_000 : 8_000;
   setInterval(() => {
     if (document.hidden || openGameId()) return;
     if (state.tab === 'live' && liveBlocksAutoRefresh()) return;

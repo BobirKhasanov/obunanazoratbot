@@ -23,13 +23,17 @@ try { // never prints the password itself, only what is needed to spot a bad val
     + `${/[\s\[\]]/.test(pw) ? ' (contains a space or bracket!)' : ''}${url !== url.trim() ? ' (URL has leading/trailing whitespace!)' : ''}`);
 } catch { console.error('[db] DATABASE_URL is not a valid URL (special characters in the password must be %-encoded)'); }
 const local = /@(localhost|127\.0\.0\.1)|host=\/|%2F/.test(url);
+// ~2.5k concurrent Mini App users: prefer Supabase Session/Transaction pooler + this pool size.
 const pool = new Pool({
   connectionString: url,
-  max: Number(process.env.PG_POOL_MAX || 8),
+  max: Number(process.env.PG_POOL_MAX || 20),
   ssl: local ? false : { rejectUnauthorized: false }, // Supabase terminates TLS with its own CA
   idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS || 10_000),
+  allowExitOnIdle: false,
 });
 pool.on('error', (e) => console.error('[db] idle client error:', e.message));
+console.log(`[db] pool max=${pool.options.max}`);
 
 /** "?" and ":name" -> "$1, $2 ..."; returns the SQL and the ordered parameter list */
 function compile(sql, args) {
@@ -117,6 +121,7 @@ CREATE TABLE IF NOT EXISTS games (
 CREATE INDEX IF NOT EXISTS idx_games_white ON games(white_id);
 CREATE INDEX IF NOT EXISTS idx_games_black ON games(black_id);
 CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
+CREATE INDEX IF NOT EXISTS idx_games_status_updated ON games(status, updated_at DESC);
 
 -- Everyone who was asked to play a challenge game (the first to accept starts it)
 CREATE TABLE IF NOT EXISTS game_invites (

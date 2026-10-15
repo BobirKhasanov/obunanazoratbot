@@ -197,8 +197,72 @@ async function userIsOnline(id) {
   return stillPresent(u && u.present_until);
 }
 
+/** Throttle present_until writes — every HTTP used to UPDATE users (too heavy at ~2.5k live). */
+const lastPresenceWrite = new Map();
+const PRESENCE_WRITE_MIN_MS = Math.max(
+  2_000,
+  Number(process.env.PRESENCE_WRITE_MS || Math.floor(realtime.presenceMs / 2)),
+);
+
 async function refreshPresence(id) {
+  const now = Date.now();
+  const prev = lastPresenceWrite.get(id) || 0;
+  if (now - prev < PRESENCE_WRITE_MIN_MS) return;
+  lastPresenceWrite.set(id, now);
   await touchPresent.run(realtime.presenceMs, id);
+  if (lastPresenceWrite.size > 20_000) {
+    for (const [k, t] of lastPresenceWrite) {
+      if (now - t > 10 * 60_000) lastPresenceWrite.delete(k);
+    }
+  }
+}
+
+/** Short TTL user row cache — cuts getUser/upsert storm under lobby polling. */
+const userMemo = new Map(); // id -> { at, user }
+const USER_MEMO_MS = Math.max(500, Number(process.env.USER_MEMO_MS || 2_000));
+const lastProfileSync = new Map(); // id -> last upsertUser ms
+const USER_SYNC_MS = Math.max(5_000, Number(process.env.USER_SYNC_MS || 60_000));
+
+function memoUser(user) {
+  if (!user) return;
+  userMemo.set(user.id, { at: Date.now(), user });
+}
+
+function invalidateUserCache(id) {
+  userMemo.delete(id);
+}
+
+async function ensureAuthedUser(tg) {
+  const now = Date.now();
+  const hit = userMemo.get(tg.id);
+  if (hit && now - hit.at < USER_MEMO_MS) return hit.user;
+
+  const lastSync = lastProfileSync.get(tg.id) || 0;
+  if (now - lastSync >= USER_SYNC_MS) {
+    await upsertUser.run(
+      tg.id,
+      tg.first_name || '',
+      tg.last_name || '',
+      tg.username || '',
+      fromTelegram(tg.language_code),
+    );
+    lastProfileSync.set(tg.id, now);
+  }
+
+  let user = await getUser.get(tg.id);
+  if (!user) {
+    await upsertUser.run(
+      tg.id,
+      tg.first_name || '',
+      tg.last_name || '',
+      tg.username || '',
+      fromTelegram(tg.language_code),
+    );
+    lastProfileSync.set(tg.id, now);
+    user = await getUser.get(tg.id);
+  }
+  memoUser(user);
+  return user;
 }
 
 async function person(id) {
@@ -260,6 +324,8 @@ async function applyRatingFinish(row, result) {
   const updAll = pairUpdate(Number(white.elo || DEFAULT_ELO), Number(black.elo || DEFAULT_ELO), scores.white);
   await db.prepare(`UPDATE users SET ${col} = ?, elo = ? WHERE id = ?`).run(updCat.a, updAll.a, white.id);
   await db.prepare(`UPDATE users SET ${col} = ?, elo = ? WHERE id = ?`).run(updCat.b, updAll.b, black.id);
+  invalidateUserCache(white.id);
+  invalidateUserCache(black.id);
 
   const month = monthKey();
   const bump = async (uid, pts, w, d, l) => {
@@ -469,6 +535,8 @@ function normalizePuzzleDailyReward(raw) {
 }
 
 async function getShopSettings() {
+  const cached = await cacheGet('shop:settings', 30_000);
+  if (cached) return cached;
   const [priceRaw, plansRaw, packsRaw, payRaw, puzzleRewardRaw] = await Promise.all([
     getSetting('premium_price_diamonds', String(PREMIUM_PRICE_FALLBACK)),
     getSetting('premium_plans', JSON.stringify(DEFAULT_PREMIUM_PLANS)),
@@ -486,13 +554,15 @@ async function getShopSettings() {
   if (one) premiumPriceDiamonds = one.diamonds;
   let payUsername = String(payRaw || DEFAULT_PAY_USERNAME).replace(/^@/, '').trim().slice(0, 64);
   if (!/^[A-Za-z0-9_]{5,64}$/.test(payUsername)) payUsername = DEFAULT_PAY_USERNAME;
-  return {
+  const shop = {
     premiumPriceDiamonds,
     premiumPlans,
     diamondPacks: normalizeDiamondPacks(packsRaw),
     payUsername,
     puzzleDailyReward: normalizePuzzleDailyReward(puzzleRewardRaw),
   };
+  await cacheSet('shop:settings', shop, 30_000);
+  return shop;
 }
 
 /** Add N calendar months in Asia/Tashkent wall clock. */
@@ -529,6 +599,7 @@ async function syncPremiumExpiry(u) {
   if (u.premium) {
     await db.prepare('UPDATE users SET premium = 0 WHERE id = ? AND premium_until IS NOT NULL AND premium_until <= now()').run(u.id);
     u.premium = 0;
+    memoUser(u);
   }
   return u;
 }
@@ -548,9 +619,11 @@ async function getBotUsername() {
   return botUsername;
 }
 
-// ---------- auth + light rate limit (Redis when configured, else in-memory) ----------
+// ---------- auth + rate limit (Redis when configured, else in-memory) ----------
 const hits = new Map(); // userId -> requests in the current minute (memory fallback)
 setInterval(() => hits.clear(), 60_000).unref();
+/** Per-user requests/minute. Sized for ~2.5k live (lobby + game); abuse still capped. */
+const RATE_LIMIT_PER_MIN = Math.max(60, Number(process.env.RATE_LIMIT_PER_MIN || 240));
 
 async function auth(req, res, next) {
   try {
@@ -564,19 +637,12 @@ async function auth(req, res, next) {
     n = (hits.get(tg.id) || 0) + 1;
     hits.set(tg.id, n);
   }
-  // Live spectate polls a few endpoints; keep headroom above normal play traffic
-  if (n > 600) return res.status(429).json({ error: 'Too many requests', code: 'limit' });
+  if (n > RATE_LIMIT_PER_MIN) return res.status(429).json({ error: 'Too many requests', code: 'limit' });
 
-  await upsertUser.run(
-    tg.id,
-    tg.first_name || '',
-    tg.last_name || '',
-    tg.username || '',
-    fromTelegram(tg.language_code),
-  );
-  let user = await getUser.get(tg.id);
+  let user = await ensureAuthedUser(tg);
   if (user.blocked) return res.status(403).json({ error: 'Your access has been disabled', code: 'blocked' });
   user = await syncPremiumExpiry(user);
+  memoUser(user);
 
   realtime.markRest(user.id);
   // /bye must not refresh presence (auth would race and put them back online)
@@ -706,7 +772,10 @@ api.patch('/me', wrap(async (req, res) => {
       lang, theme, notifyEnabled, discoverable, b.lang !== undefined ? 1 : u.lang_set,
       pieceSet, boardTheme, avatarKey, firstName, lastName, country, region, bio, u.id,
     );
-  res.json({ user: publicUser(await getUser.get(u.id), req.isAdmin) });
+  invalidateUserCache(u.id);
+  const next = await getUser.get(u.id);
+  memoUser(next);
+  res.json({ user: publicUser(next, req.isAdmin) });
 }));
 
 /**
@@ -884,6 +953,10 @@ async function applyReferralPay(inviteeId, inviterId) {
       (SELECT COUNT(*)::int FROM pay_inviter) AS inviter_paid,
       (SELECT COUNT(*)::int FROM pay_invitee) AS invitee_paid
   `).get(inviteeId, inviterId, REFERRAL_REWARD, REFERRAL_INVITEE_REWARD);
+  if (paid && (paid.inviter_paid || paid.invitee_paid)) {
+    invalidateUserCache(inviterId);
+    invalidateUserCache(inviteeId);
+  }
   return {
     reward: paid && paid.inviter_paid ? REFERRAL_REWARD : 0,
     inviteeReward: paid && paid.invitee_paid ? REFERRAL_INVITEE_REWARD : 0,
@@ -1292,7 +1365,9 @@ api.post('/puzzles/claim-daily', wrap(async (req, res) => {
   if (amount > 0) {
     await db.prepare('UPDATE users SET diamonds = diamonds + ? WHERE id = ?').run(amount, uid);
   }
+  invalidateUserCache(uid);
   const u = await getUser.get(uid);
+  memoUser(u);
   const diamonds = Number(u.diamonds || 0);
   realtime.send(uid, { t: 'wallet', diamonds });
   res.json({ ok: true, awarded: amount, amount, diamonds, day });
@@ -1469,21 +1544,32 @@ api.get('/lobby', wrap(async (req, res) => {
     }))
     .sort((a, b) => (b.friend - a.friend) || (a.inGame - b.inGame) || a.name.localeCompare(b.name));
 
-  const countRow = await db.prepare(`
-    SELECT COUNT(*)::int AS n FROM users
-    WHERE blocked = 0 AND present_until > now()
-  `).get();
-  const onlineCount = Math.max(countRow?.n || 0, realtime.onlineIds().length);
+  let onlineCount = await cacheGet('lobby:onlineCount', 3_000);
+  if (onlineCount == null) {
+    const countRow = await db.prepare(`
+      SELECT COUNT(*)::int AS n FROM users
+      WHERE blocked = 0 AND present_until > now()
+    `).get();
+    onlineCount = Math.max(countRow?.n || 0, realtime.onlineIds().length);
+    await cacheSet('lobby:onlineCount', onlineCount, 3_000);
+  } else {
+    onlineCount = Math.max(Number(onlineCount) || 0, realtime.onlineIds().length);
+  }
 
   const recent = await db.prepare(`
     SELECT * FROM games WHERE status = 'finished' AND (white_id = :u OR black_id = :u) ORDER BY updated_at DESC LIMIT 8
   `).all({ u: uid });
 
-  const liveGamesRow = await db.prepare("SELECT COUNT(*)::int AS n FROM games WHERE status = 'active'").get();
+  let liveGames = await cacheGet('lobby:liveGames', 2_000);
+  if (liveGames == null) {
+    const liveGamesRow = await db.prepare("SELECT COUNT(*)::int AS n FROM games WHERE status = 'active'").get();
+    liveGames = liveGamesRow?.n || 0;
+    await cacheSet('lobby:liveGames', liveGames, 2_000);
+  }
   res.json({
     onlineCount,
     online,
-    liveGames: liveGamesRow?.n || 0,
+    liveGames: Number(liveGames) || 0,
     games: {
       active: await many(mine.filter((g) => g.status === 'active')),
       invites: await many(mine.filter((g) => g.status === 'invited' && g.creator_id !== uid && !inviteExpired(g))),
@@ -1933,7 +2019,10 @@ api.post('/premium/buy', wrap(async (req, res) => {
     WHERE id = ? AND diamonds >= ?
   `).run(price, until.toISOString(), req.user.id, price);
   if (!r.changes) throw bad('Not enough diamonds', 'no_diamonds');
-  const next = publicUser(await getUser.get(req.user.id), req.isAdmin);
+  invalidateUserCache(req.user.id);
+  const row = await getUser.get(req.user.id);
+  memoUser(row);
+  const next = publicUser(row, req.isAdmin);
   res.json({ user: next, months, price });
 }));
 
@@ -2164,6 +2253,7 @@ admin.post('/users/:id/block', wrap(async (req, res) => {
   if (isAdmin(id)) throw bad('Admins cannot be blocked', 'admin_block');
   const blocked = req.body && req.body.blocked ? 1 : 0;
   if (!(await db.prepare('UPDATE users SET blocked = ? WHERE id = ?').run(blocked, id)).changes) throw new HttpError(404, 'User not found', 'notfound');
+  invalidateUserCache(id);
   res.json({ ok: true, blocked: !!blocked });
 }));
 
@@ -2173,6 +2263,7 @@ admin.delete('/users/:id', wrap(async (req, res) => {
   if (isAdmin(id)) throw bad('Admins cannot be deleted', 'admin_delete');
   if (!(await getUser.get(id))) throw new HttpError(404, 'User not found', 'notfound');
   await purgeUser(id, { keepFinishedGames: false });
+  invalidateUserCache(id);
   res.json({ ok: true });
 }));
 
@@ -2251,7 +2342,9 @@ admin.post('/users/:id/diamonds', wrap(async (req, res) => {
     await db.prepare('UPDATE users SET premium = 1, premium_until = ? WHERE id = ?').run(untilIso, id);
   }
 
+  invalidateUserCache(id);
   const nextRow = await getUser.get(id);
+  memoUser(nextRow);
   const next = publicUser(nextRow, isAdmin(nextRow.id));
   realtime.send(id, {
     t: 'wallet',
@@ -2331,6 +2424,7 @@ admin.get('/shop', wrap(async (req, res) => {
 
 admin.patch('/shop', wrap(async (req, res) => {
   const b = req.body || {};
+  await cacheDel('shop:settings');
   if (b.premiumPlans !== undefined) {
     const plans = normalizePremiumPlans(b.premiumPlans, PREMIUM_PRICE_FALLBACK);
     if (plans.length < 1) throw bad('Need at least one premium plan', 'bad_request');
@@ -2341,6 +2435,7 @@ admin.patch('/shop', wrap(async (req, res) => {
     const n = Math.floor(Number(b.premiumPriceDiamonds));
     if (!(n >= 1 && n <= 1_000_000)) throw bad('Premium price must be 1…1000000 diamonds', 'bad_request');
     await setSetting('premium_price_diamonds', String(n));
+    await cacheDel('shop:settings');
     const shop = await getShopSettings();
     const plans = shop.premiumPlans.map((p) => (p.months === 1 ? { ...p, diamonds: n } : p));
     if (!plans.some((p) => p.months === 1)) plans.unshift({ months: 1, diamonds: n });
@@ -2360,6 +2455,7 @@ admin.patch('/shop', wrap(async (req, res) => {
     if (!(n >= 0 && n <= 1_000_000)) throw bad('Puzzle reward must be 0…1000000 diamonds', 'bad_request');
     await setSetting('puzzle_daily_reward', String(n));
   }
+  await cacheDel('shop:settings');
   res.json({ shop: await getShopSettings() });
 }));
 
@@ -2676,24 +2772,25 @@ async function boot() {
     () => runMonthlyMedalAwards(),
   );
 
-  // Expire unanswered challenges and claim live-clock flags
+  // Expire unanswered challenges and claim live-clock flags (~2.5k: 4s tick, capped batches)
   let sweeping = false;
+  const SWEEP_MS = Math.max(2_000, Number(process.env.SWEEPER_MS || 4_000));
   setInterval(async () => {
     if (sweeping) return;
     sweeping = true;
     try {
-      for (const g of await db.prepare("SELECT * FROM games WHERE status = 'invited'").all()) {
+      for (const g of await db.prepare("SELECT * FROM games WHERE status = 'invited' ORDER BY updated_at ASC LIMIT 80").all()) {
         if (!inviteExpired(g)) continue;
         await dropInvites(g);
         await db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ? AND status = 'invited'").run(g.id);
         await pushGame(await getGame.get(g.id));
       }
-      for (const g of await db.prepare('SELECT * FROM games WHERE status = \'active\' AND white_ms IS NOT NULL').all()) {
+      for (const g of await db.prepare("SELECT * FROM games WHERE status = 'active' AND white_ms IS NOT NULL ORDER BY updated_at ASC LIMIT 120").all()) {
         const next = await claimFlagIfNeeded(g);
         if (next.status !== 'active') await pushGame(next);
       }
     } catch (e) { console.error('[sweeper]', e.message); } finally { sweeping = false; }
-  }, 2000).unref();
+  }, SWEEP_MS).unref();
 }
 boot().catch((e) => { console.error('[boot] cannot start:', e.message); process.exit(1); });
 
