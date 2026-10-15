@@ -24,12 +24,8 @@ async function loadMediaBytes(row) {
   return Buffer.isBuffer(row.data) ? row.data : Buffer.from(row.data);
 }
 
-/** No external object store — noop for callers that previously deleted Storage objects. */
-async function deleteMediaObject() { /* BYTEA-only */ }
-
 module.exports = {
   storageEnabled,
   saveMedia,
   loadMediaBytes,
-  deleteMediaObject,
 };
