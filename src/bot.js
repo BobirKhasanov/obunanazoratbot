@@ -33,9 +33,11 @@ function createBot(token, webAppUrl) {
   );
 
   const isHttps = (webAppUrl || '').startsWith('https://');
+  /** Open-app URL: keep game payloads (g…); never bake friend invites (i…) into chat buttons. */
   const openUrl = (payload) => {
     const u = new URL(webAppUrl);
-    if (payload) u.searchParams.set('p', payload);
+    const p = String(payload || '');
+    if (/^g[\w-]{4,20}$/.test(p)) u.searchParams.set('p', p);
     return u.toString();
   };
   const openKeyboard = (lang, payload) =>

@@ -177,18 +177,29 @@ function challengeAction(u) {
 async function openById(id) {
   try {
     const r = await api('GET', `/games/${id}`);
+    // Stale Telegram Open buttons (welcome / your-move) must not reopen finished boards
+    if (r.game.status === 'finished' || r.game.status === 'cancelled') {
+      toast(t('game_ended'), true);
+      return;
+    }
     if (r.game.joinable) return joinGame(id);
     // Invitee (primary invited_id or game_invites): open board with Accept, not dead-end wait
     if (r.game.status === 'invited' && r.game.creator !== state.me.id) {
       openOnline(r.game);
       return;
     }
-    if (r.game.status === 'cancelled') return toast(t('join_failed'), true);
     openOnline(r.game);
   } catch (e) { fail(e); }
 }
 async function joinGame(id) {
-  try { const r = await api('POST', `/games/${id}/join`); openOnline(r.game); } catch (e) { toast(t('join_failed'), true); }
+  try {
+    const r = await api('POST', `/games/${id}/join`);
+    if (r.game && (r.game.status === 'finished' || r.game.status === 'cancelled')) {
+      toast(t('game_ended'), true);
+      return;
+    }
+    openOnline(r.game);
+  } catch (e) { toast(t('join_failed'), true); }
 }
 function startAi(level, colour) {
   const col = colour === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : colour;
@@ -829,11 +840,14 @@ async function handleDeepLink() {
     try {
       const r = await api('POST', '/friends/join', { userId: Number(p.slice(1)) });
       if (r.user) state.me = r.user;
+      // Stale welcome buttons still carry ?p=i… — ignore once already friends / already paid
+      if (r.already) return;
       if (r.inviteeReward) {
         toast(t('invitee_reward', { n: r.inviteeReward, name: (r.friend && r.friend.name) || '…' }));
         haptic('success');
       } else if (r.friend) toast(t('friend_added', { name: r.friend.name }));
-      go(TABS.indexOf('profile'), true);
+      // Only nudge to profile on a fresh referral claim, not every re-open of an old invite link
+      if (r.inviteeReward || r.reward) go(TABS.indexOf('profile'), true);
     } catch (e) { fail(e); }
   } else if (/^g[\w-]{4,20}$/.test(p)) await joinGame(p.slice(1));
   else if (gid && /^[\w-]{4,20}$/.test(gid)) await openById(gid);

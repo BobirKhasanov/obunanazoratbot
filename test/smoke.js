@@ -213,6 +213,26 @@ async function playMoves(game, players, moves, startPly = 0) {
       const histF = await fetch(`${BASE}/api/me/diamonds/history`, { headers: { 'X-Init-Data': fake.sign(F, TOKEN) } });
       const histFJ = await histF.json();
       assert.ok(histFJ.items.some((i) => i.kind === 'referral_invitee'), 'start_param invitee ledger');
+
+      // Bot /start i… stores pending_inviter; clean Open (no ?p=) still pays on /me
+      const G = { id: 1007, first_name: 'Gina' };
+      const initG = fake.sign(G, TOKEN);
+      assert.strictEqual((await fetch(`${BASE}/api/me`, { headers: { 'X-Init-Data': initG } })).status, 200);
+      await pg.q('UPDATE users SET pending_inviter_id = $1 WHERE id = $2', USERS.A.id, G.id);
+      const aBeforePend = (await ok('A', 'GET', '/me')).user.diamonds;
+      const meG = await (await fetch(`${BASE}/api/me`, { headers: { 'X-Init-Data': initG } })).json();
+      assert.strictEqual(meG.referralClaim && meG.referralClaim.inviteeReward, 10, 'pending_inviter pays on /me');
+      assert.strictEqual(meG.user.diamonds, 10);
+      assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, aBeforePend + 20);
+      const rejoinRes = await fetch(`${BASE}/api/friends/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Init-Data': initG },
+        body: JSON.stringify({ userId: USERS.A.id }),
+      });
+      const rejoin = await rejoinRes.json();
+      assert.strictEqual(rejoinRes.status, 200, JSON.stringify(rejoin));
+      assert.strictEqual(rejoin.already, true, 'second open of invite is already-friends');
+      assert.strictEqual(rejoin.inviteeReward || 0, 0);
     });
 
     await step('admin shop settings + grant diamonds with notify', async () => {

@@ -147,7 +147,11 @@ async function saveWelcomeLang(lang, patch) {
 
 function openAppUrl(webAppUrl, payload) {
   const u = new URL(webAppUrl);
-  if (payload) u.searchParams.set('p', payload);
+  // Only game deep links (g…) belong on the Open button. Friend invites (i…) must not —
+  // the welcome message stays in chat forever; re-tapping would re-run the invite deep link.
+  // Referral bonuses are stored as pending_inviter_id on /start and claimed on first /me.
+  const p = String(payload || '');
+  if (/^g[\w-]{4,20}$/.test(p)) u.searchParams.set('p', p);
   return u.toString();
 }
 

@@ -45,6 +45,8 @@ assert.ok(read('src/server.js').includes('MAX_AVATAR = 5') && read('src/server.j
 assert.ok(profile.includes('openChatWithUser') && profile.includes("from './inbox.js'"), 'friends list opens DM chat');
 assert.ok(app.includes('home_tab_live') && app.includes('home_tab_friends') && app.includes('homePeopleTab'), 'home live/friends tabs');
 assert.ok(app.includes('home-people-list') && app.includes('paintPeopleList'), 'home live/friends swap list in place (no scroll jump)');
+assert.ok(app.includes('r.already') && app.includes('game_ended'), 'stale invite/game deep links do not reopen boards');
+assert.ok(read('src/welcome.js').includes("g[\\w-]{4,20}") || read('src/welcome.js').includes('g[\\w-]'), 'welcome Open strips friend-invite payloads');
 assert.ok(!app.includes("t('puzzle_hint')"), 'puzzle hint/maslahat removed');
 
 assert.ok(screen.includes('export function openScreen'));

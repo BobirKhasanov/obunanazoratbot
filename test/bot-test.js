@@ -64,15 +64,19 @@ const fake = require('./helpers/fake-telegram');
   }
   step('each language choice stores the language and sends a localized welcome with Open + Invite');
 
-  // 3. an invite deep link survives the language picker and ends up in the Open button
+  // 3. invite deep link is remembered for referral pay, but Open button stays clean (no sticky ?p=i…)
   tg.calls.length = 0;
   await say(502, '/start i501', 'ru');
   kb = tg.to(502)[0].body.reply_markup.inline_keyboard.flat();
   assert.deepStrictEqual(kb.map((b) => b.callback_data), ['lang:uz:i501', 'lang:uzc:i501', 'lang:ru:i501', 'lang:en:i501']);
   await press(502, 'lang:ru:i501', 'ru');
   const w = tg.to(502).pop();
-  assert.strictEqual(w.body.reply_markup.inline_keyboard[0][0].web_app.url, 'https://chess.example.test/?p=i501');
-  step('friend-invite link is carried through the language picker into the Open button');
+  const openUrl = w.body.reply_markup.inline_keyboard[0][0].web_app.url;
+  assert.ok(openUrl.startsWith('https://chess.example.test'), 'Open launches Mini App');
+  assert.ok(!/[?&]p=i501\b/.test(openUrl), 'friend invite must not stick on welcome Open button');
+  const pending = await db.prepare('SELECT pending_inviter_id FROM users WHERE id = 502').get();
+  assert.strictEqual(Number(pending.pending_inviter_id), 501, 'invite stored for /me claim');
+  step('friend-invite is stored as pending_inviter; welcome Open has no sticky ?p=i');
 
   tg.calls.length = 0;
   await say(503, '/start gAbC_123-x', 'en');
