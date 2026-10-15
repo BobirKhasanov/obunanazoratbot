@@ -75,6 +75,11 @@ const fake = require('./helpers/fake-telegram');
   assert.ok(openUrl.includes('p=i501'), 'welcome Open carries invite for first claim');
   const pending = await db.prepare('SELECT pending_inviter_id FROM users WHERE id = 502').get();
   assert.strictEqual(Number(pending.pending_inviter_id), 501, 'invite stored for /me claim');
+  // Newer /start i… overwrites stale pending (so Mini App pays the latest inviter)
+  await say(503, '/start', 'en'); // ensure inviter 503 exists
+  await say(502, '/start i503', 'ru');
+  const pending2 = await db.prepare('SELECT pending_inviter_id FROM users WHERE id = 502').get();
+  assert.strictEqual(Number(pending2.pending_inviter_id), 503, 'newer invite overwrites pending');
   step('friend-invite stored as pending_inviter and on welcome Open button');
 
   tg.calls.length = 0;

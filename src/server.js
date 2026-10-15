@@ -735,16 +735,18 @@ const statsFor = async (uid) => ({
 api.get('/me', wrap(async (req, res) => {
   const shop = await getShopSettings();
   const banner = await profileBannerMeta();
-  // 1) Bot /start i<id> stored pending_inviter_id
-  let claimed = await claimPendingReferral(req.user.id);
-  // 2) Direct Mini App open via startapp=i<id> (signed start_param) — do not rely on client deep-link only
-  if (!claimed.reward && !claimed.inviteeReward && req.startParam) {
+  // Prefer signed start_param (latest deep link) over a possibly stale pending_inviter from an older /start
+  let claimed = { reward: 0, inviteeReward: 0, inviterId: null, befriended: false, inserted: false };
+  if (req.startParam) {
     claimed = await claimStartParamReferral(req.user.id, req.startParam);
   }
-  if (claimed.reward && claimed.inviterId) {
+  if (!claimed.inserted && !claimed.reward && !claimed.inviteeReward && !(await referralRowExists(req.user.id))) {
+    claimed = await claimPendingReferral(req.user.id);
+  }
+  if (claimed.inviterId && (claimed.reward || claimed.inviteeReward || claimed.befriended)) {
     const meName = (await person(req.user.id)).name;
-    realtime.send(claimed.inviterId, { t: 'friend', id: req.user.id, reward: claimed.reward });
-    notify.toUser(claimed.inviterId, (T) => T.friendJoined(meName) + ` 💎 +${claimed.reward}`);
+    realtime.send(claimed.inviterId, { t: 'friend', id: req.user.id, reward: claimed.reward || 0 });
+    notify.toUser(claimed.inviterId, (T) => T.friendJoined(meName) + (claimed.reward ? ` 💎 +${claimed.reward}` : ''));
   }
   const userRow = claimed.inviteeReward || claimed.reward
     ? await getUser.get(req.user.id)
@@ -1076,7 +1078,12 @@ const countOpen = db.prepare(`
 const ensureRoom = async (uid) => { if ((await countOpen.get({ u: uid })).n >= MAX_OPEN_GAMES) throw bad('Too many games', 'too_many_games'); };
 
 const makeFriends = db.prepare('INSERT INTO friends (user_id, friend_id) VALUES (?, ?) ON CONFLICT DO NOTHING');
-const befriend = async (a, b) => { await makeFriends.run(a, b); await makeFriends.run(b, a); };
+/** @returns {Promise<boolean>} true if at least one friendship edge was newly inserted */
+const befriend = async (a, b) => {
+  const r1 = await makeFriends.run(a, b);
+  const r2 = await makeFriends.run(b, a);
+  return (r1.changes > 0) || (r2.changes > 0);
+};
 const areFriends = async (a, b) => !!(await db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(a, b));
 
 /** Append a wallet history row (amount may be negative for spends). */
@@ -1092,43 +1099,70 @@ async function ledgerDiamonds(userId, amount, kind, meta = {}) {
   }
 }
 
+const emptyReferral = () => ({ reward: 0, inviteeReward: 0, inserted: false, befriended: false });
+
 /** Pay referral diamonds once per invitee (referrals PK). Amounts from admin shop settings. */
 async function applyReferralPay(inviteeId, inviterId) {
-  if (!inviteeId || !inviterId || inviteeId === inviterId) return { reward: 0, inviteeReward: 0 };
+  if (!inviteeId || !inviterId || inviteeId === inviterId) return emptyReferral();
   const inviter = await getUser.get(inviterId);
-  if (!inviter || inviter.blocked) return { reward: 0, inviteeReward: 0 };
-  await befriend(inviteeId, inviterId);
+  if (!inviter || inviter.blocked) return emptyReferral();
+  const befriended = await befriend(inviteeId, inviterId);
   const shop = await getShopSettings();
   const inviterAmt = shop.referralReward;
   const inviteeAmt = shop.referralInviteeReward;
+  // Both zero: still befriend, but do not insert referrals (would burn the one-shot forever)
+  if (inviterAmt <= 0 && inviteeAmt <= 0) {
+    return { reward: 0, inviteeReward: 0, inserted: false, befriended };
+  }
+  const metaInv = JSON.stringify({ inviteeId });
+  const metaIee = JSON.stringify({ inviterId });
+  // Balance + ledger in one statement so history cannot drift from the wallet
   const paid = await db.prepare(`
     WITH r AS (
       INSERT INTO referrals (invitee_id, inviter_id) VALUES (?, ?)
       ON CONFLICT DO NOTHING RETURNING invitee_id, inviter_id
     ),
     pay_inviter AS (
-      UPDATE users SET diamonds = diamonds + ? WHERE id IN (SELECT inviter_id FROM r) RETURNING id
+      UPDATE users SET diamonds = diamonds + ?
+      WHERE ? > 0 AND id IN (SELECT inviter_id FROM r)
+      RETURNING id
     ),
     pay_invitee AS (
-      UPDATE users SET diamonds = diamonds + ? WHERE id IN (SELECT invitee_id FROM r) RETURNING id
+      UPDATE users SET diamonds = diamonds + ?
+      WHERE ? > 0 AND id IN (SELECT invitee_id FROM r)
+      RETURNING id
+    ),
+    led_inviter AS (
+      INSERT INTO diamond_ledger (user_id, amount, kind, meta)
+      SELECT inviter_id, ?, 'referral_inviter', ?::jsonb FROM r WHERE ? > 0
+      RETURNING id
+    ),
+    led_invitee AS (
+      INSERT INTO diamond_ledger (user_id, amount, kind, meta)
+      SELECT invitee_id, ?, 'referral_invitee', ?::jsonb FROM r WHERE ? > 0
+      RETURNING id
     )
     SELECT
+      (SELECT COUNT(*)::int FROM r) AS inserted,
       (SELECT COUNT(*)::int FROM pay_inviter) AS inviter_paid,
       (SELECT COUNT(*)::int FROM pay_invitee) AS invitee_paid
-  `).get(inviteeId, inviterId, inviterAmt, inviteeAmt);
-  if (paid && (paid.inviter_paid || paid.invitee_paid)) {
+  `).get(
+    inviteeId, inviterId,
+    inviterAmt, inviterAmt,
+    inviteeAmt, inviteeAmt,
+    inviterAmt, metaInv, inviterAmt,
+    inviteeAmt, metaIee, inviteeAmt,
+  );
+  const inserted = !!(paid && paid.inserted);
+  if (inserted) {
     invalidateUserCache(inviterId);
     invalidateUserCache(inviteeId);
-    if (paid.inviter_paid && inviterAmt > 0) {
-      await ledgerDiamonds(inviterId, inviterAmt, 'referral_inviter', { inviteeId });
-    }
-    if (paid.invitee_paid && inviteeAmt > 0) {
-      await ledgerDiamonds(inviteeId, inviteeAmt, 'referral_invitee', { inviterId });
-    }
   }
   return {
-    reward: paid && paid.inviter_paid ? inviterAmt : 0,
-    inviteeReward: paid && paid.invitee_paid ? inviteeAmt : 0,
+    reward: inserted ? inviterAmt : 0,
+    inviteeReward: inserted ? inviteeAmt : 0,
+    inserted,
+    befriended,
   };
 }
 
@@ -1136,15 +1170,19 @@ async function referralRowExists(inviteeId) {
   return !!(await db.prepare('SELECT 1 AS ok FROM referrals WHERE invitee_id = ?').get(inviteeId));
 }
 
+async function clearPendingInviter(inviteeId) {
+  await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(inviteeId);
+}
+
 /** Claim bot-stored pending inviter (Menu Button / welcome Open). */
 async function claimPendingReferral(inviteeId) {
   const row = await db.prepare('SELECT pending_inviter_id FROM users WHERE id = ?').get(inviteeId);
   const inviterId = row && row.pending_inviter_id ? Number(row.pending_inviter_id) : 0;
-  if (!inviterId) return { reward: 0, inviteeReward: 0, inviterId: null };
+  if (!inviterId) return { ...emptyReferral(), inviterId: null };
   const paid = await applyReferralPay(inviteeId, inviterId);
   // Clear only when paid or referral row exists — NOT merely because they became friends via a game
-  if (paid.reward || paid.inviteeReward || await referralRowExists(inviteeId)) {
-    await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(inviteeId);
+  if (paid.inserted || paid.reward || paid.inviteeReward || await referralRowExists(inviteeId)) {
+    await clearPendingInviter(inviteeId);
   }
   return { ...paid, inviterId };
 }
@@ -1152,12 +1190,12 @@ async function claimPendingReferral(inviteeId) {
 /** Claim referral from signed Telegram start_param (startapp=i<id>). */
 async function claimStartParamReferral(inviteeId, startParam) {
   const m = /^i(\d{1,15})$/.exec(String(startParam || ''));
-  if (!m) return { reward: 0, inviteeReward: 0, inviterId: null };
+  if (!m) return { ...emptyReferral(), inviterId: null };
   const inviterId = Number(m[1]);
-  if (!inviterId || inviterId === inviteeId) return { reward: 0, inviteeReward: 0, inviterId: null };
+  if (!inviterId || inviterId === inviteeId) return { ...emptyReferral(), inviterId: null };
   const paid = await applyReferralPay(inviteeId, inviterId);
-  if (paid.reward || paid.inviteeReward || await referralRowExists(inviteeId)) {
-    await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(inviteeId);
+  if (paid.inserted || paid.reward || paid.inviteeReward || await referralRowExists(inviteeId)) {
+    await clearPendingInviter(inviteeId);
   }
   return { ...paid, inviterId };
 }
@@ -2223,15 +2261,15 @@ api.post('/friends/join', wrap(async (req, res) => {
   const u = await getUser.get(other);
   if (other === uid || !u || u.blocked) throw new HttpError(404, 'Player not found', 'user_unavailable');
   const already = await areFriends(uid, other);
-  const { reward, inviteeReward } = await applyReferralPay(uid, other);
+  const { reward, inviteeReward, befriended, inserted } = await applyReferralPay(uid, other);
   // Clear pending only once referral is recorded (not merely because a game made them friends)
-  if (reward || inviteeReward || await referralRowExists(uid)) {
-    await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(uid);
+  if (inserted || reward || inviteeReward || await referralRowExists(uid)) {
+    await clearPendingInviter(uid);
   }
-  const nowFriends = await areFriends(uid, other);
-  if ((!already && nowFriends) || reward) {
+  // Notify only on real pay or a newly created friendship edge (avoids double-DM races)
+  if (reward || inviteeReward || befriended) {
     const me = (await person(uid)).name;
-    realtime.send(other, { t: 'friend', id: uid, reward });
+    realtime.send(other, { t: 'friend', id: uid, reward: reward || 0 });
     notify.toUser(other, (T) => T.friendJoined(me) + (reward ? ` 💎 +${reward}` : ''));
   }
   const meRow = inviteeReward || reward ? await getUser.get(uid) : null;

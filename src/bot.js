@@ -83,8 +83,9 @@ function createBot(token, webAppUrl) {
       // Only store if inviter exists (FK); Mini App start_param path still pays without this
       const inv = await db.prepare('SELECT id FROM users WHERE id = ? AND blocked = 0').get(inviterId);
       if (!inv) return;
+      // Latest /start i… wins (stale pending must not override a newer invite)
       await db.prepare(`
-        UPDATE users SET pending_inviter_id = COALESCE(pending_inviter_id, ?)
+        UPDATE users SET pending_inviter_id = ?
         WHERE id = ? AND id <> ?
       `).run(inviterId, fromId, inviterId);
     } catch (e) {

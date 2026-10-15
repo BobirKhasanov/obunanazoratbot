@@ -225,10 +225,14 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual((await fetch(`${BASE}/api/me`, { headers: { 'X-Init-Data': initG } })).status, 200);
       await pg.q('UPDATE users SET pending_inviter_id = $1 WHERE id = $2', USERS.A.id, G.id);
       const aBeforePend = (await ok('A', 'GET', '/me')).user.diamonds;
+      const aTgBeforePend = tg.to(USERS.A.id).length;
       const meG = await (await fetch(`${BASE}/api/me`, { headers: { 'X-Init-Data': initG } })).json();
       assert.strictEqual(meG.referralClaim && meG.referralClaim.inviteeReward, 10, 'pending_inviter pays on /me');
       assert.strictEqual(meG.user.diamonds, 10);
       assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, aBeforePend + 20);
+      await sleep(250);
+      const aPendMsgs = tg.to(USERS.A.id).slice(aTgBeforePend);
+      assert.ok(aPendMsgs.some((m) => /Gina/.test(m.body.text) && /💎/.test(m.body.text)), 'pending /me notifies inviter with diamonds');
       const rejoinRes = await fetch(`${BASE}/api/friends/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Init-Data': initG },
@@ -238,6 +242,54 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual(rejoinRes.status, 200, JSON.stringify(rejoin));
       assert.strictEqual(rejoin.already, true, 'second open of invite is already-friends');
       assert.strictEqual(rejoin.inviteeReward || 0, 0);
+
+      // Stale pending must not beat a newer signed start_param
+      await ok('C', 'GET', '/me'); // ensure Cara exists as alternate inviter
+      const H = { id: 1008, first_name: 'Hank' };
+      const initH0 = fake.sign(H, TOKEN);
+      assert.strictEqual((await fetch(`${BASE}/api/me`, { headers: { 'X-Init-Data': initH0 } })).status, 200);
+      await pg.q('UPDATE users SET pending_inviter_id = $1 WHERE id = $2', USERS.C.id, H.id); // stale: Cara
+      const cBefore = (await ok('C', 'GET', '/me')).user.diamonds;
+      const aBeforeH = (await ok('A', 'GET', '/me')).user.diamonds;
+      const initH = fake.sign(H, TOKEN, Math.floor(Date.now() / 1000), { start_param: `i${USERS.A.id}` });
+      const meH = await (await fetch(`${BASE}/api/me`, { headers: { 'X-Init-Data': initH } })).json();
+      assert.strictEqual(meH.referralClaim && meH.referralClaim.inviteeReward, 10, 'start_param wins over stale pending');
+      assert.strictEqual(meH.referralClaim.friend && meH.referralClaim.friend.id, USERS.A.id, 'credited to start_param inviter');
+      assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, aBeforeH + 20);
+      assert.strictEqual((await ok('C', 'GET', '/me')).user.diamonds, cBefore, 'stale pending inviter unpaid');
+      const [pendH] = await pg.q('SELECT pending_inviter_id AS p FROM users WHERE id = $1', H.id);
+      assert.strictEqual(pendH.p, null, 'pending cleared after start_param pay');
+
+      // Zero rewards: befriend but do not burn the one-shot referral row
+      await ok('ADMIN', 'PATCH', '/admin/shop', { referralReward: 0, referralInviteeReward: 0 });
+      const I = { id: 1009, first_name: 'Ivy' };
+      const initI = fake.sign(I, TOKEN);
+      assert.strictEqual((await fetch(`${BASE}/api/me`, { headers: { 'X-Init-Data': initI } })).status, 200);
+      const aBefore0 = (await ok('A', 'GET', '/me')).user.diamonds;
+      const j0 = await (await fetch(`${BASE}/api/friends/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Init-Data': initI },
+        body: JSON.stringify({ userId: USERS.A.id }),
+      })).json();
+      assert.strictEqual(j0.reward || 0, 0);
+      assert.strictEqual(j0.inviteeReward || 0, 0);
+      assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, aBefore0);
+      const refI = await pg.q('SELECT 1 AS ok FROM referrals WHERE invitee_id = $1', I.id);
+      assert.strictEqual(refI.length, 0, 'zero rewards must not insert referrals');
+      // Later admin raise still pays once
+      await ok('ADMIN', 'PATCH', '/admin/shop', { referralReward: 7, referralInviteeReward: 3 });
+      const j1 = await (await fetch(`${BASE}/api/friends/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Init-Data': initI },
+        body: JSON.stringify({ userId: USERS.A.id }),
+      })).json();
+      assert.strictEqual(j1.reward, 7);
+      assert.strictEqual(j1.inviteeReward, 3);
+      assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, aBefore0 + 7);
+      assert.strictEqual(j1.user && j1.user.diamonds, 3);
+      const histI = await (await fetch(`${BASE}/api/me/diamonds/history`, { headers: { 'X-Init-Data': initI } })).json();
+      assert.ok(histI.items.some((x) => x.kind === 'referral_invitee' && x.amount === 3), 'custom invitee amount in ledger');
+      await ok('ADMIN', 'PATCH', '/admin/shop', { referralReward: 20, referralInviteeReward: 10 });
     });
 
     await step('admin shop settings + grant diamonds with notify', async () => {
