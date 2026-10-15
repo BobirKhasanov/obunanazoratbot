@@ -1,6 +1,7 @@
 // Home announcement carousel (admin-managed banners).
 import { h, haptic, getInitData, shareUrl, toast } from './ui.js';
 import { t } from './i18n.js';
+import { carouselDwellMs, carouselMaxSlides, isLite } from './perf.js';
 
 const FONT_CSS = {
   system: 'inherit',
@@ -9,8 +10,6 @@ const FONT_CSS = {
   mono: 'ui-monospace, SFMono-Regular, Menlo, monospace',
 };
 
-/** How long each slide stays before auto-advance (ms). */
-const DWELL_MS = 6000;
 /** Puzzle carousel starts its timer this many ms after the home one (phase offset). */
 export const CAROUSEL_STAGGER_MS = 2000;
 const SWIPE_PX = 40;
@@ -245,9 +244,13 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
     return null;
   }
 
+  // Weak Android: fewer slides + fewer media blob fetches (iOS keeps full list).
+  const maxSlides = carouselMaxSlides();
+  const capped = Number.isFinite(maxSlides) ? items.slice(0, maxSlides) : items;
+
   // Fetch media first, then swap — avoids empty/emoji flash on remount (both boards can be media-only).
   const blobs = [];
-  const resolved = await resolveMedia(items, blobs);
+  const resolved = await resolveMedia(capped, blobs);
   if (!host.isConnected) {
     revokeBlobs(blobs);
     return null;
@@ -260,7 +263,8 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
 
   host.hidden = false;
   const opts = { onPage, botUsername, userId };
-  const track = h('div.ann-track', resolved.map((a) => slide(a, opts)));
+  const lite = isLite();
+  const track = h('div.ann-track' + (lite ? '.lite' : ''), resolved.map((a) => slide(a, opts)));
   host.replaceChildren(track);
   if (resolved.length < 2) return host;
 
@@ -268,6 +272,7 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
   host.append(dots);
 
   const n = resolved.length;
+  const dwell = carouselDwellMs();
   let timer = null;
   let armed = false;
   const go = (next) => {
@@ -289,10 +294,10 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
     stopAuto();
     const start = () => {
       armed = true;
-      timer = setInterval(() => go(go.idx + 1), DWELL_MS);
+      timer = setInterval(() => go(go.idx + 1), dwell);
     };
     // First mount: optional phase offset so two carousels don't flip together.
-    // After swipe/interaction / resume: resume on the 6s cadence immediately once armed.
+    // After swipe/interaction / resume: resume on the dwell cadence immediately once armed.
     if (!armed && delayMs > 0) timer = setTimeout(start, delayMs);
     else start();
   };

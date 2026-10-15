@@ -62,6 +62,9 @@ export class Board {
     const flipped = orientation !== this.orientation;
     this.chess = chess; this.lastMove = lastMove; this.mine = mine; this.orientation = orientation;
     this.deselect();
+    // Weak Android (data-perf=lite): skip piece glides. iOS stays animated.
+    const lite = document.documentElement.dataset.perf === 'lite';
+    if (lite) animate = false;
     this.el.classList.toggle('still', !animate);
     this.syncPieces(lastMove);
     if (flipped) for (const [sq, p] of this.pieces) this.place(p.el, sq);

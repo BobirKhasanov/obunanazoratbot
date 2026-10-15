@@ -433,10 +433,10 @@ export function playMoveSound() {
   }
 }
 
-/** Emoji rain (victory) — fewer particles on lite Android */
+/** Emoji rain (victory) — skipped on lite Android; full on iOS / high-end */
 export function rain(list = ['🎉', '♟', '✨', '🏆', '👏']) {
-  const lite = document.documentElement.dataset.perf === 'lite';
-  const n = lite ? 10 : 28;
+  if (document.documentElement.dataset.perf === 'lite') return;
+  const n = 28;
   const w = window.innerWidth;
   for (let i = 0; i < n; i++) {
     const el = h('div.rain', list[i % list.length]);
@@ -445,7 +445,7 @@ export function rain(list = ['🎉', '♟', '✨', '🏆', '👏']) {
     el.style.animationDelay = `${Math.random() * 0.8}s`;
     el.style.fontSize = `${20 + Math.random() * 16}px`;
     document.body.append(el);
-    setTimeout(() => el.remove(), lite ? 2800 : 4500);
+    setTimeout(() => el.remove(), 4500);
   }
 }
 

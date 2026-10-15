@@ -5,7 +5,7 @@ import { t, getLang } from './i18n.js';
 import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
 import { formatClock, remainingMs, isTimed, formatTashkentWhen, categoryOf } from './time.js';
-import { liveGamePollMs } from './perf.js';
+import { liveGamePollMs, gameClockTickMs, boardAnimateDefault } from './perf.js';
 
 const AI_KEY = 'chess-ai-game';
 const EMOTES = ['🤔', '😎', '😮', '👏', '🙈', '😀'];
@@ -239,11 +239,11 @@ export function openGame(opts, onClose) {
     clearInterval(S.clockTimer);
     S.clockTimer = null;
     if ((S.kind !== 'online' && S.kind !== 'spectate') || !S.game || !S.game.clock || S.game.status !== 'active' || S.over) return;
-    S.clockTimer = setInterval(syncClocks, 200);
+    S.clockTimer = setInterval(syncClocks, gameClockTickMs());
     syncClocks();
   }
 
-  function render(animate = true) {
+  function render(animate = boardAnimateDefault()) {
     const { me, opp } = names();
     const c = S.chess; const cap = captured(c);
     const ori = orientation();

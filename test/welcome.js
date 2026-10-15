@@ -31,7 +31,7 @@ assert.ok(adminSrc.includes('openWelcome'));
 assert.ok(adminSrc.includes('btn_invite'));
 assert.ok(i18nSrc.includes('welcome_title:'));
 assert.ok(postsSrc.includes('b.url || webAppUrl'));
-assert.ok(/DWELL_MS\s*=\s*6000\b/.test(annSrc));
+assert.ok(annSrc.includes('carouselDwellMs'));
 assert.ok(/CAROUSEL_STAGGER_MS\s*=\s*2000\b/.test(annSrc));
 assert.ok(appSrc.includes('delayMs: CAROUSEL_STAGGER_MS'));
 

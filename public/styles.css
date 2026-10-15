@@ -1273,10 +1273,25 @@ html[data-perf="lite"] .prof-banner {
 }
 html[data-perf="lite"] .prem-spark,
 html[data-perf="lite"] .prem-sparkle,
-html[data-perf="lite"] .float-emoji { display: none !important; }
+html[data-perf="lite"] .float-emoji,
+html[data-perf="lite"] .rain { display: none !important; }
 html[data-perf="lite"] .prem-ring { animation: none !important; }
 html[data-perf="lite"] .screen {
   transition: transform 0.28s ease-out, opacity 0.2s ease-out;
+}
+html[data-perf="lite"] .piece {
+  transition: none !important;
+  will-change: auto;
+}
+html[data-perf="lite"] .ann-track,
+html[data-perf="lite"] .ann-track.lite {
+  transition: none !important;
+}
+html[data-perf="lite"] .invite-pop .pbar-fill,
+html[data-perf="lite"] #boot .boot-glow,
+html[data-perf="lite"] #boot .boot-orbit,
+html[data-perf="lite"] #boot .boot-ic {
+  animation: none !important;
 }
 html[data-perf="lite"] .live-mini-ph {
   background:

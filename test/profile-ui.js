@@ -23,9 +23,15 @@ assert.ok(indexHtml.includes('tw.ready()') || indexHtml.includes('.ready()'), 'W
 const perf = read('public/js/perf.js');
 assert.ok(perf.includes('isAndroid') && perf.includes('lite') && perf.includes('liveRoundPollMs'), 'perf helpers for Android lite');
 assert.ok(perf.includes("platform === 'ios'") || perf.includes('isIOS'), 'perf distinguishes iOS');
+assert.ok(perf.includes('!isIOS') || perf.includes('isAndroid && !isIOS'), 'lite never forced on iOS');
+assert.ok(perf.includes('carouselDwellMs') && perf.includes('carouselMaxSlides') && perf.includes('gameClockTickMs'), 'lite carousel/poll helpers');
 assert.ok(css.includes('data-perf="lite"') && css.includes('#bg { display: none'), 'lite CSS drops heavy bg');
+assert.ok(css.includes('.ann-track') && /data-perf="lite"[\s\S]{0,400}\.ann-track/.test(css), 'lite disables carousel slide transition');
+assert.ok(css.includes('.rain { display: none') || /data-perf="lite"[\s\S]{0,200}\.rain/.test(css), 'lite hides rain');
 const live = read('public/js/live.js');
 assert.ok(live.includes('liveRoundPollMs') && live.includes('liveMiniBoardBudget') && live.includes('live-mini-ph'), 'live uses perf budgets');
+assert.ok(read('public/js/announcements.js').includes('carouselDwellMs') && read('public/js/announcements.js').includes('carouselMaxSlides'), 'carousel uses lite media/dwell caps');
+assert.ok(read('public/js/game.js').includes('gameClockTickMs') && read('public/js/game.js').includes('boardAnimateDefault'), 'game clock/board respect lite');
 assert.ok(read('src/server.js').includes("no-cache, must-revalidate") && read('src/server.js').includes('.js'), 'static JS/CSS always revalidate');
 
 assert.ok(profile.includes('export function renderProfilePage'));
@@ -122,7 +128,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261015ae"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261015ae'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016aa"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016aa'), 'HTML data-asset matches entry cache bust');
 assert.ok(/\.avwrap \.prem-ring[\s\S]{0,120}inset:\s*0/.test(css), 'premium ring stays within avatar wrap');
 assert.ok(!/prem-ring[\s\S]{0,80}inset:\s*-\d/.test(css), 'premium ring does not extend outside avatar');
 assert.ok(app.includes('wsConnected') && app.includes('connectWs()'), 'WS reconnects on foreground');

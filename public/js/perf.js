@@ -1,5 +1,4 @@
-// Device performance helpers. Lite mode targets weak Android only — iOS / high-end stay full.
-// No imports from ui.js (avoid circular deps with rain / boot).
+// Device performance helpers. Lite mode targets weak Android only — iOS always stays full.
 
 /** @typedef {'LOW'|'AVERAGE'|'HIGH'|null} PerfClass */
 
@@ -11,7 +10,7 @@ function tw() {
 
 function readPerfClass() {
   const twApp = tw();
-  // Future / newer clients
+  // Telegram Android UA / newer clients expose performance class
   const fromApi = twApp && (twApp.devicePerformance || twApp.performanceClass || twApp.perfClass);
   if (fromApi) {
     const s = String(fromApi).toUpperCase();
@@ -41,12 +40,13 @@ function detect() {
     try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
   })();
 
-  // Lite: weak Android (or reduced-motion). Never force lite on iOS solely for being iOS.
-  let lite = reducedMotion;
-  if (isAndroid) {
-    if (performanceClass === 'LOW') lite = true;
+  // Lite ONLY on Android. iOS never gets lite — even with reduced-motion.
+  let lite = false;
+  if (isAndroid && !isIOS) {
+    if (reducedMotion) lite = true;
+    else if (performanceClass === 'LOW') lite = true;
     else if (performanceClass === 'AVERAGE' && ((mem != null && mem <= 4) || cores <= 4)) lite = true;
-    else if (!performanceClass && ((mem != null && mem <= 3) || cores <= 4)) lite = true;
+    else if (!performanceClass && ((mem != null && mem <= 4) || cores <= 4)) lite = true;
   }
 
   cached = {
@@ -75,10 +75,10 @@ export function isLite() { return detect().lite; }
 export function isAndroid() { return detect().isAndroid; }
 export function getPerf() { return detect(); }
 
-/** Lichess round grid poll (ms). Slower on Android; even slower on lite. */
+/** Lichess round grid poll (ms). Slower on Android; even slower on lite. iOS unchanged. */
 export function liveRoundPollMs() {
   const p = detect();
-  if (p.lite) return 7000;
+  if (p.lite) return 8000;
   if (p.isAndroid) return 5000;
   return 3000;
 }
@@ -86,20 +86,25 @@ export function liveRoundPollMs() {
 /** Open live game poll (ms). */
 export function liveGamePollMs() {
   const p = detect();
-  if (p.lite) return 5000;
+  if (p.lite) return 6000;
   if (p.isAndroid) return 4000;
   return 2000;
 }
 
-/** Local clock UI tick (ms). */
+/** Local clock UI tick (ms) — live boards + in-game clocks. */
 export function liveClockTickMs() {
   return detect().lite ? 500 : 250;
 }
 
-/** Home / lobby soft refresh when WS is connected (ms). Longer = lighter free tier. */
+/** In-game chess clock drain tick (ms). */
+export function gameClockTickMs() {
+  return detect().lite ? 400 : 200;
+}
+
+/** Home / lobby soft refresh when WS is connected (ms). */
 export function homeTabRefreshMs() {
   const p = detect();
-  if (p.lite) return 20000;
+  if (p.lite) return 24000;
   if (p.isAndroid) return 16000;
   return 14000;
 }
@@ -107,17 +112,32 @@ export function homeTabRefreshMs() {
 /** Sheet / inbox / friend-wait soft poll (ms). */
 export function softPollMs() {
   const p = detect();
-  if (p.lite) return 8000;
+  if (p.lite) return 10000;
   if (p.isAndroid) return 6000;
   return 5000;
 }
 
-/** How many mini-boards to mount on a live round (rest = lightweight placeholder). */
-export function liveMiniBoardBudget() {
-  return detect().lite ? 6 : Infinity;
+/** Announcement carousel auto-advance dwell (ms). */
+export function carouselDwellMs() {
+  return detect().lite ? 10000 : 6000;
 }
 
-/** Victory emoji rain count. */
+/** Cap carousel slides (and media fetches) on weak Android. */
+export function carouselMaxSlides() {
+  return detect().lite ? 3 : Infinity;
+}
+
+/** How many mini-boards to mount on a live round (rest = lightweight placeholder). */
+export function liveMiniBoardBudget() {
+  return detect().lite ? 4 : Infinity;
+}
+
+/** Victory emoji rain count (0 = skip). */
 export function rainCount() {
-  return detect().lite ? 10 : 28;
+  return detect().lite ? 0 : 28;
+}
+
+/** Piece glide animations on the chess board. */
+export function boardAnimateDefault() {
+  return !detect().lite;
 }
