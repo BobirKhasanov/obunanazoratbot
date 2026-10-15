@@ -267,7 +267,7 @@ export function openGame(opts, onClose) {
     if (S.kind === 'online' && g) {
       if (g.status === 'open' || g.status === 'invited') {
         banner.hidden = false; banner.classList.add('wait');
-        const link = S.meta.botUsername ? `https://t.me/${S.meta.botUsername}?start=g${g.id}` : '';
+        const link = S.meta.botUsername ? `https://t.me/${S.meta.botUsername}?startapp=g${g.id}` : '';
         const shareFriend = async () => {
           if (!link) return toast(t('e_server'), true);
           shareUrl(link, t('share_text'));

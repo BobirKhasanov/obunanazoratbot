@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, connectWs, onWs, sendBye, tg, avatar, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, shareUrl, copyText } from './ui.js';
 import { openDmThread, refreshInboxBadges, headerInboxBtns } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
@@ -11,7 +11,7 @@ import { renderLivePage, liveBlocksAutoRefresh } from './live.js';
 import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleOpenGame } from './game.js';
 import { renderProfilePage, openUserProfile } from './profile.js';
-import { closeScreen } from './screen.js';
+import { openScreen, closeScreen } from './screen.js';
 import { loadAnnouncements, mountAnnouncementsCarousel, stopAnnouncementsCarousel, CAROUSEL_STAGGER_MS } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
@@ -137,7 +137,103 @@ async function refresh(which = state.tab) {
 }
 
 // ---------- actions ----------
-const openOnline = (g) => openGame({ kind: 'online', game: g, meta: gameMeta() }, () => refresh());
+/** Friend link games: invite UI first; board only after the friend joins (status=active). */
+const openOnline = (g) => {
+  if (g && g.mode === 'friend' && g.status === 'open') {
+    openFriendWait(g);
+    return;
+  }
+  openGame({ kind: 'online', game: g, meta: gameMeta() }, () => refresh());
+};
+
+/** Invite-first wait screen — no chessboard until the opponent joins via the link. */
+function openFriendWait(game) {
+  let joined = false;
+  let poll = null;
+  let off = () => {};
+  const gameId = game.id;
+  const friendLink = () => {
+    const bot = state.meta && state.meta.botUsername;
+    if (!bot) return '';
+    // startapp opens Mini App with start_param=g… (client joins); start= also works via bot welcome
+    return `https://t.me/${bot}?startapp=g${gameId}`;
+  };
+  openScreen((close) => {
+    const finish = (nextGame) => {
+      if (joined) return;
+      joined = true;
+      try { clearInterval(poll); } catch { /* ignore */ }
+      try { off(); } catch { /* ignore */ }
+      close(true);
+      if (nextGame && nextGame.status === 'active') openOnline(nextGame);
+      else refresh();
+    };
+    off = onWs((m) => {
+      if (m.t !== 'game' || !m.game || m.game.id !== gameId) return;
+      if (m.game.status === 'active') finish(m.game);
+      else if (m.game.status === 'cancelled' || m.game.status === 'finished') finish(null);
+    });
+    poll = setInterval(async () => {
+      try {
+        const r = await api('GET', `/games/${gameId}`);
+        if (r.game.status === 'active') finish(r.game);
+        else if (r.game.status === 'cancelled' || r.game.status === 'finished') finish(null);
+      } catch { /* ignore */ }
+    }, 2500);
+    const cancel = async () => {
+      if (joined) return;
+      joined = true;
+      try { clearInterval(poll); } catch { /* ignore */ }
+      try { off(); } catch { /* ignore */ }
+      try { await api('DELETE', `/games/${gameId}`); } catch { /* ignore */ }
+      close();
+      refresh();
+    };
+    const tc = game.timeControl && game.timeControl !== 'classic' ? game.timeControl : '';
+    return [
+      h('div.top',
+        h('button.round.back', {
+          type: 'button', 'aria-label': t('back'),
+          onclick: () => { haptic('light'); cancel(); },
+        }, icon('back', 22)),
+        h('h1', t('wait_friend'))),
+      h('div.card.friend-wait',
+        h('div.empty-ic', '🤝'),
+        h('b', t('wait_friend')),
+        h('p.muted', t('wait_friend_sub') + (tc ? ` · ${tc}` : '')),
+        h('button.btn', {
+          type: 'button',
+          onclick: () => {
+            const link = friendLink();
+            if (!link) return toast(t('e_server'), true);
+            haptic('medium');
+            shareUrl(link, t('share_text'));
+          },
+        }, icon('share', 18), t('share_link')),
+        h('button.btn.ghost', {
+          type: 'button',
+          onclick: async () => {
+            const link = friendLink();
+            if (!link) return toast(t('e_server'), true);
+            if (await copyText(link)) { toast(t('link_copied')); haptic('success'); }
+          },
+        }, icon('link', 18), t('copy_link')),
+        h('button.btn.ghost', { type: 'button', onclick: () => cancel() }, t('cancel')),
+      ),
+    ];
+  }, {
+    onClose: () => {
+      try { clearInterval(poll); } catch { /* ignore */ }
+      try { off(); } catch { /* ignore */ }
+      if (!joined) {
+        joined = true;
+        api('DELETE', `/games/${gameId}`).catch(() => {});
+        refresh();
+      }
+    },
+  });
+}
+
 const rankingCategory = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapid', classic: 'Classic', all: 'All' };
 let selectedRankingBoard = 'elo';
 let selectedRanking = 'bullet';
@@ -150,7 +246,7 @@ async function startFriendGame(opts = {}) {
     const timeControl = opts.timeControl || selectedPreset();
     const preferredColor = opts.preferredColor === 'w' || opts.preferredColor === 'b' ? opts.preferredColor : null;
     const r = await api('POST', '/games', { timeControl, preferredColor });
-    openOnline(r.game);
+    openFriendWait(r.game);
   } catch (e) { fail(e); }
 }
 async function challenge(id) {
@@ -929,9 +1025,12 @@ export async function start(me) {
       refresh();
     }
     else if (m.t === 'game') {
-      // Opponent accepted while we stayed on the list — open the board only when the game starts
-      if (m.game.status === 'active' && m.game.id !== openGameId()) { clearInvitePop(); openOnline(m.game); }
-      else if (m.game.id !== openGameId()) refresh();
+      // Opponent accepted — close invite-wait screen and open the board when the game starts
+      if (m.game.status === 'active' && m.game.id !== openGameId()) {
+        clearInvitePop();
+        closeScreen(true);
+        openOnline(m.game);
+      } else if (m.game.id !== openGameId()) refresh();
     } else if (m.t === 'invite_gone') { clearInvitePop(); refresh(); }
   });
   // Background tab refresh — tuned for ~2.5k concurrent (lite Android slower)

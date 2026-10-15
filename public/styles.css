@@ -742,6 +742,14 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
   color: #f5c542; font-size: 14px;
 }
 .home-people-bar { margin: 0 0 10px; }
+.friend-wait {
+  display: grid; gap: 12px; justify-items: stretch; text-align: center;
+  padding: 28px 20px 22px; margin-top: 24px;
+}
+.friend-wait .empty-ic { font-size: 42px; line-height: 1; margin-bottom: 4px; }
+.friend-wait b { font-size: 18px; font-weight: 800; }
+.friend-wait .muted { margin: 0 0 8px; line-height: 1.4; }
+.friend-wait .btn { width: 100%; margin: 0; }
 .ann-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .medal-preview { width: 88px; height: 88px; border-radius: 20px; margin: 0 auto 8px; }
 .prof-av { background: none; border: 0; padding: 0; }

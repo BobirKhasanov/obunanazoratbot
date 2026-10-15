@@ -342,26 +342,29 @@ function ensureMoveCtx() {
   return moveAudioCtx;
 }
 
-/** Must run inside a user gesture (board pointerdown). Unlocks HTMLAudio + WebAudio for Telegram. */
+/** Must run inside a user gesture (board pointerdown). Unlocks audio without an audible click. */
 export function unlockAudio() {
   try {
+    // WebAudio resume alone is silent — preferred for Telegram WebViews
+    const ctx = ensureMoveCtx();
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
     const el = ensureMoveAudio();
-    // volume 0 play+pause unlocks autoplay without an audible click
-    const prev = el.volume;
+    // muted unlock: volume=0 still clicks on some iOS/Telegram builds
+    const wasMuted = el.muted;
+    el.muted = true;
     el.volume = 0;
     const p = el.play();
     const reset = () => {
       try {
         el.pause();
         el.currentTime = 0;
-        el.volume = prev || 0.55;
+        el.muted = wasMuted;
+        el.volume = 0.55;
         moveAudioReady = true;
       } catch { moveAudioReady = true; }
     };
     if (p && typeof p.then === 'function') p.then(reset).catch(reset);
     else reset();
-    const ctx = ensureMoveCtx();
-    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
   } catch { /* ignore */ }
 }
 
