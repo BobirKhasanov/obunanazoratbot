@@ -969,3 +969,52 @@ Object.assign(uzc, {
   admin_notif_media: 'Расм (ихтиёрий)', admin_notif_media_ok: 'Расм бириктирилди',
   admin_notif_send: 'Ҳаммага юбориш', admin_notif_sent: '{n} ўйинчига юборилди',
 });
+
+Object.assign(en, {
+  gem_hist_title: 'Diamond history',
+  gem_hist_empty: 'No diamond activity yet',
+  gem_hist_referral_out: 'Bonus for inviting a friend',
+  gem_hist_referral_in: 'Welcome bonus from invite',
+  gem_hist_admin_grant: 'Admin credited diamonds',
+  gem_hist_admin_remove: 'Admin adjusted diamonds',
+  gem_hist_premium: 'Premium · {n} mo',
+  gem_hist_puzzle: 'Daily puzzle reward',
+  gem_hist_shop_order: 'Purchase request · {n} 💎 · {sum}',
+  loading: 'Loading…',
+});
+Object.assign(ru, {
+  gem_hist_title: 'История алмазов',
+  gem_hist_empty: 'Пока нет операций с алмазами',
+  gem_hist_referral_out: 'Бонус за приглашение друга',
+  gem_hist_referral_in: 'Приветственный бонус за приглашение',
+  gem_hist_admin_grant: 'Админ начислил алмазы',
+  gem_hist_admin_remove: 'Админ изменил баланс',
+  gem_hist_premium: 'Премиум · {n} мес.',
+  gem_hist_puzzle: 'Награда за дневную задачу',
+  gem_hist_shop_order: 'Заявка на покупку · {n} 💎 · {sum}',
+  loading: 'Загрузка…',
+});
+Object.assign(uz, {
+  gem_hist_title: 'Olmoslar tarixi',
+  gem_hist_empty: 'Hali olmos harakatlari yo‘q',
+  gem_hist_referral_out: 'Do‘st taklif qilgani uchun bonus',
+  gem_hist_referral_in: 'Taklif orqali xush kelibsiz bonusi',
+  gem_hist_admin_grant: 'Admin olmos qo‘shdi',
+  gem_hist_admin_remove: 'Admin olmosni o‘zgartirdi',
+  gem_hist_premium: 'Premium · {n} oy',
+  gem_hist_puzzle: 'Kunlik puzzle mukofoti',
+  gem_hist_shop_order: 'Sotib olish so‘rovi · {n} 💎 · {sum}',
+  loading: 'Yuklanmoqda…',
+});
+Object.assign(uzc, {
+  gem_hist_title: 'Олмослар тарихи',
+  gem_hist_empty: 'Ҳали олмос ҳаракатлари йўқ',
+  gem_hist_referral_out: 'Дўст таклиф қилгани учун бонус',
+  gem_hist_referral_in: 'Таклиф орқали хуш келибсиз бонуси',
+  gem_hist_admin_grant: 'Админ олмос қўшди',
+  gem_hist_admin_remove: 'Админ олмосни ўзгартирди',
+  gem_hist_premium: 'Премиум · {n} ой',
+  gem_hist_puzzle: 'Кунлик puzzle мукофоти',
+  gem_hist_shop_order: 'Сотиб олиш сўрови · {n} 💎 · {sum}',
+  loading: 'Юкланмоқда…',
+});

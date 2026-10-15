@@ -57,7 +57,7 @@ const fake = require('./helpers/fake-telegram');
     assert.strictEqual(rows[0][0].web_app.url, 'https://chess.example.test/', 'Open button launches the Mini App');
     assert.strictEqual(rows[1][0].text, inviteBtn);
     assert.ok(rows[1][0].url.includes('t.me/share/url'), 'Invite opens Telegram share');
-    assert.ok(decodeURIComponent(rows[1][0].url).includes('startapp=i501'), 'Invite uses personal referral');
+    assert.ok(decodeURIComponent(rows[1][0].url).includes('start=i501'), 'Invite uses personal referral');
     assert.ok(welcome.body.message_effect_id, 'welcome has the confetti effect');
     const u = await db.prepare('SELECT lang, lang_set FROM users WHERE id = 501').get();
     assert.deepStrictEqual({ ...u }, { lang: code, lang_set: 1 });

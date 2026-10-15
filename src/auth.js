@@ -9,7 +9,7 @@ const MAX_AGE_SECONDS = 24 * 60 * 60;
 
 /**
  * Validates Telegram Mini App initData (HMAC-SHA256 as documented by Telegram).
- * Returns the parsed user object or null.
+ * Returns { user, startParam } or null.
  */
 function validateInitData(initData, botToken) {
   if (!initData || !botToken) return null;
@@ -35,7 +35,10 @@ function validateInitData(initData, botToken) {
 
   try {
     const user = JSON.parse(params.get('user') || 'null');
-    return user && user.id ? user : null;
+    if (!user || !user.id) return null;
+    // Telegram Direct Link / startapp payload (signed) — used to pay referral bonuses
+    user.startParam = String(params.get('start_param') || '').trim() || null;
+    return user;
   } catch {
     return null;
   }

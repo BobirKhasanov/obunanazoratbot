@@ -693,6 +693,7 @@ async function auth(req, res, next) {
   if (!leaving) await refreshPresence(user.id);
   req.user = user;
   req.isAdmin = isAdmin(user.id);
+  req.startParam = tg.startParam || null;
   next();
   } catch (e) { next(e); }
 }
@@ -721,7 +722,12 @@ const statsFor = async (uid) => ({
 api.get('/me', wrap(async (req, res) => {
   const shop = await getShopSettings();
   const banner = await profileBannerMeta();
-  const claimed = await claimPendingReferral(req.user.id);
+  // 1) Bot /start i<id> stored pending_inviter_id
+  let claimed = await claimPendingReferral(req.user.id);
+  // 2) Direct Mini App open via startapp=i<id> (signed start_param) — do not rely on client deep-link only
+  if (!claimed.reward && !claimed.inviteeReward && req.startParam) {
+    claimed = await claimStartParamReferral(req.user.id, req.startParam);
+  }
   if (claimed.reward && claimed.inviterId) {
     const meName = (await person(req.user.id)).name;
     realtime.send(claimed.inviterId, { t: 'friend', id: req.user.id, reward: claimed.reward });
@@ -730,6 +736,7 @@ api.get('/me', wrap(async (req, res) => {
   const userRow = claimed.inviteeReward || claimed.reward
     ? await getUser.get(req.user.id)
     : req.user;
+  if (userRow && (claimed.inviteeReward || claimed.reward)) memoUser(userRow);
   let referralClaim;
   if (claimed.inviteeReward && claimed.inviterId) {
     const friend = await person(claimed.inviterId);
@@ -752,6 +759,26 @@ api.get('/me', wrap(async (req, res) => {
       profileBannerUrl: banner.url,
       profileBannerMediaId: banner.mediaId,
     },
+  });
+}));
+
+/** Wallet history: purchases, referral bonuses, admin grants, spends. */
+api.get('/me/diamonds/history', wrap(async (req, res) => {
+  const rows = await db.prepare(`
+    SELECT id, amount, kind, meta, created_at
+    FROM diamond_ledger
+    WHERE user_id = ?
+    ORDER BY created_at DESC, id DESC
+    LIMIT 80
+  `).all(req.user.id);
+  res.json({
+    items: rows.map((r) => ({
+      id: r.id,
+      amount: Number(r.amount || 0),
+      kind: r.kind,
+      meta: typeof r.meta === 'string' ? JSON.parse(r.meta || '{}') : (r.meta || {}),
+      at: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+    })),
   });
 }));
 
@@ -1039,6 +1066,19 @@ const makeFriends = db.prepare('INSERT INTO friends (user_id, friend_id) VALUES 
 const befriend = async (a, b) => { await makeFriends.run(a, b); await makeFriends.run(b, a); };
 const areFriends = async (a, b) => !!(await db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(a, b));
 
+/** Append a wallet history row (amount may be negative for spends). */
+async function ledgerDiamonds(userId, amount, kind, meta = {}) {
+  const n = Math.floor(Number(amount) || 0);
+  if (!userId || !kind || !n) return;
+  try {
+    await db.prepare(
+      'INSERT INTO diamond_ledger (user_id, amount, kind, meta) VALUES (?, ?, ?, ?::jsonb)',
+    ).run(userId, n, String(kind).slice(0, 40), JSON.stringify(meta || {}));
+  } catch (e) {
+    console.error('[ledger]', e.message || e);
+  }
+}
+
 /** Pay referral diamonds once per invitee (referrals PK). Amounts from admin shop settings. */
 async function applyReferralPay(inviteeId, inviterId) {
   if (!inviteeId || !inviterId || inviteeId === inviterId) return { reward: 0, inviteeReward: 0 };
@@ -1066,6 +1106,12 @@ async function applyReferralPay(inviteeId, inviterId) {
   if (paid && (paid.inviter_paid || paid.invitee_paid)) {
     invalidateUserCache(inviterId);
     invalidateUserCache(inviteeId);
+    if (paid.inviter_paid && inviterAmt > 0) {
+      await ledgerDiamonds(inviterId, inviterAmt, 'referral_inviter', { inviteeId });
+    }
+    if (paid.invitee_paid && inviteeAmt > 0) {
+      await ledgerDiamonds(inviteeId, inviteeAmt, 'referral_invitee', { inviterId });
+    }
   }
   return {
     reward: paid && paid.inviter_paid ? inviterAmt : 0,
@@ -1078,8 +1124,24 @@ async function claimPendingReferral(inviteeId) {
   const row = await db.prepare('SELECT pending_inviter_id FROM users WHERE id = ?').get(inviteeId);
   const inviterId = row && row.pending_inviter_id ? Number(row.pending_inviter_id) : 0;
   if (!inviterId) return { reward: 0, inviteeReward: 0, inviterId: null };
-  await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(inviteeId);
   const paid = await applyReferralPay(inviteeId, inviterId);
+  // Clear only after pay attempt so a transient failure can retry on next /me
+  if (paid.reward || paid.inviteeReward || await areFriends(inviteeId, inviterId)) {
+    await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(inviteeId);
+  }
+  return { ...paid, inviterId };
+}
+
+/** Claim referral from signed Telegram start_param (startapp=i<id>). */
+async function claimStartParamReferral(inviteeId, startParam) {
+  const m = /^i(\d{1,15})$/.exec(String(startParam || ''));
+  if (!m) return { reward: 0, inviteeReward: 0, inviterId: null };
+  const inviterId = Number(m[1]);
+  if (!inviterId || inviterId === inviteeId) return { reward: 0, inviteeReward: 0, inviterId: null };
+  const paid = await applyReferralPay(inviteeId, inviterId);
+  if (paid.reward || paid.inviteeReward || await areFriends(inviteeId, inviterId)) {
+    await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(inviteeId);
+  }
   return { ...paid, inviterId };
 }
 
@@ -1489,6 +1551,7 @@ api.post('/puzzles/claim-daily', wrap(async (req, res) => {
   }
   if (amount > 0) {
     await db.prepare('UPDATE users SET diamonds = diamonds + ? WHERE id = ?').run(amount, uid);
+    await ledgerDiamonds(uid, amount, 'puzzle_daily', { day });
   }
   invalidateUserCache(uid);
   const u = await getUser.get(uid);
@@ -2111,8 +2174,11 @@ api.post('/friends/join', wrap(async (req, res) => {
   const u = await getUser.get(other);
   if (other === uid || !u || u.blocked) throw new HttpError(404, 'Player not found', 'user_unavailable');
   const already = await areFriends(uid, other);
-  await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(uid);
   const { reward, inviteeReward } = await applyReferralPay(uid, other);
+  // Clear pending invite after successful claim (or already-friends)
+  if (reward || inviteeReward || already || await areFriends(uid, other)) {
+    await db.prepare('UPDATE users SET pending_inviter_id = NULL WHERE id = ?').run(uid);
+  }
   const nowFriends = await areFriends(uid, other);
   if ((!already && nowFriends) || reward) {
     const me = (await person(uid)).name;
@@ -2146,6 +2212,7 @@ api.post('/premium/buy', wrap(async (req, res) => {
     WHERE id = ? AND diamonds >= ?
   `).run(price, until.toISOString(), req.user.id, price);
   if (!r.changes) throw bad('Not enough diamonds', 'no_diamonds');
+  await ledgerDiamonds(req.user.id, -price, 'premium_buy', { months });
   invalidateUserCache(req.user.id);
   const row = await getUser.get(req.user.id);
   memoUser(row);
@@ -2182,6 +2249,12 @@ api.post('/shop/order', wrap(async (req, res) => {
       console.error('[shop/order] admin notify failed:', adminId, e.description || e.message);
     }
   }
+  // History row (amount 0 until admin credits after payment)
+  try {
+    await db.prepare(
+      'INSERT INTO diamond_ledger (user_id, amount, kind, meta) VALUES (?, 0, ?, ?::jsonb)',
+    ).run(u.id, 'shop_order', JSON.stringify({ diamonds: pack.diamonds, sum: pack.sum, notified }));
+  } catch (e) { console.error('[ledger] shop_order', e.message || e); }
   res.json({ ok: true, pack, notified, payUsername: shop.payUsername });
 }));
 
@@ -2467,6 +2540,11 @@ admin.post('/users/:id/diamonds', wrap(async (req, res) => {
     await db.prepare('UPDATE users SET diamonds = diamonds + ? WHERE id = ?').run(amount, id);
   } else {
     await db.prepare('UPDATE users SET premium = 1, premium_until = ? WHERE id = ?').run(untilIso, id);
+  }
+  if (amount) {
+    await ledgerDiamonds(id, amount, amount > 0 ? 'admin_grant' : 'admin_remove', {
+      premiumMonths: premiumMonths || 0,
+    });
   }
 
   invalidateUserCache(id);

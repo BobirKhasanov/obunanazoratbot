@@ -137,8 +137,10 @@ export function renderProfilePage(ctx) {
   const openDiamonds = () => openScreen((close) => {
     const packs = state.meta.diamondPacks || [];
     const payUser = state.meta.payUsername || 'hasanovbobur';
-    const have = state.me.diamonds || 0;
+    let have = state.me.diamonds || 0;
     let selected = null;
+    let history = null;
+    let histLoading = true;
     const host = h('div.diamonds-host');
     const orderSelected = async () => {
       if (!selected) { toast(t('shop_pick_pack'), true); return; }
@@ -146,9 +148,32 @@ export function renderProfilePage(ctx) {
         await api('POST', '/shop/order', { diamonds: selected.diamonds, sum: selected.sum });
         toast(t('shop_order_sent')); haptic('success');
         openPayContact();
+        loadHistory();
       } catch (e) { fail(e); }
     };
+    const kindLabel = (item) => {
+      const k = item.kind;
+      const meta = item.meta || {};
+      if (k === 'referral_inviter') return t('gem_hist_referral_out');
+      if (k === 'referral_invitee') return t('gem_hist_referral_in');
+      if (k === 'admin_grant') return t('gem_hist_admin_grant');
+      if (k === 'admin_remove') return t('gem_hist_admin_remove');
+      if (k === 'premium_buy') return t('gem_hist_premium', { n: meta.months || 1 });
+      if (k === 'puzzle_daily') return t('gem_hist_puzzle');
+      if (k === 'shop_order') return t('gem_hist_shop_order', { n: meta.diamonds || 0, sum: formatSom(meta.sum || 0) });
+      return k;
+    };
+    const fmtWhen = (iso) => {
+      try {
+        return new Intl.DateTimeFormat(undefined, {
+          timeZone: 'Asia/Tashkent',
+          year: 'numeric', month: 'short', day: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        }).format(new Date(iso));
+      } catch { return String(iso || '').slice(0, 16); }
+    };
     const draw = () => {
+      have = state.me.diamonds || 0;
       host.replaceChildren(
         h('div.card.gems',
           h('div.gems-top', h('div.gems-num', '💎 ', h('b', String(have)))),
@@ -170,9 +195,35 @@ export function renderProfilePage(ctx) {
           onclick: () => { haptic('medium'); orderSelected(); },
         }, icon('mail', 18), t('shop_write_admin')),
         h('p.muted.shop-hint', t('shop_pay_hint', { user: '@' + payUser })),
+        h('div.h2', t('gem_hist_title')),
+        histLoading
+          ? h('div.muted', t('loading') || '…')
+          : (!(history && history.length)
+            ? h('div.empty', h('div.empty-ic', '💎'), t('gem_hist_empty'))
+            : h('div.list.gem-hist', history.map((item) => {
+              const amt = Number(item.amount || 0);
+              const sign = amt > 0 ? '+' : '';
+              const amtText = amt === 0 && item.kind === 'shop_order'
+                ? `💎 ${item.meta && item.meta.diamonds ? item.meta.diamonds : '—'}`
+                : `${sign}${amt} 💎`;
+              return h('div.row.gem-hist-row',
+                h('div.grow',
+                  h('div.t', kindLabel(item)),
+                  h('div.s', fmtWhen(item.at))),
+                h('span.pill' + (amt > 0 ? '.ok' : amt < 0 ? '.bad' : ''), amtText));
+            }))),
       );
     };
+    const loadHistory = async () => {
+      histLoading = true; draw();
+      try {
+        const r = await api('GET', '/me/diamonds/history');
+        history = r.items || [];
+      } catch { history = []; }
+      histLoading = false; draw();
+    };
     draw();
+    loadHistory();
     return [...subTop(t('diamonds'), close), host];
   });
   document.removeEventListener('profile-open', document._profileOpenHandler);
@@ -180,6 +231,7 @@ export function renderProfilePage(ctx) {
   document.addEventListener('profile-open', onProfileOpen);
 
   const openFriends = () => openScreen((close) => {
+    // start= sets pending_inviter via bot; startapp also works (server reads signed start_param on /me)
     const link = `https://t.me/${state.meta.botUsername}?start=i${state.me.id}`;
     const list = state.friends || [];
     return [

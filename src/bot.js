@@ -77,10 +77,17 @@ function createBot(token, webAppUrl) {
     if (!m) return;
     const inviterId = Number(m[1]);
     if (!inviterId || inviterId === fromId) return;
-    await db.prepare(`
-      UPDATE users SET pending_inviter_id = COALESCE(pending_inviter_id, ?)
-      WHERE id = ? AND id <> ?
-    `).run(inviterId, fromId, inviterId);
+    try {
+      // Only store if inviter exists (FK); Mini App start_param path still pays without this
+      const inv = await db.prepare('SELECT id FROM users WHERE id = ? AND blocked = 0').get(inviterId);
+      if (!inv) return;
+      await db.prepare(`
+        UPDATE users SET pending_inviter_id = COALESCE(pending_inviter_id, ?)
+        WHERE id = ? AND id <> ?
+      `).run(inviterId, fromId, inviterId);
+    } catch (e) {
+      console.error('[bot] rememberInvite', e.message || e);
+    }
   };
 
   // /start always begins with the language picker; the welcome message comes after the choice

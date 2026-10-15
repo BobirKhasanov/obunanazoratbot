@@ -325,6 +325,17 @@ CREATE TABLE IF NOT EXISTS puzzle_daily_claims (
   PRIMARY KEY (user_id, day)
 );
 ALTER TABLE puzzle_daily_claims ENABLE ROW LEVEL SECURITY;
+-- Diamond wallet history (purchases, referral bonuses, admin grants, spends)
+CREATE TABLE IF NOT EXISTS diamond_ledger (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  amount BIGINT NOT NULL,
+  kind TEXT NOT NULL,
+  meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_diamond_ledger_user_created ON diamond_ledger(user_id, created_at DESC);
+ALTER TABLE diamond_ledger ENABLE ROW LEVEL SECURITY;
 `;
 
 const DEFAULT_DIAMOND_PACKS = JSON.stringify([

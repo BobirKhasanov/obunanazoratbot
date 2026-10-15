@@ -152,7 +152,8 @@ function openAppUrl(webAppUrl, payload) {
 }
 
 function referralShareUrl(botUsername, userId, shareText) {
-  const link = `https://t.me/${botUsername}?startapp=i${userId}`;
+  // Prefer ?start= so /start stores pending_inviter_id; Mini App /me also claims start_param
+  const link = `https://t.me/${botUsername}?start=i${userId}`;
   return `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText || '')}`;
 }
 

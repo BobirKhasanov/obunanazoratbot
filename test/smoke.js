@@ -191,6 +191,28 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual(r2.user.premium, true);
       assert.strictEqual(r2.months, 3);
       assert.ok(new Date(r2.user.premiumUntil) > Date.now());
+
+      // Wallet history: referral + shop order + premium spend
+      const histB = await ok('B', 'GET', '/me/diamonds/history');
+      assert.ok(histB.items.some((i) => i.kind === 'referral_invitee' && i.amount === 10), 'invitee bonus in history');
+      const histA = await ok('A', 'GET', '/me/diamonds/history');
+      assert.ok(histA.items.some((i) => i.kind === 'referral_inviter' && i.amount === 20), 'inviter bonus in history');
+      assert.ok(histA.items.some((i) => i.kind === 'shop_order'), 'shop order in history');
+      assert.ok(histA.items.some((i) => i.kind === 'premium_buy' && i.amount < 0), 'premium spend in history');
+
+      // Mini App startapp: signed start_param pays referral on first /me (no client /friends/join)
+      const F = { id: 1006, first_name: 'Finn' };
+      const aBeforeSp = (await ok('A', 'GET', '/me')).user.diamonds;
+      const initF = fake.sign(F, TOKEN, Math.floor(Date.now() / 1000), { start_param: `i${USERS.A.id}` });
+      const spRes = await fetch(`${BASE}/api/me`, { headers: { 'X-Init-Data': initF } });
+      const meF = await spRes.json();
+      assert.strictEqual(spRes.status, 200, `start_param /me ${JSON.stringify(meF)}`);
+      assert.strictEqual(meF.referralClaim && meF.referralClaim.inviteeReward, 10, 'start_param pays invitee');
+      assert.strictEqual(meF.user.diamonds, 10);
+      assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, aBeforeSp + 20, 'start_param pays inviter');
+      const histF = await fetch(`${BASE}/api/me/diamonds/history`, { headers: { 'X-Init-Data': fake.sign(F, TOKEN) } });
+      const histFJ = await histF.json();
+      assert.ok(histFJ.items.some((i) => i.kind === 'referral_invitee'), 'start_param invitee ledger');
     });
 
     await step('admin shop settings + grant diamonds with notify', async () => {

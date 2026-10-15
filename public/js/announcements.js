@@ -45,8 +45,8 @@ async function resolveMedia(items) {
 
 function referralLink(botUsername, userId) {
   if (!botUsername || !userId) return null;
-  // startapp opens Mini App with start_param; start keeps bot deep-link as fallback path
-  return `https://t.me/${botUsername}?startapp=i${userId}`;
+  // ?start=iID → bot stores pending_inviter; Mini App /me + deep-link also claim
+  return `https://t.me/${botUsername}?start=i${userId}`;
 }
 
 function openLink(a, { onPage, botUsername, userId } = {}) {

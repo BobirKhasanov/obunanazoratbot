@@ -776,19 +776,35 @@ async function rebuildAll() {
 }
 
 // ---------- deep links ----------
+function readStartParam() {
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.get('p')) return q.get('p');
+  } catch { /* ignore */ }
+  try {
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) return String(tg.initDataUnsafe.start_param);
+  } catch { /* ignore */ }
+  try {
+    if (tg && tg.initData) {
+      const sp = new URLSearchParams(tg.initData).get('start_param');
+      if (sp) return sp;
+    }
+  } catch { /* ignore */ }
+  return '';
+}
+
 async function handleDeepLink() {
-  const q = new URLSearchParams(location.search);
-  const p = q.get('p') || (tg.initDataUnsafe && tg.initDataUnsafe.start_param) || '';
-  const gid = q.get('game');
-  history.replaceState(null, '', location.pathname);
+  const p = readStartParam();
+  const gid = (() => { try { return new URLSearchParams(location.search).get('game'); } catch { return null; } })();
+  try { history.replaceState(null, '', location.pathname); } catch { /* ignore */ }
   if (/^i\d{1,15}$/.test(p)) {
     try {
       const r = await api('POST', '/friends/join', { userId: Number(p.slice(1)) });
       if (r.user) state.me = r.user;
       if (r.inviteeReward) {
-        toast(t('invitee_reward', { n: r.inviteeReward, name: r.friend.name }));
+        toast(t('invitee_reward', { n: r.inviteeReward, name: (r.friend && r.friend.name) || '…' }));
         haptic('success');
-      } else toast(t('friend_added', { name: r.friend.name }));
+      } else if (r.friend) toast(t('friend_added', { name: r.friend.name }));
       go(TABS.indexOf('profile'), true);
     } catch (e) { fail(e); }
   } else if (/^g[\w-]{4,20}$/.test(p)) await joinGame(p.slice(1));
@@ -838,11 +854,6 @@ export async function start(me) {
 
   try { initPager(); } catch (e) { console.error('[boot] pager', e); }
 
-  if (me.referralClaim && me.referralClaim.inviteeReward) {
-    toast(t('invitee_reward', { n: me.referralClaim.inviteeReward, name: (me.referralClaim.friend && me.referralClaim.friend.name) || '…' }));
-    haptic('success');
-  }
-
   connectWs((up) => { if (up) refresh(); });
   onWs((m) => {
     if (m.t === 'invite') { showInvite(m.game, m.ttl || 10000); refresh('play'); }
@@ -886,11 +897,22 @@ export async function start(me) {
     setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: 'premium' })), already ? 60 : 520);
   });
 
-  try {
-    await refresh();
-    await handleDeepLink();
-  } catch (e) {
+  // Referral toast from /me (pending_inviter or signed start_param) — before deep-link join
+  if (me.referralClaim && me.referralClaim.inviteeReward) {
+    toast(t('invitee_reward', {
+      n: me.referralClaim.inviteeReward,
+      name: (me.referralClaim.friend && me.referralClaim.friend.name) || '…',
+    }));
+    haptic('success');
+  }
+
+  try { await refresh(); } catch (e) {
     console.error('[boot] refresh', e);
+    fail(e);
+  }
+  // Always try deep links even if refresh failed (referral/startapp must not be skipped)
+  try { await handleDeepLink(); } catch (e) {
+    console.error('[boot] deep link', e);
     fail(e);
   }
 }

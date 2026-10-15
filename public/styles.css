@@ -399,6 +399,9 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .gchat-form .input { flex: 1; min-width: 0; font-size: 14px; padding: 8px 10px; }
 .gchat-form .mini { flex-shrink: 0; }
 .shop-pack.on { outline: 2px solid var(--amber); background: rgba(251, 191, 36, 0.08); }
+.gem-hist { margin-top: 4px; }
+.gem-hist-row .pill.ok { color: var(--ok, #22c55e); }
+.gem-hist-row .pill.bad { color: var(--danger, #ef4444); }
 .pz-reward { text-align: center; font-weight: 700; margin-top: 10px; }
 .capwrap { margin-left: auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .cap { display: flex; flex-wrap: wrap; justify-content: flex-end; max-width: 150px; }

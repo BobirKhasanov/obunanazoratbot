@@ -3,8 +3,9 @@
 const http = require('http');
 const crypto = require('crypto');
 
-function sign(user, token, authDate = Math.floor(Date.now() / 1000)) {
+function sign(user, token, authDate = Math.floor(Date.now() / 1000), extras = {}) {
   const params = new URLSearchParams({ auth_date: String(authDate), query_id: 'AAH', user: JSON.stringify(user) });
+  if (extras.start_param) params.set('start_param', String(extras.start_param));
   const dcs = [...params.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => `${k}=${v}`).join('\n');
   const secret = crypto.createHmac('sha256', 'WebAppData').update(token).digest();
   params.set('hash', crypto.createHmac('sha256', secret).update(dcs).digest('hex'));

@@ -113,6 +113,9 @@ assert.ok(profile.includes("t('delete_account')") && profile.includes("DELETE', 
 assert.ok(read('src/server.js').includes("api.delete('/me'") && read('src/server.js').includes('DELETE FROM games WHERE'), 'account delete wipes user games + row');
 assert.ok(profile.includes('/shop/order') || profile.includes('shop/order'));
 assert.ok(profile.includes('shop_write_admin') && profile.includes('shop_pick_pack'), 'diamonds: select pack then write admin');
+assert.ok(profile.includes('/me/diamonds/history') && profile.includes('gem_hist_title'), 'diamonds screen shows history');
+assert.ok(read('src/server.js').includes('diamond_ledger') && read('src/server.js').includes("api.get('/me/diamonds/history'"), 'server diamond ledger API');
+assert.ok(read('src/server.js').includes('claimStartParamReferral') && read('src/auth.js').includes('startParam'), 'referral from signed start_param');
 assert.ok(profile.includes('premiumPlans') || profile.includes('premium_plans'));
 assert.ok(app.includes("t === 'wallet'") || app.includes('m.t === \'wallet\''));
 assert.ok(app.includes('dailyPuzzles') && app.includes('claim-daily') && app.includes('puzzle_diff'), 'daily 1–10 puzzles + diamond claim');
@@ -129,7 +132,7 @@ assert.ok(admin.includes('admin_pack_sum') || admin.includes('admin_pack_diamond
 assert.ok(read('src/server.js').includes('parseDiamondPacksStrict') && read('src/server.js').includes('/puzzles/claim-daily') && read('src/server.js').includes('/games/:id/chat'), 'server shop/chat/puzzle endpoints');
 assert.ok(read('src/server.js').includes('puzzle_daily_reward') && read('src/server.js').includes('puzzleDailyReward'), 'server stores puzzle daily reward setting');
 
-for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down', 'stats_online_only', 'admin_delete_user', 'admin_delete_confirm', 'admin_user_deleted', 'premium_unlocks', 'premium_feat_avatar', 'premium_feat_style', 'premium_feat_bio', 'premium_feat_badge', 'avatar_photo', 'avatar_photo_premium', 'premium_wait_expiry', 'home_tab_live', 'home_tab_friends', 'ann_edit', 'ann_save_edit', 'ann_updated', 'e_friends_only', 'admin_referral_rewards', 'admin_referral_inviter', 'admin_referral_invitee', 'admin_referral_sub', 'admin_referral_bad']) {
+for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down', 'stats_online_only', 'admin_delete_user', 'admin_delete_confirm', 'admin_user_deleted', 'premium_unlocks', 'premium_feat_avatar', 'premium_feat_style', 'premium_feat_bio', 'premium_feat_badge', 'avatar_photo', 'avatar_photo_premium', 'premium_wait_expiry', 'home_tab_live', 'home_tab_friends', 'ann_edit', 'ann_save_edit', 'ann_updated', 'e_friends_only', 'admin_referral_rewards', 'admin_referral_inviter', 'admin_referral_invitee', 'admin_referral_sub', 'admin_referral_bad', 'gem_hist_title', 'gem_hist_empty', 'gem_hist_referral_out', 'gem_hist_referral_in', 'gem_hist_shop_order']) {
   assert.ok(i18n.includes(k + ':'), `i18n ${k}`);
 }
 
