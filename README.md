@@ -31,10 +31,10 @@ npm run test:engine # chess engine strength/sanity
 
 ## Deploy (Render + Cloudflare + Redis)
 
-1. **Render** (API / WebSocket / bot): `BOT_TOKEN`, `ADMIN_IDS`, `DATABASE_URL` (Supabase Session pooler), optional Redis + Storage env vars below. Health check: `/healthz`. One instance only (long polling).
+1. **Render** (API / WebSocket / bot): `BOT_TOKEN`, `ADMIN_IDS`, `DATABASE_URL` (**Neon pooled** URL, hostname contains `-pooler`), optional Redis + Storage env vars below. Health check: `/healthz`. One instance only (long polling).
 2. **Cloudflare Worker** (`wrangler.toml`): serves `public/` and proxies `/api`, `/ws`, `/healthz` to Render. In Workers → Settings → Variables set `API_ORIGIN=https://<your-render>.onrender.com`. Set Render + BotFather `WEBAPP_URL` to the Worker URL (`https://obunanazoratbot.…workers.dev`).
 3. **Upstash Redis** (optional but recommended): `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` — Lichess cache, lobby/rankings cache, rate limits.
-4. **Supabase Storage** (optional): create private bucket `media`, set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on Render.
+4. **Supabase Storage** (optional, media files only): create private bucket `media`, set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on Render. Postgres itself lives on Neon.
 
 ## Configuration
 
@@ -44,7 +44,7 @@ npm run test:engine # chess engine strength/sanity
 | `WEBAPP_URL` | Public HTTPS URL of this server |
 | `ADMIN_IDS` | Comma-separated admin Telegram IDs |
 | `BOT_USERNAME` | Optional, otherwise fetched with `getMe` |
-| `DATABASE_URL` | Postgres connection string (Supabase Session pooler) |
+| `DATABASE_URL` | Neon Postgres pooled connection string (`-pooler`) |
 | `REMIND_AFTER_HOURS` | Idle time before a "your move" reminder (default 6) |
 
 Revoke any token that was ever pasted into a chat or committed (BotFather → `/revoke`).

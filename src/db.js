@@ -1,4 +1,4 @@
-// Postgres (Supabase) access. Every call is async.
+// Postgres (Neon pooler recommended) access. Every call is async.
 //
 // db.prepare(sql) keeps the shape the rest of the code already used, but the methods return promises:
 //   await db.prepare('SELECT * FROM users WHERE id = ?').get(id)     -> row | undefined
@@ -13,7 +13,7 @@ types.setTypeParser(1700, (v) => Number(v));
 
 const url = process.env.DATABASE_URL;
 if (!url) {
-  console.error('DATABASE_URL is not set. Use the Supabase "Session pooler" connection string.');
+  console.error('DATABASE_URL is not set. Use the Neon pooled connection string (-pooler).');
   process.exit(1);
 }
 try { // never prints the password itself, only what is needed to spot a bad value
@@ -23,11 +23,11 @@ try { // never prints the password itself, only what is needed to spot a bad val
     + `${/[\s\[\]]/.test(pw) ? ' (contains a space or bracket!)' : ''}${url !== url.trim() ? ' (URL has leading/trailing whitespace!)' : ''}`);
 } catch { console.error('[db] DATABASE_URL is not a valid URL (special characters in the password must be %-encoded)'); }
 const local = /@(localhost|127\.0\.0\.1)|host=\/|%2F/.test(url);
-// ~2.5k concurrent Mini App users: prefer Supabase Session/Transaction pooler + this pool size.
+// ~2.5k concurrent Mini App users: prefer Neon pooled (-pooler) URL + this pool size.
 const pool = new Pool({
   connectionString: url,
   max: Number(process.env.PG_POOL_MAX || 20),
-  ssl: local ? false : { rejectUnauthorized: false }, // Supabase terminates TLS with its own CA
+  ssl: local ? false : { rejectUnauthorized: false }, // Neon / managed PG TLS
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS || 10_000),
   allowExitOnIdle: false,
@@ -189,7 +189,7 @@ CREATE TABLE IF NOT EXISTS announcements (
 );
 CREATE INDEX IF NOT EXISTS idx_announcements_ends ON announcements(ends_at);
 
--- The API is served only by this server (service connection); nobody should reach the tables through Supabase's public REST API
+-- The API is served only by this server (service connection); do not expose tables via a public REST API
 ALTER TABLE users ADD COLUMN IF NOT EXISTS diamonds BIGINT NOT NULL DEFAULT 0;   -- in-app currency
 ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER NOT NULL DEFAULT 0;   -- 1 while premium_until is in the future (or legacy)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TIMESTAMPTZ;            -- monthly Premium expiry (UTC); null + premium=1 = legacy permanent
