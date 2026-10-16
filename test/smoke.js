@@ -187,6 +187,19 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok(g2.message.replyTo && g2.message.replyTo.mine === false);
       const gList = await ok('A', 'GET', '/chat/global');
       assert.ok((gList.messages || []).some((m) => m.body === 'javob umumiy'));
+      // Per-message 24h TTL: oldest expired rows go first; newer stay
+      await pg.q(
+        `INSERT INTO global_chat_messages (sender_id, body, created_at) VALUES
+           ($1, 'old-a', now() - interval '25 hours'),
+           ($1, 'old-b', now() - interval '24 hours 30 minutes'),
+           ($1, 'keep-fresh', now() - interval '1 hour')`,
+        USERS.A.id,
+      );
+      await ok('A', 'GET', '/chat/global'); // triggers oldest-first purge batch
+      const afterTtl = await ok('B', 'GET', '/chat/global');
+      const bodies = (afterTtl.messages || []).map((m) => m.body);
+      assert.ok(!bodies.includes('old-a') && !bodies.includes('old-b'), 'expired messages removed oldest-first');
+      assert.ok(bodies.includes('keep-fresh') || bodies.includes('javob umumiy'), 'fresh messages kept');
       await err('B', 'POST', '/messages/threads', { userId: USERS.C.id }, 400, 'friends_only');
       // Search finds any player (not friends-only); opening chat still requires friendship
       const found = await ok('B', 'GET', `/messages/search?q=${encodeURIComponent('Car')}`);

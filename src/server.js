@@ -2481,7 +2481,28 @@ api.post('/messages/threads/:id', wrap(async (req, res) => {
   });
 }));
 
-// ---------- global lobby chat (24h history) ----------
+// ---------- global lobby chat (each message expires 24h after it was sent) ----------
+/** Drop expired rows oldest-first (by created_at), never wipe the whole room at once. */
+async function purgeGlobalChatExpired({ limit = 80, maxRounds = 1 } = {}) {
+  let removed = 0;
+  for (let round = 0; round < maxRounds; round++) {
+    const del = await db.prepare(`
+      DELETE FROM global_chat_messages
+      WHERE id IN (
+        SELECT id FROM global_chat_messages
+        WHERE created_at < now() - interval '24 hours'
+        ORDER BY created_at ASC, id ASC
+        LIMIT ?
+      )
+      RETURNING id
+    `).run(limit);
+    const n = del.changes || (del.rows && del.rows.length) || 0;
+    removed += n;
+    if (n < limit) break;
+  }
+  return removed;
+}
+
 function mapGlobalMsg(m, uid) {
   return {
     id: m.id,
@@ -2505,9 +2526,8 @@ function mapGlobalMsg(m, uid) {
 
 api.get('/chat/global', wrap(async (req, res) => {
   const uid = Number(req.user.id);
-  await db.prepare(`
-    DELETE FROM global_chat_messages WHERE created_at < now() - interval '24 hours'
-  `).run().catch(() => {});
+  // Soft prune a batch of oldest expired messages (full drain runs in the sweeper).
+  await purgeGlobalChatExpired({ limit: 40, maxRounds: 1 }).catch(() => {});
   const rows = await db.prepare(`
     SELECT m.id, m.sender_id, m.body, m.created_at, m.reply_to_id,
       u.first_name, u.last_name, u.premium, u.premium_until, u.avatar_key,
@@ -3971,10 +3991,8 @@ async function boot() {
         const next = await claimFlagIfNeeded(g);
         if (next.status !== 'active') await pushGame(next);
       }
-      // Global chat: drop messages older than 24h (oldest first)
-      await db.prepare(`
-        DELETE FROM global_chat_messages WHERE created_at < now() - interval '24 hours'
-      `).run();
+      // Global chat: each message lives 24h from its own created_at; delete oldest expired first.
+      await purgeGlobalChatExpired({ limit: 100, maxRounds: 5 });
     } catch (e) { console.error('[sweeper]', e.message); } finally { sweeping = false; }
   }, SWEEP_MS).unref();
 }

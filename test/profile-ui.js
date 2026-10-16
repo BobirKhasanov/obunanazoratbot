@@ -133,6 +133,7 @@ assert.ok(app.includes('puzzleHost') && /time-heading[\s\S]{0,400}puzzleHost|pca
 assert.ok(read('public/js/game.js').includes('isMoveSoundOn') && read('public/js/game.js').includes('allowUndo'), 'move sound + optional AI undo');
 assert.ok(read('public/js/inbox.js').includes('/chat/global') && read('public/js/inbox.js').includes('replyToId'), 'global chat + reply');
 assert.ok(read('src/db.js').includes('global_chat_messages') && read('src/server.js').includes("kind <> 'dm'"), 'global chat schema; bell ignores DM');
+assert.ok(read('src/server.js').includes('purgeGlobalChatExpired') && read('src/server.js').includes('ORDER BY created_at ASC'), 'global chat purges oldest expired first');
 assert.ok(/\.avwrap \.prem-ring[\s\S]{0,120}inset:\s*0/.test(css), 'premium ring stays within avatar wrap');
 assert.ok(!/prem-ring[\s\S]{0,80}inset:\s*-\d/.test(css), 'premium ring does not extend outside avatar');
 assert.ok(app.includes('wsConnected') && app.includes('connectWs()'), 'WS reconnects on foreground');
