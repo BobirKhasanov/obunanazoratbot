@@ -92,7 +92,25 @@ h1, h2, h3, p { margin: 0; }
   contain-intrinsic-size: auto 600px;
 }
 /* Extra room for dock + Play CTA stacked above the nav */
-.page[data-page="play"] { padding-bottom: calc(190px + var(--safe-b)); }
+/* Home: one screen, no scroll — flex column; hero + mode cards stretch on tall phones, shrink on short ones */
+.page[data-page="play"] {
+  padding-bottom: calc(92px + var(--safe-b));
+  display: flex; flex-direction: column;
+}
+.page[data-page="play"] > * { flex: none; }
+.page[data-page="play"] .nx-hdr { margin-bottom: 10px; }
+.page[data-page="play"] .ann-carousel[hidden] { display: none; margin: 0; }
+.page[data-page="play"] .nx-hero { flex: 1 1 auto; min-height: 108px; max-height: 150px; margin-bottom: 0; }
+.page[data-page="play"] .nx-hero-txt { padding: 14px 16px; gap: 6px; }
+.page[data-page="play"] .nx-hero h2 { font-size: 19px; }
+.page[data-page="play"] .nx-sec { margin: 12px 0 8px; }
+.page[data-page="play"] .nx-mode-row { flex: 2 1 auto; min-height: 128px; max-height: 184px; }
+.page[data-page="play"] .nx-mode { min-height: 0; padding: 10px; }
+.page[data-page="play"] .nx-live-strip { padding-bottom: 4px; }
+.page[data-page="play"] .nx-lc { padding: 10px; }
+.page[data-page="play"] .nx-lc-p .avwrap, .page[data-page="play"] .nx-lc-p .avatar { width: 36px; height: 36px; font-size: 13px; }
+.page[data-page="play"] .nx-daily { margin: 12px 0 0; padding: 12px 14px; }
+.page[data-page="play"] .nx-daily-ic { width: 40px; height: 40px; }
 /* Profile: radial shell so expand gaps never read as black void */
 .page[data-page="profile"] {
   background: var(--bg-radial);
