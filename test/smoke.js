@@ -365,6 +365,15 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual(g.user.premium, false, 'diamond grant must not auto-add Premium');
       const toB = tg.to(USERS.B.id).slice(bBefore);
       assert.ok(toB.some((m) => /100/.test(m.body.text) || /💎/.test(m.body.text)), 'user notified about grant');
+      assert.ok(!toB.some((m) => /Payment confirmed|To'lov tasdiqlandi|Оплата подтверждена/.test(m.body.text) && !/\+100|100/.test(m.body.text)));
+      // Removing diamonds must NOT send the "payment confirmed" grant copy
+      const mid = tg.to(USERS.B.id).length;
+      const rm = await ok('ADMIN', 'POST', `/admin/users/${USERS.B.id}/diamonds`, { amount: -40 });
+      assert.strictEqual(rm.user.diamonds, before + 60);
+      const toRm = tg.to(USERS.B.id).slice(mid);
+      assert.ok(toRm.some((m) => /40/.test(m.body.text) && /💎/.test(m.body.text)), 'user notified about removal');
+      assert.ok(!toRm.some((m) => /Payment confirmed|To'lov tasdiqlandi|Оплата подтверждена|credited|зачислено|qo'shildi|қўшилди/i.test(m.body.text)),
+        'removal must not use grant/payment text');
       // lobby exposes premium flag for online list badges (use C so A's Premium from buy stays for style tests)
       await ok('C', 'GET', '/me'); // create + mark C online first
       await pg.q('UPDATE users SET premium = 1, premium_until = now() + interval \'30 days\', discoverable = 1 WHERE id = $1', USERS.C.id);

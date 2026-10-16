@@ -158,11 +158,20 @@ function hasCopy(a) {
 function slide(a, opts) {
   const font = FONT_CSS[a.fontFamily] || FONT_CSS.system;
   const clickable = a.linkType === 'url' || a.linkType === 'page' || a.linkType === 'invite';
-  const wantedMedia = !!a.mediaId;
-  // Media-only when there is no title/body (both boards may be media-only).
-  const mediaOnly = wantedMedia && !hasCopy(a);
+  const hasImg = !!a._src;
+  // Full-bleed media only when the image loaded; failed fetches stay as gradient+emoji (visible on Android)
+  const mediaOnly = hasImg && !hasCopy(a);
   const bgFrom = a.bgFrom || '#1a2740';
   const bgTo = a.bgTo || '#0b1220';
+  const mediaNode = hasImg
+    ? h('div.ann-media', h('img', {
+      src: a._src,
+      alt: '',
+      draggable: 'false',
+      decoding: 'async',
+      style: mediaOnly ? { background: '#0b1220' } : undefined,
+    }))
+    : h('div.ann-media.emoji', '♛');
   return h((clickable ? 'button' : 'div') + '.ann-slide' + (mediaOnly ? '.media-only' : ''), {
     type: clickable ? 'button' : undefined,
     style: mediaOnly ? { fontFamily: font } : {
@@ -174,19 +183,10 @@ function slide(a, opts) {
       openLink(a, opts);
     } : undefined,
   },
-    mediaOnly ? null : h('div.ann-copy',
+    mediaOnly || !hasCopy(a) ? null : h('div.ann-copy',
       a.title ? h('b.ann-title', { style: { color: a.titleColor, fontSize: `${a.fontSize}px` } }, a.title) : null,
       a.body ? h('span.ann-body', { style: { color: a.bodyColor, fontSize: `${Math.max(12, a.fontSize - 4)}px` } }, a.body) : null),
-    a._src
-      ? h('div.ann-media', h('img', {
-        src: a._src,
-        alt: '',
-        draggable: 'false',
-        decoding: 'async',
-        // Keep last paint stable while the decode finishes (media-only boards).
-        style: mediaOnly ? { background: '#0b1220' } : undefined,
-      }))
-      : (mediaOnly ? h('div.ann-media') : h('div.ann-media.emoji', '♛')));
+    mediaNode);
 }
 
 function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {

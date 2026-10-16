@@ -143,8 +143,9 @@ export function carouselMaxSlides() {
 /** Per-image media fetch timeout (ms) — keeps boot splash from hanging. */
 export function mediaFetchTimeoutMs() {
   const p = detect();
-  if (p.lite) return 1400;
-  if (p.isAndroid) return 2200;
+  // Lite Android often needs more than 1.4s on TG WebView — empty media looked like "no carousel"
+  if (p.lite) return 3200;
+  if (p.isAndroid) return 2800;
   return 4500;
 }
 

@@ -4,15 +4,21 @@ import { $, tg } from './ui.js';
 /** @type {{ build: Function, opts: object, close: Function }[]} */
 const stack = [];
 
+function isLiteShell() {
+  try {
+    return document.documentElement.dataset.perf === 'lite'
+      || document.documentElement.dataset.android === '1';
+  } catch { return false; }
+}
+
 function hideShell() {
   const el = $('#screen');
   if (!el) return;
   el.classList.remove('show');
   el.setAttribute('aria-hidden', 'true');
   try { tg.BackButton.hide(); } catch { /* ignore */ }
-  const android = document.documentElement.dataset.android === '1'
-    || document.documentElement.dataset.perf === 'lite';
-  setTimeout(() => { if (!el.classList.contains('show')) el.replaceChildren(); }, android ? 360 : 820);
+  const lite = isLiteShell();
+  setTimeout(() => { if (!el.classList.contains('show')) el.replaceChildren(); }, lite ? 200 : 820);
 }
 
 function bindBack(close) {
@@ -37,7 +43,8 @@ function renderTop({ animate } = { animate: true }) {
   el.replaceChildren(...[].concat(top.build(top.close)).flat(Infinity).filter(Boolean));
   el.scrollTop = 0;
   el.removeAttribute('aria-hidden');
-  if (animate) {
+  // Lite/Android: skip reflow restart — cheaper open, less jank
+  if (animate && !isLiteShell()) {
     el.classList.remove('show');
     void el.offsetWidth;
   }

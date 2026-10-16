@@ -67,9 +67,15 @@ function createBot(token, webAppUrl) {
     return kb;
   };
 
-  // Shown in all four languages at once, because we do not know yet which one the user reads
+  // One language per line — a single long ·-joined line wraps badly in Telegram
+  const LANG_PICK_TEXT = [
+    '🌐 Tilni tanlang',
+    'Тилни танланг',
+    'Выберите язык',
+    'Choose your language',
+  ].join('\n');
   const askLanguage = (ctx, payload) =>
-    ctx.reply('🌐 Tilni tanlang · Тилни танланг · Выберите язык · Choose your language', {
+    ctx.reply(LANG_PICK_TEXT, {
       reply_markup: langKeyboard(payload),
     });
 

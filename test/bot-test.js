@@ -38,6 +38,8 @@ const fake = require('./helpers/fake-telegram');
   assert.deepStrictEqual(kb.map((b) => b.callback_data), ['lang:uz', 'lang:uzc', 'lang:ru', 'lang:en']);
   assert.deepStrictEqual(kb.map((b) => b.text), ["🇺🇿 O'zbekcha", '🇺🇿 Ўзбекча', '🇷🇺 Русский', '🇬🇧 English']);
   assert.ok(!/Welcome|Добро/.test(sent[0].body.text), 'no welcome before the language is chosen');
+  assert.ok(sent[0].body.text.includes('\n'), 'language prompt is multi-line (not one long · row)');
+  assert.ok(/Tilni tanlang/.test(sent[0].body.text) && /Choose your language/.test(sent[0].body.text));
   step('/start asks for the language first (Uzbek, Uzbek Cyrillic, Russian, English)');
 
   // 2. choosing a language deletes the picker and sends the welcome in that language with Open + Invite

@@ -3370,11 +3370,16 @@ admin.post('/users/:id/diamonds', wrap(async (req, res) => {
   const untilLabel = next.premiumUntilTashkent
     ? next.premiumUntilTashkent.replace('T', ' ')
     : null;
-  await notify.toUser(id, (T) => T.walletGranted({
-    diamonds: amount > 0 ? amount : 0,
-    months: premiumMonths || 0,
-    until: untilLabel,
-  }), { force: true, effect: 'party' });
+  if (amount < 0) {
+    // Removal must not send the "payment confirmed" grant text
+    await notify.toUser(id, (T) => T.walletRemoved({ diamonds: Math.abs(amount) }), { force: true });
+  } else if (amount > 0 || premiumMonths > 0) {
+    await notify.toUser(id, (T) => T.walletGranted({
+      diamonds: amount > 0 ? amount : 0,
+      months: premiumMonths || 0,
+      until: untilLabel,
+    }), { force: true, effect: 'party' });
+  }
   res.json({ ok: true, user: next });
 }));
 

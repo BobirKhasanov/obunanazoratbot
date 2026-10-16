@@ -178,6 +178,29 @@ button.row:active { transform: scale(0.98); }
 .row .amt { font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .row .amt small { display: block; font-weight: 600; font-size: 12px; color: var(--muted); margin-top: 2px; }
 .row.off { opacity: 0.5; }
+/* Admin → Users: compact icon actions, no overflowing Block/Unblock labels */
+.admin-users-page { display: grid; gap: 10px; }
+.admin-users-page .admin-users-sub { margin: 0 2px; line-height: 1.35; }
+.admin-users-page .search { width: 100%; }
+.admin-user-row { align-items: flex-start; gap: 10px; }
+.admin-user-row .grow { padding-top: 2px; }
+.admin-user-row .t { gap: 8px; flex-wrap: wrap; }
+.admin-user-row .s { line-height: 1.35; word-break: break-word; }
+.admin-user-actions {
+  display: flex; flex: none; gap: 6px; align-items: center;
+  margin-left: auto; padding-top: 2px;
+}
+.admin-user-actions .admin-user-act {
+  width: 36px; min-width: 36px; height: 36px; padding: 0;
+  justify-content: center; border-radius: 12px;
+  background: var(--card-2); color: var(--text);
+}
+.admin-user-actions .admin-user-act.ok {
+  background: rgba(74, 222, 128, 0.16); color: var(--green);
+}
+.admin-user-actions .admin-user-act.danger {
+  background: rgba(248, 113, 113, 0.14); color: var(--red);
+}
 .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 99px; background: rgba(84, 164, 247, 0.18); color: var(--blue); }
 .pill.warn { background: rgba(251, 191, 36, 0.16); color: var(--amber); }
 .day-head { font-size: 13px; font-weight: 700; color: var(--muted); margin: 16px 0 8px 4px; display: flex; justify-content: space-between; }
@@ -1380,8 +1403,18 @@ html[data-perf="lite"] .prem-sparkle,
 html[data-perf="lite"] .float-emoji,
 html[data-perf="lite"] .rain { display: none !important; }
 html[data-perf="lite"] .prem-ring { animation: none !important; }
+/* Lite: fade/short slide — long translateX fights Android WebView */
 html[data-perf="lite"] .screen {
-  transition: transform 0.28s ease-out, opacity 0.2s ease-out;
+  transform: translateX(24%) translateZ(0);
+  transition: transform 0.16s ease-out, opacity 0.12s ease-out !important;
+  will-change: auto;
+}
+html[data-perf="lite"] .screen.show {
+  transform: none;
+}
+html[data-android="1"][data-perf="lite"] .screen {
+  transform: translateX(18%) translateZ(0);
+  transition: transform 0.14s ease-out, opacity 0.1s ease-out !important;
 }
 html[data-perf="lite"] .piece {
   transition: none !important;
@@ -1415,8 +1448,15 @@ html[data-perf="lite"] .live-mini-ph {
 .ann-carousel {
   position: relative; width: 100%; margin: 0 0 14px; border-radius: 22px; overflow: hidden;
   /* pan-y so vertical page scroll works; horizontal swipe handled in JS after intent */
-  min-height: 0; height: auto; touch-action: pan-y; contain: layout paint; user-select: none;
+  min-height: 0; height: auto; touch-action: pan-y; user-select: none;
   -webkit-user-select: none; background: #0b1220;
+}
+/* contain:paint can zero-size carousels on some Android WebViews */
+html:not([data-android="1"]) .ann-carousel { contain: layout paint; }
+html[data-android="1"] .ann-carousel:not([hidden]),
+html[data-perf="lite"] .ann-carousel:not([hidden]) {
+  height: 140px; min-height: 140px; max-height: 140px;
+  visibility: visible; opacity: 1;
 }
 /* Fixed box so media never grows the page / clips outside the rounded carousel */
 .ann-carousel:not([hidden]),

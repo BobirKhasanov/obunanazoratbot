@@ -60,46 +60,70 @@ export function openAdmin(onClose) {
   async function loadUsers(q = '') {
     try {
       const r = await api('GET', '/admin/users?q=' + encodeURIComponent(q));
-      usersBox.replaceChildren(...r.users.map((u) => h('div.row' + (u.blocked ? '.off' : ''),
-        h('div.avwrap', avatar(u.first_name, u.id), u.online ? h('i.dot.on') : null),
-        h('div.grow',
-          h('div.t', u.first_name || 'Player', u.isAdmin ? h('span.pill', ' ' + t('admin_tag')) : null),
-          h('div.s', `${u.username ? '@' + u.username + ' · ' : ''}${u.id} · 💎${u.diamonds || 0}${u.premium ? ' · Premium' : ''} · ♟${u.games}`)),
-        h('button.mini', {
-          title: t('admin_grant_diamonds'),
-          onclick: async () => {
-            const raw = window.prompt(t('admin_grant_prompt', { name: u.first_name || u.id }), '100');
-            if (raw == null || raw === '') return;
-            const amount = Math.floor(Number(raw));
-            if (!Number.isFinite(amount) || amount === 0) return toast(t('e_bad_request'), true);
-            try {
-              await api('POST', `/admin/users/${u.id}/diamonds`, { amount });
-              toast(t('admin_grant_ok', { n: amount }));
-              haptic('success');
-              loadUsers(q);
-            } catch (e) { fail(e); }
-          },
-        }, '💎'),
-        u.isAdmin ? null : h('button.mini' + (u.blocked ? '.ok' : ''), {
-          type: 'button',
-          onclick: async () => {
-            try { await api('POST', `/admin/users/${u.id}/block`, { blocked: !u.blocked }); loadUsers(q); } catch (e) { fail(e); }
-          },
-        }, u.blocked ? t('unblock') : t('block')),
-        u.isAdmin ? null : h('button.mini.danger', {
-          type: 'button',
-          title: t('admin_delete_user'),
-          onclick: async () => {
-            const name = u.first_name || String(u.id);
-            if (!(await confirmSheet(t('admin_delete_confirm', { name }), t('admin_delete_user'), true))) return;
-            try {
-              await api('DELETE', `/admin/users/${u.id}`);
-              toast(t('admin_user_deleted'));
-              haptic('success');
-              loadUsers(q);
-            } catch (e) { fail(e); }
-          },
-        }, icon('trash', 16)))));
+      const rows = (r.users || []).map((u) => {
+        const name = u.first_name || 'Player';
+        const meta = [
+          u.username ? '@' + u.username : null,
+          String(u.id),
+          `💎 ${u.diamonds || 0}`,
+          u.premium ? 'Premium' : null,
+          `♟ ${u.games || 0}`,
+        ].filter(Boolean).join(' · ');
+        const actions = [
+          h('button.mini.admin-user-act', {
+            type: 'button',
+            title: t('admin_grant_diamonds'),
+            onclick: async () => {
+              const raw = window.prompt(t('admin_grant_prompt', { name: name || u.id }), '100');
+              if (raw == null || raw === '') return;
+              const amount = Math.floor(Number(raw));
+              if (!Number.isFinite(amount) || amount === 0) return toast(t('e_bad_request'), true);
+              try {
+                await api('POST', `/admin/users/${u.id}/diamonds`, { amount });
+                toast(amount < 0
+                  ? t('admin_remove_ok', { n: Math.abs(amount) })
+                  : t('admin_grant_ok', { n: amount }));
+                haptic('success');
+                loadUsers(q);
+              } catch (e) { fail(e); }
+            },
+          }, icon('gem', 16)),
+        ];
+        if (!u.isAdmin) {
+          actions.push(
+            h('button.mini.admin-user-act' + (u.blocked ? '.ok' : ''), {
+              type: 'button',
+              title: u.blocked ? t('unblock') : t('block'),
+              onclick: async () => {
+                try {
+                  await api('POST', `/admin/users/${u.id}/block`, { blocked: !u.blocked });
+                  loadUsers(q);
+                } catch (e) { fail(e); }
+              },
+            }, u.blocked ? icon('check', 16) : icon('x', 16)),
+            h('button.mini.admin-user-act.danger', {
+              type: 'button',
+              title: t('admin_delete_user'),
+              onclick: async () => {
+                if (!(await confirmSheet(t('admin_delete_confirm', { name }), t('admin_delete_user'), true))) return;
+                try {
+                  await api('DELETE', `/admin/users/${u.id}`);
+                  toast(t('admin_user_deleted'));
+                  haptic('success');
+                  loadUsers(q);
+                } catch (e) { fail(e); }
+              },
+            }, icon('trash', 16)),
+          );
+        }
+        return h('div.row.admin-user-row' + (u.blocked ? '.off' : ''),
+          h('div.avwrap', avatar(u.first_name, u.id), u.online ? h('i.dot.on') : null),
+          h('div.grow',
+            h('div.t', h('span.name', name), u.isAdmin ? h('span.pill', t('admin_tag')) : null),
+            h('div.s', meta)),
+          h('div.admin-user-actions', ...actions));
+      });
+      usersBox.replaceChildren(...(rows.length ? rows : [h('div.empty', t('nobody_live'))]));
     } catch (e) { fail(e); }
   }
 
@@ -844,8 +868,10 @@ export function openAdmin(onClose) {
     loadUsers();
     return [
       ...subTop(t('users_list'), close),
-      h('p.muted', t('admin_users_sub')),
-      search, usersBox,
+      h('div.admin-users-page',
+        h('p.muted.admin-users-sub', t('admin_users_sub')),
+        search,
+        usersBox),
     ];
   });
 

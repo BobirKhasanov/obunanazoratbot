@@ -28,6 +28,7 @@ const STR = {
       if (until) lines.push(`Premium until ${until} (Tashkent).`);
       return lines.join('\n');
     },
+    walletRemoved: ({ diamonds }) => `💎 ${diamonds} diamonds were removed from your balance.`,
     medalAward: ({ place, season, bot, premiumMonths, premiumDays }) => {
       const prem = premiumMonths > 0
         ? `★ Premium +${premiumMonths} month${premiumMonths === 1 ? '' : 's'} added.`
@@ -64,6 +65,7 @@ const STR = {
       if (until) lines.push(`Премиум до ${until} (Ташкент).`);
       return lines.join('\n');
     },
+    walletRemoved: ({ diamonds }) => `💎 С вашего баланса снято ${diamonds} алмазов.`,
     medalAward: ({ place, season, bot, premiumMonths, premiumDays }) => {
       const prem = premiumMonths > 0
         ? `★ Премиум +${premiumMonths} мес. начислен.`
@@ -100,6 +102,7 @@ const STR = {
       if (until) lines.push(`Premium ${until} gacha (Toshkent).`);
       return lines.join('\n');
     },
+    walletRemoved: ({ diamonds }) => `💎 Hisobingizdan ${diamonds} olmos yechildi.`,
     medalAward: ({ place, season, bot, premiumMonths, premiumDays }) => {
       const prem = premiumMonths > 0
         ? `★ Premium +${premiumMonths} oy qo‘shildi.`
@@ -136,6 +139,7 @@ const STR = {
       if (until) lines.push(`Премиум ${until} гача (Тошкент).`);
       return lines.join('\n');
     },
+    walletRemoved: ({ diamonds }) => `💎 Ҳисобингиздан ${diamonds} олмос ечилди.`,
     medalAward: ({ place, season, bot, premiumMonths, premiumDays }) => {
       const prem = premiumMonths > 0
         ? `★ Премиум +${premiumMonths} ой қўшилди.`
