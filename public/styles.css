@@ -2408,6 +2408,12 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
   flex: 0 0 min(62vw, 230px); scroll-snap-align: start; display: flex; align-items: center; justify-content: space-between; gap: 6px;
   padding: 12px 10px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); color: var(--text); text-align: center;
 }
+.nx-lc-more {
+  flex: 0 0 84px; display: grid; place-items: center; align-content: center; gap: 6px; scroll-snap-align: start;
+  border-radius: 16px; background: var(--card-soft); border: 1px dashed rgba(46, 139, 255, 0.4);
+  color: var(--blue); font-size: 12px; font-weight: 800;
+}
+.nx-lc-more span { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(46, 139, 255, 0.15); }
 .nx-lc-p { display: grid; justify-items: center; gap: 3px; min-width: 0; flex: 1; }
 .nx-lc-p .avwrap, .nx-lc-p .avatar { width: 40px; height: 40px; font-size: 14px; }
 .nx-lc-p b { font-size: 12px; font-weight: 800; max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
