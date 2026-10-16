@@ -93,7 +93,7 @@ assert.ok(read('public/js/board.js').includes('this.selected === sq'), 'tap same
 assert.ok(read('public/js/game.js').includes('S.busy = true'), 'online moves lock board until server ack');
 assert.ok(!app.includes("h('span.star', ' ★')"), 'home live/friends no friend star glyph');
 assert.ok(read('src/server.js').includes('/notifications/by-copy/'), 'admin delete notif by copy');
-assert.ok(css.includes('data-android="1"') && css.includes('0.38s'), 'Android snappier screen transitions');
+assert.ok(css.includes('data-android="1"') && css.includes('0.34s') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android smooth non-springy pager transitions');
 assert.ok(read('public/js/pieces.js').includes('linearGradient') && read('public/js/pieces.js').includes('neo-'), 'neo pieces use shaded gradients');
 assert.ok(read('public/js/perf.js').includes('homeTabRefreshMs') && app.includes('homeTabRefreshMs'), 'lighter home tab refresh');
 assert.ok(read('src/char-avatars.js').includes('charAvatarUrl') && fs.existsSync(path.join(root, 'public/img/char-avatars/jimmy.png')), 'char avatars are PNG assets');
@@ -130,7 +130,9 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016ai"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016ai'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016aj"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016aj'), 'HTML data-asset matches entry cache bust');
+assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
+assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(app.includes('firstPaint') && app.includes('deferPzMedia'), 'first paint skips friends wait + defers puzzle media on Android');
 assert.ok(indexHtml.includes('data-android') && indexHtml.includes("plat === 'android'"), 'Android marked early to lighten boot splash');
 assert.ok(app.includes('rank-info') && /rank-info[\s\S]{0,80}foot|foot[\s\S]{0,80}rank-info/.test(app), 'ranking info text above player list');

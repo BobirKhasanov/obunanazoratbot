@@ -1269,20 +1269,29 @@ button.grow.plain { flex: 1; display: block; }
 @media (prefers-reduced-motion: reduce) {
   #bg::before { animation: none; }
 }
-/* Android: snappier page transitions + inertial scroll (avoid 0.95s slides feeling sticky) */
+/* Android: smooth pager (no springy overshoot — that reads as shake/jitter) */
 html[data-android="1"] .screen {
-  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease-out;
+  transition: transform 0.34s cubic-bezier(0.33, 0.1, 0.25, 1), opacity 0.24s ease-out;
   scroll-behavior: auto;
   -webkit-overflow-scrolling: touch;
 }
+html[data-android="1"] #track {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
 html[data-android="1"] #track.settle,
 html[data-android="1"] #nav-ind {
-  transition-duration: 0.42s !important;
+  /* Flat ease-out — cubic-bezier(0.22,1,0.36,1) overshoots and jitters on TG Android */
+  transition: transform 0.34s cubic-bezier(0.33, 0.1, 0.25, 1) !important;
 }
 html[data-android="1"] .page {
   scroll-behavior: auto;
   -webkit-overflow-scrolling: touch;
   content-visibility: visible; /* Android WebView: auto can clip during fling */
+  /* Promote layer so horizontal slide doesn't thrash with vertical scroll */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 html[data-android="1"] .page > *,
 html[data-perf="lite"] .page > * { animation: none !important; }
@@ -1290,6 +1299,10 @@ html[data-android="1"] .list .row,
 html[data-perf="lite"] .list .row {
   content-visibility: auto;
   contain-intrinsic-size: auto 64px;
+}
+html[data-perf="lite"] #track.settle,
+html[data-perf="lite"] #nav-ind {
+  transition: transform 0.28s cubic-bezier(0.33, 0.1, 0.25, 1) !important;
 }
 html[data-android="1"] .sheet {
   transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);

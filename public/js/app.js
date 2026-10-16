@@ -1045,10 +1045,14 @@ function initPager() {
   });
   let W = pager.clientWidth;
   const setX = (px) => { track.style.transform = `translate3d(${px}px,0,0)`; };
+  let refreshAfterSlideT = null;
+  let stickyAfterSlideT = null;
   go = (i, animate) => {
     const prev = state.index;
     state.index = clamp(i, 0, TABS.length - 1); state.tab = TABS[state.index];
-    if (state.index !== prev) {
+    const changed = state.index !== prev;
+    const android = isAndroid();
+    if (changed) {
       closeScreen(true);
       // Pause auto-advance only — keep blob URLs so media carousels don't flash on return
       if (prev === TABS.indexOf('play')) {
@@ -1061,21 +1065,47 @@ function initPager() {
       }
       // Returning to play: refresh lobby data, but reuse live carousels (see renderPlay)
       if (state.tab === 'play') playSnap = '';
+      // Instant scroll reset BEFORE slide — animated scroll during transform shakes Android WebView
+      const nextPage = page(state.tab);
+      const prevPage = page(TABS[prev]);
+      if (nextPage) {
+        const prevBeh = nextPage.style.scrollBehavior;
+        nextPage.style.scrollBehavior = 'auto';
+        nextPage.scrollTop = 0;
+        nextPage.style.scrollBehavior = prevBeh;
+      }
+      if (prevPage && prevPage !== nextPage) {
+        const prevBeh = prevPage.style.scrollBehavior;
+        prevPage.style.scrollBehavior = 'auto';
+        prevPage.scrollTop = 0;
+        prevPage.style.scrollBehavior = prevBeh;
+      }
     }
     // Sticky Play fades with CSS; toggle after paint so opacity/transform transitions run
     track.classList.toggle('settle', !!animate); ind.classList.remove('drag');
     setX(-state.index * W);
     ind.style.transform = `translateX(${state.index * 100}%)`;
     btns.forEach((b, j) => b.classList.toggle('active', j === state.index));
-    requestAnimationFrame(() => setPlaySticky(state.tab === 'play'));
-    // high-smooth scroll pages to top when switching tabs
-    if (state.index !== prev) {
-      const p = page(state.tab);
-      if (p) {
-        if (animate) smoothScrollTo(p, 0, 560);
-        else p.scrollTop = 0;
+    // Android: defer dock/sticky + refresh until slide finishes (avoids layout thrash / jitter)
+    clearTimeout(stickyAfterSlideT);
+    clearTimeout(refreshAfterSlideT);
+    const afterMs = animate && android ? 360 : 0;
+    if (afterMs) {
+      stickyAfterSlideT = setTimeout(() => setPlaySticky(state.tab === 'play'), afterMs);
+    } else {
+      requestAnimationFrame(() => setPlaySticky(state.tab === 'play'));
+    }
+    if (changed) {
+      if (afterMs) {
+        refreshAfterSlideT = setTimeout(() => refresh(), afterMs);
+      } else {
+        // iOS: keep soft scroll-to-top on tab change; Android already jumped above
+        if (animate && !android) {
+          const p = page(state.tab);
+          if (p) smoothScrollTo(p, 0, 560);
+        }
+        refresh();
       }
-      refresh();
     }
     requestAnimationFrame(() => syncScrollTopBtn());
   };
