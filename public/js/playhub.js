@@ -231,7 +231,7 @@ async function paintHistory(ctx) {
   return [
     analysisCard(),
     sectionHead(t('hub_history_title')),
-    h('div.nx-chips', { 'data-noswipe': '' },
+    h('div.nx-chips.fit', { 'data-noswipe': '' },
       ...[['all', t('hist_all')], ['win', t('hist_win')], ['loss', t('hist_loss')], ['draw', t('hist_draw')]]
         .map(([id, lab]) => filterChip(id, lab, histFilter === id, () => { histFilter = id; ctx.remount(); }))),
     filtered.length
