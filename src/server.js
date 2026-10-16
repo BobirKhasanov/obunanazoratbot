@@ -2186,11 +2186,12 @@ api.get('/lobby', wrap(async (req, res) => {
       AND id NOT IN (SELECT blocked_id FROM user_blocks WHERE user_id = ?)
       AND id NOT IN (SELECT user_id FROM user_blocks WHERE blocked_id = ?)
     ORDER BY present_until DESC
-    LIMIT 40
+    LIMIT 200
   `).all(uid, uid, uid);
   // Drop ghost rows: present_until alone is not enough after a closed Mini App (WS/REST must still be live).
+  // Players inside an active game stay listed while their socket reconnects (/bye clears present_until).
   const online = rows
-    .filter((r) => realtime.isOnline(r.id))
+    .filter((r) => realtime.isOnline(r.id) || busy.has(r.id))
     .map((r) => ({
       id: r.id, name: displayName(r), inGame: busy.has(r.id), friend: friendIds.has(r.id),
       premium: isPremiumActive(r), discoverable: !!r.discoverable || friendIds.has(r.id),
@@ -2200,17 +2201,13 @@ api.get('/lobby', wrap(async (req, res) => {
     }))
     .sort((a, b) => (b.friend - a.friend) || (a.inGame - b.inGame) || a.name.localeCompare(b.name));
 
+  // Same definition as the list (live socket/REST or in a game) so "N online" matches the rows shown
   let onlineCount = await cacheGet('lobby:onlineCount', 8_000);
   if (onlineCount == null) {
-    const countRow = await db.prepare(`
-      SELECT COUNT(*)::int AS n FROM users
-      WHERE blocked = 0 AND present_until > now()
-    `).get();
-    onlineCount = Math.max(countRow?.n || 0, realtime.onlineIds().length);
+    onlineCount = realtime.onlineIds().length;
     await cacheSet('lobby:onlineCount', onlineCount, 8_000);
-  } else {
-    onlineCount = Math.max(Number(onlineCount) || 0, realtime.onlineIds().length);
   }
+  onlineCount = Math.max(Number(onlineCount) || 0, online.length + 1);
 
   const recent = await db.prepare(`
     SELECT * FROM games WHERE status = 'finished' AND (white_id = :u OR black_id = :u) ORDER BY updated_at DESC LIMIT 8
