@@ -10,7 +10,7 @@ import {
 let hubTab = 'online'; // online | rating | history
 let mode = 'online'; // online | friend | ai
 let onlineSub = 'players'; // players | live | tours
-let ratingPeriod = 'all'; // all | day | week | month
+let ratingPeriod = 'all'; // all | month
 let histFilter = 'all';
 let friendQuery = '';
 
@@ -206,6 +206,7 @@ function paintAi(ctx) {
 }
 
 async function paintRating(ctx) {
+  if (!['all', 'month'].includes(ratingPeriod)) ratingPeriod = 'all';
   const q = ratingPeriod === 'all'
     ? 'board=elo&category=all'
     : `board=period&period=${ratingPeriod}&category=all`;
@@ -220,7 +221,7 @@ async function paintRating(ctx) {
     avatarKey: ctx.me.avatarKey, score: isElo ? (mine.elo || ctx.me.elo || 1200) : (mine.points || 0),
   };
   const subTabs = segTabs([
-    ['all', t('rank_all_time')], ['day', t('rank_day')], ['week', t('rank_week')], ['month', t('rank_month')],
+    ['all', t('rank_all_time')], ['month', t('rank_month')],
   ], ratingPeriod, (v) => { ratingPeriod = v; ctx.remount(); }, 'sub');
   return [
     subTabs,
