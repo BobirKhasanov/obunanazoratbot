@@ -1,10 +1,11 @@
-// Chess piece SVGs. Style set is chosen via <html data-pieces="…"> (outline | classic | neo | staunton | studio).
-// Non-lite devices get extruded "3D" pieces (stacked offset silhouettes) — no WebGL.
+// Chess piece SVGs. Style set via <html data-pieces="…"> (outline | classic | neo | staunton | studio).
+// Default "neo" matches Chess.com-style flat pieces: large, outlined, centered in the square.
 export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio'];
 export const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio'];
 export const BOARD_SWATCH = {
   classic: { lt: '#b9c4d6', dk: '#5f7391' },
-  green: { lt: '#eedfbb', dk: '#769656' },
+  // Chess.com green board
+  green: { lt: '#eeeed2', dk: '#769656' },
   wood: { lt: '#f0d9b5', dk: '#b58863' },
   blue: { lt: '#cdd7e8', dk: '#5b7fa6' },
   brown: { lt: '#d8c3a5', dk: '#8b5e3c' },
@@ -22,13 +23,14 @@ const OUTLINE = {
 };
 
 const CLASSIC = OUTLINE;
+// Chess.com-like neo silhouettes (fill the 45×45 viewBox)
 const NEO = {
-  p: '<path d="M22.5 9.5a5.5 5.5 0 0 0-3.2 9.5c-3.2 1.3-5.3 4.2-5.3 8h17c0-3.8-2.1-6.7-5.3-8a5.5 5.5 0 0 0-3.2-9.5z"/><path d="M11.5 33h22v3.5h-22z"/>',
-  r: '<path d="M10.5 9.5h4.2v3.2h4v-3.2h7.6v3.2h4v-3.2h4.2v8.2l-3.2 3v9.5l3.2 2.4v3.2H10.5v-3.2l3.2-2.4V20.7l-3.2-3z"/><path d="M13.5 20.7h18"/>',
-  n: '<path d="M13.5 36c0-9.5 3.2-11.5 6.5-15.5-2.2 0-3.2 1.2-5.2 3.2l-3.2-2.2c3.2-6 7.5-12.2 14.5-12.2 6.2 0 10.5 5.2 10.5 13.5V36z"/><circle cx="21.2" cy="14.2" r="1.1" fill="currentColor" stroke="none"/>',
-  b: '<path d="M22.5 7.5a2.8 2.8 0 0 1 2.8 2.8c0 1.1-.7 2-1.5 2.5C28.5 15 30.5 18.2 30.5 22.2c0 3.2-1.6 5.2-3.2 6.8H17.7c-1.6-1.6-3.2-3.6-3.2-6.8 0-4 2.1-7.2 6.7-9.4-.9-.5-1.5-1.4-1.5-2.5a2.8 2.8 0 0 1 2.8-2.8z"/><path d="M12.5 36c2.1-1.6 4.2-2.1 10-2.1s7.9.5 10 2.1v1.2h-20z"/><path d="M22.5 16.5v6.5M19.2 19.8h6.6"/>',
-  q: '<circle cx="9" cy="13.5" r="2.4"/><circle cx="16" cy="8.5" r="2.4"/><circle cx="22.5" cy="7" r="2.4"/><circle cx="29" cy="8.5" r="2.4"/><circle cx="36" cy="13.5" r="2.4"/><path d="M9 15.5l4.2 14.2h18.6L36 15.5l-7.2 8-2.6-10.2-4.2 10.2-4.2-10.2-2.6 10.2z"/><path d="M11.5 32.5h22v3.8h-22z"/>',
-  k: '<path d="M22.5 5.5v7.5M18.5 9h8"/><path d="M22.5 12.5c-5.2 0-9.5 3.2-9.5 8.5 0 3.2 2.1 5.2 4.2 6.8V31.5h10.6v-3.7c2.1-1.6 4.2-3.6 4.2-6.8 0-5.3-4.3-8.5-9.5-8.5z"/><path d="M11.5 33h22v3.5h-22z"/>',
+  p: '<path d="M22.5 9a5.8 5.8 0 0 0-3.4 10.2c-3.4 1.2-5.6 4.2-5.6 8.3h18c0-4.1-2.2-7.1-5.6-8.3A5.8 5.8 0 0 0 22.5 9z"/><path d="M11 32.5h23v4H11z"/>',
+  r: '<path d="M9.5 8.5h4.5v3.5h4V8.5h9v3.5h4V8.5H36v8.5l-3.5 3v10.5l3.5 2.5v3.5H9.5v-3.5l3.5-2.5V20l-3.5-3z"/><path d="M13 19.5h19"/>',
+  n: '<path d="M12.5 36.5c0-10 3.5-12 7-16.5-2.4 0-3.5 1.3-5.6 3.4l-3.4-2.3C14 14.5 18.5 8 26 8c6.5 0 11 5.5 11 14.5V36.5z"/><circle cx="21.5" cy="14" r="1.15" fill="currentColor" stroke="none"/>',
+  b: '<path d="M22.5 7a3 3 0 0 1 3 3c0 1.15-.7 2.1-1.6 2.6C29 15 31.5 18.5 31.5 23c0 3.4-1.7 5.6-3.4 7.2H16.4c-1.7-1.6-3.4-3.8-3.4-7.2 0-4.5 2.5-8 7.1-10.4-.9-.5-1.6-1.45-1.6-2.6a3 3 0 0 1 3-3z"/><path d="M12 36.5c2.2-1.6 4.5-2.2 10.5-2.2s8.3.6 10.5 2.2v1.5H12z"/><path d="M22.5 16v7M19 19.5h7"/>',
+  q: '<circle cx="8.5" cy="13" r="2.5"/><circle cx="15.5" cy="8" r="2.5"/><circle cx="22.5" cy="6.5" r="2.5"/><circle cx="29.5" cy="8" r="2.5"/><circle cx="36.5" cy="13" r="2.5"/><path d="M8.5 15.5l4.5 14.5h19l4.5-14.5-7.5 8.2-2.8-10.5-4.2 10.5-4.2-10.5-2.8 10.5z"/><path d="M11 33h23v4H11z"/>',
+  k: '<path d="M22.5 5v8M18.5 8.5h8"/><path d="M22.5 12c-5.5 0-10 3.4-10 9 0 3.4 2.2 5.5 4.5 7.2V32h11v-3.8c2.3-1.7 4.5-3.8 4.5-7.2 0-5.6-4.5-9-10-9z"/><path d="M11 33.5h23v3.5H11z"/>',
 };
 
 const STAUNTON = {
@@ -41,15 +43,13 @@ const STAUNTON = {
 };
 
 const STUDIO = STAUNTON;
-const STUDIO_FELT = { p: 8.5, r: 9.2, n: 9, b: 9, q: 9.5, k: 9.5 };
-
 const SETS = { outline: OUTLINE, classic: CLASSIC, neo: NEO, staunton: STAUNTON, studio: STUDIO };
 const STROKE = {
   outline: '2.35',
-  classic: '1.7',
-  neo: '2.05',
+  classic: '1.85',
+  neo: '1.9',
   staunton: '1.55',
-  studio: '1.35',
+  studio: '1.55',
 };
 
 const cache = Object.create(null);
@@ -63,81 +63,29 @@ export function clearPieceCache() {
   for (const k of Object.keys(cache)) delete cache[k];
 }
 
-/** Lite Android keeps flat pieces; everyone else gets extruded 3D SVGs. */
-function useExtruded3d() {
-  try {
-    if (typeof document === 'undefined') return true;
-    if (document.documentElement.dataset.perf === 'lite') return false;
-    return true;
-  } catch { return true; }
-}
-
-/**
- * Extruded faux-3D piece: stacked offset silhouettes (depth) + ivory/ebony face.
- * Depth is balanced around the square center (no SE visual drift).
- */
-function extruded3dSvg(colour, type, shape, sw) {
-  const uid = `e3d-${colour}${type}`;
-  const face = `${uid}-f`;
-  const shine = `${uid}-s`;
-  const isW = colour === 'w';
-  const depthFar = isW ? '#8a7358' : '#050506';
-  const depthNear = isW ? '#b59a78' : '#121214';
-  const stroke = isW ? '#4a3a28' : '#000000';
-  const eye = isW ? '#4a3a28' : '#d4d4d8';
-  const feltR = STUDIO_FELT[type] || 9;
-  const defs = isW
-    ? `<linearGradient id="${face}" x1="0.18" y1="0" x2="0.82" y2="1"><stop offset="0%" stop-color="#fffef9"/><stop offset="35%" stop-color="#f5ebe0"/><stop offset="70%" stop-color="#e0cdb4"/><stop offset="100%" stop-color="#c4a882"/></linearGradient>`
-      + `<linearGradient id="${shine}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#fff" stop-opacity="0.65"/><stop offset="40%" stop-color="#fff" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity="0.14"/></linearGradient>`
-    : `<linearGradient id="${face}" x1="0.18" y1="0" x2="0.82" y2="1"><stop offset="0%" stop-color="#4a4a4e"/><stop offset="40%" stop-color="#1a1a1d"/><stop offset="100%" stop-color="#050506"/></linearGradient>`
-      + `<linearGradient id="${shine}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#fff" stop-opacity="0.28"/><stop offset="45%" stop-color="#fff" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity="0.4"/></linearGradient>`;
-
-  const faceShape = shape.replace(/fill="currentColor"/g, `fill="${eye}"`);
-  const depthShape = shape.replace(/fill="currentColor"/g, `fill="${depthFar}"`);
+/** Chess.com-style neo: solid fill + strong outline (no tiny extruded layers). */
+function neoSvg(colour, type, shape, sw) {
   const body = `stroke-linejoin="round" stroke-linecap="round" stroke-width="${sw}"`;
-
-  // Mild depth (±) so the silhouette stays centered in the cell
-  const ground = `<ellipse cx="22.5" cy="39.6" rx="${feltR + 1.5}" ry="2.2" fill="rgba(0,0,0,0.30)" stroke="none"/>`
-    + `<ellipse cx="22.5" cy="38.2" rx="${feltR}" ry="1.3" fill="#2f6b3a" stroke="none"/>`;
-
-  return `<svg viewBox="0 0 45 45" class="pc ${colour} extruded3d" ${body} aria-hidden="true">`
-    + `<defs>${defs}</defs>`
-    + `<g transform="translate(0,-0.6)">`
-    + ground
-    + `<g transform="translate(1.6,2.2)" fill="${depthFar}" stroke="${depthFar}" stroke-width="${sw}">${depthShape}</g>`
-    + `<g transform="translate(0.8,1.1)" fill="${depthNear}" stroke="${depthNear}" stroke-width="${sw}">${depthShape}</g>`
-    + `<g fill="url(#${face})" stroke="${stroke}" stroke-width="${sw}">${faceShape}</g>`
-    + `<rect x="10" y="6" width="10" height="28" rx="5" fill="url(#${shine})" opacity="0.65" stroke="none"/>`
-    + `</g></svg>`;
-}
-
-/** Flat neo (lite / outline fallback). */
-function neoFlatSvg(colour, type, shape, sw) {
-  const gid = `neo-${colour}${type}`;
-  const body = `stroke-linejoin="round" stroke-linecap="round" stroke-width="${sw}"`;
-  const defs = colour === 'w'
-    ? `<linearGradient id="${gid}" x1="0.15" y1="0.05" x2="0.9" y2="0.95"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#f8fafc"/><stop offset="100%" stop-color="#dbe3ee"/></linearGradient>`
-    : `<linearGradient id="${gid}" x1="0.15" y1="0.05" x2="0.9" y2="0.95"><stop offset="0%" stop-color="#334155"/><stop offset="45%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient>`;
-  const stroke = colour === 'w' ? '#334155' : '#020617';
-  return `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} stroke="${stroke}" aria-hidden="true"><defs>${defs}</defs><g fill="url(#${gid})">${shape}</g></svg>`;
+  const fill = colour === 'w' ? '#f0f0f0' : '#2c2c2c';
+  const stroke = colour === 'w' ? '#1a1a1a' : '#f0f0f0';
+  const eye = colour === 'w' ? '#1a1a1a' : '#f0f0f0';
+  const shaped = shape.replace(/fill="currentColor"/g, `fill="${eye}"`);
+  return `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} fill="${fill}" stroke="${stroke}" aria-hidden="true">${shaped}</svg>`;
 }
 
 /** SVG markup for a piece: colour 'w'|'b', type 'pnbrqk'. Optional setOverride for style pickers. */
 export function pieceSvg(colour, type, setOverride) {
   const set = PIECE_SETS.includes(setOverride) ? setOverride : currentPieceSet();
-  const extruded = useExtruded3d() && set !== 'outline';
-  const key = `${set}:${colour}${type}${extruded ? ':x3d' : ''}`;
+  const key = `${set}:${colour}${type}`;
   if (cache[key]) return cache[key];
 
   const sw = STROKE[set] || '1.6';
   const body = `stroke-linejoin="round" stroke-linecap="round" stroke-width="${sw}"`;
-  // Prefer Staunton silhouette for extruded look (reads more like real pieces)
-  const shape = (extruded ? (STAUNTON[type] || NEO[type]) : (SETS[set] || OUTLINE)[type]) || OUTLINE.p;
+  const shape = (SETS[set] || OUTLINE)[type] || OUTLINE.p;
 
-  if (extruded) {
-    cache[key] = extruded3dSvg(colour, type, shape, set === 'outline' ? '1.5' : '1.35');
-  } else if (set === 'neo') {
-    cache[key] = neoFlatSvg(colour, type, shape, sw);
+  if (set === 'neo' || set === 'classic' || set === 'studio' || set === 'staunton') {
+    // Same Chess.com-like rendering for the common sets (large, readable, centered)
+    cache[key] = neoSvg(colour, type, shape, sw);
   } else {
     cache[key] = `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} aria-hidden="true">${shape}</svg>`;
   }
