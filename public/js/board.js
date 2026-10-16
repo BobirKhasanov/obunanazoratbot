@@ -24,6 +24,7 @@ export class Board {
     this.selected = null; this.legal = [];
     this.squares = h('div.squares'); this.hl = h('div.hl'); this.layer = h('div.pieces'); this.coords = h('div.coords');
     this.el = h('div.board', this.squares, this.hl, this.layer, this.coords);
+    this.setBoardTouchAction('pan-y');
     root.append(this.el);
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) this.squares.append(h('i' + ((r + c) % 2 ? '.dk' : '.lt')));
     this.el.addEventListener('pointerdown', (e) => this.down(e));
@@ -136,11 +137,19 @@ export class Board {
   }
   deselect() { this.selected = null; this.legal = []; this.promo && this.closePromo(); }
 
+  setBoardTouchAction(mode) {
+    // pan-y: finger scroll over the board reaches the game screen; none: active piece drag
+    try { this.el.style.touchAction = mode; } catch { /* ignore */ }
+  }
+
   down(e) {
     if (this.promo || e.button > 0) return;
     const sq = this.sqAt(e.clientX, e.clientY);
     if (!sq) return;
-    if (this.selected && this.legal.some((m) => m.to === sq)) { this.tryMove(this.selected, sq); return; } // tap-to-move
+    if (this.selected && this.legal.some((m) => m.to === sq)) {
+      this.tryMove(this.selected, sq);
+      return;
+    }
     if (this.canTouch(sq)) {
       // Chess.com: tap the same piece again to deselect
       if (this.selected === sq) {
@@ -151,14 +160,37 @@ export class Board {
       }
       this.select(sq); haptic('select');
       const p = this.pieces.get(sq);
-      if (p) { this.drag = { sq, el: p.el, sx: e.clientX, sy: e.clientY, moved: false }; }
-    } else if (this.selected) { this.deselect(); this.drawHighlights(); }
+      if (p) {
+        // mode null until we know drag vs vertical page scroll
+        this.drag = {
+          sq, el: p.el, sx: e.clientX, sy: e.clientY,
+          moved: false, mode: null, id: e.pointerId,
+        };
+      }
+    } else if (this.selected) {
+      this.deselect();
+      this.drawHighlights();
+    }
   }
   move(e) {
     const d = this.drag; if (!d) return;
     const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
-    if (!d.moved && Math.hypot(dx, dy) < 6) return;
-    if (!d.moved) { d.moved = true; d.el.classList.add('drag'); }
+    if (!d.mode) {
+      if (Math.hypot(dx, dy) < 10) return;
+      // Vertical intent → let the game screen scroll; do not wash the piece
+      if (Math.abs(dy) > Math.abs(dx) * 1.15) {
+        this.place(d.el, d.sq);
+        this.drag = null;
+        this.setBoardTouchAction('pan-y');
+        return;
+      }
+      d.mode = 'drag';
+      d.moved = true;
+      d.el.classList.add('drag');
+      this.setBoardTouchAction('none');
+      try { this.el.setPointerCapture(d.id); } catch { /* ignore */ }
+    }
+    if (d.mode !== 'drag') return;
     const b = this.el.getBoundingClientRect(), cell = b.width / 8;
     const { x, y } = this.xy(d.sq);
     d.el.style.transform = `translate(${(e.clientX - b.left) / cell * 100 - 50}%, ${(e.clientY - b.top) / cell * 100 - 60}%)`;
@@ -166,13 +198,23 @@ export class Board {
   }
   up(e) {
     const d = this.drag; if (!d) return;
-    this.drag = null; d.el.classList.remove('drag');
-    if (!d.moved) { this.place(d.el, d.sq); return; }
+    this.drag = null;
+    d.el.classList.remove('drag');
+    this.setBoardTouchAction('pan-y');
+    try { this.el.releasePointerCapture(d.id); } catch { /* ignore */ }
+    if (!d.moved || d.mode !== 'drag') { this.place(d.el, d.sq); return; }
     const to = this.sqAt(e.clientX, e.clientY);
     if (to && to !== d.sq && this.legal.some((m) => m.to === to)) this.tryMove(d.sq, to);
     else { this.place(d.el, d.sq); haptic('light'); }
   }
-  cancelDrag() { if (this.drag) { this.drag.el.classList.remove('drag'); this.place(this.drag.el, this.drag.sq); this.drag = null; } }
+  cancelDrag() {
+    if (!this.drag) return;
+    const d = this.drag;
+    d.el.classList.remove('drag');
+    this.place(d.el, d.sq);
+    this.drag = null;
+    this.setBoardTouchAction('pan-y');
+  }
 
   tryMove(from, to) {
     const cand = this.chess.moves({ square: from, verbose: true }).filter((m) => m.to === to);

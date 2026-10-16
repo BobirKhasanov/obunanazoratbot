@@ -429,7 +429,8 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .cap .cp { width: 16px; height: 16px; margin-left: -5px; }
 .capwrap em { font-style: normal; font-size: 12px; font-weight: 800; color: var(--muted); }
 .board-host { width: 100%; max-width: min(100%, calc(100dvh - 330px - var(--safe-t) - var(--safe-b))); margin: 0 auto; flex: none; }
-.board { position: relative; width: 100%; aspect-ratio: 1; border-radius: 16px; overflow: hidden; touch-action: none; user-select: none; box-shadow: 0 12px 34px rgba(0, 0, 0, 0.25); }
+/* pan-y: scroll the game screen over the board; JS switches to none only while dragging a piece */
+.board { position: relative; width: 100%; aspect-ratio: 1; border-radius: 16px; overflow: hidden; touch-action: pan-y; user-select: none; box-shadow: 0 12px 34px rgba(0, 0, 0, 0.25); }
 .squares { position: absolute; inset: 0; display: grid; grid-template: repeat(8, 1fr) / repeat(8, 1fr); }
 .squares i.lt { background: var(--sq-lt); } .squares i.dk { background: var(--sq-dk); }
 
@@ -463,23 +464,39 @@ html[data-view3d="1"] .squares i.dk {
     linear-gradient(145deg, rgba(255, 255, 255, 0.1) 0%, transparent 40%, rgba(0, 0, 0, 0.22) 100%),
     var(--sq-dk);
 }
+/* Standing 3D look: tilt pieces in perspective so they read as upright on the board */
+html[data-view3d="1"] .board .pieces {
+  perspective: 520px;
+  perspective-origin: 50% 80%;
+}
+html[data-view3d="1"] .board .piece .pc {
+  transform: rotateX(32deg) scale(0.94, 0.86);
+  transform-origin: 50% 92%;
+  filter: drop-shadow(0 5px 2px rgba(0, 0, 0, 0.42)) drop-shadow(0 1px 0 rgba(255, 255, 255, 0.12));
+}
+html[data-view3d="1"] .board .piece.drag .pc {
+  transform: rotateX(12deg) scale(1.06, 1);
+  filter: drop-shadow(0 12px 10px rgba(0, 0, 0, 0.5));
+}
 html[data-view3d="1"] .piece {
-  filter: drop-shadow(0 2px 1.5px rgba(0, 0, 0, 0.38)) drop-shadow(0 6px 5px rgba(0, 0, 0, 0.18));
+  filter: none;
 }
 html[data-view3d="1"] .piece.drag {
-  filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.45));
+  filter: none;
+  z-index: 6;
 }
 html[data-view3d="1"] .coords b {
   color: rgba(245, 230, 205, 0.72);
   font-weight: 700;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
 }
-/* Mini live boards: no wood frame / piece filters (many on screen) */
-html[data-view3d="1"] .live-mini-board .piece { filter: none; }
-html[data-view3d="1"] .live-mini-board .squares i.lt,
-html[data-view3d="1"] .live-mini-board .squares i.dk {
-  background: var(--sq-lt);
+/* Mini live boards: flat pieces (many on screen — no perspective cost) */
+html[data-view3d="1"] .live-mini-board .pieces { perspective: none; }
+html[data-view3d="1"] .live-mini-board .piece .pc {
+  transform: none;
+  filter: none;
 }
+html[data-view3d="1"] .live-mini-board .squares i.lt { background: var(--sq-lt); }
 html[data-view3d="1"] .live-mini-board .squares i.dk { background: var(--sq-dk); }
 /* Lite: never pay for filters / wood frame */
 html[data-perf="lite"] .board-host {
