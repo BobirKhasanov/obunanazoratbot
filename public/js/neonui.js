@@ -50,13 +50,12 @@ export function roundBtn(ic, label, onClick) {
 }
 
 /** Fallback hero when admins have no announcements. */
-export function heroBanner(onMore) {
+export function heroBanner() {
   return h('div.nx-hero',
     h('div.nx-hero-art', { style: { backgroundImage: 'url(/img/ui/hero.webp)' } }),
     h('div.nx-hero-txt',
       h('h2', t('hero_t1'), h('br'), h('span', t('hero_t2'))),
-      h('p', t('hero_sub')),
-      h('button.nx-hero-btn', { type: 'button', onclick: tap(onMore) }, t('hero_more'), icon('chevron', 14))));
+      h('p', t('hero_sub'))));
 }
 
 /** Big mode card with illustration (Home) or compact selectable card (O'ynash). */

@@ -2347,7 +2347,8 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 
 /* ----- hero / modes ----- */
 .nx-hero {
-  position: relative; overflow: hidden; min-height: 168px; border-radius: 22px; margin: 0 0 6px;
+  position: relative; overflow: hidden; min-height: 140px; border-radius: 22px; margin: 0 0 6px;
+  display: flex; align-items: center;
   background: linear-gradient(120deg, #0f1a2e 0%, #13284a 100%); border: 1px solid rgba(46, 139, 255, 0.22);
 }
 .nx-hero-art { position: absolute; inset: 0 0 0 38%; background: center right / cover no-repeat; }
@@ -2359,10 +2360,6 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 .nx-hero h2 { margin: 0; font-size: 20px; line-height: 1.2; font-weight: 800; letter-spacing: -0.02em; }
 .nx-hero h2 span { color: var(--blue); }
 .nx-hero p { margin: 0; font-size: 12px; color: #b8c3d6; font-weight: 600; line-height: 1.35; }
-.nx-hero-btn {
-  display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; padding: 9px 14px; border-radius: 12px;
-  background: var(--blue); color: #fff; border: 0; font-size: 13px; font-weight: 800;
-}
 .nx-mode-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .nx-mode-row.compact { margin-bottom: 14px; }
 .nx-mode {

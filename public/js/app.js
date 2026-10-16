@@ -619,7 +619,7 @@ refreshers.play = async function renderPlay() {
       onGems: openGemsPage,
     }),
     annHost,
-    hasAnn ? null : heroBanner(() => goPlayHub('online')),
+    hasAnn ? null : heroBanner(),
     sectionHead(t('home_modes'), () => goPlayHub(), t('see_all')),
     h('div.nx-mode-row',
       modeCard({
