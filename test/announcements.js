@@ -65,7 +65,9 @@ assert.ok(!/prev === TABS\.indexOf\('play'\)\)\s*\{\s*stopAnnouncementsCarousel/
 assert.ok(app.includes('time-option') && app.includes("classList.toggle('selected'"), 'time pick in-place (no remount)');
 assert.ok(ann.includes('prepareAnnouncements') && ann.includes('paintAnnouncementsCarousel'), 'carousel prepare + sync paint');
 assert.ok(app.includes('prepareAnnouncements') && app.includes('paintAnnouncementsCarousel'), 'home prepares carousels before mount');
-assert.ok(ann.includes('AbortController') && ann.includes('isLite()'), 'Android lite media fetch timeout');
+assert.ok(ann.includes('AbortController') && ann.includes('mediaFetchTimeoutMs'), 'Android media fetch timeout');
+assert.ok(ann.includes('setPointerCapture') && ann.includes('releasePointerCapture') && /axis === 'v'/.test(ann), 'carousel releases vertical to page scroll');
+assert.ok(/ann-carousel[\s\S]{0,220}touch-action:\s*pan-y/.test(css), 'carousel allows vertical page scroll');
 assert.ok(i18n.includes('ann_title_section:'));
 
 // Neon-only media path (no Supabase Storage)

@@ -41,12 +41,13 @@ function detect() {
   })();
 
   // Lite ONLY on Android. iOS never gets lite — even with reduced-motion.
+  // Mid/unknown Android → lite (HIGH stays full). Caps cores/mem alone miss many 8-core phones.
   let lite = false;
   if (isAndroid && !isIOS) {
     if (reducedMotion) lite = true;
-    else if (performanceClass === 'LOW') lite = true;
-    else if (performanceClass === 'AVERAGE' && ((mem != null && mem <= 4) || cores <= 4)) lite = true;
-    else if (!performanceClass && ((mem != null && mem <= 4) || cores <= 4)) lite = true;
+    else if (performanceClass === 'HIGH') lite = false;
+    else if (performanceClass === 'LOW' || performanceClass === 'AVERAGE') lite = true;
+    else lite = true; // unknown Android → lite (safer default)
   }
 
   cached = {
@@ -124,7 +125,18 @@ export function carouselDwellMs() {
 
 /** Cap carousel slides (and media fetches) on weak Android. */
 export function carouselMaxSlides() {
-  return detect().lite ? 3 : Infinity;
+  const p = detect();
+  if (p.lite) return 2;
+  if (p.isAndroid) return 4;
+  return Infinity;
+}
+
+/** Per-image media fetch timeout (ms) — keeps boot splash from hanging. */
+export function mediaFetchTimeoutMs() {
+  const p = detect();
+  if (p.lite) return 1400;
+  if (p.isAndroid) return 2200;
+  return 4500;
 }
 
 /** How many mini-boards to mount on a live round (rest = lightweight placeholder). */

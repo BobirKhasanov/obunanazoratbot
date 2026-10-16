@@ -1,6 +1,6 @@
 // Main app: boot, swipe pager, pages, deep links.
 import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, toggle, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, shareUrl, copyText } from './ui.js';
-import { homeTabRefreshMs, softPollMs } from './perf.js';
+import { homeTabRefreshMs, softPollMs, isLite, isAndroid } from './perf.js';
 import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
@@ -502,12 +502,23 @@ const resultText = (g) => {
 let playSnap = '';
 let homePeopleTab = 'live'; // 'live' | 'friends'
 refreshers.play = async function renderPlay() {
+  const playElEarly = page('play');
+  // First home paint (under splash): skip friends wait — biggest Android open win
+  const firstPaint = !(playElEarly && playElEarly.classList.contains('seen') && playElEarly.childElementCount);
   const [l, , anns, puzzleAnns] = await Promise.all([
     loadLobby(),
-    loadFriends().catch(() => { state.friends = state.friends || []; }),
+    firstPaint
+      ? Promise.resolve(state.friends || [])
+      : loadFriends().catch(() => { state.friends = state.friends || []; }),
     loadAnnouncements(api, 'home'),
     loadAnnouncements(api, 'puzzle'),
   ]);
+  if (firstPaint) {
+    // Hydrate friends after splash dismisses (does not block "O'yin yuklanmoqda")
+    loadFriends()
+      .then(() => { if (state.tab === 'play') { playSnap = ''; refresh('play'); } })
+      .catch(() => {});
+  }
   const saved = savedAiGame();
   // Full lobby list (free + in-game), same people as the Online sheet
   const onlinePlayers = l.online || [];
@@ -527,7 +538,7 @@ refreshers.play = async function renderPlay() {
     ann: (anns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
     pz: (puzzleAnns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
   });
-  const playEl = page('play');
+  const playEl = playElEarly || page('play');
   if (snap === playSnap && playEl && playEl.classList.contains('seen') && playEl.childElementCount) {
     const pill = playEl.querySelector('.online-heading .livepill');
     if (pill) pill.replaceChildren(h('i.dot'), t('online_now', { n: l.onlineCount }));
@@ -565,9 +576,13 @@ refreshers.play = async function renderPlay() {
     }
   };
   const annOpts = { botUsername: state.meta?.botUsername, userId: state.me?.id, onPage };
+  // Android/lite first paint: home board waits for media; puzzle board paints without media then hydrates
+  const deferPzMedia = firstPaint && (isLite() || isAndroid());
   const [prepAnn, prepPz] = await Promise.all([
     (!reuseAnn && anns && anns.length) ? prepareAnnouncements(anns) : Promise.resolve(null),
-    (!reusePz && puzzleAnns && puzzleAnns.length) ? prepareAnnouncements(puzzleAnns) : Promise.resolve(null),
+    (!reusePz && puzzleAnns && puzzleAnns.length)
+      ? prepareAnnouncements(puzzleAnns, { media: !deferPzMedia })
+      : Promise.resolve(null),
   ]);
 
   const controls = [
@@ -721,6 +736,14 @@ refreshers.play = async function renderPlay() {
   if (state.tab === 'play') {
     if (reuseAnn) resumeAnnouncementsHost(annHost);
     if (reusePz) resumeAnnouncementsHost(puzzleHost);
+  }
+  // Finish puzzle board media after first paint (keeps splash short on Android)
+  if (deferPzMedia && puzzleAnns && puzzleAnns.length && puzzleHost.isConnected) {
+    prepareAnnouncements(puzzleAnns).then((prep) => {
+      if (!puzzleHost.isConnected || !prep || !prep.items.length) return;
+      puzzleHost.dataset.annKey = pzKey;
+      paintAnnouncementsCarousel(puzzleHost, prep, { ...annOpts, delayMs: CAROUSEL_STAGGER_MS });
+    }).catch(() => {});
   }
 };
 refreshers.live = async function renderLive() {

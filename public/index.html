@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en" data-theme="dark" data-asset="20261016af" data-pieces="neo" data-board="green">
+<html lang="en" data-theme="dark" data-asset="20261016ag" data-pieces="neo" data-board="green">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#111827">
   <title>Chess</title>
-  <link rel="stylesheet" href="/styles.css?v=20261016af">
+  <link rel="stylesheet" href="/styles.css?v=20261016ag">
   <style>
     /* Inline boot splash — always visible until JS reveals gate/app (never a blank black WebView) */
     html, body { margin: 0; min-height: 100%; min-height: 100dvh; background: radial-gradient(ellipse at 50% 42%, #1a2740 0%, #111827 62%, #0b1220 100%); color: var(--text, #fff); }
@@ -92,6 +92,10 @@
       0% { transform: translateX(-110%); }
       100% { transform: translateX(260%); }
     }
+    /* Android: drop boot orbit/glow immediately (before modules) */
+    html[data-android="1"] #boot .boot-glow,
+    html[data-android="1"] #boot .boot-orbit,
+    html[data-android="1"] #boot .boot-ic { animation: none !important; }
   </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script>
@@ -99,6 +103,11 @@
     (function () {
       try {
         var tw = window.Telegram && window.Telegram.WebApp;
+        var ua = navigator.userAgent || '';
+        var plat = String((tw && tw.platform) || '').toLowerCase();
+        if (plat === 'android' || /Android/i.test(ua)) {
+          document.documentElement.setAttribute('data-android', '1');
+        }
         if (!tw) return;
         tw.ready();
         try { tw.expand(); } catch (e) {}
@@ -148,7 +157,7 @@
     <div id="toast" role="status"></div>
   </main>
   <!-- Light entry: /me + hide splash, then dynamic-import heavy app.js -->
-  <script type="module" src="/js/entry.js?v=20261016af"></script>
+  <script type="module" src="/js/entry.js?v=20261016ag"></script>
   <script>
     (function () {
       var DEFAULTS = {

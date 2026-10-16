@@ -1,7 +1,7 @@
 // Home announcement carousel (admin-managed banners).
 import { h, haptic, getInitData, shareUrl, toast } from './ui.js';
 import { t } from './i18n.js';
-import { carouselDwellMs, carouselMaxSlides, isLite } from './perf.js';
+import { carouselDwellMs, carouselMaxSlides, mediaFetchTimeoutMs, isLite } from './perf.js';
 
 const FONT_CSS = {
   system: 'inherit',
@@ -84,8 +84,7 @@ export function resumeAnnouncementsHost(host) {
 }
 
 async function resolveMedia(items, blobs) {
-  // Lite Android: short timeout so one slow image cannot stall home open
-  const timeoutMs = isLite() ? 2200 : 5000;
+  const timeoutMs = mediaFetchTimeoutMs();
   return Promise.all(items.map(async (a) => {
     if (!a.mediaId) return { ...a, _src: null };
     const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -110,12 +109,18 @@ async function resolveMedia(items, blobs) {
 
 /**
  * Prefetch + cap slides before DOM mount so home + carousels can paint together.
- * @returns {{ items: object[], blobs: string[] }}
+ * @param {object[]} items
+ * @param {{ media?: boolean }} [opts] media=false skips blob fetch (fast first paint)
+ * @returns {Promise<{ items: object[], blobs: string[] }>}
  */
-export async function prepareAnnouncements(items) {
+export async function prepareAnnouncements(items, opts = {}) {
   if (!items || !items.length) return { items: [], blobs: [] };
   const maxSlides = carouselMaxSlides();
   const capped = Number.isFinite(maxSlides) ? items.slice(0, maxSlides) : items;
+  const wantMedia = opts.media !== false;
+  if (!wantMedia) {
+    return { items: capped.map((a) => ({ ...a, _src: null })), blobs: [] };
+  }
   const blobs = [];
   const resolved = await resolveMedia(capped, blobs);
   return { items: resolved, blobs };
@@ -186,10 +191,14 @@ function slide(a, opts) {
 
 function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {
   let drag = null;
+  const releaseCap = (id) => {
+    try { if (host.hasPointerCapture?.(id)) host.releasePointerCapture(id); } catch { /* ignore */ }
+  };
   const onDown = (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     stopAuto && stopAuto();
     host._annSwiped = false;
+    // Do NOT capture yet — vertical page scroll must keep ownership until horizontal intent is clear
     drag = {
       x0: e.clientX,
       y0: e.clientY,
@@ -197,9 +206,8 @@ function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {
       axis: null,
       base: -go.idx * host.clientWidth,
       id: e.pointerId,
+      captured: false,
     };
-    track.classList.add('dragging');
-    try { host.setPointerCapture(e.pointerId); } catch { /* ignore */ }
   };
   const onMove = (e) => {
     if (!drag || e.pointerId !== drag.id) return;
@@ -207,13 +215,19 @@ function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {
     const dy = e.clientY - drag.y0;
     if (!drag.axis) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-      drag.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'h' : 'v';
+      // Prefer vertical page scroll when motion is mostly vertical
+      drag.axis = Math.abs(dx) > Math.abs(dy) * 1.15 ? 'h' : 'v';
       if (drag.axis === 'v') {
-        track.classList.remove('dragging');
+        releaseCap(drag.id);
         drag = null;
         armAuto && armAuto();
         return;
       }
+      track.classList.add('dragging');
+      try {
+        host.setPointerCapture(e.pointerId);
+        drag.captured = true;
+      } catch { /* ignore */ }
     }
     if (drag.axis !== 'h') return;
     e.preventDefault();
@@ -228,14 +242,16 @@ function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {
     if (!drag || (e.pointerId != null && e.pointerId !== drag.id)) return;
     const dx = drag.dx;
     const wasH = drag.axis === 'h';
+    const id = drag.id;
     track.classList.remove('dragging');
+    releaseCap(id);
     drag = null;
     if (wasH && Math.abs(dx) >= SWIPE_PX) {
       host._annSwiped = true;
       haptic('select');
       go(go.idx + (dx < 0 ? 1 : -1));
       setTimeout(() => { host._annSwiped = false; }, 280);
-    } else {
+    } else if (wasH) {
       go(go.idx); // snap back
     }
     armAuto && armAuto();

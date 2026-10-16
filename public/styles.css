@@ -1327,7 +1327,10 @@ html[data-perf="lite"] .ann-track.lite {
 html[data-perf="lite"] .invite-pop .pbar-fill,
 html[data-perf="lite"] #boot .boot-glow,
 html[data-perf="lite"] #boot .boot-orbit,
-html[data-perf="lite"] #boot .boot-ic {
+html[data-perf="lite"] #boot .boot-ic,
+html[data-android="1"] #boot .boot-glow,
+html[data-android="1"] #boot .boot-orbit,
+html[data-android="1"] #boot .boot-ic {
   animation: none !important;
 }
 html[data-perf="lite"] .live-mini-ph {
@@ -1343,7 +1346,8 @@ html[data-perf="lite"] .live-mini-ph {
 /* ---------- home announcements carousel ---------- */
 .ann-carousel {
   position: relative; width: 100%; margin: 0 0 14px; border-radius: 22px; overflow: hidden;
-  min-height: 0; height: auto; touch-action: pan-x; contain: layout paint; user-select: none;
+  /* pan-y so vertical page scroll works; horizontal swipe handled in JS after intent */
+  min-height: 0; height: auto; touch-action: pan-y; contain: layout paint; user-select: none;
   -webkit-user-select: none; background: #0b1220;
 }
 /* Fixed box so media never grows the page / clips outside the rounded carousel */
