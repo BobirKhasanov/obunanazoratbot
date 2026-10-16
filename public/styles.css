@@ -450,9 +450,9 @@ html[data-perf="lite"] .piece { filter: none !important; }
 .hl u.check { background: radial-gradient(circle, rgba(248, 113, 113, 0.95) 0%, rgba(248, 113, 113, 0) 72%); }
 .hl u.mv::after { content: ""; position: absolute; inset: 36%; border-radius: 50%; background: rgba(20, 85, 30, 0.35); }
 .hl u.cap::after { content: ""; position: absolute; inset: 6%; border-radius: 50%; border: 5px solid rgba(20, 85, 30, 0.35); }
-/* Chess.com-sized pieces: fill most of the square, perfectly centered */
+/* Chess.com Neo-sized pieces: ~90% of the square, centered */
 .piece {
-  padding: 2.5%;
+  padding: 1.5%;
   display: block;
   transition: transform 0.28s var(--ease), opacity 0.22s var(--ease);
   will-change: auto;
@@ -466,10 +466,21 @@ html[data-perf="lite"] .piece { filter: none !important; }
   display: block;
   overflow: visible;
   margin: 0;
+  filter: drop-shadow(0 1px 0.5px rgba(0, 0, 0, 0.18));
 }
-.pc.w { fill: #f0f0f0; stroke: #1a1a1a; color: #1a1a1a; }
-.pc.b { fill: #2c2c2c; stroke: #f0f0f0; color: #f0f0f0; }
-.cap .pc.b { stroke: #f0f0f0; stroke-width: 2.2; }
+html[data-perf="lite"] .pc { filter: none; }
+.pc.w { fill: #f8f8f8; stroke: #464646; color: #464646; }
+.pc.b { fill: #565352; stroke: #262626; color: #777474; }
+/* Neo paints fill via inline gradient — don't flatten it from CSS */
+:root[data-pieces="neo"] .pc.w,
+:root[data-pieces="neo"] .pc.b,
+.style-opt[data-pieces="neo"] .pc.w,
+.style-opt[data-pieces="neo"] .pc.b,
+.style-preview[data-pieces="neo"] .pc.w,
+.style-preview[data-pieces="neo"] .pc.b {
+  fill: unset; stroke: unset;
+}
+.cap .pc.b { stroke: #262626; stroke-width: 2.2; }
 
 /* Piece set polish — .style-opt/.style-preview beat :root so each swatch shows its own set */
 :root[data-pieces="outline"] .pc.w { fill: rgba(248, 250, 252, 0.08); stroke: #e2e8f0; }
@@ -481,15 +492,15 @@ html[data-perf="lite"] .piece { filter: none !important; }
 :root[data-pieces="classic"] .pc.w,
 :root[data-pieces="neo"] .pc.w,
 :root[data-pieces="staunton"] .pc.w,
-:root[data-pieces="studio"] .pc.w { fill: #f0f0f0; stroke: #1a1a1a; color: #1a1a1a; }
+:root[data-pieces="studio"] .pc.w { fill: #f8f8f8; stroke: #464646; color: #464646; }
 :root[data-pieces="classic"] .pc.b,
 :root[data-pieces="neo"] .pc.b,
 :root[data-pieces="staunton"] .pc.b,
-:root[data-pieces="studio"] .pc.b { fill: #2c2c2c; stroke: #f0f0f0; color: #f0f0f0; }
+:root[data-pieces="studio"] .pc.b { fill: #565352; stroke: #262626; color: #777474; }
 :root[data-pieces="classic"] .pc.b circle[fill="currentColor"],
 :root[data-pieces="neo"] .pc.b circle[fill="currentColor"],
 :root[data-pieces="staunton"] .pc.b circle[fill="currentColor"],
-:root[data-pieces="studio"] .pc.b circle[fill="currentColor"] { fill: #f0f0f0; }
+:root[data-pieces="studio"] .pc.b circle[fill="currentColor"] { fill: #777474; }
 
 .style-opt[data-pieces="outline"] .pc.w,
 .style-preview[data-pieces="outline"] .pc.w { fill: rgba(248, 250, 252, 0.12); stroke: #f8fafc; }
@@ -504,7 +515,7 @@ html[data-perf="lite"] .piece { filter: none !important; }
 .style-opt[data-pieces="staunton"] .pc.w,
 .style-preview[data-pieces="staunton"] .pc.w,
 .style-opt[data-pieces="studio"] .pc.w,
-.style-preview[data-pieces="studio"] .pc.w { fill: #f0f0f0; stroke: #1a1a1a; color: #1a1a1a; }
+.style-preview[data-pieces="studio"] .pc.w { fill: #f8f8f8; stroke: #464646; color: #464646; }
 .style-opt[data-pieces="classic"] .pc.b,
 .style-preview[data-pieces="classic"] .pc.b,
 .style-opt[data-pieces="neo"] .pc.b,
@@ -512,7 +523,7 @@ html[data-perf="lite"] .piece { filter: none !important; }
 .style-opt[data-pieces="staunton"] .pc.b,
 .style-preview[data-pieces="staunton"] .pc.b,
 .style-opt[data-pieces="studio"] .pc.b,
-.style-preview[data-pieces="studio"] .pc.b { fill: #2c2c2c; stroke: #f0f0f0; color: #f0f0f0; }
+.style-preview[data-pieces="studio"] .pc.b { fill: #565352; stroke: #262626; color: #777474; }
 .style-opt[data-pieces="classic"] .pc.b circle[fill="currentColor"],
 .style-preview[data-pieces="classic"] .pc.b circle[fill="currentColor"],
 .style-opt[data-pieces="neo"] .pc.b circle[fill="currentColor"],
@@ -520,7 +531,7 @@ html[data-perf="lite"] .piece { filter: none !important; }
 .style-opt[data-pieces="staunton"] .pc.b circle[fill="currentColor"],
 .style-preview[data-pieces="staunton"] .pc.b circle[fill="currentColor"],
 .style-opt[data-pieces="studio"] .pc.b circle[fill="currentColor"],
-.style-preview[data-pieces="studio"] .pc.b circle[fill="currentColor"] { fill: #f0f0f0; }
+.style-preview[data-pieces="studio"] .pc.b circle[fill="currentColor"] { fill: #777474; }
 :root[data-theme="light"] .style-opt[data-pieces="outline"] .pc.w,
 :root[data-theme="light"] .style-preview[data-pieces="outline"] .pc.w { fill: rgba(15, 23, 42, 0.05); stroke: #0f172a; }
 :root[data-theme="light"] .style-opt[data-pieces="outline"] .pc.b,

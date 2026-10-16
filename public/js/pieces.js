@@ -1,10 +1,9 @@
 // Chess piece SVGs. Style set via <html data-pieces="…"> (outline | classic | neo | staunton | studio).
-// Default "neo" matches Chess.com-style flat pieces: large, outlined, centered in the square.
+// Default "neo" matches Chess.com Neo: soft shaded fills, dark outlines, large centered silhouettes.
 export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio'];
 export const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio'];
 export const BOARD_SWATCH = {
   classic: { lt: '#b9c4d6', dk: '#5f7391' },
-  // Chess.com green board
   green: { lt: '#eeeed2', dk: '#769656' },
   wood: { lt: '#f0d9b5', dk: '#b58863' },
   blue: { lt: '#cdd7e8', dk: '#5b7fa6' },
@@ -23,14 +22,15 @@ const OUTLINE = {
 };
 
 const CLASSIC = OUTLINE;
-// Chess.com-like neo silhouettes (fill the 45×45 viewBox)
+
+// Neo silhouettes — chunky Chess.com-like proportions in a 45×45 box
 const NEO = {
-  p: '<path d="M22.5 9a5.8 5.8 0 0 0-3.4 10.2c-3.4 1.2-5.6 4.2-5.6 8.3h18c0-4.1-2.2-7.1-5.6-8.3A5.8 5.8 0 0 0 22.5 9z"/><path d="M11 32.5h23v4H11z"/>',
-  r: '<path d="M9.5 8.5h4.5v3.5h4V8.5h9v3.5h4V8.5H36v8.5l-3.5 3v10.5l3.5 2.5v3.5H9.5v-3.5l3.5-2.5V20l-3.5-3z"/><path d="M13 19.5h19"/>',
-  n: '<path d="M12.5 36.5c0-10 3.5-12 7-16.5-2.4 0-3.5 1.3-5.6 3.4l-3.4-2.3C14 14.5 18.5 8 26 8c6.5 0 11 5.5 11 14.5V36.5z"/><circle cx="21.5" cy="14" r="1.15" fill="currentColor" stroke="none"/>',
-  b: '<path d="M22.5 7a3 3 0 0 1 3 3c0 1.15-.7 2.1-1.6 2.6C29 15 31.5 18.5 31.5 23c0 3.4-1.7 5.6-3.4 7.2H16.4c-1.7-1.6-3.4-3.8-3.4-7.2 0-4.5 2.5-8 7.1-10.4-.9-.5-1.6-1.45-1.6-2.6a3 3 0 0 1 3-3z"/><path d="M12 36.5c2.2-1.6 4.5-2.2 10.5-2.2s8.3.6 10.5 2.2v1.5H12z"/><path d="M22.5 16v7M19 19.5h7"/>',
-  q: '<circle cx="8.5" cy="13" r="2.5"/><circle cx="15.5" cy="8" r="2.5"/><circle cx="22.5" cy="6.5" r="2.5"/><circle cx="29.5" cy="8" r="2.5"/><circle cx="36.5" cy="13" r="2.5"/><path d="M8.5 15.5l4.5 14.5h19l4.5-14.5-7.5 8.2-2.8-10.5-4.2 10.5-4.2-10.5-2.8 10.5z"/><path d="M11 33h23v4H11z"/>',
-  k: '<path d="M22.5 5v8M18.5 8.5h8"/><path d="M22.5 12c-5.5 0-10 3.4-10 9 0 3.4 2.2 5.5 4.5 7.2V32h11v-3.8c2.3-1.7 4.5-3.8 4.5-7.2 0-5.6-4.5-9-10-9z"/><path d="M11 33.5h23v3.5H11z"/>',
+  p: '<path d="M22.5 9.2c-3.1 0-5.5 2.5-5.5 5.6 0 1.7.8 3.2 2 4.2-3.6 1.4-5.9 4.5-5.9 8.5h18.8c0-4-2.3-7.1-5.9-8.5 1.2-1 2-2.5 2-4.2 0-3.1-2.4-5.6-5.5-5.6z"/><path d="M12.2 31.8c1.4-1.1 3.6-1.7 10.3-1.7s8.9.6 10.3 1.7v1.2H12.2z"/><path d="M10.8 34.6h23.4v4.2c0 .6-.5 1.1-1.1 1.1H11.9c-.6 0-1.1-.5-1.1-1.1z"/>',
+  r: '<path d="M11.2 8.2h4.4v4H19v-4h7v4h3.4v-4h4.4v8.4l-2.8 2.6v11.2l2.8 2.4v4.2H11.2v-4.2l2.8-2.4V19.2l-2.8-2.6z"/><path d="M14.2 19.4h16.6"/><path d="M9.4 37.2h26.2v2.6H9.4z"/>',
+  n: '<path d="M12.4 39.8c-.2-9.8 2.8-13.2 7.2-18.2-2.6.1-4 1.5-6.2 3.8l-3.6-2.6C13.2 15.2 18.2 8.4 26.2 8.4c6.8 0 11.4 5.4 11.4 14.2v17.2z"/><path d="M15.6 12.6c1.4-2.2 3.4-3.6 6.2-3.8"/><circle cx="21.2" cy="14.4" r="1.2" fill="currentColor" stroke="none"/><path d="M10.8 37.4h25.2v2.4H10.8z"/>',
+  b: '<path d="M22.5 6.4c1.5 0 2.7 1.2 2.7 2.7 0 1-.5 1.8-1.3 2.3 4.6 2.2 7.6 6.2 7.6 11.2 0 3.6-1.8 6-3.6 7.8h-10.8c-1.8-1.8-3.6-4.2-3.6-7.8 0-5 3-9 7.6-11.2-.8-.5-1.3-1.3-1.3-2.3 0-1.5 1.2-2.7 2.7-2.7z"/><path d="M22.5 15.6v7.4M19 19.3h7"/><path d="M11.2 34.8c2.2-1.6 4.8-2.2 11.3-2.2s9.1.6 11.3 2.2v1.4H11.2z"/><path d="M9.4 37.6h26.2v2.2H9.4z"/>',
+  q: '<circle cx="8.4" cy="13.2" r="2.55"/><circle cx="15.4" cy="8" r="2.55"/><circle cx="22.5" cy="6.2" r="2.55"/><circle cx="29.6" cy="8" r="2.55"/><circle cx="36.6" cy="13.2" r="2.55"/><path d="M8.4 15.6l4.4 14.8h20.4l4.4-14.8-7.6 8.4-2.8-10.6-4.3 10.6-4.3-10.6-2.8 10.6z"/><path d="M12.2 33.4h20.6v1.4H12.2z"/><path d="M10.2 36.2h24.6v3.6H10.2z"/>',
+  k: '<path d="M22.5 4.2v8.2M18.4 7.8h8.2"/><path d="M22.5 12.2c-5.8 0-10.4 3.6-10.4 9.4 0 3.6 2.4 5.8 4.8 7.4V32h11.2v-3c2.4-1.6 4.8-3.8 4.8-7.4 0-5.8-4.6-9.4-10.4-9.4z"/><path d="M12.2 33.6h20.6v1.3H12.2z"/><path d="M10 36.4h25v3.4H10z"/>',
 };
 
 const STAUNTON = {
@@ -47,7 +47,7 @@ const SETS = { outline: OUTLINE, classic: CLASSIC, neo: NEO, staunton: STAUNTON,
 const STROKE = {
   outline: '2.35',
   classic: '1.85',
-  neo: '1.9',
+  neo: '1.65',
   staunton: '1.55',
   studio: '1.55',
 };
@@ -63,14 +63,20 @@ export function clearPieceCache() {
   for (const k of Object.keys(cache)) delete cache[k];
 }
 
-/** Chess.com-style neo: solid fill + strong outline (no tiny extruded layers). */
+/** Chess.com Neo palette: soft face gradient + strong outline. */
 function neoSvg(colour, type, shape, sw) {
+  const gid = `neo-${colour}${type}`;
   const body = `stroke-linejoin="round" stroke-linecap="round" stroke-width="${sw}"`;
-  const fill = colour === 'w' ? '#f0f0f0' : '#2c2c2c';
-  const stroke = colour === 'w' ? '#1a1a1a' : '#f0f0f0';
-  const eye = colour === 'w' ? '#1a1a1a' : '#f0f0f0';
-  const shaped = shape.replace(/fill="currentColor"/g, `fill="${eye}"`);
-  return `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} fill="${fill}" stroke="${stroke}" aria-hidden="true">${shaped}</svg>`;
+  const isW = colour === 'w';
+  // Chess.com Neo palette
+  const stroke = isW ? '#464646' : '#262626';
+  const detail = isW ? '#464646' : '#777474';
+  const defs = isW
+    ? `<linearGradient id="${gid}" x1="0.18" y1="0.05" x2="0.88" y2="0.95"><stop offset="0%" stop-color="#ffffff"/><stop offset="42%" stop-color="#f8f8f8"/><stop offset="100%" stop-color="#d3d3d3"/></linearGradient>`
+    : `<linearGradient id="${gid}" x1="0.18" y1="0.05" x2="0.88" y2="0.95"><stop offset="0%" stop-color="#777474"/><stop offset="38%" stop-color="#565352"/><stop offset="100%" stop-color="#454242"/></linearGradient>`;
+  const shaped = shape.replace(/fill="currentColor"/g, `style="fill:${detail};stroke:none"`);
+  // Inline style beats stylesheet .pc fill so Neo gradients actually show
+  return `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} color="${detail}" aria-hidden="true"><defs>${defs}</defs><g style="fill:url(#${gid});stroke:${stroke}">${shaped}</g></svg>`;
 }
 
 /** SVG markup for a piece: colour 'w'|'b', type 'pnbrqk'. Optional setOverride for style pickers. */
@@ -84,7 +90,6 @@ export function pieceSvg(colour, type, setOverride) {
   const shape = (SETS[set] || OUTLINE)[type] || OUTLINE.p;
 
   if (set === 'neo' || set === 'classic' || set === 'studio' || set === 'staunton') {
-    // Same Chess.com-like rendering for the common sets (large, readable, centered)
     cache[key] = neoSvg(colour, type, shape, sw);
   } else {
     cache[key] = `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} aria-hidden="true">${shape}</svg>`;

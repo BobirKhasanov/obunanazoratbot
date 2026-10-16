@@ -14,11 +14,11 @@ const perf = fs.readFileSync(path.join(__dirname, '../public/js/perf.js'), 'utf8
 assert.ok(server.includes("const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio']"));
 assert.ok(server.includes("const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio']"));
 assert.ok(pieces.includes("export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio']"));
-assert.ok(pieces.includes('neoSvg') && pieces.includes('#f0f0f0') && pieces.includes('#2c2c2c'), 'Chess.com-style neo fills');
+assert.ok(pieces.includes('neoSvg') && pieces.includes('#f8f8f8') && pieces.includes('#565352') && pieces.includes('linearGradient') && pieces.includes('neo-'), 'Chess.com Neo palette + gradients');
 assert.ok(!pieces.includes('extruded3dSvg') && !pieces.includes('useExtruded3d'), 'no extruded 3D pieces (reverted)');
 assert.ok(css.includes('#eeeed2') && css.includes('#769656'), 'Chess.com green board colors');
 assert.ok(!/board-host\s*\{[^}]*padding:\s*5\.2%/.test(css), 'no wood frame padding on board-host');
-assert.ok(/\.piece\s*\{[^}]*padding:\s*2\.5%/.test(css), 'pieces fill the square like Chess.com');
+assert.ok(/\.piece\s*\{[^}]*padding:\s*1\.5%/.test(css), 'pieces fill the square like Chess.com');
 assert.ok(perf.includes('dataset.view3d'), 'perf still exposes view3d flag');
 
 for (const set of PIECE_SETS) {
