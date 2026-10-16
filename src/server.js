@@ -2140,14 +2140,14 @@ api.get('/lobby', wrap(async (req, res) => {
 
   // Shared presence: present_until is refreshed on every API call and cleared on Mini App close / WS leave.
   const rows = await db.prepare(`
-    SELECT id, first_name, last_name, discoverable, premium, premium_until, avatar_key
+    SELECT id, first_name, last_name, discoverable, premium, premium_until, avatar_key, elo
     FROM users
     WHERE blocked = 0 AND id != ?
       AND present_until > now()
       AND id NOT IN (SELECT blocked_id FROM user_blocks WHERE user_id = ?)
       AND id NOT IN (SELECT user_id FROM user_blocks WHERE blocked_id = ?)
     ORDER BY present_until DESC
-    LIMIT 40
+  LIMIT 40
   `).all(uid, uid, uid);
   // Drop ghost rows: present_until alone is not enough after a closed Mini App (WS/REST must still be live).
   const online = rows
@@ -2157,6 +2157,7 @@ api.get('/lobby', wrap(async (req, res) => {
       premium: isPremiumActive(r), discoverable: !!r.discoverable || friendIds.has(r.id),
       invited: inviteGameByUser.has(r.id), inviteGameId: inviteGameByUser.get(r.id) || null,
       avatarKey: r.avatar_key || null,
+      elo: Number(r.elo || DEFAULT_ELO),
     }))
     .sort((a, b) => (b.friend - a.friend) || (a.inGame - b.inGame) || a.name.localeCompare(b.name));
 
@@ -2906,7 +2907,7 @@ api.post('/chat/global', wrap(async (req, res) => {
 api.get('/friends', wrap(async (req, res) => {
   const uid = req.user.id;
   const rows = await db.prepare(`
-    SELECT u.id, u.first_name, u.premium, u.premium_until, u.present_until, u.avatar_key
+    SELECT u.id, u.first_name, u.premium, u.premium_until, u.present_until, u.avatar_key, u.elo
     FROM friends f JOIN users u ON u.id = f.friend_id WHERE f.user_id = ? ORDER BY u.first_name
   `).all(uid);
   let busy;
@@ -2927,6 +2928,7 @@ api.get('/friends', wrap(async (req, res) => {
       premium: isPremiumActive(r),
       invited: inviteGameByUser.has(r.id), inviteGameId: inviteGameByUser.get(r.id) || null,
       avatarKey: r.avatar_key || null,
+      elo: Number(r.elo || DEFAULT_ELO),
     })).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name)),
   });
 }));

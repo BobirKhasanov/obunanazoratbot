@@ -17,9 +17,9 @@ function hideTgBack() {
   try { if (tg && tg.BackButton) tg.BackButton.hide(); } catch { /* ignore */ }
 }
 
-/** @typedef {'bot'|'intl'} LiveSection */
-/** @type {LiveSection} */
-let section = 'bot';
+/** @typedef {'players'|'live'|'tournaments'} OnlineMainTab */
+/** @type {OnlineMainTab} */
+let mainTab = 'players';
 /** Navigation inside Halqaro: list → tour → round → game */
 let nav = { view: 'list' };
 let pollTimer = null;
@@ -63,9 +63,9 @@ function bindTap(el, fn) {
   el.addEventListener('click', fire);
 }
 
-function setSection(s) {
-  section = s;
-  if (s === 'bot') nav = { view: 'list' };
+function setMainTab(tab) {
+  mainTab = tab;
+  if (tab !== 'tournaments') nav = { view: 'list' };
 }
 
 function backIntl() {
@@ -156,13 +156,35 @@ function startsLabel(ts) {
   return t('starts_at', { t: `${hh}:${mm}` });
 }
 
-function tabsEl(onRefresh) {
-  return pillBar(
-    [['bot', t('live_tab_bot')], ['intl', t('live_tab_intl')]],
-    section,
-    (s) => { setSection(s); onRefresh(); },
-    { className: 'rank-tabs live-tabs' },
-  );
+function onlineTabsEl(onRefresh) {
+  const items = [
+    ['players', t('online_tab_players')],
+    ['live', t('online_tab_live')],
+    ['tournaments', t('online_tab_tours')],
+  ];
+  return h('div.online-tabs', { role: 'tablist' },
+    ...items.map(([id, label]) => h('button.online-tab' + (mainTab === id ? '.on' : ''), {
+      type: 'button',
+      role: 'tab',
+      'aria-selected': mainTab === id ? 'true' : 'false',
+      onclick: () => {
+        if (mainTab === id) return;
+        haptic('select');
+        setMainTab(id);
+        onRefresh();
+      },
+    }, label)));
+}
+
+function onlinePageHead(onRefresh, extraRight) {
+  return [
+    h('div.online-head',
+      h('div.online-head-text',
+        h('h1', t('live_title')),
+        h('p.muted', t('online_sub'))),
+      extraRight || null),
+    onlineTabsEl(onRefresh),
+  ].filter(Boolean);
 }
 
 function empty(text, ic) {
@@ -225,8 +247,81 @@ function recentResultLine(g) {
   return when ? `${r} · ${when}` : r;
 }
 
-async function renderBot(mount, meta, onClose, onRefresh) {
+async function renderPlayers(mount, onRefresh, actions = {}) {
   hideTgBack();
+  clearPoll();
+  let lobby = { online: [], onlineCount: 0, liveGames: 0 };
+  let friends = [];
+  try {
+    const [l, f] = await Promise.all([
+      api('GET', '/lobby'),
+      api('GET', '/friends').catch(() => ({ friends: [] })),
+    ]);
+    lobby = l || lobby;
+    friends = f.friends || [];
+  } catch (e) {
+    fail(e);
+    return mount([
+      ...onlinePageHead(onRefresh),
+      empty(t('live_load_fail'), '🛰️'),
+      h('button.btn', { onclick: () => onRefresh() }, t('retry_live')),
+    ]);
+  }
+  const online = lobby.online || [];
+  const tcLabel = () => {
+    const tc = actions.getTimeLabel ? actions.getTimeLabel() : '3+2';
+    return tc === 'classic' || tc === 'any' ? '3+2' : tc;
+  };
+  const playerCard = (u) => {
+    const blocked = !!u.inGame || u.online === false || (!u.friend && u.discoverable === false);
+    return h('div.online-player-card',
+      h('button.online-player-av', {
+        type: 'button',
+        onclick: () => { haptic('select'); actions.openProfile && actions.openProfile(u.id); },
+      }, avBlock(u.name || '?', u.id || 0, {
+        premium: !!u.premium, online: true, round: true, avatarKey: u.avatarKey || null,
+      })),
+      h('button.online-player-info', {
+        type: 'button',
+        onclick: () => { haptic('select'); actions.openProfile && actions.openProfile(u.id); },
+      },
+        h('div.t', h('span.name', u.name || '…'), u.premium ? h('span.online-flag', '★') : null),
+        h('div.s', t('elo') + ' ' + String(u.elo || 1200))),
+      h('div.online-player-tc', h('span.online-bolt', '⚡'), h('span', tcLabel())),
+      h('button.online-play-btn', {
+        type: 'button',
+        disabled: blocked || !!u.invited,
+        onclick: () => {
+          if (blocked) return;
+          haptic('medium');
+          if (u.invited && u.inviteGameId && actions.cancelChallenge) actions.cancelChallenge(u.inviteGameId);
+          else actions.challenge && actions.challenge(u.id);
+        },
+      }, u.invited ? t('cancel') : t('play_btn')));
+  };
+  const onlineFriends = friends.filter((f) => f.online);
+  mount([
+    ...onlinePageHead(onRefresh),
+    h('div.online-stats',
+      h('div.online-stat', h('span.online-stat-ic', '🟢'), h('small', t('online_stat_online')), h('b', String(lobby.onlineCount || online.length))),
+      h('div.online-stat', h('span.online-stat-ic', '🎮'), h('small', t('online_stat_games')), h('b', String(lobby.liveGames || 0))),
+      h('div.online-stat', h('span.online-stat-ic', '🏆'), h('small', t('online_stat_tours')), h('b', '—'))),
+    h('div.h2', t('online_tab_players'), h('span.count-pill', String(online.length))),
+    online.length
+      ? h('div.online-player-list', ...online.map(playerCard))
+      : empty(t('nobody'), '🛰️'),
+    onlineFriends.length
+      ? [
+        h('div.h2', t('online_friends'), h('span.count-pill', String(onlineFriends.length))),
+        h('div.online-player-list', ...onlineFriends.map((f) => playerCard({ ...f, friend: true, online: true, discoverable: true }))),
+      ]
+      : null,
+  ].flat().filter(Boolean));
+}
+
+async function renderLiveGames(mount, meta, onClose, onRefresh) {
+  hideTgBack();
+  clearPoll();
   let data;
   let recent = [];
   try {
@@ -239,35 +334,38 @@ async function renderBot(mount, meta, onClose, onRefresh) {
   } catch (e) {
     fail(e);
     return mount([
-      tabsEl(onRefresh),
+      ...onlinePageHead(onRefresh),
       empty(t('live_load_fail'), '🛰️'),
       h('button.btn', { onclick: () => onRefresh() }, t('retry_live')),
     ]);
   }
   const games = data.games || [];
-  const nodes = [
-    h('div.top', h('h1', t('live_title')), h('div.livepill', h('i.dot'), t('live_games_count', { n: games.length }))),
-    tabsEl(onRefresh),
-    h('div.h2', t('live_tab_bot'), h('span.count-pill', String(games.length))),
-    games.length ? h('div.list', games.map((g) => {
+  mount([
+    ...onlinePageHead(onRefresh),
+    h('div.h2', t('online_tab_live'), h('span.count-pill', String(games.length))),
+    games.length ? h('div.list.online-live-list', games.map((g) => {
       const w = g.white || {}, b = g.black || {};
       const mine = !!g.you;
-      return h('button.row', {
-        onclick: async () => {
-          haptic('light');
-          try { await openSpectate(g, meta, onClose); } catch (e) { fail(e); }
-        },
-      },
-        h('div.avwrap', avatar(w.name || '?', w.id || 0, '', w.avatarKey || null), h('i.dot.on')),
-        h('div.grow',
-          h('div.t', `${w.name || '?'} – ${b.name || '?'}`),
-          h('div.s', [
-            t('watching_live'),
-            g.timeControl && g.timeControl !== 'classic' ? ` · ${g.timeControl}` : '',
-            mine ? ` · ${t('you')}` : '',
-            ` · ${t('ply_n', { n: g.ply || 0 })}`,
-          ].join(''))),
-        icon('arrow', 18));
+      return h('div.online-live-card',
+        h('div.online-live-side',
+          avBlock(w.name || '?', w.id || 0, { round: true, online: true, avatarKey: w.avatarKey || null }),
+          h('div.t', w.name || '?'),
+          h('div.s', String(w.elo || ''))),
+        h('div.online-live-mid',
+          h('span.live-badge', h('i.dot'), t('jonli')),
+          h('b', g.timeControl && g.timeControl !== 'classic' ? g.timeControl : '—'),
+          h('div.s', t('ply_n', { n: g.ply || 0 }) + (mine ? ` · ${t('you')}` : ''))),
+        h('div.online-live-side',
+          avBlock(b.name || '?', b.id || 0, { round: true, online: true, avatarKey: b.avatarKey || null }),
+          h('div.t', b.name || '?'),
+          h('div.s', String(b.elo || ''))),
+        h('button.online-watch-btn', {
+          type: 'button',
+          onclick: async () => {
+            haptic('light');
+            try { await openSpectate(g, meta, onClose); } catch (e) { fail(e); }
+          },
+        }, icon('eye', 16), t('watching')));
     })) : empty(t('live_no_bot_games'), '♟'),
     h('div.h2', t('analyze_title')),
     h('p.muted.analyze-home-sub', t('analyze_home_sub')),
@@ -294,8 +392,7 @@ async function renderBot(mount, meta, onClose, onRefresh) {
           }, icon('sparkles', 16), t('analyze')));
       }))
       : empty(t('analyze_empty'), '♟'),
-  ];
-  mount(nodes);
+  ]);
 }
 
 // ---------- Lichess tournaments ----------
@@ -335,8 +432,7 @@ async function renderIntlList(mount, onRefresh) {
   catch (e) {
     fail(e);
     return mount([
-      h('div.top', h('h1', t('live_title'))),
-      tabsEl(onRefresh),
+      ...onlinePageHead(onRefresh),
       empty(t('live_load_fail'), '🌐'),
       h('button.btn', { onclick: () => onRefresh() }, t('retry_live')),
     ]);
@@ -345,8 +441,7 @@ async function renderIntlList(mount, onRefresh) {
   const upcoming = data.upcoming || [];
   const all = [...active, ...upcoming];
   mount([
-    h('div.top', h('h1', t('live_title')), h('div.livepill', h('i.dot'), t('jonli'))),
-    tabsEl(onRefresh),
+    ...onlinePageHead(onRefresh),
     h('div.h2', t('tournaments'), h('span.count-pill', t('count_ta', { n: all.length }))),
     all.length ? h('div.list', all.map((item) => broadcastRow(item, (it) => {
       haptic('light');
@@ -406,8 +501,7 @@ async function renderTour(mount, onRefresh) {
   mount([
     h('div.top',
       backBtn(goBack),
-      h('h1', nav.tourName || tour.name || t('live_tab_intl'))),
-    tabsEl(onRefresh),
+      h('h1', nav.tourName || tour.name || t('online_tab_tours'))),
     h('div.card.live-tour-head',
       h('b', tour.name || nav.tourName),
       tour.info && tour.info.location ? h('div.muted', tour.info.location) : null,
@@ -521,7 +615,7 @@ async function renderRound(mount, onRefresh) {
     ]);
   }
   // User already opened a game (or left) while we were fetching — do not wipe that view
-  if (gen !== renderGen || section !== 'intl' || nav.view !== 'round') return;
+  if (gen !== renderGen || mainTab !== 'tournaments' || nav.view !== 'round') return;
 
   // Keep slugs in sync from the payload for subsequent polls
   if (data.round) {
@@ -570,8 +664,7 @@ async function renderRound(mount, onRefresh) {
   mount([
     h('div.top',
       backBtn(goBack),
-      h('h1', tour.name || nav.tourName || t('live_tab_intl'))),
-    tabsEl(() => { clearPoll(); onRefresh(); }),
+      h('h1', tour.name || nav.tourName || t('online_tab_tours'))),
     h('div.card.live-tour-head',
       h('b', tour.name || nav.tourName),
       h('div.muted', [
@@ -592,7 +685,7 @@ async function renderRound(mount, onRefresh) {
 
   // Tick card clocks locally between polls
   clockTimer = setInterval(() => {
-    if (section !== 'intl' || nav.view !== 'round') return clearPoll();
+    if (mainTab !== 'tournaments' || nav.view !== 'round') return clearPoll();
     for (const [id, st] of clockMap) {
       const card = grid.querySelector && grid.querySelector(`[data-gid="${id}"]`);
       if (!card) continue;
@@ -605,7 +698,7 @@ async function renderRound(mount, onRefresh) {
 
   // Soft poll: clocks + mini-board FEN in place (slower on Android / lite)
   pollTimer = setInterval(async () => {
-    if (section !== 'intl' || nav.view !== 'round') return clearPoll();
+    if (mainTab !== 'tournaments' || nav.view !== 'round') return clearPoll();
     try {
       const next = await api('GET', roundApi('', { fresh: false }));
       for (const g of next.games || []) {
@@ -836,7 +929,7 @@ async function renderGame(mount, onRefresh) {
 
   // Smooth local clock drain (like Lichess / reference app)
   clockTimer = setInterval(() => {
-    if (section !== 'intl' || nav.view !== 'game' || gen !== renderGen) return clearPoll();
+    if (mainTab !== 'tournaments' || nav.view !== 'game' || gen !== renderGen) return clearPoll();
     paintClocks();
   }, liveClockTickMs());
 
@@ -844,7 +937,7 @@ async function renderGame(mount, onRefresh) {
   let polls = 0;
   const gamePoll = liveGamePollMs();
   pollTimer = setInterval(async () => {
-    if (section !== 'intl' || nav.view !== 'game' || gen !== renderGen) return clearPoll();
+    if (mainTab !== 'tournaments' || nav.view !== 'game' || gen !== renderGen) return clearPoll();
     polls += 1;
     try {
       const round = await api('GET', roundApi('', { fresh: false }));
@@ -857,38 +950,43 @@ async function renderGame(mount, onRefresh) {
 }
 
 /**
- * Main entry for the Online tab.
+ * Main entry for the Online tab (players / live / tournaments).
  * @param {(nodes: any[]) => void} mount
  * @param {{ me: any, botUsername: string, reactions: string[] }} meta
  * @param {() => void} onCloseGame
  * @param {() => void} onRefresh
+ * @param {{ challenge?: Function, cancelChallenge?: Function, openProfile?: Function, getTimeLabel?: Function }} [actions]
  */
-export async function renderLivePage(mount, meta, onCloseGame, onRefresh) {
+export async function renderLivePage(mount, meta, onCloseGame, onRefresh, actions = {}) {
   destroyBoards();
-  if (section === 'bot') {
+  if (mainTab === 'tournaments' && nav.view === 'tour') return renderTour(mount, onRefresh);
+  if (mainTab === 'tournaments' && nav.view === 'round') return renderRound(mount, onRefresh);
+  if (mainTab === 'tournaments' && nav.view === 'game') return renderGame(mount, onRefresh);
+  if (mainTab === 'players') {
     clearPoll();
-    return renderBot(mount, meta, onCloseGame, onRefresh);
+    return renderPlayers(mount, onRefresh, actions);
   }
-  if (nav.view === 'tour') return renderTour(mount, onRefresh);
-  if (nav.view === 'round') return renderRound(mount, onRefresh);
-  if (nav.view === 'game') return renderGame(mount, onRefresh);
+  if (mainTab === 'live') {
+    clearPoll();
+    return renderLiveGames(mount, meta, onCloseGame, onRefresh);
+  }
   return renderIntlList(mount, onRefresh);
 }
 
 export function resetLiveNav() {
   clearPoll();
   destroyBoards();
-  section = 'bot';
+  mainTab = 'players';
   nav = { view: 'list' };
 }
 
-/** Intl pages poll/refresh themselves — skip the global 8s remount (avoids request storms). */
+/** Intl deep pages poll/refresh themselves — skip the global remount. */
 export function liveBlocksAutoRefresh() {
-  return section === 'intl';
+  return mainTab === 'tournaments' && nav.view !== 'list';
 }
 
-/** Play hub → Tournaments: open Halqaro (Lichess) section, not bot spectate. */
+/** Play hub → Tournaments: open Halqaro (Lichess) section. */
 export function openLiveTournaments() {
-  setSection('intl');
+  setMainTab('tournaments');
   nav = { view: 'list' };
 }

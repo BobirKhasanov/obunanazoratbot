@@ -516,18 +516,42 @@ export function errText(err) {
 export const missingKeys = () => Object.fromEntries(
   Object.entries(DICT).map(([l, d]) => [l, Object.keys(en).filter((k) => !(k in d))]));
 
+Object.assign(en, {
+  online_tab_players: 'Online players', online_tab_live: 'Live games', online_tab_tours: 'Tournaments',
+  online_sub: 'Real-time activity', online_stat_online: 'Online', online_stat_games: 'Matches', online_stat_tours: 'Tours',
+  online_friends: 'Online friends', see_all: 'See all >', gchat_removed: 'Lobby chat is no longer available',
+  play_card_online_sub: 'Play players worldwide', play_card_friend_sub: 'Invite your friends', play_card_ai_sub: 'Vs bots of any level',
+});
 Object.assign(en, { nav_play: 'Home', nav_puzzles: 'Puzzles', nav_rankings: 'Ranking', nav_live: 'Online', nav_profile: 'Profile',
   puzzles_title: 'Puzzles', puzzles_sub: 'Find the checkmate', mate_in: 'Mate in {n}', puzzle_n: 'Puzzle {n}', puzzle_solved_count: '{a} of {b} solved',
   puzzle_wrong: 'Not this move, try again', puzzle_done: 'Checkmate! Solved', puzzle_next: 'Next puzzle', puzzle_retry: 'Restart', puzzle_hint: 'Hint',
   puzzle_white: 'White to move', puzzle_black: 'Black to move', puzzle_back: 'All puzzles', puzzle_continue: 'Keep going, mate follows' });
+Object.assign(ru, {
+  online_tab_players: 'Онлайн игроки', online_tab_live: 'Живые партии', online_tab_tours: 'Турниры',
+  online_sub: 'Активность в реальном времени', online_stat_online: 'Онлайн', online_stat_games: 'Партии', online_stat_tours: 'Турниры',
+  online_friends: 'Друзья онлайн', see_all: 'Все >', gchat_removed: 'Общий чат больше недоступен',
+  play_card_online_sub: 'С игроками со всего мира', play_card_friend_sub: 'Пригласите друзей', play_card_ai_sub: 'Против ботов любого уровня',
+});
 Object.assign(ru, { nav_play: 'Главная', nav_puzzles: 'Задачи', nav_rankings: 'Рейтинг', nav_live: 'Онлайн', nav_profile: 'Профиль',
   puzzles_title: 'Задачи', puzzles_sub: 'Найдите мат', mate_in: 'Мат в {n}', puzzle_n: 'Задача {n}', puzzle_solved_count: 'Решено {a} из {b}',
   puzzle_wrong: 'Не этот ход, попробуйте ещё', puzzle_done: 'Мат! Решено', puzzle_next: 'Следующая задача', puzzle_retry: 'Заново', puzzle_hint: 'Подсказка',
   puzzle_white: 'Ход белых', puzzle_black: 'Ход чёрных', puzzle_back: 'Все задачи', puzzle_continue: 'Верно, дальше будет мат' });
+Object.assign(uz, {
+  online_tab_players: "Onlayn o'yinchilar", online_tab_live: "Jonli o'yinlar", online_tab_tours: 'Turnirlar',
+  online_sub: 'Real vaqt faolligi', online_stat_online: 'Onlayn', online_stat_games: 'Partiyalar', online_stat_tours: 'Turnirlar',
+  online_friends: "Online do'stlar", see_all: 'Barchasi >', gchat_removed: 'Umumiy chat olib tashlandi',
+  play_card_online_sub: "Dunyo bo'ylab o'yinchilar bilan", play_card_friend_sub: "Do'stlaringizni taklif qiling", play_card_ai_sub: 'Har xil darajadagi botlarga qarshi',
+});
 Object.assign(uz, { nav_play: 'Asosiy', nav_puzzles: 'Boshqotirma', nav_rankings: 'Reyting', nav_live: 'Online', nav_profile: 'Profil',
   puzzles_title: 'Boshqotirmalar', puzzles_sub: 'Matni toping', mate_in: '{n} yurishda mat', puzzle_n: '{n}-boshqotirma', puzzle_solved_count: '{b} tadan {a} tasi yechildi',
   puzzle_wrong: 'Bu yurish emas, qayta urinib ko‘ring', puzzle_done: 'Mat! Yechildi', puzzle_next: 'Keyingi boshqotirma', puzzle_retry: 'Qaytadan', puzzle_hint: 'Maslahat',
   puzzle_white: 'Oqlar yuradi', puzzle_black: 'Qoralar yuradi', puzzle_back: 'Barcha boshqotirmalar', puzzle_continue: 'To‘g‘ri, endi mat keladi' });
+Object.assign(uzc, {
+  online_tab_players: 'Онлайн ўйинчилар', online_tab_live: 'Жонли ўйинлар', online_tab_tours: 'Турнирлар',
+  online_sub: 'Реал вақт фаоллиги', online_stat_online: 'Онлайн', online_stat_games: 'Партиялар', online_stat_tours: 'Турнирлар',
+  online_friends: 'Онлайн дўстлар', see_all: 'Барчаси >', gchat_removed: 'Умумий чат олиб ташланди',
+  play_card_online_sub: 'Дунё бўйлаб ўйинчилар билан', play_card_friend_sub: 'Дўстларингизни таклиф қилинг', play_card_ai_sub: 'Ҳар хил даражадаги ботларга қарши',
+});
 Object.assign(uzc, { nav_play: 'Асосий', nav_puzzles: 'Бошқотирма', nav_rankings: 'Рейтинг', nav_live: 'Онлайн', nav_profile: 'Профил',
   puzzles_title: 'Бошқотирмалар', puzzles_sub: 'Матни топинг', mate_in: '{n} юришда мат', puzzle_n: '{n}-бошқотирма', puzzle_solved_count: '{b} тадан {a} таси ечилди',
   puzzle_wrong: 'Бу юриш эмас, қайта уриниб кўринг', puzzle_done: 'Мат! Ечилди', puzzle_next: 'Кейинги бошқотирма', puzzle_retry: 'Қайтадан', puzzle_hint: 'Маслаҳат',

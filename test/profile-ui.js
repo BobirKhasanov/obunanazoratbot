@@ -148,7 +148,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016be"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016be'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016bg"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016bg'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -173,14 +173,14 @@ assert.ok(css.includes('.list.player-list') && /player-list[\s\S]{0,120}padding:
 assert.ok(app.includes('.filter(Boolean)') && app.includes('puzzle_retry'), 'puzzle actions skip null (no literal "null" text)');
 assert.ok(read('src/server.js').includes('PODIUM_PREMIUM') && read('src/server.js').includes('grantPodiumPremium'), 'monthly podium auto-Premium');
 assert.ok(read('src/server.js').includes('medal_premium_') && /days:\s*20/.test(read('src/server.js')) && /days:\s*15/.test(read('src/server.js')), 'podium Premium 1mo/20d/15d');
-assert.ok(app.includes('puzzleHost') && /time-heading[\s\S]{0,900}puzzleHost|pcards[\s\S]{0,400}puzzle/.test(app), 'puzzle carousel below time/play cards');
+assert.ok(app.includes('puzzleHost') && /time-heading[\s\S]{0,2200}puzzleHost|pcards[\s\S]{0,1200}puzzle/.test(app), 'puzzle carousel below time/play cards');
 assert.ok(read('public/js/game.js').includes('isMoveSoundOn') && read('public/js/game.js').includes('allowUndo'), 'move sound + optional AI undo');
 assert.ok(read('public/js/game.js').includes('sound-btn') && /icon\([^)]*soundOn[^)]*28\)/.test(read('public/js/game.js')), 'sound toggle icon larger');
 assert.ok(read('public/js/ui.js').includes('if (!isMoveSoundOn()) return') && read('public/js/game.js').includes('if (isMoveSoundOn()) unlockAudio()'), 'muted move sound skips unlock/play');
 assert.ok(app.includes('prepareAnnouncements') && app.includes('paintAnnouncementsCarousel') && read('public/js/announcements.js').includes('prepareAnnouncements'), 'carousels prepared before home mount');
 assert.ok(app.includes('dismissBootRevealApp') && read('public/js/entry.js').includes('appP'), 'splash stays until first paint; app.js loads with /me');
-assert.ok(read('public/js/inbox.js').includes('/chat/global') && read('public/js/inbox.js').includes('replyToId'), 'global chat + reply');
-assert.ok(read('public/js/inbox.js').includes('inbox-peer') && read('public/js/inbox.js').includes('openUserProfile') && read('public/js/inbox.js').includes('chat-av'), 'DM/global name+avatar open profile');
+assert.ok(read('public/js/inbox.js').includes('gchat_removed') && read('public/js/inbox.js').includes('replyToId'), 'lobby chat removed; DM reply kept');
+assert.ok(read('public/js/inbox.js').includes('inbox-peer') && read('public/js/inbox.js').includes('openUserProfile') && read('public/js/inbox.js').includes('chat-av'), 'DM name+avatar open profile');
 assert.ok(read('public/js/userprofile.js').includes('send_message') && read('public/js/userprofile.js').includes('openChatWithUser'), 'visit profile → send message');
 assert.ok(admin.includes('admin-analysis-card') && admin.includes("t('analyze_title')"), 'admin shop surfaces game analysis');
 assert.ok(read('src/db.js').includes('global_chat_messages') && read('src/server.js').includes("kind <> 'dm'"), 'global chat schema; bell ignores DM');
@@ -323,7 +323,9 @@ assert.ok(read('src/server.js').includes('runBotForever') && read('src/server.js
 assert.ok(read('src/server.js').includes('unhandledRejection') && read('src/server.js').includes('uncaughtException'), 'process error handlers keep process supervised');
 assert.ok(read('workers/proxy.js').includes('RETRY_STATUSES') && read('workers/proxy.js').includes('maxAttempts'), 'Worker retries origin 502/503');
 assert.ok(require('fs').existsSync(require('path').join(__dirname, '..', 'render.yaml')), 'render.yaml blueprint present');
-assert.ok(read('public/js/app.js').includes('openGlobalChat') && read('public/js/inbox.js').includes('export function openGlobalChat'), 'global chat on Live/Friends bar');
+assert.ok(read('public/js/inbox.js').includes('gchat_removed') && !read('public/js/app.js').includes('openGlobalChat()'), 'global lobby chat removed from UI');
+assert.ok(read('public/js/live.js').includes('online-tabs') && read('public/js/live.js').includes('online_tab_players'), 'Online page tab switcher');
+assert.ok(css.includes('.online-tab.on') && css.includes('.online-player-card'), 'Online tab/player card styles');
 assert.ok(read('public/js/board.js').includes('premoveEnabled') && read('public/js/game.js').includes("timeControl === '1+0'"), '1+0 premoves');
 assert.ok(read('public/js/analyze.js').includes('openGameAnalysis') && read('src/server.js').includes('/games/:id/analyze'), 'game analysis flow');
 assert.ok(read('src/server.js').includes('friend_requests') && read('public/js/userprofile.js').includes('add_friend'), 'friend requests from profile');

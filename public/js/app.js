@@ -1,7 +1,7 @@
 // Main app: boot, swipe pager, pages, deep links.
 import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, toggle, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopSmooth, shareUrl, copyText } from './ui.js';
 import { homeTabRefreshMs, softPollMs, isLite, isAndroid } from './perf.js';
-import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat, openGlobalChat } from './inbox.js';
+import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -631,7 +631,6 @@ refreshers.play = async function renderPlay() {
   ));
   const banner = (cls, emoji, title, sub, fn) => h('button.home-banner.' + cls, { onclick: () => { haptic('light'); fn(); } },
     h('div.home-banner-text', h('b', title), h('small', sub)), h('span.home-banner-art', emoji));
-  const card = (emoji, label, fn) => h('button.pcard', { onclick: () => { haptic('light'); fn(); } }, h('span.pcard-art', emoji), h('b', label));
   // Build carousels fully (media already fetched) so they mount with the rest of home
   const annHost = reuseAnn
     ? prevAnn
@@ -715,11 +714,11 @@ refreshers.play = async function renderPlay() {
   paintPeopleList(homePeopleTab);
   const onlineBlock = [
     h('div.h2.online-heading', t('online_players'),
-      h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
-    h('button.btn.ghost.home-gchat-btn', {
-      type: 'button',
-      onclick: () => { haptic('light'); openGlobalChat(); },
-    }, icon('chat', 18), t('gchat_open')),
+      h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount })),
+      h('button.see-all', {
+        type: 'button',
+        onclick: () => { haptic('light'); go(TABS.indexOf('live'), true); },
+      }, t('see_all'))),
     peopleBar,
     peopleListHost,
   ];
@@ -738,10 +737,14 @@ refreshers.play = async function renderPlay() {
       onclick: () => { haptic('medium'); ensurePlayFlow().open(); },
     }, t('play_btn')),
     h('div.h2.other-modes-h', t('other_modes')),
-    h('div.pcards',
-      card('🌐', t('play_card_online'), onlineSheet),
-      card('🤝', t('play_card_friend'), startFriendGame),
-      card('🤖', t('play_card_ai'), aiSheet)),
+    h('div.pcards.mode-cards',
+      h('button.pcard.mode-card', { type: 'button', onclick: () => { haptic('light'); onlineSheet(); } },
+        h('span.pcard-art', '🌐'), h('b', t('play_card_online')), h('small', t('play_card_online_sub'))),
+      h('button.pcard.mode-card', { type: 'button', onclick: () => { haptic('light'); startFriendGame(); } },
+        h('span.pcard-art', '🤝'), h('b', t('play_card_friend')), h('small', t('play_card_friend_sub'))),
+      h('button.pcard.mode-card', { type: 'button', onclick: () => { haptic('light'); aiSheet(); } },
+        h('span.pcard-art', '🤖'), h('b', t('play_card_ai')), h('small', t('play_card_ai_sub'))),
+    ),
     // 2nd announcement board sits between play modes and online players
     puzzleAnns && puzzleAnns.length ? puzzleHost : puzzleFallback,
     ...onlineBlock,
@@ -778,6 +781,15 @@ refreshers.live = async function renderLive() {
     gameMeta(),
     () => refresh('live'),
     () => refresh('live'),
+    {
+      challenge: (id) => challenge(id),
+      cancelChallenge: (gid) => cancelChallenge(gid),
+      openProfile: (id) => openUserProfile(id, {
+        onChallenge: (u) => challenge(u.id),
+        refreshHome: () => refresh('live'),
+      }),
+      getTimeLabel: () => (selectedTime === 'any' ? '3+2' : selectedTime),
+    },
   );
 };
 
@@ -1293,15 +1305,6 @@ export async function start(me) {
       if (isViewingDmThread(m.threadId)) return;
       haptic('success');
       toast(t('msg_new_from', { name: (m.from && m.from.name) || '…' }));
-    }
-    else if (m.t === 'gchat') {
-      try { refreshInboxBadges(); } catch { /* ignore */ }
-      if (isViewingGlobalChat()) return;
-      const msg = m.message || {};
-      if (msg.replyTo && msg.replyTo.mine) {
-        haptic('success');
-        toast(t('gchat_reply_from', { name: (msg.from && msg.from.name) || '…' }));
-      }
     }
     else if (m.t === 'wallet' && m.user) {
       state.me = { ...state.me, ...m.user };
