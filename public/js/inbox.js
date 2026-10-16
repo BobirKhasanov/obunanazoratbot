@@ -385,6 +385,7 @@ export function openMessages() {
       }, 280);
     });
 
+    // Global lobby chat lives on Home → Live/Friends bar (openGlobalChat)
     body.replaceChildren(
       h('p.muted.msg-sub', t('msg_sub')),
       h('div.field.msg-search-field', searchInput),
@@ -619,9 +620,17 @@ function openChatShell({ title, peer, loadUrl, sendUrl, wsMatch, pollMs, showNam
   });
 }
 
-/** Global lobby chat removed from UI (kept stub so old deep-links no-op). */
 export function openGlobalChat() {
-  toast(t('gchat_removed') || t('e_notfound'), true);
+  viewingGlobal = true;
+  openChatShell({
+    title: t('gchat_title'),
+    loadUrl: '/chat/global',
+    sendUrl: '/chat/global',
+    wsMatch: (m) => m.t === 'gchat',
+    pollMs: softPollMs(),
+    showNames: true,
+    onCloseExtra: () => { viewingGlobal = false; },
+  });
 }
 
 function openChat(threadId, peer) {

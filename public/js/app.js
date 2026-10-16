@@ -1,7 +1,7 @@
 // Main app: boot, swipe pager, pages, deep links.
 import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, toggle, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopSmooth, shareUrl, copyText } from './ui.js';
 import { homeTabRefreshMs, softPollMs, isLite, isAndroid } from './perf.js';
-import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread } from './inbox.js';
+import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat, openGlobalChat } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -17,17 +17,17 @@ import {
   loadAnnouncements,
   prepareAnnouncements,
   paintAnnouncementsCarousel,
-  hydrateAnnouncementsMedia,
   pauseAnnouncementsCarousel,
   resumeAnnouncementsCarousel,
   resumeAnnouncementsHost,
   stopAnnouncementsHost,
   isAnnouncementsHostLive,
   announcementsKey,
-  CAROUSEL_STAGGER_MS,
 } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
+import { renderPlayHub } from './playhub.js';
+import { appHeader, sectionHead, modeCard, liveMiniCard } from './neonui.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
 let selectedTime = 'any';
@@ -333,12 +333,6 @@ function openFriendWait(game) {
   });
 }
 
-const rankingCategory = () => ({
-  bullet: t('tc_bullet'), blitz: t('tc_blitz'), rapid: t('tc_rapid'),
-  classic: t('tc_classic'), all: t('rank_all') || 'All',
-});
-let selectedRankingBoard = 'elo';
-let selectedRanking = 'bullet';
 async function startQuick() {
   // Same path as Play CTA: time/color setup → expanding-Elo quick match
   ensurePlayFlow().openTimeSetup();
@@ -512,18 +506,16 @@ const resultText = (g) => {
 };
 
 let playSnap = '';
-let homePeopleTab = 'live'; // 'live' | 'friends'
 refreshers.play = async function renderPlay() {
   const playElEarly = page('play');
   // First home paint (under splash): skip friends wait — biggest Android open win
   const firstPaint = !(playElEarly && playElEarly.classList.contains('seen') && playElEarly.childElementCount);
-  const [l, , anns, puzzleAnns] = await Promise.all([
+  const [l, , anns] = await Promise.all([
     loadLobby(),
     firstPaint
       ? Promise.resolve(state.friends || [])
       : loadFriends().catch(() => { state.friends = state.friends || []; }),
     loadAnnouncements(api, 'home'),
-    loadAnnouncements(api, 'puzzle'),
   ]);
   if (firstPaint) {
     // Hydrate friends after splash dismisses (does not block "O'yin yuklanmoqda")
@@ -537,10 +529,9 @@ refreshers.play = async function renderPlay() {
   const friends = state.friends || [];
   // Skip full remount when nothing visible changed — stops home-page flicker every poll.
   const snap = JSON.stringify({
-    t: selectedTime,
-    tab: homePeopleTab,
     d: state.me.diamonds || 0,
     o: l.onlineCount,
+    elo: (l.stats && l.stats.elo) || state.me.elo || 1200,
     inv: (l.games.invites || []).map((g) => g.id),
     act: (l.games.active || []).map((g) => [g.id, g.turn, g.you]),
     wait: (l.games.waiting || []).map((g) => g.id),
@@ -548,14 +539,13 @@ refreshers.play = async function renderPlay() {
     fr: friends.map((f) => [f.id, !!f.online, !!f.inGame, !!f.invited, !!f.premium, f.avatarKey || '']),
     sav: saved ? [saved.level, saved.fen] : null,
     ann: (anns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
-    pz: (puzzleAnns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
   });
   const playEl = playElEarly || page('play');
   if (snap === playSnap && playEl && playEl.classList.contains('seen') && playEl.childElementCount) {
-    const pill = playEl.querySelector('.online-heading .livepill');
-    if (pill) pill.replaceChildren(h('i.dot'), t('online_now', { n: l.onlineCount }));
-    const gem = playEl.querySelector('.gempill');
-    if (gem) gem.textContent = '💎 ' + (state.me.diamonds || 0);
+    const gem = playEl.querySelector('.neon-gem b');
+    if (gem) gem.textContent = String(state.me.diamonds || 0);
+    const eloEl = playEl.querySelector('.neon-hdr-elo span');
+    if (eloEl) eloEl.textContent = String((l.stats && l.stats.elo) || state.me.elo || 1200);
     try { refreshInboxBadges(playEl); } catch { /* ignore */ }
     // Tab return / soft poll: keep media carousels and restart auto-advance if paused
     if (state.tab === 'play') resumeAnnouncementsCarousel(playEl);
@@ -563,18 +553,15 @@ refreshers.play = async function renderPlay() {
   }
   playSnap = snap;
 
-  // Reuse live carousels when announcement content is unchanged — avoids media flash on soft refresh / taps
+  // Reuse live carousel when announcement content is unchanged — avoids media flash on soft refresh / taps
   const annKey = announcementsKey(anns);
-  const pzKey = announcementsKey(puzzleAnns);
   const prevAnn = playEl?.querySelector('.ann-carousel[data-ann-board="home"]');
   const prevPz = playEl?.querySelector('.ann-carousel[data-ann-board="puzzle"]');
   // Must still be "live" (blobs + timers state). Dead hosts after hard-stop must remount.
   const reuseAnn = !!(prevAnn && prevAnn.dataset.annKey === annKey && isAnnouncementsHostLive(prevAnn));
-  const reusePz = !!(prevPz && prevPz.dataset.annKey === pzKey && isAnnouncementsHostLive(prevPz));
   if (reuseAnn) prevAnn.remove();
   else if (prevAnn) stopAnnouncementsHost(prevAnn);
-  if (reusePz) prevPz.remove();
-  else if (prevPz) stopAnnouncementsHost(prevPz);
+  if (prevPz) stopAnnouncementsHost(prevPz);
 
   // Prefetch carousel media BEFORE building home DOM — page + boards open together
   const onPage = (pageName) => {
@@ -591,47 +578,11 @@ refreshers.play = async function renderPlay() {
     }
   };
   const annOpts = { botUsername: state.meta?.botUsername, userId: state.me?.id, onPage };
-  // Android/lite first paint: home board waits for media; puzzle board paints without media then hydrates
-  const deferPzMedia = firstPaint && (isLite() || isAndroid());
-  const [prepAnn, prepPz] = await Promise.all([
-    (!reuseAnn && anns && anns.length) ? prepareAnnouncements(anns) : Promise.resolve(null),
-    (!reusePz && puzzleAnns && puzzleAnns.length)
-      ? prepareAnnouncements(puzzleAnns, { media: !deferPzMedia })
-      : Promise.resolve(null),
-  ]);
+  const prepAnn = (!reuseAnn && anns && anns.length)
+    ? await prepareAnnouncements(anns)
+    : null;
 
-  const controls = [
-    ['1+0', '1+0', 'Bullet'],
-    ['3+2', '3+2', 'Blitz'],
-    ['5+0', '5+0', 'Blitz'],
-    ['10+0', '10+0', 'Rapid'],
-    ['15+10', '15+10', 'Rapid'],
-    ['any', t('any_time'), t('any_time_sub')],
-  ];
-  const modes = h('div.time-grid', controls.map(([id, label, sub]) =>
-    h('button.time-option' + (selectedTime === id ? '.selected' : ''), {
-      type: 'button',
-      onclick: () => {
-        if (selectedTime === id) return;
-        selectedTime = id;
-        haptic('select');
-        // In-place select — do not remount home (keeps media carousel stable)
-        modes.querySelectorAll('.time-option').forEach((btn, i) => {
-          btn.classList.toggle('selected', controls[i][0] === id);
-        });
-        try {
-          if (playSnap) {
-            const o = JSON.parse(playSnap);
-            o.t = id;
-            playSnap = JSON.stringify(o);
-          }
-        } catch { /* next poll remounts */ }
-      },
-    }, h('b', label), h('small', sub))
-  ));
-  const banner = (cls, emoji, title, sub, fn) => h('button.home-banner.' + cls, { onclick: () => { haptic('light'); fn(); } },
-    h('div.home-banner-text', h('b', title), h('small', sub)), h('span.home-banner-art', emoji));
-  // Build carousels fully (media already fetched) so they mount with the rest of home
+  // Build carousel fully (media already fetched) so it mounts with the rest of home
   const annHost = reuseAnn
     ? prevAnn
     : h('div.ann-carousel', {
@@ -646,108 +597,56 @@ refreshers.play = async function renderPlay() {
       paintAnnouncementsCarousel(annHost, prepAnn, annOpts);
     }
   }
-  const puzzleHost = reusePz
-    ? prevPz
-    : h('div.ann-carousel.ann-puzzle', {
-      ...(prepPz && prepPz.items.length ? {} : { hidden: true }),
-      'data-noswipe': '',
-      'data-ann-board': 'puzzle',
-    });
-  if (!reusePz) {
-    puzzleHost.dataset.annBoard = 'puzzle';
-    if (prepPz && prepPz.items.length) {
-      puzzleHost.dataset.annKey = pzKey;
-      paintAnnouncementsCarousel(puzzleHost, prepPz, { ...annOpts, delayMs: CAROUSEL_STAGGER_MS });
-    }
-  }
   const openProfile = (id) => openUserProfile(id, {
     onChallenge: (u) => challenge(u.id),
     refreshHome: () => { playSnap = ''; refresh('play'); },
   });
-  // Stable list host so Live/Friends pills swap content without remounting the page (keeps scroll).
-  const peopleListHost = h('div.home-people-list');
-  const paintPeopleList = (tab) => {
-    if (tab === 'friends') {
-      peopleListHost.replaceChildren(friends.length
-        ? h('div.list.home-online.player-list', ...friends.map((f) => {
-          const row = { ...f, friend: true, online: !!f.online, discoverable: true };
-          return h('div.row',
-            h('button.plain', { type: 'button', onclick: () => openProfile(f.id) },
-              avBlock(f.name, f.id, { premium: !!f.premium, online: !!f.online, round: true, avatarKey: f.avatarKey || null })),
-            h('button.grow.plain', { type: 'button', onclick: () => openProfile(f.id) },
-              h('div.t', h('span.name', f.name), f.premium ? premIc() : null),
-              h('div.s', f.invited ? t('challenge_sent') : (f.inGame ? t('in_game') : (f.online ? t('online') : t('offline'))))),
-            challengeAction(row));
-        }))
-        : empty(t('no_friends'), '👋'));
-    } else {
-      peopleListHost.replaceChildren(onlinePlayers.length
-        ? h('div.list.home-online.player-list', ...onlinePlayers.map((u) => h('div.row',
-          h('button.plain', { type: 'button', onclick: () => openProfile(u.id) },
-            avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true, avatarKey: u.avatarKey || null })),
-          h('button.grow.plain', { type: 'button', onclick: () => openProfile(u.id) },
-            h('div.t', h('span.name', u.name), u.premium ? premIc() : null),
-            h('div.s', u.invited ? t('challenge_sent') : (u.inGame ? t('in_game') : t('online')))),
-          challengeAction(u))))
-        : empty(t('nobody'), '🛰️'));
-    }
-  };
-  const syncPeopleSnap = (tab) => {
-    if (!playSnap) return;
-    try {
-      const o = JSON.parse(playSnap);
-      o.tab = tab;
-      playSnap = JSON.stringify(o);
-    } catch { /* next poll remounts */ }
-  };
-  const peopleBar = pillBar(
-    [['live', t('home_tab_live')], ['friends', t('home_tab_friends')]],
-    homePeopleTab,
-    (v) => {
-      if (v === homePeopleTab) return;
-      homePeopleTab = v;
-      paintPeopleList(v);
-      syncPeopleSnap(v);
-    },
-    { className: 'pill-bar home-people-bar' },
-  );
-  paintPeopleList(homePeopleTab);
-  const onlineBlock = [
-    h('div.h2.online-heading', t('online_players'),
-      h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount })),
-      h('button.see-all', {
-        type: 'button',
-        onclick: () => { haptic('light'); go(TABS.indexOf('live'), true); },
-      }, t('see_all'))),
-    peopleBar,
-    peopleListHost,
-  ];
-  const puzzleFallback = banner('violet', '🧩', t('home_puzzle'), t('puzzles_sub'), () => go(TABS.indexOf('puzzles'), true));
+  let liveStrip = [];
+  try {
+    const lg = await api('GET', '/live/games');
+    liveStrip = (lg.games || []).slice(0, 8);
+  } catch { /* ignore */ }
+  const pzReward = Math.floor(Number(state.meta && state.meta.puzzleDailyReward) || 10);
+  const goPlayHub = () => go(TABS.indexOf('rankings'), true);
   const nodes = [
-    h('div.top',
-      h('h1', '♟ ' + t('app')),
-      h('div.pills',
-        headerInboxBtns(),
-        h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)))),
+    appHeader({
+      me: state.me,
+      elo: (l.stats && l.stats.elo) || state.me.elo || 1200,
+      inboxBtns: headerInboxBtns(),
+      onProfile: () => go(TABS.indexOf('profile'), true),
+      onGems: () => {
+        go(TABS.indexOf('profile'), true);
+        setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: 'diamonds' })), 200);
+      },
+    }),
     annHost,
-    h('div.time-heading', t('choose_time')),
-    modes,
-    h('button.cta.play-cta-home', {
+    sectionHead(t('home_modes'), goPlayHub, t('see_all')),
+    h('div.neon-mode-row',
+      modeCard({
+        title: t('hub_mode_online'), sub: t('mode_online_sub'), tone: 'blue', emoji: '🌐',
+        onClick: () => goPlayHub(),
+      }),
+      modeCard({
+        title: t('hub_mode_friend'), sub: t('mode_friend_sub'), tone: 'gold', emoji: '🤝',
+        onClick: () => startFriendGame(),
+      }),
+      modeCard({
+        title: t('hub_mode_ai'), sub: t('mode_ai_sub'), tone: 'violet', emoji: '🤖',
+        onClick: () => aiSheet(),
+      })),
+    sectionHead(t('home_live_now'), () => go(TABS.indexOf('live'), true), t('see_all')),
+    liveStrip.length
+      ? h('div.neon-hscroll', { 'data-noswipe': '' }, ...liveStrip.map((g) => liveMiniCard(g, () => {
+        go(TABS.indexOf('live'), true);
+      })))
+      : h('p.muted.neon-sec-sub', t('live_no_bot_games')),
+    h('button.neon-daily', {
       type: 'button',
-      onclick: () => { haptic('medium'); ensurePlayFlow().open(); },
-    }, t('play_btn')),
-    h('div.h2.other-modes-h', t('other_modes')),
-    h('div.pcards.mode-cards',
-      h('button.pcard.mode-card', { type: 'button', onclick: () => { haptic('light'); onlineSheet(); } },
-        h('span.pcard-art', '🌐'), h('b', t('play_card_online')), h('small', t('play_card_online_sub'))),
-      h('button.pcard.mode-card', { type: 'button', onclick: () => { haptic('light'); startFriendGame(); } },
-        h('span.pcard-art', '🤝'), h('b', t('play_card_friend')), h('small', t('play_card_friend_sub'))),
-      h('button.pcard.mode-card', { type: 'button', onclick: () => { haptic('light'); aiSheet(); } },
-        h('span.pcard-art', '🤖'), h('b', t('play_card_ai')), h('small', t('play_card_ai_sub'))),
-    ),
-    // 2nd announcement board sits between play modes and online players
-    puzzleAnns && puzzleAnns.length ? puzzleHost : puzzleFallback,
-    ...onlineBlock,
+      onclick: () => { haptic('light'); go(TABS.indexOf('puzzles'), true); },
+    },
+      h('span.neon-daily-ic', '🎯'),
+      h('div.grow', h('b', t('home_daily')), h('small', t('home_daily_sub'))),
+      h('span.neon-daily-reward', '💎 +' + pzReward, icon('chevron', 16))),
     l.games.invites.length ? [h('div.h2', t('invites')), h('div.list', l.games.invites.map((g) => h('div.row.invite',
       avBlock(g.opponent.name, g.opponent.id, { premium: !!g.opponent.premium, round: true, avatarKey: g.opponent.avatarKey || null }),
       h('div.grow', h('div.t', g.opponent.name), h('div.s', t('challenge'))),
@@ -758,22 +657,8 @@ refreshers.play = async function renderPlay() {
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
   ];
   mount('play', nodes);
-  // Play CTA is inline under the time grid (screenshot layout) — keep dock sticky hidden
   setPlaySticky(false);
-  // Reused boards: restart auto-advance after remount into the page
-  if (state.tab === 'play') {
-    if (reuseAnn) resumeAnnouncementsHost(annHost);
-    if (reusePz) resumeAnnouncementsHost(puzzleHost);
-  }
-  // Finish puzzle board media after first paint (keeps splash short on Android)
-  if (deferPzMedia && puzzleAnns && puzzleAnns.length && puzzleHost.isConnected) {
-    prepareAnnouncements(puzzleAnns).then((prep) => {
-      if (!puzzleHost.isConnected || !prep || !prep.items.length) return;
-      puzzleHost.dataset.annKey = pzKey;
-      // In-place hydrate — avoid remount flash / index reset
-      hydrateAnnouncementsMedia(puzzleHost, prep);
-    }).catch(() => {});
-  }
+  if (state.tab === 'play' && reuseAnn) resumeAnnouncementsHost(annHost);
 };
 refreshers.live = async function renderLive() {
   await renderLivePage(
@@ -781,106 +666,29 @@ refreshers.live = async function renderLive() {
     gameMeta(),
     () => refresh('live'),
     () => refresh('live'),
-    {
-      challenge: (id) => challenge(id),
-      cancelChallenge: (gid) => cancelChallenge(gid),
-      openProfile: (id) => openUserProfile(id, {
-        onChallenge: (u) => challenge(u.id),
-        refreshHome: () => refresh('live'),
-      }),
-      getTimeLabel: () => (selectedTime === 'any' ? '3+2' : selectedTime),
-    },
   );
 };
 
-/** Keep ranking chrome mounted so pill thumbs can slide without remount flicker. */
-let rankUi = null;
-function paintRankBody(host, data, isElo) {
-  const rows = data.rankings || [];
-  const unit = isElo ? t('elo') : t('points');
-  const hint = isElo ? t('rankings_elo_hint') : t('rankings_monthly_hint', { month: data.monthLabel || '' });
-  const foot = isElo ? t('rankings_elo_scoring') : t('rankings_scoring');
-  const openRankProfile = (id) => {
-    haptic('select');
-    openUserProfile(id, {
+refreshers.rankings = async function renderRankings() {
+  await renderPlayHub((nodes) => mount('rankings', nodes), {
+    me: state.me,
+    loadLobby,
+    loadFriends,
+    headerInboxBtns,
+    ensurePlayFlow,
+    startFriendGame,
+    aiSheet,
+    challenge,
+    goTab: (name) => go(TABS.indexOf(name), true),
+    openGems: () => {
+      go(TABS.indexOf('profile'), true);
+      setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: 'diamonds' })), 200);
+    },
+    openProfile: (id) => openUserProfile(id, {
       onChallenge: (u) => challenge(u.id),
       refreshHome: () => refresh('rankings'),
-    });
-  };
-  host.replaceChildren(
-    h('div.card.rank-summary',
-      h('div.rank-summary-title', rankingCategory()[selectedRanking] + ' · ' + (isElo ? t('rank_board_elo') : t('rank_board_monthly'))),
-      h('div.muted', hint),
-      // Scoring / Premium copy sits above the list (not under the players)
-      h('div.rank-info', foot),
-      rows.length ? h('div.list.rank-list', rows.map((p) => {
-        const prem = !!(p.premium || (state.me && p.id === state.me.id && state.me.premium));
-        return h('button.row.rank-row', {
-          type: 'button',
-          onclick: () => openRankProfile(p.id),
-        },
-          h('div.rank-place' + (p.rank <= 3 ? '.podium-' + p.rank : ''), p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : String(p.rank)),
-          avBlock(p.name, p.id, { premium: prem, round: true, avatarKey: p.avatarKey }),
-          h('div.grow',
-            h('div.t', h('span.name', p.name), prem ? premIc() : null, p.id === state.me.id ? h('span.star', ' · ' + t('you_short')) : null),
-            h('div.s', isElo
-              ? t('rank_games', { n: p.games || 0 })
-              : t('rank_record', { w: p.wins || 0, d: p.draws || 0, l: p.losses || 0 }))),
-          h('div.rank-points', h('b', String(isElo ? (p.elo ?? p.points) : p.points)), h('small', unit)));
-      })) : h('div.empty.rank-empty', t('rankings_empty'))),
-  );
-}
-refreshers.rankings = async function renderRankings() {
-  const isElo = selectedRankingBoard === 'elo';
-  const categories = isElo
-    ? ['bullet', 'blitz', 'rapid', 'classic']
-    : ['all', 'bullet', 'blitz', 'rapid', 'classic'];
-  if (!categories.includes(selectedRanking)) selectedRanking = isElo ? 'bullet' : 'all';
-  let data;
-  try {
-    data = await api('GET', `/rankings?board=${selectedRankingBoard}&category=${selectedRanking}`);
-  } catch (e) { fail(e); return; }
-
-  const p = page('rankings');
-  const sameChrome = rankUi && rankUi.board === selectedRankingBoard && p.contains(rankUi.root);
-  if (sameChrome) {
-    rankUi.tabs.set(selectedRanking);
-    rankUi.boardBar.set(selectedRankingBoard);
-    paintRankBody(rankUi.body, data, isElo);
-    return;
-  }
-
-  const body = h('div.rank-body');
-  const boardBar = pillBar(
-    [['elo', t('rank_board_elo')], ['monthly', t('rank_board_monthly')]],
-    selectedRankingBoard,
-    (id) => {
-      if (id === selectedRankingBoard) return;
-      selectedRankingBoard = id;
-      selectedRanking = id === 'elo' ? 'bullet' : 'all';
-      refresh('rankings');
-    },
-    { className: 'rank-board-bar' },
-  );
-  const tabs = pillBar(
-    categories.map((c) => [c, rankingCategory()[c]]),
-    selectedRanking,
-    (category) => {
-      if (category === selectedRanking) return;
-      selectedRanking = category;
-      refresh('rankings');
-    },
-    { className: 'rank-tabs' + (isElo ? '' : ' five') },
-  );
-  const root = h('div.rank-root',
-    h('div.top', h('h1', '♜ ' + t('rankings_title'))),
-    boardBar,
-    tabs,
-    body,
-  );
-  paintRankBody(body, data, isElo);
-  mount('rankings', root);
-  rankUi = { root, body, boardBar, tabs, board: selectedRankingBoard };
+    }),
+  });
 };
 
 // ---------- puzzles (daily 1–10 easy→hard; +1 💎 for all 10) ----------
@@ -1066,8 +874,13 @@ let go = () => {};
 function initPager() {
   const pager = $('#pager'), track = $('#track'), ind = $('#nav-ind'), nav = $('#nav');
   ind.style.width = `calc((100% - 12px) / ${TABS.length})`;
+  const NAV_ICONS = { play: 'play', puzzles: 'puzzles', rankings: 'gamepad', live: 'live', profile: 'profile' };
   const btns = TABS.map((k, i) => {
-    const b = h('button.nav-btn', { 'aria-label': t('nav_' + k), onclick: () => { haptic('select'); go(i, true); } }, icon(k, 22), h('span', t('nav_' + k)));
+    const b = h('button.nav-btn', {
+      'aria-label': t('nav_' + k),
+      'data-tab': k,
+      onclick: () => { haptic('select'); go(i, true); },
+    }, icon(NAV_ICONS[k] || k, 22), h('span', t('nav_' + k)));
     nav.append(b); return b;
   });
   let W = pager.clientWidth;
@@ -1306,6 +1119,15 @@ export async function start(me) {
       haptic('success');
       toast(t('msg_new_from', { name: (m.from && m.from.name) || '…' }));
     }
+    else if (m.t === 'gchat') {
+      try { refreshInboxBadges(); } catch { /* ignore */ }
+      if (isViewingGlobalChat()) return;
+      const msg = m.message || {};
+      if (msg.replyTo && msg.replyTo.mine) {
+        haptic('success');
+        toast(t('gchat_reply_from', { name: (msg.from && msg.from.name) || '…' }));
+      }
+    }
     else if (m.t === 'wallet' && m.user) {
       state.me = { ...state.me, ...m.user };
       const g = m.granted || {};
@@ -1353,6 +1175,24 @@ export async function start(me) {
     if (!already) go(idx, true);
     else closeScreen(true);
     setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: 'premium' })), already ? 60 : 520);
+  });
+  document.addEventListener('app-open', (ev) => {
+    const pageName = ev && ev.detail && ev.detail.page;
+    if (!pageName) return;
+    if (['play', 'puzzles', 'rankings', 'live', 'profile'].includes(pageName)) {
+      go(TABS.indexOf(pageName), true);
+      return;
+    }
+    if (['premium', 'friends', 'settings', 'diamonds', 'gems', 'stats', 'promo'].includes(pageName)) {
+      const idx = TABS.indexOf('profile');
+      const already = state.index === idx;
+      go(idx, true);
+      if (already) closeScreen(true);
+      setTimeout(
+        () => document.dispatchEvent(new CustomEvent('profile-open', { detail: pageName })),
+        already ? 60 : (isAndroid() || isLite() ? 400 : 520),
+      );
+    }
   });
 
   // Defer referral toast until after splash dismiss (avoids toast under boot)

@@ -52,8 +52,10 @@ assert.ok(profile.includes('/me/avatar') && profile.includes('avatar_photo') && 
 assert.ok(profile.includes('5 * 1024 * 1024') || profile.includes('5*1024*1024'), 'avatar client limit 5MB');
 assert.ok(read('src/server.js').includes('MAX_AVATAR = 5') && read('src/server.js').includes('/api/avatars/'), 'avatar 5MB + public serve');
 assert.ok(profile.includes('openChatWithUser') && profile.includes("from './inbox.js'"), 'friends list opens DM chat');
-assert.ok(app.includes('home_tab_live') && app.includes('home_tab_friends') && app.includes('homePeopleTab'), 'home live/friends tabs');
-assert.ok(app.includes('home-people-list') && app.includes('paintPeopleList'), 'home live/friends swap list in place (no scroll jump)');
+assert.ok(app.includes("from './playhub.js'") && app.includes('renderPlayHub'), 'Play hub wired on rankings tab');
+assert.ok(app.includes("from './neonui.js'") && app.includes('appHeader') && app.includes('modeCard'), 'neon home shell');
+assert.ok(app.includes('neon-mode-row') && app.includes('neon-daily') && app.includes('liveMiniCard'), 'home neon sections');
+assert.ok(app.includes("rankings: 'gamepad'") && app.includes("'data-tab': k"), 'nav icons map Oynash to gamepad');
 assert.ok(app.includes('r.already') && app.includes('game_ended'), 'stale invite/game deep links do not reopen boards');
 assert.ok(read('src/welcome.js').includes('startapp=i'), 'invite share uses startapp for Mini App claim');
 assert.ok(!app.includes("t('puzzle_hint')"), 'puzzle hint/maslahat removed');
@@ -78,7 +80,7 @@ assert.ok(
   'Android lite .screen.show clears translateX (full overlay)',
 );
 assert.ok(read('public/js/i18n.js').includes("reason_checkmate: 'mat bilan'") && read('public/js/i18n.js').includes("reason_checkmate: 'мат билан'"), 'checkmate is mat not mot');
-assert.ok(app.includes('hydrateAnnouncementsMedia') && read('public/js/announcements.js').includes('hydrateAnnouncementsMedia'), 'Android puzzle carousel hydrates in place');
+assert.ok(read('public/js/announcements.js').includes('hydrateAnnouncementsMedia'), 'announcements support in-place media hydrate');
 assert.ok(/setPlaySticky\(false\)/.test(app) && !app.includes('setPlaySticky(true)'), 'Play sticky stays off; CTA is inline');
 assert.ok(read('src/server.js').includes('purgeUser') && read('src/server.js').includes("admin.delete('/users/:id'"), 'server admin purge endpoint');
 assert.ok(admin.includes('menu-card') || admin.includes('menuCard'));
@@ -129,7 +131,7 @@ assert.ok(app.includes('viewportChanged') && app.includes('syncTgChrome'), 're-s
 assert.ok(!css.includes('.mini.back svg { transform: rotate(180deg)'), 'live back no longer flipped chevron');
 assert.ok(css.includes('.round.back .ic svg'), 'back chevron optically centered');
 assert.ok(css.includes('#play-sticky'), 'dock Play mount retained (hidden)');
-assert.ok(app.includes('play-cta-home') && app.includes('setPlaySticky(false)'), 'Play CTA is inline on home, sticky off');
+assert.ok(app.includes('setPlaySticky(false)') && css.includes('#play-sticky'), 'Play sticky mount kept off on neon home');
 assert.ok(read('public/js/profile.js').includes('myinfo-cam') && read('public/js/profile.js').includes('add_photo'), 'my info matches card+camera UI');
 assert.ok(read('public/js/analyze.js').includes('analyze-acc') && read('public/js/analyze.js').includes('excellent'), 'Chess.com-style analysis accuracy UI');
 assert.ok(read('src/scheduler.js').includes('IDLE_APP_MINUTES') && read('src/scheduler.js').includes('JOIN_TIMEOUT_MINUTES'), '30m idle + join timeouts');
@@ -137,7 +139,7 @@ assert.ok(/\.screen\s*\{[^}]*z-index:\s*50/.test(css) && css.includes('#app:has(
 assert.ok(app.includes('createPlayFlow') && app.includes('setPlaySticky'), 'home wires play flow + sticky Play');
 assert.ok(read('public/js/playflow.js').includes("h1', t('nav_game')") && !read('public/js/playflow.js').includes('pf-title'), 'Game hub has one title (top bar only)');
 assert.ok(!app.includes("t('home_rank')"), 'live ranking banner removed from home');
-assert.ok(app.includes("t('online_players')") && app.includes('home-online'), 'home shows live online players list');
+assert.ok(app.includes("t('home_modes')") && app.includes("t('home_live_now')") && app.includes("t('home_daily')"), 'neon home section titles');
 const playflow = read('public/js/playflow.js');
 assert.ok(playflow.includes('openSearching') && playflow.includes('/games/quick'), 'play flow searching + quick match');
 assert.ok(playflow.includes('preferredColor') && playflow.includes('TIME_GROUPS'), 'time/color setup in play flow');
@@ -148,15 +150,15 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016bg"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016bg'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016neon"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016neon'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
 assert.ok(read('public/js/i18n.js').includes("vs_ai: 'Play vs AI'") && read('public/js/i18n.js').includes("play_card_ai: 'Vs AI'"), 'UI says AI not computer');
 assert.ok(read('public/js/game.js').includes("icon('ai'") && css.includes('.avatar.ai'), 'AI avatar uses sparkles icon');
-assert.ok(app.includes('firstPaint') && app.includes('deferPzMedia'), 'first paint skips friends wait + defers puzzle media on Android');
+assert.ok(app.includes('firstPaint') && app.includes('loadFriends'), 'first paint skips friends wait then hydrates');
 assert.ok(indexHtml.includes('data-android') && indexHtml.includes("plat === 'android'"), 'Android marked early to lighten boot splash');
-assert.ok(app.includes('rank-info') && /rank-info[\s\S]{0,80}foot|foot[\s\S]{0,80}rank-info/.test(app), 'ranking info text above player list');
+assert.ok(read('public/js/playhub.js').includes('neon-rank-you') && read('public/js/playhub.js').includes('/rankings?'), 'Play hub rating board + pinned you row');
 assert.ok(app.includes('initScrollTop') && app.includes('scroll-top') && css.includes('.scroll-top'), 'scroll-to-top on scrollable pages');
 assert.ok(app.includes('scrollToTopSmooth') && read('public/js/ui.js').includes('scrollToTopSmooth') && read('public/js/ui.js').includes('cancelSmoothScroll'), 'scroll-top uses slow smooth glide');
 assert.ok(read('public/js/ui.js').includes('isiOSScroll') && read('public/js/ui.js').includes("behavior: 'smooth'") && read('public/js/ui.js').includes('stopScrollMomentum'), 'iOS scroll-top uses native smooth + momentum kill');
@@ -173,14 +175,14 @@ assert.ok(css.includes('.list.player-list') && /player-list[\s\S]{0,120}padding:
 assert.ok(app.includes('.filter(Boolean)') && app.includes('puzzle_retry'), 'puzzle actions skip null (no literal "null" text)');
 assert.ok(read('src/server.js').includes('PODIUM_PREMIUM') && read('src/server.js').includes('grantPodiumPremium'), 'monthly podium auto-Premium');
 assert.ok(read('src/server.js').includes('medal_premium_') && /days:\s*20/.test(read('src/server.js')) && /days:\s*15/.test(read('src/server.js')), 'podium Premium 1mo/20d/15d');
-assert.ok(app.includes('puzzleHost') && /time-heading[\s\S]{0,2200}puzzleHost|pcards[\s\S]{0,1200}puzzle/.test(app), 'puzzle carousel below time/play cards');
+assert.ok(app.includes('neon-daily') && app.includes("TABS.indexOf('puzzles')"), 'home daily challenge opens puzzles');
 assert.ok(read('public/js/game.js').includes('isMoveSoundOn') && read('public/js/game.js').includes('allowUndo'), 'move sound + optional AI undo');
 assert.ok(read('public/js/game.js').includes('sound-btn') && /icon\([^)]*soundOn[^)]*28\)/.test(read('public/js/game.js')), 'sound toggle icon larger');
 assert.ok(read('public/js/ui.js').includes('if (!isMoveSoundOn()) return') && read('public/js/game.js').includes('if (isMoveSoundOn()) unlockAudio()'), 'muted move sound skips unlock/play');
 assert.ok(app.includes('prepareAnnouncements') && app.includes('paintAnnouncementsCarousel') && read('public/js/announcements.js').includes('prepareAnnouncements'), 'carousels prepared before home mount');
 assert.ok(app.includes('dismissBootRevealApp') && read('public/js/entry.js').includes('appP'), 'splash stays until first paint; app.js loads with /me');
-assert.ok(read('public/js/inbox.js').includes('gchat_removed') && read('public/js/inbox.js').includes('replyToId'), 'lobby chat removed; DM reply kept');
-assert.ok(read('public/js/inbox.js').includes('inbox-peer') && read('public/js/inbox.js').includes('openUserProfile') && read('public/js/inbox.js').includes('chat-av'), 'DM name+avatar open profile');
+assert.ok(read('public/js/inbox.js').includes('/chat/global') && read('public/js/inbox.js').includes('replyToId'), 'global chat + reply');
+assert.ok(read('public/js/inbox.js').includes('inbox-peer') && read('public/js/inbox.js').includes('openUserProfile') && read('public/js/inbox.js').includes('chat-av'), 'DM/global name+avatar open profile');
 assert.ok(read('public/js/userprofile.js').includes('send_message') && read('public/js/userprofile.js').includes('openChatWithUser'), 'visit profile → send message');
 assert.ok(admin.includes('admin-analysis-card') && admin.includes("t('analyze_title')"), 'admin shop surfaces game analysis');
 assert.ok(read('src/db.js').includes('global_chat_messages') && read('src/server.js').includes("kind <> 'dm'"), 'global chat schema; bell ignores DM');
@@ -207,10 +209,11 @@ assert.ok(admin.includes('movePack') && admin.includes('admin-pack-order') && ad
 assert.ok(css.includes('prem-ring') && css.includes('prem-spin'), 'single rotating gold prem-ring (no second static border)');
 assert.ok(css.includes('tg-star-twinkle') || css.includes('prem-spark'), 'Telegram Stars–style sparkles');
 assert.ok(/\.prem-ic[\s\S]{0,160}width:\s*(2[8-9]|3[0-9])px/.test(css), 'premIc badge at least 28px');
-assert.ok(app.includes('openRankProfile') || (app.includes('paintRankBody') && app.includes('openUserProfile') && app.includes('rank-row')), 'rankings row opens profile');
-assert.ok(app.includes('avBlock(p.name') || app.includes('avBlock(p.name,'), 'rankings show avatars');
-assert.ok(!/rankings_title[\s\S]{0,80}rankings_live/.test(app) && !app.includes("t('rankings_live')"), 'rankings live pill removed');
-assert.ok(app.includes('state.me.premium') || app.includes('p.premium'), 'rankings premium from API or self');
+const playhub = read('public/js/playhub.js');
+assert.ok(playhub.includes('openProfile') && playhub.includes('neon-rank-row'), 'Play hub rating rows open profile');
+assert.ok(playhub.includes('avBlock(p.name') || playhub.includes('avBlock(p.name,'), 'rankings show avatars');
+assert.ok(playhub.includes('hub_tab_online') && playhub.includes('hub_tab_rating') && playhub.includes('hub_tab_history'), 'Play hub Online/Reyting/Tarix');
+assert.ok(playhub.includes('p.premium') || playhub.includes('!!p.premium'), 'rankings premium from API');
 assert.ok(read('public/js/userprofile.js').includes('filter(Boolean)'), 'user profile does not append null text nodes');
 assert.ok(profile.includes('.filter(Boolean)') && profile.includes('host.replaceChildren'), 'my info does not append null text nodes');
 assert.ok(read('public/js/userprofile.js').includes('uprof-statgrid.wdl'), 'profile W/D/L is a full 3-col row');
@@ -253,7 +256,7 @@ assert.ok(admin.includes('admin_pack_sum') || admin.includes('admin_pack_diamond
 assert.ok(read('src/server.js').includes('parseDiamondPacksStrict') && read('src/server.js').includes('/puzzles/claim-daily') && read('src/server.js').includes('/games/:id/chat'), 'server shop/chat/puzzle endpoints');
 assert.ok(read('src/server.js').includes('puzzle_daily_reward') && read('src/server.js').includes('puzzleDailyReward'), 'server stores puzzle daily reward setting');
 
-for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down', 'stats_online_only', 'admin_delete_user', 'admin_delete_confirm', 'admin_user_deleted', 'premium_unlocks', 'premium_feat_avatar', 'premium_feat_style', 'premium_feat_bio', 'premium_feat_badge', 'avatar_photo', 'avatar_photo_premium', 'premium_wait_expiry', 'home_tab_live', 'home_tab_friends', 'ann_edit', 'ann_save_edit', 'ann_updated', 'e_friends_only', 'admin_referral_rewards', 'admin_referral_inviter', 'admin_referral_invitee', 'admin_referral_sub', 'admin_referral_bad', 'gem_hist_title', 'gem_hist_empty', 'gem_hist_referral_out', 'gem_hist_referral_in', 'gem_hist_shop_order']) {
+for (const k of ['sec_rating', 'sec_game', 'sec_settings', 'settings', 'help', 'terms', 'dark_mode', 'close_app', 'app_version', 'shop_packs', 'admin_sec_shop', 'premium_until', 'shop_order_sent', 'premium_plans', 'shop_write_admin', 'game_chat', 'puzzle_daily_reward', 'admin_puzzle_reward', 'admin_pack_up', 'admin_pack_down', 'stats_online_only', 'admin_delete_user', 'admin_delete_confirm', 'admin_user_deleted', 'premium_unlocks', 'premium_feat_avatar', 'premium_feat_style', 'premium_feat_bio', 'premium_feat_badge', 'avatar_photo', 'avatar_photo_premium', 'premium_wait_expiry', 'hub_title', 'hub_tab_online', 'hub_mode_online', 'see_all', 'stat_online', 'online_realtime', 'ann_edit', 'ann_save_edit', 'ann_updated', 'e_friends_only', 'admin_referral_rewards', 'admin_referral_inviter', 'admin_referral_invitee', 'admin_referral_sub', 'admin_referral_bad', 'gem_hist_title', 'gem_hist_empty', 'gem_hist_referral_out', 'gem_hist_referral_in', 'gem_hist_shop_order']) {
   assert.ok(i18n.includes(k + ':'), `i18n ${k}`);
 }
 
@@ -271,7 +274,8 @@ assert.ok(profile.includes('/feedback') && profile.includes('feedback_send'), 'h
 assert.ok(profile.includes('openUserProfile') || read('public/js/userprofile.js').includes('openUserProfile'), 'user profile view');
 assert.ok(css.includes('prem-glow') && css.includes('uprof-hero'), 'premium glow + public profile styles');
 assert.ok(admin.includes('ann_board_puzzle') && admin.includes("board: annBoard"), 'admin puzzle board');
-assert.ok(app.includes("loadAnnouncements(api, 'puzzle')") || app.includes("loadAnnouncements(api, \"puzzle\")"), 'puzzle carousel load');
+assert.ok(app.includes("loadAnnouncements(api, 'home')") || app.includes('loadAnnouncements(api, "home")'), 'home carousel load');
+assert.ok(live.includes('neon-match-row') && live.includes('statCard') && live.includes('friendActionRow'), 'Online tab neon layout');
 assert.ok(admin.includes('/admin/profile-banner') && admin.includes('admin_banner'), 'admin can change profile banner');
 assert.ok(i18n.includes('profile_edit:') && i18n.includes('admin_banner:') && i18n.includes('my_info:'));
 const server = read('src/server.js');
@@ -294,8 +298,8 @@ assert.ok(html.includes('id="play-sticky"') && html.includes('id="dock"'), 'Play
 assert.ok(html.includes('id="boot"'), 'boot splash in HTML');
 assert.ok(html.includes('var(--text') && (html.includes('var(--bg') || html.includes('radial-gradient')), 'boot splash uses theme vars / radial (light text not stuck white)');
 assert.ok(css.includes('pill-thumb') && ui.includes('pillBar'), 'sliding pill bars for section selection');
-assert.ok(app.includes('rank-board-bar'), 'ranking bars on home/rankings');
-assert.ok(app.includes("online-heading") && app.includes("t('online_now'") && !/gempill[\s\S]{0,180}livepill/.test(app), 'online count sits by Online players, not in gem header');
+assert.ok(read('public/js/playhub.js').includes('neon-hub-tabs') && read('public/js/playhub.js').includes('pillBar'), 'Play hub uses sliding section pills');
+assert.ok(app.includes('appHeader') && app.includes('headerInboxBtns') && css.includes('.neon-gem'), 'neon header has inbox + gems');
 assert.ok(!app.includes('hdr-ic') && !app.includes("t('xabarnoma')"), 'header mail/bell icons removed');
 const entry = read('public/js/entry.js');
 assert.ok(entry.includes('timeoutMs') && entry.includes('showApp') && entry.includes('showGate'), 'entry has /me timeout and reveals app/gate');
@@ -323,9 +327,7 @@ assert.ok(read('src/server.js').includes('runBotForever') && read('src/server.js
 assert.ok(read('src/server.js').includes('unhandledRejection') && read('src/server.js').includes('uncaughtException'), 'process error handlers keep process supervised');
 assert.ok(read('workers/proxy.js').includes('RETRY_STATUSES') && read('workers/proxy.js').includes('maxAttempts'), 'Worker retries origin 502/503');
 assert.ok(require('fs').existsSync(require('path').join(__dirname, '..', 'render.yaml')), 'render.yaml blueprint present');
-assert.ok(read('public/js/inbox.js').includes('gchat_removed') && !read('public/js/app.js').includes('openGlobalChat()'), 'global lobby chat removed from UI');
-assert.ok(read('public/js/live.js').includes('online-tabs') && read('public/js/live.js').includes('online_tab_players'), 'Online page tab switcher');
-assert.ok(css.includes('.online-tab.on') && css.includes('.online-player-card'), 'Online tab/player card styles');
+assert.ok(read('public/js/app.js').includes('openGlobalChat') && read('public/js/inbox.js').includes('export function openGlobalChat'), 'global chat on Live/Friends bar');
 assert.ok(read('public/js/board.js').includes('premoveEnabled') && read('public/js/game.js').includes("timeControl === '1+0'"), '1+0 premoves');
 assert.ok(read('public/js/analyze.js').includes('openGameAnalysis') && read('src/server.js').includes('/games/:id/analyze'), 'game analysis flow');
 assert.ok(read('src/server.js').includes('friend_requests') && read('public/js/userprofile.js').includes('add_friend'), 'friend requests from profile');

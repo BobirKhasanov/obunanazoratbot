@@ -2147,7 +2147,7 @@ api.get('/lobby', wrap(async (req, res) => {
       AND id NOT IN (SELECT blocked_id FROM user_blocks WHERE user_id = ?)
       AND id NOT IN (SELECT user_id FROM user_blocks WHERE blocked_id = ?)
     ORDER BY present_until DESC
-  LIMIT 40
+    LIMIT 40
   `).all(uid, uid, uid);
   // Drop ghost rows: present_until alone is not enough after a closed Mini App (WS/REST must still be live).
   const online = rows
