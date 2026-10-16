@@ -42,6 +42,7 @@ export class Board {
     window.removeEventListener('pointerup', this.h.up);
     window.removeEventListener('pointercancel', this.h.cancel);
     clearTimeout(this.hintT);
+    clearTimeout(this.settleT);
   }
 
   // square name -> {x, y} in board cells for the current orientation
@@ -56,7 +57,31 @@ export class Board {
     const f = this.orientation === 'w' ? x : 7 - x, r = this.orientation === 'w' ? 8 - y : y + 1;
     return FILES[f] + r;
   }
-  place(el, sq) { const { x, y } = this.xy(sq); el.style.transform = `translate(${x * 100}%, ${y * 100}%)`; el.dataset.sq = sq; }
+  place(el, sq, { animate = true } = {}) {
+    const { x, y } = this.xy(sq);
+    // translate3d — stable compositing; % is relative to the piece box (= one square)
+    const next = `translate3d(${x * 100}%, ${y * 100}%, 0)`;
+    if (!animate) {
+      const prev = el.style.transition;
+      el.style.transition = 'none';
+      el.style.transform = next;
+      // force reflow so later transitions don't replay from a stale matrix
+      void el.offsetWidth;
+      el.style.transition = prev;
+    } else {
+      el.style.transform = next;
+    }
+    el.dataset.sq = sq;
+  }
+
+  /** Snap every piece to its square and kill leftover transition jitter. */
+  settlePieces() {
+    for (const [sq, p] of this.pieces) {
+      this.place(p.el, sq, { animate: false });
+      p.el.classList.remove('drag', 'born');
+      p.el.style.willChange = 'auto';
+    }
+  }
 
   /** Show a position. chess: chess.js instance. mine: colour that may move ('w'|'b') or null for view-only. */
   set(chess, { lastMove = null, orientation = this.orientation, mine = null, animate = true } = {}) {
@@ -66,14 +91,25 @@ export class Board {
     // Weak Android (data-perf=lite): skip piece glides. iOS stays animated.
     const lite = document.documentElement.dataset.perf === 'lite';
     if (lite) animate = false;
+    clearTimeout(this.settleT);
     this.el.classList.toggle('still', !animate);
-    this.syncPieces(lastMove);
-    if (flipped) for (const [sq, p] of this.pieces) this.place(p.el, sq);
+    this.syncPieces(lastMove, animate);
+    if (flipped) for (const [sq, p] of this.pieces) this.place(p.el, sq, { animate: false });
     this.drawCoords(); this.drawHighlights();
-    if (!animate) requestAnimationFrame(() => this.el.classList.remove('still'));
+    if (!animate) {
+      this.settlePieces();
+      requestAnimationFrame(() => this.el.classList.remove('still'));
+    } else {
+      // After the glide finishes, hard-snap so pieces don't keep jittering
+      this.settleT = setTimeout(() => {
+        this.el.classList.add('still');
+        this.settlePieces();
+        requestAnimationFrame(() => this.el.classList.remove('still'));
+      }, 380);
+    }
   }
 
-  syncPieces(last) {
+  syncPieces(last, animate = true) {
     const next = new Map();
     for (const row of this.chess.board()) for (const p of row) if (p) next.set(p.square, p);
     const oldLeft = new Map(this.pieces); const newLeft = new Map();
@@ -90,12 +126,17 @@ export class Board {
     };
     for (const [sq, p] of newLeft) {
       const osq = takeOld(p, sq);
-      if (osq) { const o = oldLeft.get(osq); oldLeft.delete(osq); kept.set(sq, o); this.place(o.el, sq); newLeft.delete(sq); }
+      if (osq) {
+        const o = oldLeft.get(osq); oldLeft.delete(osq); kept.set(sq, o);
+        if (animate) o.el.style.willChange = 'transform';
+        this.place(o.el, sq, { animate });
+        newLeft.delete(sq);
+      }
     }
     for (const [, o] of oldLeft) { o.el.classList.add('gone'); const el = o.el; setTimeout(() => el.remove(), 320); }
     for (const [sq, p] of newLeft) {
       const el = h('div.piece', { html: pieceSvg(p.color, p.type) });
-      this.place(el, sq); el.classList.add('born'); this.layer.append(el);
+      this.place(el, sq, { animate: false }); el.classList.add('born'); this.layer.append(el);
       requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('born')));
       kept.set(sq, { el, c: p.color, t: p.type });
     }
@@ -111,7 +152,7 @@ export class Board {
     }
   }
 
-  mark(sq, cls) { const { x, y } = this.xy(sq); const el = h('u.' + cls); el.style.transform = `translate(${x * 100}%, ${y * 100}%)`; this.hl.append(el); return el; }
+  mark(sq, cls) { const { x, y } = this.xy(sq); const el = h('u.' + cls); el.style.transform = `translate3d(${x * 100}%, ${y * 100}%, 0)`; this.hl.append(el); return el; }
   drawHighlights() {
     this.hl.replaceChildren();
     if (this.lastMove) { this.mark(this.lastMove.from, 'last'); this.mark(this.lastMove.to, 'last'); }
@@ -179,7 +220,7 @@ export class Board {
       if (Math.hypot(dx, dy) < 10) return;
       // Vertical intent → let the game screen scroll; do not wash the piece
       if (Math.abs(dy) > Math.abs(dx) * 1.15) {
-        this.place(d.el, d.sq);
+        this.place(d.el, d.sq, { animate: false });
         this.drag = null;
         this.setBoardTouchAction('pan-y');
         return;
@@ -193,7 +234,7 @@ export class Board {
     if (d.mode !== 'drag') return;
     const b = this.el.getBoundingClientRect(), cell = b.width / 8;
     const { x, y } = this.xy(d.sq);
-    d.el.style.transform = `translate(${(e.clientX - b.left) / cell * 100 - 50}%, ${(e.clientY - b.top) / cell * 100 - 60}%)`;
+    d.el.style.transform = `translate3d(${(e.clientX - b.left) / cell * 100 - 50}%, ${(e.clientY - b.top) / cell * 100 - 55}%, 0)`;
     d.el.dataset.x = x; d.el.dataset.y = y;
   }
   up(e) {
@@ -202,16 +243,16 @@ export class Board {
     d.el.classList.remove('drag');
     this.setBoardTouchAction('pan-y');
     try { this.el.releasePointerCapture(d.id); } catch { /* ignore */ }
-    if (!d.moved || d.mode !== 'drag') { this.place(d.el, d.sq); return; }
+    if (!d.moved || d.mode !== 'drag') { this.place(d.el, d.sq, { animate: false }); return; }
     const to = this.sqAt(e.clientX, e.clientY);
     if (to && to !== d.sq && this.legal.some((m) => m.to === to)) this.tryMove(d.sq, to);
-    else { this.place(d.el, d.sq); haptic('light'); }
+    else { this.place(d.el, d.sq, { animate: true }); haptic('light'); }
   }
   cancelDrag() {
     if (!this.drag) return;
     const d = this.drag;
     d.el.classList.remove('drag');
-    this.place(d.el, d.sq);
+    this.place(d.el, d.sq, { animate: false });
     this.drag = null;
     this.setBoardTouchAction('pan-y');
   }

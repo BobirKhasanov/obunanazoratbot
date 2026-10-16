@@ -16,7 +16,7 @@ assert.ok(server.includes("const BOARD_THEMES = ['classic', 'green', 'wood', 'bl
 assert.ok(pieces.includes("export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio']"));
 assert.ok(pieces.includes('extruded3dSvg') && pieces.includes('STUDIO_FELT'), 'extruded 3D SVG pieces');
 assert.ok(perf.includes('dataset.view3d') && css.includes('data-view3d="1"'), 'view3d CSS/SVG board depth');
-assert.ok(pieces.includes('useExtruded3d') && pieces.includes('translate(3.2,4.4)') && pieces.includes('extruded3d'), 'default pieces use stacked extrusion (not CSS rotateX)');
+assert.ok(pieces.includes('useExtruded3d') && pieces.includes('translate(1.6,2.2)') && pieces.includes('extruded3d'), 'default pieces use centered stacked extrusion');
 assert.ok(!css.includes('rotateX(32deg)'), 'no CSS rotateX piece tilt (WebView ignores it)');
 
 for (const set of PIECE_SETS) {

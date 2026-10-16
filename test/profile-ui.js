@@ -130,7 +130,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016ap"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016ap'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016aq"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016aq'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -150,6 +150,7 @@ assert.ok(read('public/js/pieces.js').includes("'studio'") && read('src/server.j
 assert.ok(read('public/js/perf.js').includes('dataset.view3d') && read('public/js/perf.js').includes('isView3d'), 'view3d gated off on lite Android');
 assert.ok(read('public/js/pieces.js').includes('extruded3dSvg') && read('public/js/pieces.js').includes('useExtruded3d') && read('public/js/pieces.js').includes('extruded3d'), 'pieces use extruded 3D SVG stacks');
 assert.ok(read('public/js/board.js').includes('mode: null') && read('public/js/board.js').includes('setBoardTouchAction') && read('public/js/board.js').includes("Math.abs(dy) > Math.abs(dx)") && /\.board\s*\{[^}]*touch-action:\s*pan-y/.test(css), 'board allows vertical scroll; drag only after horizontal intent');
+assert.ok(read('public/js/board.js').includes('settlePieces') && read('public/js/board.js').includes('translate3d') && css.includes('place-items: center'), 'pieces settle after move and stay centered in squares');
 assert.ok(css.includes('.list.player-list') && /player-list[\s\S]{0,120}padding:\s*7px/.test(css), 'compact player rows keep text size');
 assert.ok(app.includes('.filter(Boolean)') && app.includes('puzzle_retry'), 'puzzle actions skip null (no literal "null" text)');
 assert.ok(read('src/server.js').includes('PODIUM_PREMIUM') && read('src/server.js').includes('grantPodiumPremium'), 'monthly podium auto-Premium');

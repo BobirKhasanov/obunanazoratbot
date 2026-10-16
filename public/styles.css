@@ -464,20 +464,20 @@ html[data-view3d="1"] .squares i.dk {
     linear-gradient(145deg, rgba(255, 255, 255, 0.1) 0%, transparent 40%, rgba(0, 0, 0, 0.22) 100%),
     var(--sq-dk);
 }
-/* Extruded SVG pieces already carry depth; soft contact shadow under each */
+/* Extruded SVG has its own ground shadow — no CSS filter (filters jitter after moves in WKWebView) */
 html[data-view3d="1"] .board .piece .pc.extruded3d,
 html[data-perf="full"] .board .piece .pc.extruded3d {
-  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.28));
+  filter: none;
   overflow: visible;
 }
-html[data-view3d="1"] .board .piece.drag .pc.extruded3d,
-html[data-perf="full"] .board .piece.drag .pc.extruded3d {
-  filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.45));
+html[data-view3d="1"] .board .piece.drag,
+html[data-perf="full"] .board .piece.drag {
   z-index: 6;
+  filter: none;
 }
 html[data-view3d="1"] .board,
 html[data-perf="full"] .board {
-  overflow: visible; /* don't clip extruded depth / shadows */
+  overflow: hidden;
 }
 html[data-view3d="1"] .squares,
 html[data-perf="full"] .squares {
@@ -489,17 +489,8 @@ html[data-view3d="1"] .coords b {
   font-weight: 700;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
 }
-/* Mini live boards: lighter shadow only */
-html[data-view3d="1"] .live-mini-board .piece .pc.extruded3d,
-html[data-perf="full"] .live-mini-board .piece .pc.extruded3d {
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
-}
 html[data-view3d="1"] .live-mini-board .squares i.lt { background: var(--sq-lt); }
 html[data-view3d="1"] .live-mini-board .squares i.dk { background: var(--sq-dk); }
-html[data-view3d="1"] .live-mini-board .board,
-html[data-perf="full"] .live-mini-board .board {
-  overflow: hidden;
-}
 /* Lite: never pay for filters / wood frame */
 html[data-perf="lite"] .board-host {
   padding: 0;
@@ -509,19 +500,27 @@ html[data-perf="lite"] .board-host {
 html[data-perf="lite"] .piece { filter: none !important; }
 .hl, .pieces, .coords { position: absolute; inset: 0; pointer-events: none; }
 .hl u, .piece { position: absolute; left: 0; top: 0; width: 12.5%; height: 12.5%; }
-.hl u { display: block; will-change: transform; }
+.hl u { display: block; }
 .hl u.last { background: rgba(250, 204, 21, 0.38); }
 .hl u.sel { background: rgba(84, 164, 247, 0.5); }
 .hl u.hint { background: rgba(74, 222, 128, 0.5); }
 .hl u.check { background: radial-gradient(circle, rgba(248, 113, 113, 0.95) 0%, rgba(248, 113, 113, 0) 72%); }
 .hl u.mv::after { content: ""; position: absolute; inset: 36%; border-radius: 50%; background: rgba(15, 23, 42, 0.32); }
 .hl u.cap::after { content: ""; position: absolute; inset: 6%; border-radius: 50%; border: 4px solid rgba(15, 23, 42, 0.32); }
-.piece { transition: transform 0.34s var(--ease), opacity 0.3s; will-change: transform; padding: 1%; }
-.board.still .piece { transition: none; }
-.piece.gone { opacity: 0; transform-origin: center; }
+/* Center piece art in the square; no permanent will-change (causes post-move jitter) */
+.piece {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 5%;
+  transition: transform 0.34s var(--ease), opacity 0.28s var(--ease);
+  will-change: auto;
+}
+.board.still .piece { transition: none !important; }
+.piece.gone { opacity: 0; transition: opacity 0.28s var(--ease); }
 .piece.born { opacity: 0; }
-.piece.drag { transition: none; z-index: 5; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.4)); }
-.pc { width: 100%; height: 100%; display: block; overflow: visible; }
+.piece.drag { transition: none !important; z-index: 5; }
+.pc { width: 100%; height: 100%; display: block; overflow: visible; margin: 0; }
 .pc.w { fill: var(--pc-w); stroke: var(--pc-stroke); color: var(--pc-stroke); }
 .pc.b { fill: var(--pc-b); stroke: var(--pc-stroke); color: var(--pc-w); }
 .pc.b path[d*="M22.500 17"], .pc.b path[d*="M14 21h17"],
@@ -1409,6 +1408,7 @@ html[data-android="1"] .sheet {
 }
 html[data-android="1"] .piece {
   transition: transform 0.22s ease-out, opacity 0.18s ease-out;
+  will-change: auto;
 }
 html[data-android="1"] #bg::before { animation-duration: 80s; opacity: 0.18; }
 
@@ -1432,6 +1432,7 @@ html[data-perf="lite"] .screen {
 html[data-perf="lite"] .piece {
   transition: none !important;
   will-change: auto;
+  filter: none !important;
 }
 html[data-perf="lite"] .ann-track,
 html[data-perf="lite"] .ann-track.lite {

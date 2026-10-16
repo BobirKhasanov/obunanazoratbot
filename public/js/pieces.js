@@ -74,14 +74,13 @@ function useExtruded3d() {
 
 /**
  * Extruded faux-3D piece: stacked offset silhouettes (depth) + ivory/ebony face.
- * Readable as 3D even when CSS perspective is ignored by Telegram WebView.
+ * Depth is balanced around the square center (no SE visual drift).
  */
 function extruded3dSvg(colour, type, shape, sw) {
   const uid = `e3d-${colour}${type}`;
   const face = `${uid}-f`;
   const shine = `${uid}-s`;
   const isW = colour === 'w';
-  // Depth / side colors (darker, shifted down-right)
   const depthFar = isW ? '#8a7358' : '#050506';
   const depthNear = isW ? '#b59a78' : '#121214';
   const stroke = isW ? '#4a3a28' : '#000000';
@@ -93,25 +92,23 @@ function extruded3dSvg(colour, type, shape, sw) {
     : `<linearGradient id="${face}" x1="0.18" y1="0" x2="0.82" y2="1"><stop offset="0%" stop-color="#4a4a4e"/><stop offset="40%" stop-color="#1a1a1d"/><stop offset="100%" stop-color="#050506"/></linearGradient>`
       + `<linearGradient id="${shine}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#fff" stop-opacity="0.28"/><stop offset="45%" stop-color="#fff" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity="0.4"/></linearGradient>`;
 
-  // Replace currentColor eye dots so they stay visible on the face layer
   const faceShape = shape.replace(/fill="currentColor"/g, `fill="${eye}"`);
   const depthShape = shape.replace(/fill="currentColor"/g, `fill="${depthFar}"`);
-
   const body = `stroke-linejoin="round" stroke-linecap="round" stroke-width="${sw}"`;
-  // Contact shadow + green felt under the base
-  const ground = `<ellipse cx="23.5" cy="40.2" rx="${feltR + 2}" ry="2.6" fill="rgba(0,0,0,0.34)" stroke="none"/>`
-    + `<ellipse cx="22.5" cy="38.6" rx="${feltR}" ry="1.45" fill="#2f6b3a" stroke="none"/>`;
 
-  // Three depth plates (far → near) then lit face — classic isometric extrusion
+  // Mild depth (±) so the silhouette stays centered in the cell
+  const ground = `<ellipse cx="22.5" cy="39.6" rx="${feltR + 1.5}" ry="2.2" fill="rgba(0,0,0,0.30)" stroke="none"/>`
+    + `<ellipse cx="22.5" cy="38.2" rx="${feltR}" ry="1.3" fill="#2f6b3a" stroke="none"/>`;
+
   return `<svg viewBox="0 0 45 45" class="pc ${colour} extruded3d" ${body} aria-hidden="true">`
     + `<defs>${defs}</defs>`
+    + `<g transform="translate(0,-0.6)">`
     + ground
-    + `<g transform="translate(3.2,4.4)" fill="${depthFar}" stroke="${depthFar}" stroke-width="${sw}">${depthShape}</g>`
-    + `<g transform="translate(2.1,2.9)" fill="${depthNear}" stroke="${depthNear}" stroke-width="${sw}">${depthShape}</g>`
-    + `<g transform="translate(1.0,1.4)" fill="${depthNear}" stroke="${stroke}" stroke-width="${Number(sw) * 0.85}" opacity="0.95">${depthShape}</g>`
+    + `<g transform="translate(1.6,2.2)" fill="${depthFar}" stroke="${depthFar}" stroke-width="${sw}">${depthShape}</g>`
+    + `<g transform="translate(0.8,1.1)" fill="${depthNear}" stroke="${depthNear}" stroke-width="${sw}">${depthShape}</g>`
     + `<g fill="url(#${face})" stroke="${stroke}" stroke-width="${sw}">${faceShape}</g>`
-    + `<rect x="9.5" y="5.5" width="11" height="29" rx="5.5" fill="url(#${shine})" opacity="0.7" stroke="none"/>`
-    + `</svg>`;
+    + `<rect x="10" y="6" width="10" height="28" rx="5" fill="url(#${shine})" opacity="0.65" stroke="none"/>`
+    + `</g></svg>`;
 }
 
 /** Flat neo (lite / outline fallback). */
