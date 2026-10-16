@@ -151,7 +151,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261017nx25"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261017nx25'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261017nx26"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261017nx26'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -222,8 +222,17 @@ assert.ok(playhub.includes('hub_tab_online') && playhub.includes('hub_tab_rating
 assert.ok(read('public/js/neonui.js').includes('!!p.premium'), 'rankings premium from API');
 assert.ok(read('public/js/userprofile.js').includes('filter(Boolean)'), 'user profile does not append null text nodes');
 assert.ok(profile.includes('.filter(Boolean)') && profile.includes('host.replaceChildren'), 'my info does not append null text nodes');
-assert.ok(read('public/js/userprofile.js').includes('uprof-statgrid.wdl'), 'profile W/D/L is a full 3-col row');
-assert.ok(css.includes('.uprof-statgrid.wdl'), 'W/D/L grid style');
+{
+  const up = read('public/js/userprofile.js');
+  assert.ok(up.includes('prof-cover.uprof-cover') && up.includes('div.prof-banner') && up.includes('div.prof-band') && up.includes('nx-prof-chips'), 'user profile uses own-profile banner cover + band');
+  assert.ok(up.includes('uprof-back.nx-round') && /\.uprof-back\s*\{[^}]*var\(--safe-t\)/.test(css), 'user profile back button over banner respects safe area');
+  assert.ok(up.includes("statCard('chart'") && up.includes('div.nx-wdl.uprof-wdl') && up.includes('nx-wdl-bar'), 'user profile nx stat cards + W/D/L bar');
+  assert.ok(up.includes('uprof-cta') && up.includes('button.nx-btn-p') && up.includes('button.nx-btn-o') && up.includes('div.menu-card.uprof-menu'), 'user profile nx actions + menu card');
+  assert.ok(up.includes('/like') && up.includes('/friends/request') && up.includes('/respond') && up.includes('/block') && up.includes('onChallenge'), 'user profile keeps like/friend/block/challenge');
+  assert.ok(!up.includes('uprof-hero') && !up.includes('uprof-statgrid') && !up.includes("t('profile_title')"), 'old purple hero + plain tiles + Profil title removed');
+  assert.ok(/html\[data-perf="lite"\] \.uprof-cta \.nx-btn-p/.test(css), 'user profile lite drops CTA shadow');
+  for (const k of ['uprof_games', 'uprof_friend_add_sub', 'uprof_block_sub']) assert.ok((i18n.match(new RegExp(k + ':', 'g')) || []).length === 4, `i18n ${k} in 4 langs`);
+}
 assert.ok(app.includes('headerInboxBtns'), 'home header mail/bell for DMs + notifications');
 assert.ok(app.includes('openFriendWait') && app.includes('friend-wait'), 'friend play shows invite wait before board');
 assert.ok(
@@ -278,7 +287,7 @@ assert.ok(profile.includes('info_username_locked'), 'username not editable in UI
 assert.ok(profile.includes('delete_account') && profile.includes('confirmSheet'), 'delete account asks once');
 assert.ok(profile.includes('/feedback') && profile.includes('feedback_send'), 'help feedback chat');
 assert.ok(profile.includes('openUserProfile') || read('public/js/userprofile.js').includes('openUserProfile'), 'user profile view');
-assert.ok(css.includes('prem-glow') && css.includes('uprof-hero'), 'premium glow + public profile styles');
+assert.ok(css.includes('prem-glow') && css.includes('.uprof-like'), 'premium glow + public profile styles');
 assert.ok(admin.includes('ann_board_puzzle') && admin.includes("board: annBoard"), 'admin puzzle board');
 assert.ok(app.includes("loadAnnouncements(api, 'home')") || app.includes('loadAnnouncements(api, "home")'), 'home carousel load');
 assert.ok(live.includes('liveMatchRow') && live.includes('statCard(') && live.includes('friendRow(') && live.includes('tourneyCard(') && live.includes('onlineBubble'), 'Online tab neon layout');

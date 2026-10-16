@@ -1392,3 +1392,23 @@ Object.assign(uzc, {
   e_promo_used: 'Бу кодни аллақачон ишлатгансиз', e_promo_exists: 'Бундай код бор',
   e_promo_reward: 'Олмос ёки Премиум танланг', e_promo_amount: 'Миқдор нотўғри', e_promo_max: 'Лимит нотўғри',
 });
+Object.assign(en, {
+  uprof_games: 'Games', uprof_friend_add_sub: 'Invite and chat in one tap', uprof_friend_sub: 'In your friends list',
+  uprof_friend_in_sub: '{name} wants to be friends', uprof_friend_out_sub: 'Waiting for an answer',
+  uprof_block_sub: 'No messages or challenges from them', uprof_unblock_sub: 'Allow messages and challenges again',
+});
+Object.assign(ru, {
+  uprof_games: 'Партии', uprof_friend_add_sub: 'Вызов и чат в одно касание', uprof_friend_sub: 'В вашем списке друзей',
+  uprof_friend_in_sub: '{name} хочет дружить', uprof_friend_out_sub: 'Ожидает ответа',
+  uprof_block_sub: 'Без сообщений и вызовов от игрока', uprof_unblock_sub: 'Снова разрешить сообщения и вызовы',
+});
+Object.assign(uz, {
+  uprof_games: "O'yinlar", uprof_friend_add_sub: 'Bir bosishda taklif va suhbat', uprof_friend_sub: 'Do‘stlaringiz ro‘yxatida',
+  uprof_friend_in_sub: '{name} do‘st bo‘lmoqchi', uprof_friend_out_sub: 'Javob kutilmoqda',
+  uprof_block_sub: 'Undan xabar va taklif kelmaydi', uprof_unblock_sub: 'Xabar va takliflarga yana ruxsat berish',
+});
+Object.assign(uzc, {
+  uprof_games: 'Ўйинлар', uprof_friend_add_sub: 'Бир босишда таклиф ва суҳбат', uprof_friend_sub: 'Дўстларингиз рўйхатида',
+  uprof_friend_in_sub: '{name} дўст бўлмоқчи', uprof_friend_out_sub: 'Жавоб кутилмоқда',
+  uprof_block_sub: 'Ундан хабар ва таклиф келмайди', uprof_unblock_sub: 'Хабар ва таклифларга яна рухсат бериш',
+});
