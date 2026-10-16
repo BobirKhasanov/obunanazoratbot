@@ -15,8 +15,25 @@ let ctx = null; // the open game, or null
 export const openGameId = () => (ctx && (ctx.kind === 'online' || ctx.kind === 'spectate') ? ctx.id : null);
 /** After piece-set change: refresh captures / clocks without animation. */
 export function restyleOpenGame() { if (ctx && ctx.render) ctx.render(false); }
-export const savedAiGame = () => { try { const s = JSON.parse(localStorage.getItem(AI_KEY)); return s && Array.isArray(s.moves) ? s : null; } catch { return null; } };
-const saveAi = (s) => { try { s ? localStorage.setItem(AI_KEY, JSON.stringify(s)) : localStorage.removeItem(AI_KEY); } catch { /* storage blocked */ } };
+const AI_IDLE_MS = 30 * 60 * 1000;
+export const savedAiGame = () => {
+  try {
+    const s = JSON.parse(localStorage.getItem(AI_KEY));
+    if (!s || !Array.isArray(s.moves)) return null;
+    const at = Number(s.savedAt) || 0;
+    if (at && Date.now() - at > AI_IDLE_MS) {
+      try { localStorage.removeItem(AI_KEY); } catch { /* ignore */ }
+      return null;
+    }
+    return s;
+  } catch { return null; }
+};
+const saveAi = (s) => {
+  try {
+    if (!s) localStorage.removeItem(AI_KEY);
+    else localStorage.setItem(AI_KEY, JSON.stringify({ ...s, savedAt: Date.now() }));
+  } catch { /* storage blocked */ }
+};
 
 // ---------- engine (worker with a main-thread fallback) ----------
 let worker = null, workerBroken = false, reqId = 0; const pending = new Map();
@@ -55,7 +72,7 @@ function captured(chess) {
   }
   return { lost, score };
 }
-const reasonKey = (r) => ({ checkmate: 'reason_checkmate', resign: 'reason_resign', stalemate: 'reason_stalemate', agreement: 'reason_agreement', insufficient: 'reason_insufficient', repetition: 'reason_repetition', fifty: 'reason_fifty', abandoned: 'reason_abandoned', timeout: 'reason_timeout', timeout_draw: 'reason_timeout_draw' }[r] || 'reason_checkmate');
+const reasonKey = (r) => ({ checkmate: 'reason_checkmate', resign: 'reason_resign', stalemate: 'reason_stalemate', agreement: 'reason_agreement', insufficient: 'reason_insufficient', repetition: 'reason_repetition', fifty: 'reason_fifty', abandoned: 'reason_abandoned', idle: 'reason_idle', timeout: 'reason_timeout', timeout_draw: 'reason_timeout_draw' }[r] || 'reason_checkmate');
 
 // ---------- the screen ----------
 export function openGame(opts, onClose) {

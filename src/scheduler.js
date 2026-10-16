@@ -8,6 +8,10 @@ const realtime = require('./realtime');
 const { turnOf, parseMoves } = require('./game');
 const REMIND_AFTER_HOURS = Number(process.env.REMIND_AFTER_HOURS || 6); // env overrides are for tests
 const ABANDON_AFTER_DAYS = 7;
+/** Waiting open/invited games auto-cancel if nobody joins. */
+const JOIN_TIMEOUT_MINUTES = Math.max(1, Number(process.env.JOIN_TIMEOUT_MINUTES || 30));
+/** Active game ends as draw if neither player opened the Mini App for this long. */
+const IDLE_APP_MINUTES = Math.max(1, Number(process.env.IDLE_APP_MINUTES || 30));
 
 const nameOf = db.prepare('SELECT first_name FROM users WHERE id = ?');
 const name = async (id) => ((await nameOf.get(id)) || {}).first_name || 'Player';
@@ -35,8 +39,33 @@ async function remindMoves() {
 }
 
 async function housekeeping(onGameChanged) {
-  // Invitations nobody answered within a day
-  await db.prepare("UPDATE games SET status = 'cancelled' WHERE status IN ('open', 'invited') AND updated_at < now() - interval '1 day'").run();
+  // Open / invited games nobody joined within JOIN_TIMEOUT_MINUTES
+  await db.prepare(`
+    UPDATE games SET status = 'cancelled', updated_at = now()
+    WHERE status IN ('open', 'invited')
+      AND created_at < now() - (? * interval '1 minute')
+  `).run(JOIN_TIMEOUT_MINUTES);
+
+  // Both players left the Mini App for IDLE_APP_MINUTES → draw (applies to timed + untimed)
+  const idleRows = await db.prepare(`
+    SELECT g.id, g.white_id, g.black_id
+    FROM games g
+    JOIN users w ON w.id = g.white_id
+    JOIN users b ON b.id = g.black_id
+    WHERE g.status = 'active'
+      AND w.last_seen < now() - (? * interval '1 minute')
+      AND b.last_seen < now() - (? * interval '1 minute')
+    ORDER BY g.updated_at ASC
+    LIMIT 80
+  `).all(IDLE_APP_MINUTES, IDLE_APP_MINUTES);
+  for (const g of idleRows) {
+    if (realtime.isOnline(g.white_id) || realtime.isOnline(g.black_id)) continue;
+    const r = await db.prepare(`
+      UPDATE games SET status = 'finished', result = '1/2-1/2', reason = 'idle', draw_by = NULL, updated_at = now()
+      WHERE id = ? AND status = 'active'
+    `).run(g.id);
+    if (r.changes > 0 && onGameChanged) await onGameChanged(g.id);
+  }
 
   // Untimed games where nobody moved for a week: the player who was waiting wins
   const dead = await db.prepare(`
@@ -45,7 +74,7 @@ async function housekeeping(onGameChanged) {
   `).all(ABANDON_AFTER_DAYS);
   for (const g of dead) {
     const result = turnOf(parseMoves(g.moves)) === 'w' ? '0-1' : '1-0';
-    await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = 'abandoned', updated_at = now() WHERE id = ?").run(result, g.id);
+    await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = 'abandoned', updated_at = now() WHERE id = ? AND status = 'active'").run(result, g.id);
     if (onGameChanged) await onGameChanged(g.id);
   }
 

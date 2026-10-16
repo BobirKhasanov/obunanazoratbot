@@ -512,40 +512,60 @@ export function renderProfilePage(ctx) {
 
   const openMyInfo = () => openScreen((close) => {
     const host = h('div.myinfo');
+    const rowTap = (label, value, onClick, locked) => h('button.info-row' + (locked ? '.locked' : ''), {
+      type: 'button',
+      disabled: !!locked,
+      onclick: () => { if (locked) return; haptic('select'); onClick && onClick(); },
+    },
+      h('span', label),
+      h('span.info-row-val',
+        h('b' + (locked ? '.locked' : ''), value),
+        locked ? null : icon('chevron', 16)));
+
     const draw = () => {
       const u = state.me;
+      const uname = u.username ? '@' + u.username : '—';
       const nodes = [
-        h('button.myinfo-av', {
-          type: 'button',
-          onclick: () => { haptic('select'); openAvatar(); },
-        }, avBlock(u.displayName || u.firstName, u.id, {
-          premium: !!u.premium, size: 'xl', round: true, avatarKey: u.avatarKey,
-        })),
-        h('div.info-sec',
+        h('div.myinfo-hero',
+          h('button.myinfo-av', {
+            type: 'button',
+            'aria-label': t('add_photo'),
+            onclick: () => { haptic('select'); openAvatar(); },
+          },
+            avBlock(u.displayName || u.firstName, u.id, {
+              premium: !!u.premium, size: 'xl', round: true, avatarKey: u.avatarKey,
+            }),
+            h('span.myinfo-cam', { 'aria-hidden': 'true' }, icon('camera', 16))),
+          h('div.myinfo-id',
+            h('b.myinfo-name', u.displayName || u.firstName || 'Player'),
+            h('span.myinfo-user', uname)),
+          h('button.myinfo-photo-btn', {
+            type: 'button',
+            onclick: () => { haptic('select'); openAvatar(); },
+          }, icon('camera', 16), t('add_photo'))),
+        h('div.info-card.myinfo-card',
           h('div.info-sec-h',
-            h('span', t('info_personal')),
+            h('span.info-sec-title', icon('user', 16), t('info_personal')),
             h('button.info-edit', {
               type: 'button', 'aria-label': t('profile_edit'),
               onclick: () => { haptic('select'); editPersonalSheet(draw); },
-            }, icon('pencil', 16))),
-          h('div.info-card',
-            h('div.info-row', h('span', t('info_first')), h('b', dash(u.firstName))),
-            h('div.info-row', h('span', t('info_last')), h('b', dash(u.lastName))),
-            h('div.info-row', h('span', t('info_username')), h('b.locked', u.username ? '@' + u.username : '—')))),
-        h('div.info-sec',
+            }, icon('pencil', 15))),
+          rowTap(t('info_first'), dash(u.firstName), () => editPersonalSheet(draw)),
+          rowTap(t('info_last'), dash(u.lastName), () => editPersonalSheet(draw)),
+          rowTap(t('info_username'), uname, null, true)),
+        h('div.info-card.myinfo-card',
           h('div.info-sec-h',
-            h('span', t('info_address')),
+            h('span.info-sec-title', icon('pin', 16), t('info_address')),
             h('button.info-edit', {
               type: 'button', 'aria-label': t('profile_edit'),
               onclick: () => { haptic('select'); editAddressSheet(draw); },
-            }, icon('pencil', 16))),
-          h('div.info-card',
-            h('div.info-row', h('span', t('info_country')), h('b', dash(u.country))),
-            h('div.info-row', h('span', t('info_region')), h('b', dash(u.region))))),
+            }, icon('pencil', 15))),
+          rowTap(t('info_country'), dash(u.country), () => editAddressSheet(draw)),
+          rowTap(t('info_region'), dash(u.region), () => editAddressSheet(draw))),
         u.premium || u.isAdmin
-          ? h('div.info-sec',
+          ? h('div.info-card.myinfo-card',
             h('div.info-sec-h',
-              h('span', t('info_bio')),
+              h('span.info-sec-title', icon('docs', 16), t('info_bio')),
               h('button.info-edit', {
                 type: 'button', 'aria-label': t('profile_edit'),
                 onclick: () => {
@@ -568,14 +588,27 @@ export function renderProfilePage(ctx) {
                     }, t('save')),
                   ]);
                 },
-              }, icon('pencil', 16))),
-            h('div.info-card',
-              h('div.info-row', h('span', t('info_bio')), h('b', dash(u.bio)))))
+              }, icon('pencil', 15))),
+            rowTap(t('info_bio'), dash(u.bio), () => {
+              const inp = h('textarea.input', {
+                rows: 3, maxlength: 160, value: u.bio || '', placeholder: t('info_bio_ph'),
+              });
+              sheet((c) => [
+                h('h2', t('info_bio')),
+                inp,
+                h('button.cta', {
+                  type: 'button',
+                  onclick: async () => {
+                    try {
+                      state.me = await save({ bio: inp.value });
+                      toast(t('info_saved')); haptic('success');
+                      c(); draw(); refresh();
+                    } catch (e) { fail(e); }
+                  },
+                }, t('save')),
+              ]);
+            }))
           : null,
-        h('button.btn.ghost', {
-          type: 'button',
-          onclick: () => { haptic('light'); close(); },
-        }, icon('back', 18), t('back')),
         !u.isAdmin
           ? h('button.info-delete', {
             type: 'button',

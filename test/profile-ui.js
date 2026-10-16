@@ -79,7 +79,7 @@ assert.ok(
 );
 assert.ok(read('public/js/i18n.js').includes("reason_checkmate: 'mat bilan'") && read('public/js/i18n.js').includes("reason_checkmate: 'мат билан'"), 'checkmate is mat not mot');
 assert.ok(app.includes('hydrateAnnouncementsMedia') && read('public/js/announcements.js').includes('hydrateAnnouncementsMedia'), 'Android puzzle carousel hydrates in place');
-assert.ok(app.includes('wantSticky') && /setPlaySticky\(false\)/.test(app), 'Play sticky hides immediately when leaving Play');
+assert.ok(/setPlaySticky\(false\)/.test(app) && !app.includes('setPlaySticky(true)'), 'Play sticky stays off; CTA is inline');
 assert.ok(read('src/server.js').includes('purgeUser') && read('src/server.js').includes("admin.delete('/users/:id'"), 'server admin purge endpoint');
 assert.ok(admin.includes('menu-card') || admin.includes('menuCard'));
 assert.ok(app.includes('avBlock') && app.includes('premIc'), 'online list premium badge + ring');
@@ -128,8 +128,11 @@ assert.ok(/prof-banner[\s\S]{0,200}var\(--safe-t\)/.test(css), 'profile banner c
 assert.ok(app.includes('viewportChanged') && app.includes('syncTgChrome'), 're-sync Telegram chrome on expand');
 assert.ok(!css.includes('.mini.back svg { transform: rotate(180deg)'), 'live back no longer flipped chevron');
 assert.ok(css.includes('.round.back .ic svg'), 'back chevron optically centered');
-assert.ok(css.includes('#play-sticky'), 'sticky Play CTA above dock');
-assert.ok(css.includes('#app:has(#screen.show) #play-sticky'), 'sticky Play hidden under overlays');
+assert.ok(css.includes('#play-sticky'), 'dock Play mount retained (hidden)');
+assert.ok(app.includes('play-cta-home') && app.includes('setPlaySticky(false)'), 'Play CTA is inline on home, sticky off');
+assert.ok(read('public/js/profile.js').includes('myinfo-cam') && read('public/js/profile.js').includes('add_photo'), 'my info matches card+camera UI');
+assert.ok(read('public/js/analyze.js').includes('analyze-acc') && read('public/js/analyze.js').includes('excellent'), 'Chess.com-style analysis accuracy UI');
+assert.ok(read('src/scheduler.js').includes('IDLE_APP_MINUTES') && read('src/scheduler.js').includes('JOIN_TIMEOUT_MINUTES'), '30m idle + join timeouts');
 assert.ok(/\.screen\s*\{[^}]*z-index:\s*50/.test(css) && css.includes('#app:has(#screen.show) #dock'), 'screen covers dock on iOS/Android');
 assert.ok(app.includes('createPlayFlow') && app.includes('setPlaySticky'), 'home wires play flow + sticky Play');
 assert.ok(read('public/js/playflow.js').includes("h1', t('nav_game')") && !read('public/js/playflow.js').includes('pf-title'), 'Game hub has one title (top bar only)');
@@ -145,7 +148,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016bd"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016bd'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016be"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016be'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -170,7 +173,7 @@ assert.ok(css.includes('.list.player-list') && /player-list[\s\S]{0,120}padding:
 assert.ok(app.includes('.filter(Boolean)') && app.includes('puzzle_retry'), 'puzzle actions skip null (no literal "null" text)');
 assert.ok(read('src/server.js').includes('PODIUM_PREMIUM') && read('src/server.js').includes('grantPodiumPremium'), 'monthly podium auto-Premium');
 assert.ok(read('src/server.js').includes('medal_premium_') && /days:\s*20/.test(read('src/server.js')) && /days:\s*15/.test(read('src/server.js')), 'podium Premium 1mo/20d/15d');
-assert.ok(app.includes('puzzleHost') && /time-heading[\s\S]{0,400}puzzleHost|pcards[\s\S]{0,200}puzzle/.test(app), 'puzzle carousel below time/play cards');
+assert.ok(app.includes('puzzleHost') && /time-heading[\s\S]{0,900}puzzleHost|pcards[\s\S]{0,400}puzzle/.test(app), 'puzzle carousel below time/play cards');
 assert.ok(read('public/js/game.js').includes('isMoveSoundOn') && read('public/js/game.js').includes('allowUndo'), 'move sound + optional AI undo');
 assert.ok(read('public/js/game.js').includes('sound-btn') && /icon\([^)]*soundOn[^)]*28\)/.test(read('public/js/game.js')), 'sound toggle icon larger');
 assert.ok(read('public/js/ui.js').includes('if (!isMoveSoundOn()) return') && read('public/js/game.js').includes('if (isMoveSoundOn()) unlockAudio()'), 'muted move sound skips unlock/play');

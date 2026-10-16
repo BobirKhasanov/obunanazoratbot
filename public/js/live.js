@@ -1,9 +1,11 @@
-// Online tab: bot live spectate + Lichess international broadcasts.
+// Online tab: bot live spectate + Lichess international broadcasts + game analysis.
 import { Chess } from '/vendor/chess.js';
-import { h, icon, haptic, api, fail, avatar, tg, pillBar } from './ui.js';
+import { h, icon, haptic, api, fail, avatar, avBlock, tg, pillBar } from './ui.js';
 import { t } from './i18n.js';
 import { Board } from './board.js';
 import { openGame } from './game.js';
+import { openGameAnalysis } from './analyze.js';
+import { formatTashkentWhen } from './time.js';
 import { liveRoundPollMs, liveGamePollMs, liveClockTickMs, liveMiniBoardBudget, isLite } from './perf.js';
 
 /** In-app circular back only (do not also show Telegram.BackButton — that doubles the control). */
@@ -214,11 +216,27 @@ async function openSpectate(game, meta, onClose) {
   openGame({ kind: 'spectate', game: full, meta }, onClose);
 }
 
+function recentResultLine(g) {
+  if (g.status !== 'finished') return '';
+  const r = g.result === '1/2-1/2'
+    ? t('draw_title')
+    : (g.result === '1-0') === (g.you === 'w') ? t('you_won') : t('you_lost');
+  const when = formatTashkentWhen(g.updatedAt);
+  return when ? `${r} · ${when}` : r;
+}
+
 async function renderBot(mount, meta, onClose, onRefresh) {
   hideTgBack();
   let data;
-  try { data = await api('GET', '/live/games'); }
-  catch (e) {
+  let recent = [];
+  try {
+    const [live, lobby] = await Promise.all([
+      api('GET', '/live/games'),
+      api('GET', '/lobby').catch(() => ({ games: {} })),
+    ]);
+    data = live;
+    recent = (lobby.games && lobby.games.recent) || [];
+  } catch (e) {
     fail(e);
     return mount([
       tabsEl(onRefresh),
@@ -251,6 +269,31 @@ async function renderBot(mount, meta, onClose, onRefresh) {
           ].join(''))),
         icon('arrow', 18));
     })) : empty(t('live_no_bot_games'), '♟'),
+    h('div.h2', t('analyze_title')),
+    h('p.muted.analyze-home-sub', t('analyze_home_sub')),
+    recent.length
+      ? h('div.list.analyze-live-list', recent.map((g) => {
+        const o = g.opponent || {};
+        return h('div.row.recent-analyze',
+          avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, avatarKey: o.avatarKey || null }),
+          h('div.grow', h('div.t', o.name || '…'), h('div.s', recentResultLine(g))),
+          h('button.mini.ok', {
+            type: 'button',
+            'aria-label': t('analyze'),
+            onclick: () => {
+              haptic('light');
+              openGameAnalysis({
+                id: g.id,
+                moves: g.moves,
+                white: g.white,
+                black: g.black,
+                you: g.you,
+                result: g.result,
+              });
+            },
+          }, icon('sparkles', 16), t('analyze')));
+      }))
+      : empty(t('analyze_empty'), '♟'),
   ];
   mount(nodes);
 }

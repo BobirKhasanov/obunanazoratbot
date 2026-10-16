@@ -4,7 +4,6 @@ import { homeTabRefreshMs, softPollMs, isLite, isAndroid } from './perf.js';
 import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat, openGlobalChat } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
-import { openGameAnalysis } from './analyze.js';
 import { Chess } from '/vendor/chess.js';
 import { Board, restyleBoards } from './board.js';
 import { goodMoves, mateIn } from './puzzles.js';
@@ -734,6 +733,11 @@ refreshers.play = async function renderPlay() {
     annHost,
     h('div.time-heading', t('choose_time')),
     modes,
+    h('button.cta.play-cta-home', {
+      type: 'button',
+      onclick: () => { haptic('medium'); ensurePlayFlow().open(); },
+    }, t('play_btn')),
+    h('div.h2.other-modes-h', t('other_modes')),
     h('div.pcards',
       card('🌐', t('play_card_online'), onlineSheet),
       card('🤝', t('play_card_friend'), startFriendGame),
@@ -749,34 +753,10 @@ refreshers.play = async function renderPlay() {
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
       saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('ai', 22)), h('div.grow', h('div.t', t('ai') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
-    (l.games.recent && l.games.recent.length) ? [
-      h('div.h2', t('recent')),
-      h('p.muted.analyze-home-sub', t('analyze_home_sub')),
-      h('div.list', l.games.recent.map((g) => {
-        const o = g.opponent || {};
-        return h('div.row.recent-analyze',
-          avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, avatarKey: o.avatarKey || null }),
-          h('div.grow', h('div.t', o.name || '…'), h('div.s', resultText(g))),
-          h('button.mini.ok', {
-            type: 'button',
-            'aria-label': t('analyze'),
-            onclick: () => {
-              haptic('light');
-              openGameAnalysis({
-                id: g.id,
-                moves: g.moves,
-                white: g.white,
-                black: g.black,
-                you: g.you,
-                result: g.result,
-              });
-            },
-          }, icon('sparkles', 16), t('analyze')));
-      })),
-    ] : null,
   ];
   mount('play', nodes);
-  setPlaySticky(state.tab === 'play');
+  // Play CTA is inline under the time grid (screenshot layout) — keep dock sticky hidden
+  setPlaySticky(false);
   // Reused boards: restart auto-advance after remount into the page
   if (state.tab === 'play') {
     if (reuseAnn) resumeAnnouncementsHost(annHost);
@@ -1125,15 +1105,8 @@ function initPager() {
     clearTimeout(stickyAfterSlideT);
     clearTimeout(refreshAfterSlideT);
     const afterMs = animate && android ? 360 : 0;
-    // Hide Play sticky immediately when leaving Play (don't leave it over other tabs for 360ms)
-    const wantSticky = state.tab === 'play';
-    if (!wantSticky) {
-      setPlaySticky(false);
-    } else if (afterMs) {
-      stickyAfterSlideT = setTimeout(() => setPlaySticky(true), afterMs);
-    } else {
-      requestAnimationFrame(() => setPlaySticky(true));
-    }
+    // Play CTA is inline on Home — dock sticky stays off (no jump on tab/remount)
+    setPlaySticky(false);
     if (changed) {
       if (afterMs) {
         refreshAfterSlideT = setTimeout(() => refresh(), afterMs);
