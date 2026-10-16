@@ -5,6 +5,7 @@ import { t } from './i18n.js';
 import { Board } from './board.js';
 import { openGame } from './game.js';
 import { openGameAnalysis } from './analyze.js';
+import { openScreen } from './screen.js';
 import { formatTashkentWhen } from './time.js';
 import { liveRoundPollMs, liveGamePollMs, liveClockTickMs, liveMiniBoardBudget, isLite } from './perf.js';
 import { openChatWithUser, openMessages, openNotifications } from './inbox.js';
@@ -258,6 +259,30 @@ let showAllLive = false;
 let showAllUsers = false;
 let showAllFriends = false;
 
+/** Finished games ready for engine analysis (opened from the Tahlil stat card). */
+function openAnalysisList(recent) {
+  openScreen((close) => [
+    h('div.top', backBtn(() => { haptic('light'); close(); }), h('h1', t('analyze_title'))),
+    h('p.nx-sec-sub.nx-an-sub', t('analyze_home_sub')),
+    recent.length
+      ? h('div.nx-list', ...recent.map((g) => {
+        const o = g.opponent || {};
+        return h('div.nx-pr',
+          h('div.nx-row-main',
+            avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, avatarKey: o.avatarKey || null }),
+            h('div.nx-row-tx', h('b', o.name || '…'), h('small', recentResultLine(g)))),
+          h('button.nx-btn-o.sm', {
+            type: 'button',
+            onclick: () => {
+              haptic('light');
+              openGameAnalysis({ id: g.id, moves: g.moves, white: g.white, black: g.black, you: g.you, result: g.result });
+            },
+          }, icon('sparkles', 14), t('analyze')));
+      }))
+      : emptyNote(t('analyze_empty')),
+  ]);
+}
+
 async function renderBot(mount, meta, onClose, onRefresh) {
   hideTgBack();
   const [live, lobby, fr, tours] = await Promise.all([
@@ -296,7 +321,7 @@ async function renderBot(mount, meta, onClose, onRefresh) {
     h('div.nx-stats',
       statCard('users', t('stat_online'), onlineCount, 'green'),
       statCard('gamepad', t('stat_games'), lobby.liveGames != null ? lobby.liveGames : games.length, 'blue'),
-      statCard('trophy', t('stat_tourneys'), activeTours.length, 'gold')),
+      statCard('sparkles', t('stat_analysis'), recent.length, 'gold', () => openAnalysisList(recent))),
     sectionHead(t('live_now_sec'), more(showAllLive || games.length <= 3, () => { showAllLive = true; }), t('see_all')),
     games.length
       ? h('div.nx-list', ...(showAllLive ? games : games.slice(0, 3)).map((g) => liveMatchRow(g, { onWatch: watch, onProfile: openProfile })))
@@ -329,23 +354,6 @@ async function renderBot(mount, meta, onClose, onRefresh) {
         onInvite: (x) => challenge(x.id),
       })))
       : emptyNote(t('no_friends')),
-    sectionHead(t('analyze_title'), null, null, { sub: t('analyze_home_sub') }),
-    recent.length
-      ? h('div.nx-list', ...recent.map((g) => {
-        const o = g.opponent || {};
-        return h('div.nx-pr',
-          h('div.nx-row-main',
-            avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, avatarKey: o.avatarKey || null }),
-            h('div.nx-row-tx', h('b', o.name || '…'), h('small', recentResultLine(g)))),
-          h('button.nx-btn-o.sm', {
-            type: 'button',
-            onclick: () => {
-              haptic('light');
-              openGameAnalysis({ id: g.id, moves: g.moves, white: g.white, black: g.black, you: g.you, result: g.result });
-            },
-          }, icon('sparkles', 14), t('analyze')));
-      }))
-      : emptyNote(t('analyze_empty')),
   ];
   mount(nodes);
   if (tourScroll) {
