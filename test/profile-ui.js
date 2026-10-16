@@ -38,7 +38,8 @@ assert.ok(read('public/js/game.js').includes('gameClockTickMs') && read('public/
 assert.ok(read('src/server.js').includes("no-cache, must-revalidate") && read('src/server.js').includes('.js'), 'static JS/CSS always revalidate');
 
 assert.ok(profile.includes('export function renderProfilePage'));
-assert.ok(profile.includes('sec_rating'));
+assert.ok(profile.includes('nx-stats') && profile.includes("statCard('chart'") && profile.includes('nx-wdl'), 'profile neon stats + W/D/L card');
+assert.ok(profile.includes("openHub('history')") && profile.includes("openHub('rating')"), 'profile links into Play hub Tarix/Reyting');
 assert.ok(profile.includes('sec_settings'));
 assert.ok(profile.includes('openScreen'));
 assert.ok(profile.includes('menu-card') || profile.includes('menuCard'));
@@ -150,7 +151,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261017nx7"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261017nx7'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261017nx10"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261017nx10'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');

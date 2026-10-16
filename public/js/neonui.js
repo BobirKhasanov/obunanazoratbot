@@ -124,8 +124,8 @@ export function liveMatchRow(g, { onWatch, onProfile } = {}) {
     h('button.nx-btn-o', { type: 'button', onclick: tap(() => onWatch && onWatch(g)) }, icon('eye', 15), t('watch_btn')));
 }
 
-export function statCard(ic, label, value, tone) {
-  return h('div.nx-stat.' + (tone || 'blue'),
+export function statCard(ic, label, value, tone, onClick) {
+  return h((onClick ? 'button' : 'div') + '.nx-stat.' + (tone || 'blue'), onClick ? { type: 'button', onclick: tap(onClick) } : {},
     h('span.nx-stat-ic', icon(ic, 20)),
     h('div', h('small', label), h('b', String(value))));
 }

@@ -7,6 +7,7 @@ import { openUserProfile } from './userprofile.js';
 import { openChatWithUser } from './inbox.js';
 export { openUserProfile };
 import { stylePickerCard } from './style-ui.js';
+import { sectionHead, statCard } from './neonui.js';
 import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
 import { restyleBoards } from './board.js';
 import { restyleOpenGame } from './game.js';
@@ -23,10 +24,6 @@ const solvedCount = () => {
     return raw.ids.length;
   } catch { return 0; }
 };
-
-function sec(label) {
-  return h('div.sec-label', label);
-}
 
 function menuCard(...rows) {
   return h('div.menu-card', rows.filter(Boolean));
@@ -806,17 +803,25 @@ export function renderProfilePage(ctx) {
   ]);
 
   const pzDone = solvedCount();
+  const pzTotal = dailyPuzzles().length;
 
   const bannerUrl = (state.meta && state.meta.profileBannerUrl) || '/img/profile-banner.png';
   const shownName = me.displayName || [me.firstName, me.lastName].filter(Boolean).join(' ') || 'Player';
+  const elo = ctx.elo || me.elo || 1200;
+  const rank = ctx.rank;
+  const openHub = ctx.openHub || ((tab) => goTab('rankings'));
+  const total = s.w + s.d + s.l;
+  const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
+  const onlineFriends = friends.filter((f) => f.online).length;
+  const wdlCol = (n, label, cls) => h('div.nx-wdl-col', h('b.' + cls, String(n)), h('small', label));
 
   return [
     h('div.prof-cover',
       h('div.prof-banner', { style: { backgroundImage: `url("${bannerUrl}")` } },
-        h('button.prof-edit', {
-          type: 'button',
+        h('button.prof-edit.nx-round', {
+          type: 'button', 'aria-label': t('profile_edit'), title: t('profile_edit'),
           onclick: () => { haptic('select'); openMyInfo(); },
-        }, icon('pencil', 16), t('profile_edit'))),
+        }, icon('pencil', 18))),
       h('div.prof-band',
         h('button.prof-av' + (me.premium ? '.prem-glow' : ''), {
           type: 'button',
@@ -827,32 +832,47 @@ export function renderProfilePage(ctx) {
           },
         }, avBlock(shownName, me.id, { premium: !!me.premium, size: 'xl', round: true, sparkles: !!me.premium, avatarKey: me.avatarKey })),
         h('div.prof-meta',
-          h('h2', h('span.name', shownName), me.premium ? premIc() : null),
-          me.username ? h('div.prof-user', me.username) : h('div.prof-user', t('profile_title'))),
-        h('button.prof-gem', {
+          h('h2', h('span.name', shownName), me.premium ? premIc(18) : null),
+          h('div.prof-user', me.username ? '@' + me.username : t('profile_title')),
+          h('div.nx-prof-chips',
+            h('button.nx-chip-s.blue', { type: 'button', onclick: () => { haptic('select'); openHub('rating'); } },
+              icon('chart', 12), String(elo)),
+            h('span.nx-chip-s', rank ? t('prof_rank', { n: rank }) : t('prof_no_rank')),
+            me.premium ? h('span.nx-chip-s.gold', '👑 Premium') : null)),
+        h('button.prof-gem.nx-gem', {
           type: 'button',
           title: t('diamonds'),
           onclick: () => { haptic('select'); openDiamonds(); },
-        }, h('span.prof-gem-ic', '💎'), h('b', String(me.diamonds || 0))))),
+        }, h('span.prof-gem-ic.nx-gem-ic', '💎'), h('b', String(me.diamonds || 0)), h('span.nx-gem-plus', icon('plus', 12, 2.6))))),
 
     h('div.prof-body',
-      sec(t('sec_rating')),
-      h('div.rating-row',
-        h('button.card.rating-tile', { type: 'button', onclick: () => { haptic('select'); openStats(); } },
-          h('span.rating-ic', '♟'),
-          h('div', h('small.muted', t('stats')), h('b.rating-n', `${s.w}/${s.d}/${s.l}`)),
-          h('div.s', t('wins') + ' · ' + t('draws') + ' · ' + t('losses'))),
-        h('button.card.rating-tile', { type: 'button', onclick: () => { haptic('select'); goTab('puzzles'); } },
-          h('span.rating-ic', '🧩'),
-          h('div', h('small.muted', t('nav_puzzles')), h('b.rating-n', String(pzDone))),
-          h('div.s', t('puzzle_solved_count', { a: pzDone, b: dailyPuzzles().length })))),
+      h('div.nx-stats',
+        statCard('chart', t('elo'), elo, 'blue', () => openHub('rating')),
+        statCard('trophy', t('wins'), s.w, 'green', () => openHub('history')),
+        statCard('puzzles', t('prof_daily'), `${pzDone}/${pzTotal}`, 'gold', () => goTab('puzzles'))),
 
-      sec(t('sec_game')),
+      h('button.nx-wdl', { type: 'button', onclick: () => { haptic('select'); openHub('history'); } },
+        h('div.nx-wdl-head',
+          h('b', t('stats')),
+          h('small', t('prof_games_total', { n: total })),
+          icon('chevron', 16)),
+        h('div.nx-wdl-bar',
+          h('i.w', { style: { width: pct(s.w) + '%' } }),
+          h('i.d', { style: { width: pct(s.d) + '%' } }),
+          h('i.l', { style: { width: pct(s.l) + '%' } })),
+        h('div.nx-wdl-nums',
+          wdlCol(s.w, t('wins'), 'w'), wdlCol(s.d, t('draws'), 'd'), wdlCol(s.l, t('losses'), 'l'))),
+
+      sectionHead(t('sec_game')),
       menuCard(
-        menuRow({ ic: 'chart', title: t('stats'), sub: `${s.w}W · ${s.d}D · ${s.l}L`, onClick: openStats }),
-        menuRow({ ic: 'rankings', title: t('nav_rankings'), onClick: () => goTab('rankings') }),
+        menuRow({ ic: 'history', title: t('hub_tab_history'), sub: t('prof_history_sub'), onClick: () => openHub('history') }),
+        menuRow({ ic: 'trophy', title: t('hub_tab_rating'), sub: t('prof_rating_sub'), onClick: () => openHub('rating') }),
         menuRow({ ic: 'profile', title: t('avatar_title'), sub: t('avatar_menu_sub'), onClick: openAvatar }),
-        menuRow({ ic: 'handshake', title: t('friends_title'), sub: friends.length ? String(friends.length) : t('no_friends').split('\n')[0], onClick: openFriends }),
+        menuRow({
+          ic: 'friends', title: t('friends_title'),
+          sub: friends.length ? `${t('count_ta', { n: friends.length })} · ${onlineFriends} ${t('online').toLowerCase()}` : t('no_friends').split('\n')[0],
+          onClick: openFriends,
+        }),
         menuRow({ ic: 'gem', title: t('diamonds'), sub: String(me.diamonds || 0) + ' 💎', onClick: openDiamonds }),
         menuRow({
           ic: 'crown',
@@ -862,13 +882,13 @@ export function renderProfilePage(ctx) {
             : t('premium_plans'),
           onClick: openPremium,
         }),
-        menuRow({ ic: 'gem', title: t('promo_title'), sub: t('promo_menu_sub'), onClick: openPromo }),
+        menuRow({ ic: 'sparkles', title: t('promo_title'), sub: t('promo_menu_sub'), onClick: openPromo }),
         me.isAdmin ? menuRow({ ic: 'shield', title: t('admin_panel'), onClick: () => openAdmin(rebuildAll) }) : null,
       ),
 
-      sec(t('sec_settings')),
+      sectionHead(t('sec_settings')),
       menuCard(
-        menuRow({ ic: 'profile', title: t('my_info'), sub: t('my_info_sub'), onClick: openMyInfo }),
+        menuRow({ ic: 'pencil', title: t('my_info'), sub: t('my_info_sub'), onClick: openMyInfo }),
         menuRow({ ic: 'globe', title: t('language'), sub: LANG_NAMES[getLang()], onClick: openLanguage }),
         menuRow({ ic: 'gear', title: t('settings'), onClick: openSettings }),
         menuRow({ ic: 'help', title: t('help'), onClick: openHelp }),

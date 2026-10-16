@@ -26,7 +26,7 @@ import {
 } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
-import { renderPlayHub, openPlayHubMode } from './playhub.js';
+import { renderPlayHub, openPlayHubMode, openPlayHubTab } from './playhub.js';
 import { appHeader, sectionHead, modeCard, liveMiniCard, heroBanner, dailyCard, emptyNote } from './neonui.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
@@ -828,14 +828,21 @@ function closePuzzle() { if (pz && pz.board) pz.board.destroy(); pz = null; hapt
 refreshers.puzzles = async function renderPuzzles() { if (!pz) puzzleList(); };
 
 refreshers.profile = async function renderProfile() {
-  const st = state.stats || (await api('GET', '/me')).stats; state.stats = st;
-  await loadFriends();
+  const [st, , rankMe] = await Promise.all([
+    state.stats ? Promise.resolve(state.stats) : api('GET', '/me').then((r) => r.stats),
+    loadFriends(),
+    api('GET', '/rankings?board=elo&category=all').then((r) => r.me || null).catch(() => null),
+  ]);
+  state.stats = st;
   mount('profile', ...renderProfilePage({
     state,
     challengeAction,
     challenge,
     gameRow,
+    elo: (rankMe && rankMe.elo) || (st && st.elo) || state.me.elo || 1200,
+    rank: rankMe ? rankMe.rank : null,
     goTab: (name) => { closeScreen(true); go(TABS.indexOf(name), true); },
+    openHub: (tab) => { closeScreen(true); openPlayHubTab(tab); go(TABS.indexOf('rankings'), true); },
     rebuildAll,
     refresh: () => refresh('profile'),
   }));
