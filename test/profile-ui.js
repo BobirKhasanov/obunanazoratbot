@@ -130,6 +130,7 @@ assert.ok(css.includes('.round.back .ic svg'), 'back chevron optically centered'
 assert.ok(css.includes('#play-sticky'), 'sticky Play CTA above dock');
 assert.ok(css.includes('#app:has(#screen.show) #play-sticky'), 'sticky Play hidden under overlays');
 assert.ok(app.includes('createPlayFlow') && app.includes('setPlaySticky'), 'home wires play flow + sticky Play');
+assert.ok(read('public/js/playflow.js').includes("h1', t('nav_game')") && !read('public/js/playflow.js').includes('pf-title'), 'Game hub has one title (top bar only)');
 assert.ok(!app.includes("t('home_rank')"), 'live ranking banner removed from home');
 assert.ok(app.includes("t('online_players')") && app.includes('home-online'), 'home shows live online players list');
 const playflow = read('public/js/playflow.js');
@@ -142,7 +143,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016av"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016av'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016aw"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016aw'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');

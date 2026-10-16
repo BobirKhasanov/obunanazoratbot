@@ -63,8 +63,8 @@ export function createPlayFlow(deps) {
         }, icon('back', 22)),
         h('h1', t('nav_game'))),
       h('div.pf-hub',
-        h('div.pf-hero', '⚔️'),
-        h('h1.pf-title', t('nav_game')),
+        h('div.pf-hero', { 'aria-hidden': 'true' }, '⚔️'),
+        // Title lives in the top bar only — avoid duplicate "Game" under the hero
         h('div.pf-stack',
           h('button.pf-time-row', {
             type: 'button',
