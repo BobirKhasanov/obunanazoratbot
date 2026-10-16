@@ -31,9 +31,10 @@ npm run test:engine # chess engine strength/sanity
 
 ## Deploy (Render + Cloudflare + Redis)
 
-1. **Render** (API / WebSocket / bot): `BOT_TOKEN`, `ADMIN_IDS`, `DATABASE_URL` (**Neon pooled** URL, hostname contains `-pooler`), optional Redis env vars below. Health check: `/healthz`. One instance only (long polling). Admin media/avatars are stored as BYTEA in Neon — no separate object store.
-2. **Cloudflare Worker** (`wrangler.toml`): serves `public/` and proxies `/api`, `/ws`, `/healthz` to Render. In Workers → Settings → Variables set `API_ORIGIN=https://<your-render>.onrender.com`. Set Render + BotFather `WEBAPP_URL` to the Worker URL (`https://obunanazoratbot.…workers.dev`).
-3. **Upstash Redis** (optional but recommended): `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` — Lichess cache, lobby/rankings cache, rate limits.
+1. **Render** (API / WebSocket / bot): see `render.yaml`. Set `BOT_TOKEN`, `ADMIN_IDS`, `DATABASE_URL` (**Neon pooled** URL, hostname contains `-pooler`), `WEBAPP_URL` (= Worker URL). Health check: `/healthz`. **One instance only** (long polling). Admin media/avatars are BYTEA in Neon.
+2. **Keep-alive (UptimeRobot):** HTTP monitor every **5 minutes** on **`https://chess-uz-bot.onrender.com/healthz`** (Render origin, not the Worker). That stops Free-tier sleep so the Mini App does not show “No connection”.
+3. **Cloudflare Worker** (`wrangler.toml` + `workers/proxy.js`): serves `public/` and proxies `/api`, `/ws`, `/healthz` to Render (retries on 502/503). Set `API_ORIGIN=https://chess-uz-bot.onrender.com`. Point BotFather + Render `WEBAPP_URL` at the Worker (`https://obunanazoratbot.hasanovbobur1202.workers.dev`).
+4. **Upstash Redis** (optional but recommended): `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` — Lichess cache, lobby/rankings cache, rate limits.
 
 ## Configuration
 

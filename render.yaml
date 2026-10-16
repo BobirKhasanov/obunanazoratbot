@@ -1,0 +1,19 @@
+# Render Blueprint — one instance only (Telegram long-polling bot).
+# Keep-alive: UptimeRobot (or similar) HTTP GET every 5 min on the Render URL:
+#   https://chess-uz-bot.onrender.com/healthz
+# Ping Render directly (not the Cloudflare Worker) so the free instance does not sleep.
+# Secrets stay in the Dashboard: BOT_TOKEN, ADMIN_IDS, DATABASE_URL (Neon -pooler), WEBAPP_URL.
+services:
+  - type: web
+    name: chess-uz-bot
+    runtime: node
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    numInstances: 1
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22.13.0"
+      - key: NODE_ENV
+        value: production

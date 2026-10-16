@@ -4041,20 +4041,40 @@ realtime.attach(server, BOT_TOKEN, {
   },
 });
 
+/** Keep Telegram long-polling alive across transient network / API errors. */
+async function runBotForever() {
+  if (process.env.DISABLE_BOT === '1') return;
+  if (!(WEBAPP_URL || '').startsWith('https://')) {
+    console.warn('[bot] WEBAPP_URL must be an https:// URL for the Open button to work.');
+  }
+  let delayMs = 1_000;
+  for (;;) {
+    try {
+      await bot.start({
+        onStart: async (me) => {
+          botUsername = botUsername || me.username;
+          console.log(`[bot] @${me.username} started`);
+          delayMs = 1_000;
+          try { await setupMenu(bot, WEBAPP_URL); } catch (e) {
+            console.error('[bot] setupMenu:', e.message);
+          }
+        },
+      });
+      console.warn('[bot] polling stopped; restarting…');
+    } catch (e) {
+      console.error('[bot] failed:', e && e.message ? e.message : e);
+    }
+    await new Promise((r) => setTimeout(r, delayMs));
+    delayMs = Math.min(delayMs * 2, 60_000);
+  }
+}
+
 async function boot() {
   await db.ready; // tables exist before anybody connects
-  server.listen(PORT, () => console.log(`[server] listening on :${PORT}`));
+  // Bind all interfaces so Render's proxy can reach the process
+  server.listen(PORT, '0.0.0.0', () => console.log(`[server] listening on 0.0.0.0:${PORT}`));
 
-  if (process.env.DISABLE_BOT !== '1') {
-    if (!(WEBAPP_URL || '').startsWith('https://')) console.warn('[bot] WEBAPP_URL must be an https:// URL for the Open button to work.');
-    bot.start({
-      onStart: async (me) => {
-        botUsername = botUsername || me.username;
-        console.log(`[bot] @${me.username} started`);
-        await setupMenu(bot, WEBAPP_URL);
-      },
-    }).catch((e) => console.error('[bot] failed to start:', e.message));
-  }
+  runBotForever().catch((e) => console.error('[bot] loop died:', e && e.message ? e.message : e));
   startScheduler(
     async (id) => pushGame(await getGame.get(id)),
     () => runMonthlyMedalAwards(),
@@ -4084,4 +4104,25 @@ async function boot() {
 }
 boot().catch((e) => { console.error('[boot] cannot start:', e.message); process.exit(1); });
 
-process.on('SIGTERM', () => { bot.stop().catch(() => {}); server.close(); db.close().catch(() => {}); process.exit(0); });
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err && err.stack ? err.stack : err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err && err.stack ? err.stack : err);
+  // Let Render restart a wedged process
+  setTimeout(() => process.exit(1), 250).unref?.();
+});
+
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[server] ${signal}, shutting down…`);
+  bot.stop().catch(() => {});
+  server.close(() => {
+    db.close().catch(() => {}).finally(() => process.exit(0));
+  });
+  setTimeout(() => process.exit(0), 8_000).unref?.();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

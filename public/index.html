@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en" data-theme="dark" data-asset="20261016ba" data-pieces="neo" data-board="green">
+<html lang="en" data-theme="dark" data-asset="20261016bb" data-pieces="neo" data-board="green">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#111827">
   <title>Chess</title>
-  <link rel="stylesheet" href="/styles.css?v=20261016ba">
+  <link rel="stylesheet" href="/styles.css?v=20261016bb">
   <style>
     /* Inline boot splash — always visible until JS reveals gate/app (never a blank black WebView) */
     html, body { margin: 0; min-height: 100%; min-height: 100dvh; background: radial-gradient(ellipse at 50% 42%, #1a2740 0%, #111827 62%, #0b1220 100%); color: var(--text, #fff); }
@@ -136,6 +136,7 @@
       <div class="gate-icon">♟</div>
       <h1>Open from Telegram</h1>
       <p>This app works inside Telegram. Open the bot and tap <b>Play</b>.</p>
+      <button type="button" class="btn gate-retry" data-gate-retry hidden>Try again</button>
     </div>
   </div>
 
@@ -160,9 +161,11 @@
     <div id="toast" role="status"></div>
   </main>
   <!-- Light entry: /me + hide splash, then dynamic-import heavy app.js -->
-  <script type="module" src="/js/entry.js?v=20261016ba"></script>
+  <script type="module" src="/js/entry.js?v=20261016bb"></script>
   <script>
     (function () {
+      // Wake Render origin early (cold start) while splash paints
+      try { fetch('/healthz', { cache: 'no-store', credentials: 'omit' }).catch(function () {}); } catch (e) {}
       var DEFAULTS = {
         en: { title: 'Loading game', subtitle: 'Please wait…' },
         ru: { title: 'Игра загружается', subtitle: 'Подождите…' },
@@ -265,7 +268,7 @@
         var play = document.querySelector('.page[data-page="play"]');
         if (play && play.childElementCount > 0) forceLeaveSplash();
         else failBoot('Juda uzoq kutildi');
-      }, 14000);
+      }, 42000);
     })();
   </script>
 </body>

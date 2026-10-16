@@ -1,6 +1,7 @@
 // Light entry: /me + app.js in parallel; keep splash until home first paint.
+// Retries /me through Render cold-starts so users do not land on "No connection".
 import { api, setInitData, tg } from './ui.js';
-import { errText, setLang } from './i18n.js';
+import { errText, setLang, t } from './i18n.js';
 import { applyPerfMode } from './perf.js';
 
 function hideBoot() {
@@ -24,6 +25,13 @@ function showGate(msg) {
     if (msg) {
       const h1 = gate.querySelector('h1');
       if (h1) h1.textContent = msg;
+    }
+    const retry = gate.querySelector('[data-gate-retry]');
+    if (retry) {
+      const net = !msg || /connection|aloqa|соединен|нет соедин/i.test(String(msg));
+      retry.hidden = !net;
+      retry.textContent = t('retry_live') || 'Try again';
+      retry.onclick = () => { location.reload(); };
     }
   }
 }
@@ -55,20 +63,50 @@ function assetV() {
   return document.documentElement.getAttribute('data-asset') || String(Date.now());
 }
 
-async function loadMe() {
-  const req = api('GET', '/me', undefined, { timeoutMs: 5000 });
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Fire-and-forget wake so Render leaves sleep before /me. */
+function wakeOrigin() {
+  try {
+    fetch('/healthz', { cache: 'no-store', credentials: 'omit' }).catch(() => {});
+  } catch (e) { /* ignore */ }
+}
+
+async function loadMeOnce(timeoutMs) {
+  const req = api('GET', '/me', undefined, { timeoutMs });
   req.catch(function () {});
   let timer;
   const backup = new Promise(function (_, reject) {
     timer = setTimeout(function () {
       reject(Object.assign(new Error('timeout'), { code: 'net' }));
-    }, 5500);
+    }, timeoutMs + 400);
   });
   try {
     return await Promise.race([req, backup]);
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Several attempts — covers Render free-tier wake (often 10–40s). */
+async function loadMe() {
+  const attempts = [9000, 12000, 16000];
+  let lastErr;
+  for (let i = 0; i < attempts.length; i++) {
+    if (i > 0) wakeOrigin();
+    try {
+      return await loadMeOnce(attempts[i]);
+    } catch (e) {
+      lastErr = e;
+      const code = (e && e.code) || '';
+      const retryable = !code || code === 'net' || code === 'server' || code === 'timeout';
+      if (!retryable || i === attempts.length - 1) throw e;
+      await sleep(400 * (i + 1));
+    }
+  }
+  throw lastErr || Object.assign(new Error('timeout'), { code: 'net' });
 }
 
 function isSyntaxLoadError(e) {
@@ -82,6 +120,7 @@ function isSyntaxLoadError(e) {
 async function main() {
   try { applyPerfMode(); } catch (e) { /* ignore */ }
   syncChrome();
+  wakeOrigin();
 
   if (!tg || !tg.initData) {
     showGate();
