@@ -291,7 +291,7 @@ Object.assign(en, {
   nav_rankings: 'Ranking', rankings_title: 'Live rankings', rankings_live: 'Live leaderboard',
   rankings_points_hint: 'Standings update automatically',
   rankings_empty: 'No ranked games yet. Finish a game to appear here.',
-  rankings_scoring: 'Monthly points: 2 for a win, 1 for a draw. Resets each calendar month (Tashkent).',
+  rankings_scoring: 'Monthly points: 2 for a win, 1 for a draw. Resets each calendar month (Tashkent). Top 1 / 2 / 3 get Premium: 1 month / 20 days / 15 days.',
   rankings_elo_hint: 'Lifetime Elo rating — points accumulate forever.',
   rankings_elo_scoring: 'Elo starts at 1200. Wins raise your rating, losses lower it. Separate boards per time control.',
   rankings_monthly_hint: 'Monthly mini-app points · {month}',
@@ -316,13 +316,13 @@ Object.assign(en, {
   admin_medals_sizes: 'Text sizes', admin_medals_sz_place: 'Tier I/II/III',
   admin_medals_sz_name: 'Name', admin_medals_sz_handle: 'Handle', admin_medals_sz_title: 'Season', admin_medals_sz_bot: 'Bot',
   admin_medals_pick_month: 'Season month', admin_medals_preview_place: 'Preview place',
-  admin_medals_auto_hint: 'Auto (Tashkent): last day 23:59 freezes the top 3; on the 1st the bot mints medals and sends PNG photos to winners. No manual award.',
+  admin_medals_auto_hint: 'Auto (Tashkent): last day 23:59 freezes the top 3; on the 1st the bot mints medals, grants Premium (1 month / 20 days / 15 days), and sends PNG photos to winners.',
 });
 Object.assign(ru, {
   nav_rankings: 'Рейтинг', rankings_title: 'Рейтинг в реальном времени', rankings_live: 'Таблица обновляется онлайн',
   rankings_points_hint: 'Рейтинг обновляется автоматически',
   rankings_empty: 'Пока нет рейтинговых партий. Завершите партию, чтобы появиться здесь.',
-  rankings_scoring: 'Месячные очки: 2 за победу, 1 за ничью. Обнуляются каждый календарный месяц (Ташкент).',
+  rankings_scoring: 'Месячные очки: 2 за победу, 1 за ничью. Обнуляются каждый календарный месяц (Ташкент). Топ 1 / 2 / 3 получают Premium: 1 месяц / 20 дней / 15 дней.',
   rankings_elo_hint: 'Пожизненный Elo — очки накапливаются всегда.',
   rankings_elo_scoring: 'Elo начинается с 1200. Победы повышают рейтинг, поражения снижают. Отдельные доски по контролю времени.',
   rankings_monthly_hint: 'Месячные очки мини-приложения · {month}',
@@ -347,13 +347,13 @@ Object.assign(ru, {
   admin_medals_sizes: 'Размеры текста', admin_medals_sz_place: 'Уровень I/II/III',
   admin_medals_sz_name: 'Имя', admin_medals_sz_handle: 'Ник', admin_medals_sz_title: 'Сезон', admin_medals_sz_bot: 'Бот',
   admin_medals_pick_month: 'Месяц сезона', admin_medals_preview_place: 'Место превью',
-  admin_medals_auto_hint: 'Авто (Ташкент): в последний день в 23:59 фиксируется топ-3; 1-го бот выдаёт медали и шлёт PNG победителям. Без ручной выдачи.',
+  admin_medals_auto_hint: 'Авто (Ташкент): в последний день в 23:59 фиксируется топ-3; 1-го бот выдаёт медали, Premium (1 месяц / 20 дней / 15 дней) и шлёт PNG победителям.',
 });
 Object.assign(uz, {
   nav_rankings: 'Reyting', rankings_title: 'Jonli reyting', rankings_live: 'Reyting yangilanib turadi',
   rankings_points_hint: 'Jadval avtomatik yangilanadi',
   rankings_empty: 'Hozircha reytingli o‘yinlar yo‘q. Ro‘yxatga kirish uchun o‘yinni yakunlang.',
-  rankings_scoring: 'Oylik ochko: g‘alaba 2, durang 1. Har oy (Toshkent) yangilanadi.',
+  rankings_scoring: 'Oylik ochko: g‘alaba 2, durang 1. Har oy (Toshkent) yangilanadi. Top 1 / 2 / 3 ga Premium: 1 oy / 20 kun / 15 kun.',
   rankings_elo_hint: 'Umrbod Elo — ochkolar doim yig‘iladi.',
   rankings_elo_scoring: 'Elo 1200 dan boshlanadi. G‘alaba oshiradi, mag‘lubiyat kamaytiradi. Har vaqt nazorati alohida.',
   rankings_monthly_hint: 'Oylik mini app ochkolari · {month}',
@@ -378,13 +378,13 @@ Object.assign(uz, {
   admin_medals_sizes: 'Matn o‘lchamlari', admin_medals_sz_place: 'Daraja I/II/III',
   admin_medals_sz_name: 'Ism', admin_medals_sz_handle: 'Nik', admin_medals_sz_title: 'Mavsum', admin_medals_sz_bot: 'Bot',
   admin_medals_pick_month: 'Mavsum oyi', admin_medals_preview_place: 'Ko‘rish o‘rni',
-  admin_medals_auto_hint: 'Avto (Toshkent): oyning oxirgi kuni 23:59 da top-3 saqlanadi; 1-sida bot medal beradi va g‘oliblarga PNG yuboradi. Qo‘lda berish yo‘q.',
+  admin_medals_auto_hint: 'Avto (Toshkent): oyning oxirgi kuni 23:59 da top-3 saqlanadi; 1-sida bot medal + Premium (1 oy / 20 kun / 15 kun) beradi va g‘oliblarga PNG yuboradi.',
 });
 Object.assign(uzc, {
   nav_rankings: 'Рейтинг', rankings_title: 'Жонли рейтинг', rankings_live: 'Рейтинг автоматик янгиланади',
   rankings_points_hint: 'Жадвал автоматик янгиланади',
   rankings_empty: 'Ҳозирча рейтингли ўйинлар йўқ. Рўйхатга кириш учун ўйинни якунланг.',
-  rankings_scoring: 'Ойлик очко: ғалаба 2, дуранг 1. Ҳар ой (Тошкент) янгиланади.',
+  rankings_scoring: 'Ойлик очко: ғалаба 2, дуранг 1. Ҳар ой (Тошкент) янгиланади. Top 1 / 2 / 3 га Premium: 1 ой / 20 кун / 15 кун.',
   rankings_elo_hint: 'Умрбод Elo — очкolar доим йиғилади.',
   rankings_elo_scoring: 'Elo 1200 дан бошланади. Ғалаба оширади, мағлубият камайтиради.',
   rankings_monthly_hint: 'Ойлик мини апп очколари · {month}',
@@ -409,7 +409,7 @@ Object.assign(uzc, {
   admin_medals_sizes: 'Матн ўлчамлари', admin_medals_sz_place: 'Даража I/II/III',
   admin_medals_sz_name: 'Исм', admin_medals_sz_handle: 'Ник', admin_medals_sz_title: 'Мавсум', admin_medals_sz_bot: 'Бот',
   admin_medals_pick_month: 'Мавсум ойи', admin_medals_preview_place: 'Кўриш ўрни',
-  admin_medals_auto_hint: 'Авто (Тошкент): ойнинг охирги куни 23:59 да топ-3 сақланади; 1-сида бот медал беради ва ғолибларга PNG юборади. Қўлда бериш йўқ.',
+  admin_medals_auto_hint: 'Авто (Тошкент): ойнинг охирги куни 23:59 да топ-3 сақланади; 1-сида бот медал + Премиум (1 ой / 20 кун / 15 кун) беради ва ғолибларга PNG юборади.',
 });
 
 const DICT = { en, ru, uz, uzc };

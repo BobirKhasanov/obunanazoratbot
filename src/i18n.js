@@ -28,8 +28,13 @@ const STR = {
       if (until) lines.push(`Premium until ${until} (Tashkent).`);
       return lines.join('\n');
     },
-    medalAward: ({ place, season, bot }) =>
-      `🏆 Season reward!\nYou finished Top ${place} for ${season}.\nYour medal is attached — set it as your avatar in the app.\n${bot || ''}`.trim(),
+    medalAward: ({ place, season, bot, premiumMonths, premiumDays }) => {
+      const prem = premiumMonths > 0
+        ? `★ Premium +${premiumMonths} month${premiumMonths === 1 ? '' : 's'} added.`
+        : (premiumDays > 0 ? `★ Premium +${premiumDays} days added.` : '');
+      return `🏆 Season reward!\nYou finished Top ${place} for ${season}.\n${prem}\nYour medal is attached — set it as your avatar in the app.\n${bot || ''}`
+        .replace(/\n{2,}/g, '\n').trim();
+    },
     unknown: 'Tap the button below to start playing.',
     description: 'Play chess against the computer, online players or your friends, right inside Telegram.',
     shortDescription: 'Chess in Telegram: vs computer, online or friends',
@@ -59,8 +64,13 @@ const STR = {
       if (until) lines.push(`Премиум до ${until} (Ташкент).`);
       return lines.join('\n');
     },
-    medalAward: ({ place, season, bot }) =>
-      `🏆 Награда сезона!\nВы заняли Top ${place} в ${season}.\nМедаль во вложении — выберите её как аватар в приложении.\n${bot || ''}`.trim(),
+    medalAward: ({ place, season, bot, premiumMonths, premiumDays }) => {
+      const prem = premiumMonths > 0
+        ? `★ Премиум +${premiumMonths} мес. начислен.`
+        : (premiumDays > 0 ? `★ Премиум +${premiumDays} дн. начислен.` : '');
+      return `🏆 Награда сезона!\nВы заняли Top ${place} в ${season}.\n${prem}\nМедаль во вложении — выберите её как аватар в приложении.\n${bot || ''}`
+        .replace(/\n{2,}/g, '\n').trim();
+    },
     unknown: 'Нажмите кнопку ниже, чтобы начать игру.',
     description: 'Играйте в шахматы с компьютером, игроками онлайн или друзьями, прямо в Telegram.',
     shortDescription: 'Шахматы в Telegram: с компьютером, онлайн или с друзьями',
@@ -90,8 +100,13 @@ const STR = {
       if (until) lines.push(`Premium ${until} gacha (Toshkent).`);
       return lines.join('\n');
     },
-    medalAward: ({ place, season, bot }) =>
-      `🏆 Mavsum mukofoti!\nSiz ${season} oyida Top ${place} bo‘ldingiz.\nMedal biriktirilgan — ilovada avatar qilib tanlang.\n${bot || ''}`.trim(),
+    medalAward: ({ place, season, bot, premiumMonths, premiumDays }) => {
+      const prem = premiumMonths > 0
+        ? `★ Premium +${premiumMonths} oy qo‘shildi.`
+        : (premiumDays > 0 ? `★ Premium +${premiumDays} kun qo‘shildi.` : '');
+      return `🏆 Mavsum mukofoti!\nSiz ${season} oyida Top ${place} bo‘ldingiz.\n${prem}\nMedal biriktirilgan — ilovada avatar qilib tanlang.\n${bot || ''}`
+        .replace(/\n{2,}/g, '\n').trim();
+    },
     unknown: "O'ynashni boshlash uchun pastdagi tugmani bosing.",
     description: "Kompyuter, onlayn o'yinchilar yoki do'stlaringiz bilan shaxmat o'ynang, to'g'ridan-to'g'ri Telegramda.",
     shortDescription: "Telegramda shaxmat: kompyuter, onlayn yoki do'stlar bilan",
@@ -121,8 +136,13 @@ const STR = {
       if (until) lines.push(`Премиум ${until} гача (Тошкент).`);
       return lines.join('\n');
     },
-    medalAward: ({ place, season, bot }) =>
-      `🏆 Мавсум мукофоти!\nСиз ${season} ойида Top ${place} бўлдингиз.\nМедал бириктирилган — иловада аватар қилиб танланг.\n${bot || ''}`.trim(),
+    medalAward: ({ place, season, bot, premiumMonths, premiumDays }) => {
+      const prem = premiumMonths > 0
+        ? `★ Премиум +${premiumMonths} ой қўшилди.`
+        : (premiumDays > 0 ? `★ Премиум +${premiumDays} кун қўшилди.` : '');
+      return `🏆 Мавсум мукофоти!\nСиз ${season} ойида Top ${place} бўлдингиз.\n${prem}\nМедал бириктирилган — иловада аватар қилиб танланг.\n${bot || ''}`
+        .replace(/\n{2,}/g, '\n').trim();
+    },
     unknown: 'Ўйнашни бошлаш учун пастдаги тугмани босинг.',
     description: 'Компьютер, онлайн ўйинчилар ёки дўстларингиз билан шахмат ўйнанг, тўғридан-тўғри Телеграмда.',
     shortDescription: 'Телеграмда шахмат: компьютер, онлайн ёки дўстлар билан',

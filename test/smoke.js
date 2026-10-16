@@ -664,12 +664,32 @@ async function playMoves(game, players, moves, startPly = 0) {
       );
       // Current month must not be awardable (prevents accidental mid-season medals)
       await err('ADMIN', 'POST', '/admin/medals/award', { month: cfg.month, notify: false }, 400, 'bad_request');
+      // Clear premium so award can grant podium Premium from a known base
+      await pg.q(
+        'UPDATE users SET premium = 0, premium_until = NULL WHERE id = ANY($1::bigint[])',
+        [USERS.B.id, USERS.A.id, USERS.C.id],
+      );
       // notify:false — fake Telegram cannot accept SVG/PNG documents in this harness
       const awarded = await ok('ADMIN', 'POST', '/admin/medals/award', { month: prevMonth, notify: false });
       assert.ok(awarded.awarded.length >= 1);
       const top1 = awarded.awarded.find((m) => m.place === 1);
+      const top2 = awarded.awarded.find((m) => m.place === 2);
+      const top3 = awarded.awarded.find((m) => m.place === 3);
       assert.ok(top1 && top1.userId === USERS.B.id);
       assert.ok(awarded.awarded.every((m) => m.svg === undefined), 'svg not echoed in award JSON');
+      assert.ok(awarded.premiumGrants && awarded.premiumGrants.length >= 1, 'podium Premium granted');
+      assert.strictEqual(top1.premiumMonths, 1, 'top1 gets 1 month Premium');
+      if (top2) assert.strictEqual(top2.premiumDays, 20, 'top2 gets 20 days Premium');
+      if (top3) assert.strictEqual(top3.premiumDays, 15, 'top3 gets 15 days Premium');
+      const meB = await ok('B', 'GET', '/me');
+      assert.ok(meB.user.premium, 'top1 Premium active');
+      assert.ok(meB.user.premiumUntil, 'top1 has premium_until');
+      // Re-award must not stack Premium again
+      const until1 = meB.user.premiumUntil;
+      const again = await ok('ADMIN', 'POST', '/admin/medals/award', { month: prevMonth, notify: false });
+      assert.ok(!again.premiumGrants || again.premiumGrants.length === 0, 'premium grant is idempotent');
+      const meB2 = await ok('B', 'GET', '/me');
+      assert.strictEqual(meB2.user.premiumUntil, until1, 'premium_until unchanged on re-award');
 
       const svgRes = await fetch(`${BASE}/api/medals/${top1.id}.svg`, {
         headers: { 'X-Init-Data': init('B') },

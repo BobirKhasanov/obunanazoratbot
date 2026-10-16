@@ -846,13 +846,14 @@ function openPuzzle(i) {
   let board = null;
   const say = (text, cls) => { status.textContent = text; status.className = 'pz-status' + (cls ? ' ' + cls : ''); };
   const draw = (lastMove) => board.set(chess, { orientation: colour, mine: state2.locked ? null : colour, lastMove, animate: true });
-  const buttons = (solved) => actions.replaceChildren(
+  const buttons = (solved) => actions.replaceChildren(...[
     h('button.btn.ghost.sm', { onclick: () => openPuzzle(i) }, t('puzzle_retry')),
     solved
       ? (i + 1 < list.length
         ? h('button.btn.sm', { onclick: () => openPuzzle(i + 1) }, t('puzzle_next'))
         : h('button.btn.sm', { onclick: closePuzzle }, t('puzzle_back')))
-      : null);
+      : null,
+  ].filter(Boolean));
   const onMove = async (from, to, promotion) => {
     if (state2.locked) return;
     unlockAudio();
@@ -1175,6 +1176,7 @@ export async function start(me) {
       const bits = [];
       if (g.diamonds > 0) bits.push(`+${g.diamonds} 💎`);
       if (g.premiumMonths > 0) bits.push(`★ +${g.premiumMonths}`);
+      if (g.premiumDays > 0) bits.push(`★ +${g.premiumDays}d`);
       toast(bits.length ? bits.join(' · ') : t('wallet_updated'));
       haptic('success');
       if (canStyleChess(state.me)) applyChessStyle(state.me.pieceSet, state.me.boardTheme);

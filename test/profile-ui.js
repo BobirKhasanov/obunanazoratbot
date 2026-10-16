@@ -128,7 +128,10 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016ad"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016ad'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016ae"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016ae'), 'HTML data-asset matches entry cache bust');
+assert.ok(app.includes('.filter(Boolean)') && app.includes('puzzle_retry'), 'puzzle actions skip null (no literal "null" text)');
+assert.ok(read('src/server.js').includes('PODIUM_PREMIUM') && read('src/server.js').includes('grantPodiumPremium'), 'monthly podium auto-Premium');
+assert.ok(read('src/server.js').includes('medal_premium_') && /days:\s*20/.test(read('src/server.js')) && /days:\s*15/.test(read('src/server.js')), 'podium Premium 1mo/20d/15d');
 assert.ok(app.includes('puzzleHost') && /time-heading[\s\S]{0,400}puzzleHost|pcards[\s\S]{0,200}puzzle/.test(app), 'puzzle carousel below time/play cards');
 assert.ok(read('public/js/game.js').includes('isMoveSoundOn') && read('public/js/game.js').includes('allowUndo'), 'move sound + optional AI undo');
 assert.ok(read('public/js/game.js').includes('sound-btn') && /icon\([^)]*soundOn[^)]*28\)/.test(read('public/js/game.js')), 'sound toggle icon larger');

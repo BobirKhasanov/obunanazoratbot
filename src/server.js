@@ -498,6 +498,47 @@ async function loadPodiumForAward(month) {
   return top.map((u, i) => ({ id: u.id, name: u.name, username: u.username, points: u.points, place: i + 1 }));
 }
 
+/** Monthly ranking podium Premium: Top1 = 1 month, Top2 = 20 days, Top3 = 15 days. */
+const PODIUM_PREMIUM = {
+  1: { months: 1, days: 0 },
+  2: { months: 0, days: 20 },
+  3: { months: 0, days: 15 },
+};
+
+/** Extend Premium from now (or existing expiry). Returns { until, user } or null. */
+async function grantPodiumPremium(userId, place, meta = {}) {
+  const reward = PODIUM_PREMIUM[place];
+  if (!reward) return null;
+  const u = await getUser.get(userId);
+  if (!u) return null;
+  const base = (u.premium_until && new Date(u.premium_until).getTime() > Date.now())
+    ? new Date(u.premium_until)
+    : new Date();
+  const until = reward.months > 0
+    ? addMonthsTashkent(base, reward.months)
+    : addDaysUtc(base, reward.days);
+  await db.prepare('UPDATE users SET premium = 1, premium_until = ? WHERE id = ?')
+    .run(until.toISOString(), userId);
+  invalidateUserCache(userId);
+  const nextRow = await getUser.get(userId);
+  memoUser(nextRow);
+  const next = publicUser(nextRow, isAdmin(nextRow.id));
+  try {
+    realtime.send(userId, {
+      t: 'wallet',
+      user: next,
+      granted: {
+        diamonds: 0,
+        premiumMonths: reward.months || 0,
+        premiumDays: reward.days || 0,
+        reason: 'monthly_podium',
+        ...meta,
+      },
+    });
+  } catch { /* ignore */ }
+  return { until, user: next, months: reward.months || 0, days: reward.days || 0 };
+}
+
 async function awardMonthMedals(month, { notifyWinners = false } = {}) {
   const m = month || previousMonthKey();
   if (!/^\d{4}-\d{2}$/.test(m)) throw bad('month must be YYYY-MM', 'bad_request');
@@ -525,12 +566,49 @@ async function awardMonthMedals(month, { notifyWinners = false } = {}) {
     awarded.push({ id: mid, place, userId: u.id, name: u.name, title, month: m, svg });
   }
 
+  // Idempotent Premium for podium (once per completed month)
+  const premiumAlready = await getSetting(`medal_premium_${m}`, '');
+  const premiumGrants = [];
+  if (premiumAlready !== '1' && awarded.length) {
+    for (const a of awarded) {
+      try {
+        const g = await grantPodiumPremium(a.userId, a.place, { month: m, place: a.place });
+        if (g) {
+          premiumGrants.push({
+            place: a.place,
+            userId: a.userId,
+            months: g.months,
+            days: g.days,
+            until: g.until.toISOString(),
+          });
+          a.premiumMonths = g.months;
+          a.premiumDays = g.days;
+        }
+      } catch (e) {
+        console.error('[medals] premium', a.userId, e.message || e);
+      }
+    }
+    if (premiumGrants.length) await setSetting(`medal_premium_${m}`, '1');
+  } else {
+    // Already granted — still expose intended amounts for API consumers
+    for (const a of awarded) {
+      const r = PODIUM_PREMIUM[a.place];
+      if (r) { a.premiumMonths = r.months || 0; a.premiumDays = r.days || 0; }
+    }
+  }
+
   if (notifyWinners && awarded.length) {
     const season = seasonLabel(m);
     for (const a of awarded) {
       const u = await getUser.get(a.userId);
       const T = require('./i18n').tr(u?.lang || 'en');
-      const caption = T.medalAward({ place: a.place, season, bot: cfg.botHandle });
+      const caption = T.medalAward({
+        place: a.place,
+        season,
+        bot: cfg.botHandle,
+        premiumMonths: a.premiumMonths || 0,
+        premiumDays: a.premiumDays || 0,
+      });
       try {
         const png = await svgToPngBuffer(a.svg);
         await notify.sendMedal(a.userId, {
@@ -546,7 +624,12 @@ async function awardMonthMedals(month, { notifyWinners = false } = {}) {
     }
     await setSetting(`medals_notified_${m}`, '1');
   }
-  return { month: m, monthLabel: monthLabelEn(m), awarded: awarded.map(({ svg, ...rest }) => rest) };
+  return {
+    month: m,
+    monthLabel: monthLabelEn(m),
+    awarded: awarded.map(({ svg, ...rest }) => rest),
+    premiumGrants,
+  };
 }
 
 /** Lazy mint previous month medals (no DM) if scores exist and medals missing. */
@@ -3584,8 +3667,8 @@ admin.delete('/medals/:month', wrap(async (req, res) => {
     WHERE avatar_key LIKE ?
   `).run(`medal:m-${month}-%`);
   const r = await db.prepare('DELETE FROM medals WHERE month = ?').run(month);
-  await db.prepare("DELETE FROM app_settings WHERE key = ? OR key = ?").run(
-    `medals_notified_${month}`, `medal_snapshot_${month}`,
+  await db.prepare('DELETE FROM app_settings WHERE key = ? OR key = ? OR key = ?').run(
+    `medals_notified_${month}`, `medal_snapshot_${month}`, `medal_premium_${month}`,
   );
   res.json({ ok: true, deleted: r.changes || 0, month });
 }));
