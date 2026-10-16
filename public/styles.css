@@ -2602,6 +2602,13 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 .nx-daily-ic { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; flex: none; font-size: 22px; background: rgba(46, 139, 255, 0.16); }
 .nx-daily-rw { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 999px; flex: none; background: rgba(46, 139, 255, 0.16); }
 .nx-daily-rw b { color: #9cc8ff; font-weight: 800; }
+.nx-daily > .ic { flex: none; color: var(--muted); }
+.nx-daily .nx-row-tx { flex: 1 1 auto; min-width: 0; }
+.nx-daily .nx-row-tx b { min-width: 0; }
+.nx-daily .nx-row-tx small {
+  display: block; min-width: 0; overflow: visible; white-space: normal; text-overflow: unset;
+  line-height: 1.35;
+}
 .nx-continue { margin-bottom: 4px; }
 
 /* ----- nav: active tile = blue icon + label (no centre circle) ----- */
