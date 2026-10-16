@@ -158,17 +158,35 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual((await ok('C', 'GET', '/me')).user.diamonds, beforeC + 10);
       assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 40, 'second invitee also pays inviter');
 
-      // Friend chat + in-app DM notification
+      // Friend chat: mail badge only (bell must stay free of chat)
       const th = await ok('A', 'POST', '/messages/threads', { userId: USERS.B.id });
       assert.ok(th.id);
       await ok('A', 'POST', `/messages/threads/${th.id}`, { body: 'salom' });
       const chat = await ok('B', 'GET', `/messages/threads/${th.id}`);
       assert.ok((chat.messages || []).some((m) => m.body === 'salom'));
       assert.ok(chat.peer && chat.peer.id === USERS.A.id, 'thread returns peer for deep link open');
-      const notifs = await ok('B', 'GET', '/notifications');
-      const dmNotif = (notifs.notifications || []).find((n) => n.kind === 'dm' && n.meta && n.meta.threadId === th.id);
-      assert.ok(dmNotif, 'recipient got DM notification');
-      assert.ok(/salom/i.test(dmNotif.body || ''));
+      // B already read the thread above — send another unread DM for the mail badge
+      await ok('A', 'POST', `/messages/threads/${th.id}`, { body: 'reply me' });
+      const unread2 = await ok('B', 'GET', '/messages/unread-count');
+      assert.ok((unread2.count || 0) >= 1, 'DM lights mail unread badge');
+      const bell = await ok('B', 'GET', '/notifications/unread-count');
+      assert.strictEqual(bell.count || 0, 0, 'DM must not light the bell');
+      // Reply in DM
+      const withReply = await ok('B', 'POST', `/messages/threads/${th.id}`, {
+        body: 'javob',
+        replyToId: (chat.messages || []).find((m) => m.body === 'salom')?.id,
+      });
+      assert.ok(withReply.replyTo && /salom/i.test(withReply.replyTo.body || ''), 'DM reply attached');
+      // Global lobby chat + 24h table
+      const g1 = await ok('A', 'POST', '/chat/global', { body: 'salom hammaga' });
+      assert.ok(g1.message && g1.message.id);
+      const g2 = await ok('B', 'POST', '/chat/global', {
+        body: 'javob umumiy',
+        replyToId: g1.message.id,
+      });
+      assert.ok(g2.message.replyTo && g2.message.replyTo.mine === false);
+      const gList = await ok('A', 'GET', '/chat/global');
+      assert.ok((gList.messages || []).some((m) => m.body === 'javob umumiy'));
       await err('B', 'POST', '/messages/threads', { userId: USERS.C.id }, 400, 'friends_only');
       // Search finds any player (not friends-only); opening chat still requires friendship
       const found = await ok('B', 'GET', `/messages/search?q=${encodeURIComponent('Car')}`);

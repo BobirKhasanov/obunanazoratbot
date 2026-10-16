@@ -1,6 +1,6 @@
 // Game screen: vs computer (local engine in a Web Worker) and online / friend games (server-authoritative over WebSocket).
 import { Chess } from '/vendor/chess.js';
-import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatEmoji, rain, avatar, avBlock, sleep, shareUrl, copyText, playMoveSound, unlockAudio } from './ui.js';
+import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatEmoji, rain, avatar, avBlock, sleep, shareUrl, copyText, playMoveSound, unlockAudio, isMoveSoundOn, setMoveSoundOn } from './ui.js';
 import { t, getLang } from './i18n.js';
 import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
@@ -65,6 +65,7 @@ export function openGame(opts, onClose) {
     kind: opts.kind, onClose, level: opts.level || 3, colour: opts.colour || 'w', id: opts.game ? opts.game.id : null,
     moves: [], chess: new Chess(), over: false, busy: false, game: opts.game || null, flipped: false, meta: opts.meta || {}, thinking: false,
     clockTimer: null, flagClaimed: false, chat: [], chatOpen: false,
+    allowUndo: opts.allowUndo !== false,
   };
 
   const bar = (cls) => ({
@@ -78,6 +79,24 @@ export function openGame(opts, onClose) {
   const banner = h('div.gbanner'); banner.hidden = true;
   const back = h('button.round.back', { 'aria-label': t('back'), onclick: () => closeGame() }, icon('back', 22));
   const title = h('div.gtitle');
+  const soundBtn = h('button.round', {
+    type: 'button',
+    'aria-label': t('move_sound'),
+    onclick: () => {
+      const on = !isMoveSoundOn();
+      setMoveSoundOn(on);
+      paintSoundBtn();
+      haptic('select');
+      if (on) { unlockAudio(); playMoveSound(); }
+    },
+  });
+  const paintSoundBtn = () => {
+    const on = isMoveSoundOn();
+    soundBtn.replaceChildren(icon(on ? 'soundOn' : 'soundOff', 22));
+    soundBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    soundBtn.classList.toggle('off', !on);
+  };
+  paintSoundBtn();
   const act = (ic, label, fn) => h('button.act', { onclick: fn, 'aria-label': label }, icon(ic, 22), h('span', label));
   const actions = h('div.actions');
   const reactBar = h('div.reactbar'); reactBar.hidden = true;
@@ -92,7 +111,10 @@ export function openGame(opts, onClose) {
     h('div.gchat-form', chatInput, h('button.mini', { type: 'button', 'aria-label': t('game_chat_send'), onclick: sendChat }, icon('send', 18))),
   );
   root.append(
-    h('div.ghead', back, title, h('button.round', { 'aria-label': t('flip'), onclick: () => { S.flipped = !S.flipped; render(false); haptic('light'); } }, icon('flip', 22))),
+    h('div.ghead', back, title,
+      h('div.ghead-tools',
+        soundBtn,
+        h('button.round', { 'aria-label': t('flip'), onclick: () => { S.flipped = !S.flipped; render(false); haptic('light'); } }, icon('flip', 22)))),
     status, top.el, boardHost, bot.el, moveStrip, banner, reactBar, chatPanel, actions,
   );
   const board = S.board = new Board(boardHost, { onMove: (f, to, p) => humanMove(f, to, p) });
@@ -362,8 +384,8 @@ export function openGame(opts, onClose) {
         act('flag', t('resign'), resign),
       );
     } else if (S.kind === 'ai' && live) {
+      if (S.allowUndo) actions.append(act('undo', t('undo'), undo));
       actions.append(
-        act('undo', t('undo'), undo),
         act('flag', t('resign'), resign),
         act('smile', '', toggleReact),
         act('globe', t('hint'), hint),
@@ -425,7 +447,11 @@ export function openGame(opts, onClose) {
     S.thinking = false;
     const over = checkEnd();
     render();
-    if (S.kind === 'ai') saveAi(S.over ? null : { moves: S.moves, level: S.level, colour: S.colour });
+    if (S.kind === 'ai') {
+      saveAi(S.over ? null : {
+        moves: S.moves, level: S.level, colour: S.colour, allowUndo: !!S.allowUndo,
+      });
+    }
     if (!over && S.kind === 'ai' && S.chess.turn() !== S.colour) aiTurn();
     void human;
   }
@@ -450,10 +476,12 @@ export function openGame(opts, onClose) {
     S.thinking = true; render(false);
     const token = S.token = {};
     const t0 = Date.now();
+    // Realistic pause after the player moves (1–1.5s total, including engine time)
+    const thinkMs = 1000 + Math.floor(Math.random() * 501);
     const seen = []; { const c = new Chess(); seen.push(c.fen()); for (const [f, to, p] of S.moves) { c.move({ from: f, to, promotion: p }); seen.push(c.fen()); } }
     let mv = null;
     try { mv = await askEngine(S.chess.fen(), S.level, seen); } catch { mv = null; }
-    await sleep(Math.max(0, 450 - (Date.now() - t0)));
+    await sleep(Math.max(0, thinkMs - (Date.now() - t0)));
     if (S.token !== token || ctx !== S) return; // game closed or undone meanwhile
     S.thinking = false;
     if (!mv) { const all = S.chess.moves({ verbose: true }); if (!all.length) return afterMove(false); const m = all[Math.floor(Math.random() * all.length)]; mv = { from: m.from, to: m.to, promotion: m.promotion }; }
@@ -464,11 +492,11 @@ export function openGame(opts, onClose) {
   }
 
   function undo() {
-    if (S.thinking || S.over || S.moves.length === 0) return;
+    if (!S.allowUndo || S.thinking || S.over || S.moves.length === 0) return;
     const n = S.chess.turn() === S.colour ? 2 : 1;
     for (let i = 0; i < n && S.moves.length; i++) { S.moves.pop(); }
     S.chess = build(S.moves); S.token = null; haptic('select');
-    render(); saveAi({ moves: S.moves, level: S.level, colour: S.colour });
+    render(); saveAi({ moves: S.moves, level: S.level, colour: S.colour, allowUndo: !!S.allowUndo });
   }
   async function hint() {
     if (S.thinking || S.over || S.chess.turn() !== S.colour) return;
@@ -561,7 +589,11 @@ export function openGame(opts, onClose) {
 
   S.render = render;
   if (S.kind === 'ai') {
-    if (opts.resume) { S.moves = opts.resume.moves; S.chess = build(S.moves); }
+    if (opts.resume) {
+      S.moves = opts.resume.moves;
+      S.chess = build(S.moves);
+      if (opts.resume.allowUndo != null) S.allowUndo = !!opts.resume.allowUndo;
+    }
     S.colour = opts.colour || 'w'; S.chess = build(S.moves); render(false);
     if (S.chess.turn() !== S.colour) aiTurn();
   } else if (S.kind === 'spectate') {

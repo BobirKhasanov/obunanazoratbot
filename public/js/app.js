@@ -1,7 +1,7 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, shareUrl, copyText } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, toggle, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, shareUrl, copyText } from './ui.js';
 import { homeTabRefreshMs, softPollMs } from './perf.js';
-import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread } from './inbox.js';
+import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -339,19 +339,24 @@ async function joinGame(id) {
     openOnline(r.game);
   } catch (e) { toast(t('join_failed'), true); }
 }
-function startAi(level, colour) {
+function startAi(level, colour, opts = {}) {
   const col = colour === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : colour;
-  const S = openGame({ kind: 'ai', level, colour: col, meta: gameMeta() }, () => refresh());
+  const S = openGame({
+    kind: 'ai', level, colour: col, allowUndo: opts.allowUndo !== false, meta: gameMeta(),
+  }, () => refresh());
   S.onStats = (s) => { state.stats = s; };
 }
 function resumeAi() {
   const s = savedAiGame(); if (!s) return;
-  const S = openGame({ kind: 'ai', level: s.level, colour: s.colour, resume: s, meta: gameMeta() }, () => refresh());
+  const S = openGame({
+    kind: 'ai', level: s.level, colour: s.colour, resume: s,
+    allowUndo: s.allowUndo !== false, meta: gameMeta(),
+  }, () => refresh());
   S.onStats = (st) => { state.stats = st; };
 }
 
 function aiSheet() {
-  let level = 2, colour = 'w';
+  let level = 2, colour = 'w', allowUndo = true;
   sheet((close) => {
     const levels = h('div.levels');
     const draw = () => levels.replaceChildren(...[1, 2, 3, 4].map((n) => h('button.lvl' + (n === level ? '.on' : ''), { onclick: () => { level = n; haptic('select'); draw(); } },
@@ -363,7 +368,10 @@ function aiSheet() {
       h('div.label', t('level')), levels,
       h('div.label', t('play_as')),
       seg([['w', '♔ ' + t('white')], ['r', '🎲 ' + t('random')], ['b', '♚ ' + t('black')]], colour, (v) => { colour = v; }),
-      h('button.btn', { onclick: () => { close(); setTimeout(() => startAi(level, colour), 120); } }, t('start')),
+      h('div.setting.ai-undo-row',
+        h('div', h('b', t('ai_undo')), h('small', t('ai_undo_sub'))),
+        toggle(allowUndo, (v) => { allowUndo = v; })),
+      h('button.btn', { onclick: () => { close(); setTimeout(() => startAi(level, colour, { allowUndo }), 120); } }, t('start')),
     ];
   });
 }
@@ -602,13 +610,14 @@ refreshers.play = async function renderPlay() {
         headerInboxBtns(),
         h('button.gempill', { onclick: () => go(TABS.indexOf('profile'), true) }, '💎 ' + (state.me.diamonds || 0)))),
     annHost,
-    puzzleAnns && puzzleAnns.length ? puzzleHost : puzzleFallback,
     h('div.time-heading', t('choose_time')),
     modes,
     h('div.pcards',
       card('🌐', t('play_card_online'), onlineSheet),
       card('🤝', t('play_card_friend'), startFriendGame),
       card('🤖', t('play_card_ai'), aiSheet)),
+    // 2nd announcement board sits between play modes and online players
+    puzzleAnns && puzzleAnns.length ? puzzleHost : puzzleFallback,
     ...onlineBlock,
     l.games.invites.length ? [h('div.h2', t('invites')), h('div.list', l.games.invites.map((g) => h('div.row.invite',
       avBlock(g.opponent.name, g.opponent.id, { premium: !!g.opponent.premium, round: true, avatarKey: g.opponent.avatarKey || null }),
@@ -1123,6 +1132,16 @@ export async function start(me) {
       if (isViewingDmThread(m.threadId)) return;
       haptic('success');
       toast(t('msg_new_from', { name: (m.from && m.from.name) || '…' }));
+    }
+    else if (m.t === 'gchat') {
+      try { refreshInboxBadges(); } catch { /* ignore */ }
+      if (isViewingGlobalChat()) return;
+      const msg = m.message || {};
+      // Inbox red dot is for replies to you — toast only then
+      if (msg.replyTo && msg.replyTo.mine) {
+        haptic('success');
+        toast(t('gchat_reply_from', { name: (msg.from && msg.from.name) || '…' }));
+      }
     }
     else if (m.t === 'wallet' && m.user) {
       state.me = { ...state.me, ...m.user };

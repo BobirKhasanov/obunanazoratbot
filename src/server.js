@@ -2259,9 +2259,11 @@ api.get('/notifications', wrap(async (req, res) => {
 }));
 
 api.get('/notifications/unread-count', wrap(async (req, res) => {
+  // Chat traffic (DM) must never light the bell — only admin / feedback / system.
   const row = await db.prepare(`
     SELECT COUNT(*)::int AS n FROM notifications
     WHERE user_id = ? AND read_at IS NULL AND ${NOTIF_ACTIVE}
+      AND kind <> 'dm'
   `).get(req.user.id);
   res.json({ count: row?.n || 0 });
 }));
@@ -2288,12 +2290,24 @@ async function blockedEither(a, b) {
 
 api.get('/messages/unread-count', wrap(async (req, res) => {
   const uid = req.user.id;
-  const row = await db.prepare(`
+  const dm = await db.prepare(`
     SELECT COUNT(*)::int AS n FROM dm_messages m
     JOIN dm_threads t ON t.id = m.thread_id
     WHERE (t.user_a = ? OR t.user_b = ?) AND m.sender_id <> ? AND m.read_at IS NULL
   `).get(uid, uid, uid);
-  res.json({ count: row?.n || 0 });
+  // Global chat: badge only for replies to this user's messages (not every lobby message).
+  const lastRead = (await db.prepare('SELECT last_read_id AS n FROM global_chat_reads WHERE user_id = ?').get(uid))?.n || 0;
+  const gReply = await db.prepare(`
+    SELECT COUNT(*)::int AS n FROM global_chat_messages m
+    JOIN global_chat_messages parent ON parent.id = m.reply_to_id
+    WHERE parent.sender_id = ? AND m.sender_id <> ? AND m.id > ?
+      AND m.created_at > now() - interval '24 hours'
+  `).get(uid, uid, lastRead);
+  res.json({
+    count: (dm?.n || 0) + (gReply?.n || 0),
+    dm: dm?.n || 0,
+    globalReplies: gReply?.n || 0,
+  });
 }));
 
 api.get('/messages/search', wrap(async (req, res) => {
@@ -2395,8 +2409,11 @@ api.get('/messages/threads/:id', wrap(async (req, res) => {
     WHERE thread_id = ? AND sender_id <> ? AND read_at IS NULL
   `).run(tid, uid);
   const msgs = await db.prepare(`
-    SELECT id, sender_id, body, created_at FROM dm_messages
-    WHERE thread_id = ? ORDER BY created_at ASC LIMIT 200
+    SELECT m.id, m.sender_id, m.body, m.created_at, m.reply_to_id,
+      r.body AS reply_body, r.sender_id AS reply_sender
+    FROM dm_messages m
+    LEFT JOIN dm_messages r ON r.id = m.reply_to_id
+    WHERE m.thread_id = ? ORDER BY m.created_at ASC LIMIT 200
   `).all(tid);
   res.json({
     peer: other
@@ -2404,6 +2421,11 @@ api.get('/messages/threads/:id', wrap(async (req, res) => {
       : { id: otherId, name: 'Player' },
     messages: msgs.map((m) => ({
       id: m.id, body: m.body, mine: Number(m.sender_id) === uid, createdAt: m.created_at,
+      replyTo: m.reply_to_id ? {
+        id: m.reply_to_id,
+        body: m.reply_body || '',
+        mine: Number(m.reply_sender) === uid,
+      } : null,
     })),
   });
 }));
@@ -2412,6 +2434,7 @@ api.post('/messages/threads/:id', wrap(async (req, res) => {
   const uid = Number(req.user.id);
   const tid = intParam(req.params.id);
   const body = cleanText(req.body && req.body.body, 1000, 'text', true);
+  const replyToId = req.body && req.body.replyToId != null ? intParam(req.body.replyToId) : null;
   const th = await db.prepare('SELECT * FROM dm_threads WHERE id = ?').get(tid);
   if (!th || (Number(th.user_a) !== uid && Number(th.user_b) !== uid)) {
     throw new HttpError(404, 'Not found', 'notfound');
@@ -2419,34 +2442,30 @@ api.post('/messages/threads/:id', wrap(async (req, res) => {
   const other = Number(th.user_a) === uid ? Number(th.user_b) : Number(th.user_a);
   if (await blockedEither(uid, other)) throw bad('Blocked', 'blocked');
   if (!(await areFriends(uid, other))) throw bad('Friends only', 'friends_only');
+  let replyMeta = null;
+  if (replyToId) {
+    const parent = await db.prepare('SELECT id, body, sender_id FROM dm_messages WHERE id = ? AND thread_id = ?').get(replyToId, tid);
+    if (!parent) throw bad('Reply target missing', 'bad_request');
+    replyMeta = { id: parent.id, body: parent.body, mine: Number(parent.sender_id) === uid };
+  }
   const ins = await db.prepare(`
-    INSERT INTO dm_messages (thread_id, sender_id, body) VALUES (?, ?, ?) RETURNING id, created_at
-  `).run(tid, uid, body);
+    INSERT INTO dm_messages (thread_id, sender_id, body, reply_to_id) VALUES (?, ?, ?, ?) RETURNING id, created_at
+  `).run(tid, uid, body, replyToId);
   const row = ins.rows?.[0];
   if (!row) throw bad('Could not send', 'server');
   await db.prepare('UPDATE dm_threads SET updated_at = now() WHERE id = ?').run(tid);
 
   const me = await person(uid);
   const preview = body.length > 120 ? `${body.slice(0, 117)}…` : body;
-  const peerMeta = {
-    threadId: tid,
-    fromUserId: uid,
-    fromName: me.name,
-    peer: { id: uid, name: me.name, premium: isPremiumActive(req.user) },
-  };
-  try {
-    await db.prepare(`
-      INSERT INTO notifications (user_id, kind, title, body, meta) VALUES (?, 'dm', ?, ?, ?::jsonb)
-    `).run(other, me.name, preview, JSON.stringify(peerMeta));
-  } catch (e) {
-    console.error('[dm] notif', e.message || e);
-  }
+  // Inbox mail badge only — do not insert into notifications (bell stays chat-free).
   realtime.send(other, {
     t: 'dm',
     threadId: tid,
+    id: row.id,
     from: { id: uid, name: me.name },
     body,
     preview,
+    replyTo: replyMeta,
   });
   // Telegram push when recipient is not live in the Mini App
   if (!realtime.isOnline(other)) {
@@ -2458,7 +2477,119 @@ api.post('/messages/threads/:id', wrap(async (req, res) => {
     body,
     mine: true,
     createdAt: row.created_at || new Date().toISOString(),
+    replyTo: replyMeta,
   });
+}));
+
+// ---------- global lobby chat (24h history) ----------
+function mapGlobalMsg(m, uid) {
+  return {
+    id: m.id,
+    body: m.body,
+    mine: Number(m.sender_id) === uid,
+    createdAt: m.created_at,
+    from: {
+      id: m.sender_id,
+      name: displayName({ first_name: m.first_name, last_name: m.last_name }),
+      premium: isPremiumActive({ premium: m.premium, premium_until: m.premium_until }),
+      avatarKey: m.avatar_key || null,
+    },
+    replyTo: m.reply_to_id ? {
+      id: m.reply_to_id,
+      body: m.reply_body || '',
+      fromName: m.reply_name || '',
+      mine: Number(m.reply_sender) === uid,
+    } : null,
+  };
+}
+
+api.get('/chat/global', wrap(async (req, res) => {
+  const uid = Number(req.user.id);
+  await db.prepare(`
+    DELETE FROM global_chat_messages WHERE created_at < now() - interval '24 hours'
+  `).run().catch(() => {});
+  const rows = await db.prepare(`
+    SELECT m.id, m.sender_id, m.body, m.created_at, m.reply_to_id,
+      u.first_name, u.last_name, u.premium, u.premium_until, u.avatar_key,
+      r.body AS reply_body, r.sender_id AS reply_sender,
+      ru.first_name AS reply_first, ru.last_name AS reply_last
+    FROM global_chat_messages m
+    JOIN users u ON u.id = m.sender_id
+    LEFT JOIN global_chat_messages r ON r.id = m.reply_to_id
+    LEFT JOIN users ru ON ru.id = r.sender_id
+    WHERE m.created_at > now() - interval '24 hours'
+    ORDER BY m.created_at ASC
+    LIMIT 200
+  `).all();
+  const maxId = rows.length ? Number(rows[rows.length - 1].id) : 0;
+  if (maxId) {
+    await db.prepare(`
+      INSERT INTO global_chat_reads (user_id, last_read_id, updated_at) VALUES (?, ?, now())
+      ON CONFLICT (user_id) DO UPDATE SET last_read_id = GREATEST(global_chat_reads.last_read_id, EXCLUDED.last_read_id), updated_at = now()
+    `).run(uid, maxId);
+  }
+  res.json({
+    messages: rows.map((m) => mapGlobalMsg({
+      ...m,
+      reply_name: displayName({ first_name: m.reply_first, last_name: m.reply_last }),
+    }, uid)),
+  });
+}));
+
+api.post('/chat/global', wrap(async (req, res) => {
+  const uid = Number(req.user.id);
+  const body = cleanText(req.body && req.body.body, 500, 'text', true);
+  const replyToId = req.body && req.body.replyToId != null ? intParam(req.body.replyToId) : null;
+  let replyRow = null;
+  if (replyToId) {
+    replyRow = await db.prepare(`
+      SELECT m.id, m.body, m.sender_id, u.first_name, u.last_name
+      FROM global_chat_messages m JOIN users u ON u.id = m.sender_id
+      WHERE m.id = ? AND m.created_at > now() - interval '24 hours'
+    `).get(replyToId);
+    if (!replyRow) throw bad('Reply target missing', 'bad_request');
+  }
+  const ins = await db.prepare(`
+    INSERT INTO global_chat_messages (sender_id, body, reply_to_id) VALUES (?, ?, ?)
+    RETURNING id, created_at
+  `).run(uid, body, replyToId);
+  const row = ins.rows?.[0];
+  if (!row) throw bad('Could not send', 'server');
+  const me = await getUser.get(uid);
+  const payload = mapGlobalMsg({
+    id: row.id,
+    sender_id: uid,
+    body,
+    created_at: row.created_at,
+    reply_to_id: replyToId,
+    first_name: me.first_name,
+    last_name: me.last_name,
+    premium: me.premium,
+    premium_until: me.premium_until,
+    avatar_key: me.avatar_key,
+    reply_body: replyRow ? replyRow.body : null,
+    reply_sender: replyRow ? replyRow.sender_id : null,
+    reply_name: replyRow ? displayName(replyRow) : '',
+  }, uid);
+  // Fan-out to live Mini Apps (replyTo.mine is per recipient — badge/toast for reply targets)
+  for (const id of realtime.onlineIds()) {
+    if (Number(id) === uid) continue;
+    realtime.send(id, {
+      t: 'gchat',
+      message: {
+        ...payload,
+        mine: false,
+        replyTo: payload.replyTo
+          ? { ...payload.replyTo, mine: Number(replyRow?.sender_id) === Number(id) }
+          : null,
+      },
+    });
+  }
+  await db.prepare(`
+    INSERT INTO global_chat_reads (user_id, last_read_id, updated_at) VALUES (?, ?, now())
+    ON CONFLICT (user_id) DO UPDATE SET last_read_id = GREATEST(global_chat_reads.last_read_id, EXCLUDED.last_read_id), updated_at = now()
+  `).run(uid, row.id);
+  res.status(201).json({ message: payload });
 }));
 
 // ---------- friends ----------
@@ -3840,6 +3971,10 @@ async function boot() {
         const next = await claimFlagIfNeeded(g);
         if (next.status !== 'active') await pushGame(next);
       }
+      // Global chat: drop messages older than 24h (oldest first)
+      await db.prepare(`
+        DELETE FROM global_chat_messages WHERE created_at < now() - interval '24 hours'
+      `).run();
     } catch (e) { console.error('[sweeper]', e.message); } finally { sweeping = false; }
   }, SWEEP_MS).unref();
 }

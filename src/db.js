@@ -302,12 +302,30 @@ CREATE TABLE IF NOT EXISTS dm_messages (
   read_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_dm_messages_thread ON dm_messages(thread_id, created_at);
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS reply_to_id BIGINT REFERENCES dm_messages(id) ON DELETE SET NULL;
+-- Lobby global chat (24h retention). Replies to your messages drive inbox badge.
+CREATE TABLE IF NOT EXISTS global_chat_messages (
+  id BIGSERIAL PRIMARY KEY,
+  sender_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  reply_to_id BIGINT REFERENCES global_chat_messages(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_global_chat_created ON global_chat_messages(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_global_chat_reply ON global_chat_messages(reply_to_id) WHERE reply_to_id IS NOT NULL;
+CREATE TABLE IF NOT EXISTS global_chat_reads (
+  user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  last_read_id BIGINT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 ALTER TABLE profile_likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dm_threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dm_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE global_chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE global_chat_reads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS preferred_color TEXT; -- w | b | null (random) — creator preference while waiting
 CREATE INDEX IF NOT EXISTS idx_games_matchmaking ON games(status, mode, time_control, created_at);
 -- Allow home-screen presets (and keep legacy category values already stored)

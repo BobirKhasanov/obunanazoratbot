@@ -92,6 +92,9 @@ const P = {
   mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4.5 7.5L12 13l7.5-5.5"/>',
   bell: '<path d="M6.5 10a5.5 5.5 0 0 1 11 0c0 4 1.5 5.5 1.5 5.5H5S6.5 14 6.5 10z"/><path d="M10 18.5a2 2 0 0 0 4 0"/>',
   chat: '<path d="M5 6a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H10l-4 3v-3a3 3 0 0 1-3-3z"/>',
+  soundOn: '<path d="M4 10v4h3l4 3V7L7 10H4z"/><path d="M15.5 9.5a3.5 3.5 0 0 1 0 5"/><path d="M17.5 7a6.5 6.5 0 0 1 0 10"/>',
+  soundOff: '<path d="M4 10v4h3l4 3V7L7 10H4z"/><path d="M17 9l4 4M21 9l-4 4"/>',
+  reply: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/>',
 };
 export const icon = (name, size = 24, sw = 1.9) => h('span.ic', {
   html: `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`,
@@ -406,9 +409,23 @@ function playMoveSoundOsc() {
   } catch { /* ignore */ }
 }
 
+const MOVE_SOUND_KEY = 'chess-move-sound';
+/** Local preference: hear move sounds in this Mini App (default on). */
+export function isMoveSoundOn() {
+  try {
+    const v = localStorage.getItem(MOVE_SOUND_KEY);
+    if (v === '0' || v === 'off' || v === 'false') return false;
+  } catch { /* ignore */ }
+  return true;
+}
+export function setMoveSoundOn(on) {
+  try { localStorage.setItem(MOVE_SOUND_KEY, on ? '1' : '0'); } catch { /* ignore */ }
+}
+
 /** Piece-drop when a move lands (player, opponent, AI, puzzles). */
 export function playMoveSound() {
   try {
+    if (!isMoveSoundOn()) return;
     const now = performance.now();
     if (now - lastMoveSoundAt < 40) return;
     lastMoveSoundAt = now;

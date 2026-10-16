@@ -1,10 +1,13 @@
-// In-app messages (DM search + chat) and notifications (admin → users; feedback → admins).
-import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData, onWs, confirmSheet } from './ui.js';
+// In-app messages (global chat + DM) and notifications (admin → users; feedback → admins).
+import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData, onWs, confirmSheet, pillBar } from './ui.js';
 import { t } from './i18n.js';
 import { openScreen } from './screen.js';
+import { softPollMs, isLite } from './perf.js';
 
 /** Thread currently open in the chat UI (suppresses toast spam for that chat). */
 let activeThreadId = null;
+/** True while the global lobby chat screen is open. */
+let viewingGlobal = false;
 
 function inboxHead(title, close, emoji) {
   return h('div.top.inbox-head',
@@ -73,7 +76,6 @@ function notifMediaEl(n) {
 /** Squircle mail + bell for the home header (reference style). */
 export function headerInboxBtns() {
   const bind = (el, open) => {
-    // Stop home pager from stealing the gesture; debounce so pointerup+click don't double-open.
     let last = 0;
     el.addEventListener('pointerdown', (e) => { e.stopPropagation(); }, { passive: true });
     const go = (e) => {
@@ -115,6 +117,7 @@ export async function refreshInboxBadges(root) {
     const mailSlot = host.querySelector?.('.hdr-ic[aria-label="' + t('messages') + '"] .hdr-badge-slot')
       || host.querySelectorAll?.('.hdr-ic .hdr-badge-slot')?.[0];
     const bellSlot = host.querySelectorAll?.('.hdr-ic .hdr-badge-slot')?.[1];
+    // Mail = DMs + global replies-to-you. Bell = non-chat notifications only.
     if (mailSlot) mailSlot.replaceChildren(badgeEl(m.count) || '');
     if (bellSlot) bellSlot.replaceChildren(badgeEl(n.count) || '');
   } catch { /* ignore badge errors */ }
@@ -125,13 +128,18 @@ export function isViewingDmThread(threadId) {
   return activeThreadId != null && Number(activeThreadId) === Number(threadId);
 }
 
+export function isViewingGlobalChat() {
+  return viewingGlobal;
+}
+
 export function openNotifications() {
   openScreen((close) => {
-    const list = h('div.notif-list', h('div.skeleton'), h('div.skeleton'));
+    const list = h('div.notif-list.inbox-scroll', h('div.skeleton'), h('div.skeleton'));
     const load = async () => {
       try {
         const r = await api('GET', '/notifications');
-        const items = r.notifications || [];
+        // Hide legacy DM copies — chats live under the mail icon only
+        const items = (r.notifications || []).filter((n) => n.kind !== 'dm');
         if (!items.length) {
           list.replaceChildren(h('div.empty', h('div.empty-ic', '🔔'), t('notif_empty')));
           return;
@@ -148,25 +156,16 @@ export function openNotifications() {
           const feedbackHint = n.kind === 'feedback' && n.meta?.username
             ? '@' + n.meta.username
             : (n.kind === 'feedback' && n.meta?.fromName ? n.meta.fromName : '');
-          const isDm = n.kind === 'dm' && n.meta && n.meta.threadId;
           nodes.push(h('button.notif-row' + (n.read ? '' : '.unread'), {
             type: 'button',
             onclick: async () => {
               try { if (!n.read) await api('POST', `/notifications/${n.id}/read`); } catch { /* ignore */ }
               n.read = true;
-              if (isDm) {
-                openChat(n.meta.threadId, n.meta.peer || {
-                  id: n.meta.fromUserId,
-                  name: n.meta.fromName || n.title || t('messages'),
-                });
-                refreshInboxBadges();
-                return;
-              }
               openNotifDetail(n, () => { load(); refreshInboxBadges(); });
             },
           },
-            h('div.notif-ic' + (n.kind === 'feedback' ? '.feedback' : n.kind === 'dm' ? '.dm' : ''),
-              icon(n.kind === 'feedback' ? 'help' : n.kind === 'dm' ? 'mail' : 'bell', 18)),
+            h('div.notif-ic' + (n.kind === 'feedback' ? '.feedback' : ''),
+              icon(n.kind === 'feedback' ? 'help' : 'bell', 18)),
             h('div.notif-body',
               h('div.notif-head', h('b', n.title), h('span.notif-time', fmtTime(n.createdAt))),
               bodyPreview ? h('div.notif-snippet', bodyPreview) : null,
@@ -179,7 +178,11 @@ export function openNotifications() {
       } catch (e) { fail(e); list.replaceChildren(h('div.empty', t('notif_empty'))); }
     };
     load();
-    return [inboxHead(t('xabarnoma'), close, '🔔'), list];
+    return [
+      h('div.inbox-shell',
+        inboxHead(t('xabarnoma'), close, '🔔'),
+        list),
+    ];
   }, { onClose: () => refreshInboxBadges() });
 }
 
@@ -243,8 +246,10 @@ function openNotifDetail(n, onBack) {
 
 export function openMessages() {
   let searchTimer = null;
+  let tab = 'global';
   openScreen((close) => {
-    const threadsHost = h('div.msg-threads', h('div.skeleton'), h('div.skeleton'));
+    const body = h('div.inbox-body');
+    const threadsHost = h('div.msg-threads');
     const searchInput = h('input.input.msg-search', {
       type: 'search',
       placeholder: t('msg_search_ph'),
@@ -290,7 +295,7 @@ export function openMessages() {
                   try {
                     const th = await api('POST', '/messages/threads', { userId: u.id });
                     openChat(th.id, th.peer || u);
-                  } catch (e) { fail(e); }
+                  } catch (err) { fail(err); }
                 },
               },
                 avBlock(u.name, u.id, { premium: !!u.premium, round: true, avatarKey: u.avatarKey || null }),
@@ -303,14 +308,40 @@ export function openMessages() {
       }, 280);
     });
 
-    loadThreads();
+    const paint = () => {
+      if (tab === 'global') {
+        body.replaceChildren(
+          h('p.muted.msg-sub', t('gchat_sub')),
+          h('button.btn.gchat-open', {
+            type: 'button',
+            onclick: () => openGlobalChat(),
+          }, icon('chat', 18), t('gchat_open')),
+          h('p.muted.gchat-hint', t('gchat_ttl')),
+        );
+      } else {
+        body.replaceChildren(
+          h('p.muted.msg-sub', t('msg_sub')),
+          h('div.field.msg-search-field', searchInput),
+          searchResults,
+          h('div.h2', t('msg_chats')),
+          threadsHost,
+        );
+        loadThreads();
+      }
+    };
+
+    const tabs = pillBar(
+      [['global', t('gchat_tab')], ['dm', t('msg_chats')]],
+      tab,
+      (v) => { tab = v; paint(); },
+      { className: 'pill-bar inbox-tabs' },
+    );
+    paint();
     return [
-      inboxHead(t('messages'), close, '✉️'),
-      h('p.muted.msg-sub', t('msg_sub')),
-      h('div.field.msg-search-field', searchInput),
-      searchResults,
-      h('div.h2', t('msg_chats')),
-      threadsHost,
+      h('div.inbox-shell',
+        inboxHead(t('messages'), close, '✉️'),
+        tabs,
+        h('div.inbox-scroll', body)),
     ];
   }, {
     onClose: () => {
@@ -340,21 +371,52 @@ export async function openDmThread(threadId, peerHint) {
   } catch (e) { fail(e); }
 }
 
-function bubbleEl(m) {
-  return h('div.chat-bubble' + (m.mine ? '.mine' : ''),
-    h('div.chat-bubble-text', m.body),
-    h('small', fmtTime(m.createdAt)));
+function replyPreview(reply, onClear) {
+  if (!reply) return null;
+  return h('div.chat-reply-bar',
+    h('div.grow',
+      h('b', t('chat_replying')),
+      h('span', String(reply.body || '').slice(0, 80))),
+    h('button.round.sm', {
+      type: 'button', 'aria-label': t('cancel'),
+      onclick: () => onClear(),
+    }, icon('x', 16)));
 }
 
-function openChat(threadId, peer) {
-  const tid = Number(threadId);
+function bubbleEl(m, { onReply, showName } = {}) {
+  const reply = m.replyTo
+    ? h('div.chat-quote',
+      h('b', m.replyTo.fromName || (m.replyTo.mine ? t('you') : '…')),
+      h('span', String(m.replyTo.body || '').slice(0, 100)))
+    : null;
+  const name = showName && !m.mine && m.from
+    ? h('div.chat-from', m.from.name || '…')
+    : null;
+  return h('div.chat-bubble' + (m.mine ? '.mine' : ''),
+    {
+      onclick: onReply ? () => { haptic('select'); onReply(m); } : undefined,
+    },
+    name,
+    reply,
+    h('div.chat-bubble-text', m.body),
+    h('div.chat-bubble-meta',
+      h('small', fmtTime(m.createdAt)),
+      onReply ? h('button.chat-reply-btn', {
+        type: 'button',
+        'aria-label': t('chat_reply'),
+        onclick: (e) => { e.stopPropagation(); haptic('select'); onReply(m); },
+      }, icon('reply', 14)) : null));
+}
+
+function openChatShell({ title, loadUrl, sendUrl, wsMatch, pollMs, showNames, onCloseExtra }) {
   let cleanupChat = () => {};
+  let replyTo = null;
   openScreen((close) => {
-    activeThreadId = tid;
-    const log = h('div.chat-log');
+    const log = h('div.chat-log' + (isLite() ? '.lite' : ''));
+    const replyHost = h('div.chat-reply-host');
     const input = h('input.input.chat-input', {
       type: 'text',
-      maxlength: 1000,
+      maxlength: showNames ? 500 : 1000,
       placeholder: t('msg_ph'),
       enterKeyHint: 'send',
       autocomplete: 'off',
@@ -367,6 +429,17 @@ function openChat(threadId, peer) {
     let sending = false;
     let knownIds = new Set();
 
+    const setReply = (m) => {
+      replyTo = m ? {
+        id: m.id,
+        body: m.body,
+        fromName: (m.from && m.from.name) || (m.mine ? t('you') : ''),
+        mine: !!m.mine,
+      } : null;
+      replyHost.replaceChildren(replyPreview(replyTo, () => setReply(null)) || '');
+      try { input.focus(); } catch { /* ignore */ }
+    };
+
     function paint(msgs) {
       const list = msgs || [];
       knownIds = new Set(list.map((m) => m.id).filter((x) => x != null));
@@ -374,7 +447,7 @@ function openChat(threadId, peer) {
         log.replaceChildren(h('div.chat-empty', h('div.empty-ic', '💬'), t('msg_start')));
         return;
       }
-      log.replaceChildren(...list.map(bubbleEl));
+      log.replaceChildren(...list.map((m) => bubbleEl(m, { onReply: setReply, showName: showNames })));
       requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
     }
 
@@ -383,13 +456,13 @@ function openChat(threadId, peer) {
       if (m.id != null) knownIds.add(m.id);
       const empty = log.querySelector('.chat-empty');
       if (empty) log.replaceChildren();
-      log.append(bubbleEl(m));
+      log.append(bubbleEl(m, { onReply: setReply, showName: showNames }));
       requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
     }
 
     async function load() {
       try {
-        const r = await api('GET', `/messages/threads/${tid}`);
+        const r = await api('GET', loadUrl);
         paint(r.messages || []);
         refreshInboxBadges();
       } catch (e) { fail(e); }
@@ -401,14 +474,19 @@ function openChat(threadId, peer) {
       sending = true;
       sendBtn.disabled = true;
       input.value = '';
+      const payload = { body };
+      if (replyTo && replyTo.id != null) payload.replyToId = replyTo.id;
       try {
-        const r = await api('POST', `/messages/threads/${tid}`, { body });
-        appendMsg({
+        const r = await api('POST', sendUrl, payload);
+        const msg = r.message || {
           id: r.id,
           body: r.body || body,
           mine: true,
           createdAt: r.createdAt || new Date().toISOString(),
-        });
+          replyTo: r.replyTo || (replyTo ? { ...replyTo } : null),
+        };
+        appendMsg(msg);
+        setReply(null);
         haptic('light');
       } catch (e) {
         input.value = body;
@@ -425,26 +503,23 @@ function openChat(threadId, peer) {
     });
 
     const offWs = onWs((m) => {
-      if (m.t !== 'dm' || Number(m.threadId) !== tid) return;
-      if (m.body) {
-        appendMsg({
-          id: m.id,
-          body: m.body,
-          mine: false,
-          createdAt: m.createdAt || new Date().toISOString(),
-        });
+      if (!wsMatch(m)) return;
+      const msg = m.message || (m.body ? {
+        id: m.id, body: m.body, mine: false,
+        createdAt: m.createdAt || new Date().toISOString(),
+        from: m.from, replyTo: m.replyTo || null,
+      } : null);
+      if (msg) {
+        appendMsg(msg);
         refreshInboxBadges();
-      } else {
-        load();
-      }
+      } else load();
     });
 
     load();
-    const poll = setInterval(load, 8000);
+    const poll = setInterval(load, pollMs);
     cleanupChat = () => {
       clearInterval(poll);
       try { offWs(); } catch { /* ignore */ }
-      if (activeThreadId === tid) activeThreadId = null;
     };
     const finish = () => {
       cleanupChat();
@@ -453,14 +528,43 @@ function openChat(threadId, peer) {
 
     return [
       h('div.chat-screen',
-        inboxHead(peer?.name || t('messages'), finish),
+        inboxHead(title, finish),
         log,
+        replyHost,
         h('div.chat-compose', input, sendBtn)),
     ];
   }, {
     onClose: () => {
       cleanupChat();
+      try { onCloseExtra && onCloseExtra(); } catch { /* ignore */ }
       refreshInboxBadges();
     },
+  });
+}
+
+function openGlobalChat() {
+  viewingGlobal = true;
+  openChatShell({
+    title: t('gchat_title'),
+    loadUrl: '/chat/global',
+    sendUrl: '/chat/global',
+    wsMatch: (m) => m.t === 'gchat',
+    pollMs: softPollMs(),
+    showNames: true,
+    onCloseExtra: () => { viewingGlobal = false; },
+  });
+}
+
+function openChat(threadId, peer) {
+  const tid = Number(threadId);
+  activeThreadId = tid;
+  openChatShell({
+    title: peer?.name || t('messages'),
+    loadUrl: `/messages/threads/${tid}`,
+    sendUrl: `/messages/threads/${tid}`,
+    wsMatch: (m) => m.t === 'dm' && Number(m.threadId) === tid,
+    pollMs: softPollMs(),
+    showNames: false,
+    onCloseExtra: () => { if (activeThreadId === tid) activeThreadId = null; },
   });
 }
