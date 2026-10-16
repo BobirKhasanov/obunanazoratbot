@@ -173,6 +173,7 @@ async function paintFriends(ctx) {
         type: 'button', 'aria-label': t('invite_btn'),
         onclick: () => { haptic('light'); ctx.openFriends(); },
       }, icon('userPlus', 20))),
+    timeChips(ctx),
     h('button.nx-cta.ghost', {
       type: 'button', onclick: () => { haptic('medium'); ctx.startFriendGame(); },
     }, icon('link', 18), t('friend_link_game')),
@@ -197,6 +198,7 @@ function paintAi(ctx) {
       ['r', '🎲 ' + t('random')],
       ['b', '♚ ' + t('black')],
     ], aiColour, (v) => { setAiColour(v); ctx.remount(); }, 'sub'),
+    timeChips(ctx),
     sectionHead(t('ai_pick_level')),
     h('div.nx-list', ...levels.map(([n, key, range]) => levelRow({
       n, title: t(key), range, desc: t(key + '_d'),

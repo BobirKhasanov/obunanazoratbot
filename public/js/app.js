@@ -402,6 +402,7 @@ function startAi(level, colour, opts = {}) {
   const col = colour === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : colour;
   const S = openGame({
     kind: 'ai', level, colour: col, allowUndo: opts.allowUndo !== false, meta: gameMeta(),
+    timeControl: opts.timeControl || selectedPreset(),
   }, () => refresh());
   S.onStats = (s) => { state.stats = s; };
 }

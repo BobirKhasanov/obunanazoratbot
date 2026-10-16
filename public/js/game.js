@@ -4,7 +4,7 @@ import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatE
 import { t, getLang } from './i18n.js';
 import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
-import { formatClock, remainingMs, isTimed, formatTashkentWhen, categoryOf } from './time.js';
+import { formatClock, remainingMs, isTimed, formatTashkentWhen, categoryOf, presetOf, normalizeTimeControl } from './time.js';
 import { liveGamePollMs, gameClockTickMs, boardAnimateDefault } from './perf.js';
 import { openGameAnalysis } from './analyze.js';
 
@@ -84,7 +84,33 @@ export function openGame(opts, onClose) {
     moves: [], chess: new Chess(), over: false, busy: false, game: opts.game || null, flipped: false, meta: opts.meta || {}, thinking: false,
     clockTimer: null, flagClaimed: false, chat: [], chatOpen: false,
     allowUndo: opts.allowUndo !== false,
+    timeControl: opts.kind === 'ai' ? normalizeTimeControl(opts.timeControl || (opts.resume && opts.resume.timeControl)) : null, aiClock: null,
   };
+  if (S.kind === 'ai' && isTimed(S.timeControl)) {
+    const p = presetOf(S.timeControl);
+    const saved = opts.resume && opts.resume.clock;
+    S.aiClock = {
+      initialMs: p.baseMs, incrementMs: p.incMs,
+      whiteMs: saved ? saved.whiteMs : p.baseMs, blackMs: saved ? saved.blackMs : p.baseMs,
+      turnStartedAt: new Date().toISOString(),
+    };
+  }
+  // Clock source: server game for online/spectate, local snapshot for timed AI games.
+  const clockGame = () => (S.kind === 'ai'
+    ? (S.aiClock ? { clock: S.aiClock, timeControl: S.timeControl, status: S.over ? 'finished' : 'active', turn: S.chess.turn() } : null)
+    : S.game);
+  const aiSave = () => ({
+    moves: S.moves, level: S.level, colour: S.colour, allowUndo: !!S.allowUndo, timeControl: S.timeControl,
+    clock: S.aiClock ? { whiteMs: remainingMs(S.aiClock, 'w', S.chess.turn(), 'active'), blackMs: remainingMs(S.aiClock, 'b', S.chess.turn(), 'active') } : null,
+  });
+  /** Timed AI game: charge the side that just moved and start the other side's clock. */
+  function punchAiClock(mover) {
+    const c = S.aiClock;
+    if (!c || S.over) return;
+    const key = mover === 'w' ? 'whiteMs' : 'blackMs';
+    c[key] = remainingMs(c, mover, mover, 'active') + (c.incrementMs || 0);
+    c.turnStartedAt = new Date().toISOString();
+  }
 
   const bar = (cls) => ({
     el: h('div.pbar.' + cls), av: h('div.pav'), name: h('b'), sub: h('small'), cap: h('div.cap'), mat: h('em'),
@@ -182,7 +208,7 @@ export function openGame(opts, onClose) {
   }
 
   function sideClock(side) {
-    const g = S.game;
+    const g = clockGame();
     if (!g || !g.clock) return null;
     if (g.status === 'open' || g.status === 'invited') {
       const base = g.clock.initialMs;
@@ -203,10 +229,11 @@ export function openGame(opts, onClose) {
       }));
     b.name.textContent = p.name;
     const clock = sideClock(colour);
-    const ms = S.game && S.game.clock && S.game.status === 'active'
-      ? remainingMs(S.game.clock, colour, S.game.turn, S.game.status) : null;
+    const cg = clockGame();
+    const ms = cg && cg.clock && cg.status === 'active'
+      ? remainingMs(cg.clock, colour, cg.turn, cg.status) : null;
     if (clock != null) {
-      const cat = categoryOf((S.game && S.game.timeControl) || 'classic');
+      const cat = categoryOf((cg && cg.timeControl) || 'classic');
       const low = ms != null && ms <= 20000;
       b.sub.replaceChildren(h('span.pclk.' + cat + (low ? '.low' : ''), clock));
     } else {
@@ -250,8 +277,9 @@ export function openGame(opts, onClose) {
   function paintSideClock(el, side) {
     const text = sideClock(side);
     if (text == null) return;
-    const ms = remainingMs(S.game.clock, side, S.game.turn, S.game.status);
-    const cat = categoryOf(S.game.timeControl || 'classic');
+    const cg = clockGame();
+    const ms = remainingMs(cg.clock, side, cg.turn, cg.status);
+    const cat = categoryOf(cg.timeControl || 'classic');
     const low = ms != null && ms <= 20000;
     let span = el.querySelector('.pclk');
     if (!span) {
@@ -264,8 +292,9 @@ export function openGame(opts, onClose) {
   }
 
   function syncClocks() {
-    if (!ctx || ctx !== S || (S.kind !== 'online' && S.kind !== 'spectate') || !S.game || !S.game.clock || S.over) return;
-    if (S.game.status !== 'active') return;
+    const cg = clockGame();
+    if (!ctx || ctx !== S || !cg || !cg.clock || S.over) return;
+    if (cg.status !== 'active') return;
     const ori = orientation();
     const oppCol = S.colour === 'w' ? 'b' : 'w';
     const topIsOpp = ori === S.colour;
@@ -273,10 +302,17 @@ export function openGame(opts, onClose) {
     const botSide = topIsOpp ? S.colour : oppCol;
     paintSideClock(top.sub, topSide);
     paintSideClock(bot.sub, botSide);
-    const topMs = remainingMs(S.game.clock, topSide, S.game.turn, S.game.status);
-    const botMs = remainingMs(S.game.clock, botSide, S.game.turn, S.game.status);
+    const topMs = remainingMs(cg.clock, topSide, cg.turn, cg.status);
+    const botMs = remainingMs(cg.clock, botSide, cg.turn, cg.status);
     top.el.classList.toggle('low', topMs != null && topMs <= 20000);
     bot.el.classList.toggle('low', botMs != null && botMs <= 20000);
+    if (S.kind === 'ai' && (topMs === 0 || botMs === 0)) {
+      const flagged = remainingMs(cg.clock, S.colour, cg.turn, cg.status) === 0 ? S.colour : (S.colour === 'w' ? 'b' : 'w');
+      S.over = true; S.token = null; S.thinking = false; saveAi(null);
+      render(false);
+      showResult(flagged === S.colour ? 'loss' : 'win', 'timeout');
+      return;
+    }
     if (S.kind === 'online' && !S.flagClaimed && (topMs === 0 || botMs === 0)) {
       S.flagClaimed = true;
       api('POST', `/games/${S.id}/flag`).then((r) => applyServer(r.game, true)).catch(() => { S.flagClaimed = false; });
@@ -286,7 +322,8 @@ export function openGame(opts, onClose) {
   function armClock() {
     clearInterval(S.clockTimer);
     S.clockTimer = null;
-    if ((S.kind !== 'online' && S.kind !== 'spectate') || !S.game || !S.game.clock || S.game.status !== 'active' || S.over) return;
+    const cg = clockGame();
+    if (!cg || !cg.clock || cg.status !== 'active' || S.over) return;
     S.clockTimer = setInterval(syncClocks, gameClockTickMs());
     syncClocks();
   }
@@ -460,6 +497,7 @@ export function openGame(opts, onClose) {
     if (S.kind === 'ai') {
       try { S.chess.move({ from, to, promotion }); } catch { return render(); }
       playMoveSound();
+      punchAiClock(S.colour);
       S.moves.push([from, to, promotion]); afterMove(true);
     } else {
       const before = S.chess.fen();
@@ -485,9 +523,7 @@ export function openGame(opts, onClose) {
     const over = checkEnd();
     render();
     if (S.kind === 'ai') {
-      saveAi(S.over ? null : {
-        moves: S.moves, level: S.level, colour: S.colour, allowUndo: !!S.allowUndo,
-      });
+      saveAi(S.over ? null : aiSave());
     }
     if (!over && S.kind === 'ai' && S.chess.turn() !== S.colour) aiTurn();
     void human;
@@ -514,7 +550,9 @@ export function openGame(opts, onClose) {
     const token = S.token = {};
     const t0 = Date.now();
     // Pause after the player moves (2s total, including engine time)
-    const thinkMs = 2000;
+    const aiLeft = S.aiClock ? remainingMs(S.aiClock, S.chess.turn(), S.chess.turn(), 'active') : null;
+    let thinkMs = 2000;
+    if (aiLeft != null) thinkMs = Math.max(250, Math.min(thinkMs, aiLeft / 40));
     const seen = []; { const c = new Chess(); seen.push(c.fen()); for (const [f, to, p] of S.moves) { c.move({ from: f, to, promotion: p }); seen.push(c.fen()); } }
     let mv = null;
     try { mv = await askEngine(S.chess.fen(), S.level, seen); } catch { mv = null; }
@@ -522,7 +560,10 @@ export function openGame(opts, onClose) {
     if (S.token !== token || ctx !== S) return; // game closed or undone meanwhile
     S.thinking = false;
     if (!mv) { const all = S.chess.moves({ verbose: true }); if (!all.length) return afterMove(false); const m = all[Math.floor(Math.random() * all.length)]; mv = { from: m.from, to: m.to, promotion: m.promotion }; }
+    if (S.over) return;
+    const aiCol = S.chess.turn();
     S.chess.move({ from: mv.from, to: mv.to, promotion: mv.promotion });
+    punchAiClock(aiCol);
     S.moves.push([mv.from, mv.to, mv.promotion]);
     playMoveSound();
     haptic('light'); afterMove(false);
@@ -533,7 +574,8 @@ export function openGame(opts, onClose) {
     const n = S.chess.turn() === S.colour ? 2 : 1;
     for (let i = 0; i < n && S.moves.length; i++) { S.moves.pop(); }
     S.chess = build(S.moves); S.token = null; haptic('select');
-    render(); saveAi({ moves: S.moves, level: S.level, colour: S.colour, allowUndo: !!S.allowUndo });
+    if (S.aiClock) S.aiClock.turnStartedAt = new Date().toISOString();
+    render(); saveAi(aiSave());
   }
   async function hint() {
     if (S.thinking || S.over || S.chess.turn() !== S.colour) return;
@@ -626,7 +668,7 @@ export function openGame(opts, onClose) {
           });
         },
       }, icon('ai', 18), t('analyze')) : null,
-      S.kind === 'ai' ? h('button.btn', { onclick: () => { close(); const o = { kind: 'ai', level: S.level, colour: S.colour === 'w' ? 'b' : 'w', meta: S.meta }; const cb = S.onClose, st = S.onStats; openGame(o, cb); ctx.onStats = st; } }, t('play_again')) : null,
+      S.kind === 'ai' ? h('button.btn', { onclick: () => { close(); const o = { kind: 'ai', level: S.level, colour: S.colour === 'w' ? 'b' : 'w', meta: S.meta, timeControl: S.timeControl, allowUndo: S.allowUndo }; const cb = S.onClose, st = S.onStats; openGame(o, cb); ctx.onStats = st; } }, t('play_again')) : null,
       S.kind === 'online' && S.game.opponent ? h('button.btn', { onclick: async () => { close(); try { const r = await api('POST', '/games', { opponentId: S.game.opponent.id, timeControl: S.game.timeControl || 'classic' }); closeNow(); openGame({ kind: 'online', game: r.game, meta: S.meta }, S.onClose); } catch (e) { fail(e); } } }, t('rematch')) : null,
       h('button.btn.ghost', { onclick: () => { close(); closeGame(); } }, t('close')),
     ].filter(Boolean));

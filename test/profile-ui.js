@@ -213,6 +213,11 @@ assert.ok(/\.prem-ic[\s\S]{0,160}width:\s*(2[8-9]|3[0-9])px/.test(css), 'premIc 
 const playhub = read('public/js/playhub.js');
 assert.ok(playhub.includes('openProfile') && playhub.includes('rankRow('), 'Play hub rating rows open profile');
 assert.ok(read('public/js/neonui.js').includes('avBlock(p.name'), 'rankings show avatars');
+{
+  const fnBody = (name) => { const i = playhub.indexOf(`function ${name}(`); const j = playhub.indexOf('\nfunction ', i + 1); return playhub.slice(i, j < 0 ? undefined : j); };
+  assert.ok(fnBody('paintFriends').includes('timeChips(ctx)') && fnBody('paintAi').includes('timeChips(ctx)'), 'friend + AI modes render shared time chips');
+  assert.ok(/timeControl:\s*opts\.timeControl \|\| selectedPreset\(\)/.test(app) && read('public/js/game.js').includes('punchAiClock'), 'AI games use selected time control (local clock)');
+}
 assert.ok(playhub.includes('hub_tab_online') && playhub.includes('hub_tab_rating') && playhub.includes('hub_tab_history'), 'Play hub Online/Reyting/Tarix');
 assert.ok(read('public/js/neonui.js').includes('!!p.premium'), 'rankings premium from API');
 assert.ok(read('public/js/userprofile.js').includes('filter(Boolean)'), 'user profile does not append null text nodes');
