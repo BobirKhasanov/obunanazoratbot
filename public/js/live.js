@@ -311,7 +311,7 @@ async function renderBot(mount, meta, onClose, onRefresh) {
           'aria-label': t('live_tab_intl'),
           onclick: () => { haptic('light'); setSection('intl'); onRefresh(); },
         }, icon('search', 20)),
-        ...headerInboxBtns(),
+        headerInboxBtns(),
         h('button.round', {
           type: 'button',
           'aria-label': t('nav_friends'),
@@ -324,8 +324,7 @@ async function renderBot(mount, meta, onClose, onRefresh) {
       statCard(t('stat_online'), onlineCount, 'green'),
       statCard(t('stat_games'), games.length, 'blue'),
       statCard(t('stat_tourneys'), tourneyHint || '·', 'gold')),
-    tabsEl(onRefresh),
-    sectionHead(t('live_now_sec')),
+    sectionHead(t('live_now_sec'), () => { setSection('intl'); onRefresh(); }, t('see_all')),
     games.length
       ? h('div.neon-list', ...games.slice(0, 12).map((g) => liveMatchRow(g, meta, onClose)))
       : empty(t('live_no_bot_games'), '♟'),
@@ -343,10 +342,13 @@ async function renderBot(mount, meta, onClose, onRefresh) {
         type: 'button',
         onclick: () => { haptic('light'); setSection('intl'); onRefresh(); },
       },
+        h('span.neon-live-badge', '● LIVE'),
         h('b', t('tournaments_menu')),
         h('small', t('live_tab_intl')),
         h('span.neon-watch-btn', icon('eye', 14), t('watch_btn')))),
-    sectionHead(t('online_users_sec'), null, null),
+    sectionHead(t('online_users_sec'), () => {
+      document.dispatchEvent(new CustomEvent('app-open', { detail: { page: 'rankings' } }));
+    }, t('see_all')),
     onlineUsers.length
       ? h('div.neon-hscroll', { 'data-noswipe': '' }, ...onlineUsers.slice(0, 24).map((u) => h('button.neon-online-user', {
         type: 'button',
@@ -358,8 +360,8 @@ async function renderBot(mount, meta, onClose, onRefresh) {
       : h('p.muted.neon-sec-sub', t('nobody')),
     sectionHead(
       t('online_friends_sec') + (onlineFriends.length ? ` · ${onlineFriends.length}` : ''),
-      null,
-      null,
+      () => document.dispatchEvent(new CustomEvent('app-open', { detail: { page: 'friends' } })),
+      t('see_all'),
     ),
     onlineFriends.length
       ? h('div.neon-list', ...onlineFriends.map((f) => friendActionRow(f, {
@@ -373,7 +375,7 @@ async function renderBot(mount, meta, onClose, onRefresh) {
         },
       })))
       : h('p.muted.neon-sec-sub', t('no_friends')),
-    h('div.h2', t('analyze_title')),
+    sectionHead(t('analyze_title')),
     h('p.muted.analyze-home-sub', t('analyze_home_sub')),
     recent.length
       ? h('div.list.analyze-live-list', recent.map((g) => {

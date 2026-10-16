@@ -6,8 +6,17 @@ import {
   appHeader, sectionHead, playerPlayRow, filterChip, historyRow, modeCard,
 } from './neonui.js';
 
+function goLiveTournaments(ctx) {
+  try {
+    document.dispatchEvent(new CustomEvent('app-open', { detail: { page: 'live', tourneys: true } }));
+  } catch { /* ignore */ }
+  ctx.goTab('live');
+}
+
 /** @type {'online'|'rating'|'history'} */
 let hubTab = 'online';
+/** @type {'online'|'friend'|'ai'} */
+let modePick = 'online';
 let histFilter = 'all';
 let ratingBoard = 'elo';
 let ratingCat = 'all';
@@ -48,9 +57,7 @@ export async function renderPlayHub(mount, deps) {
   let body = [];
   if (hubTab === 'rating') body = await paintRating(ctx);
   else if (hubTab === 'history') body = paintHistory(recent, ctx);
-  else {
-    body = paintOnline(online, friends, ctx);
-  }
+  else body = paintOnline(online, friends, ctx, lobby);
 
   const sub = hubTab === 'rating' ? t('hub_sub_rating')
     : hubTab === 'history' ? t('hub_sub_history')
@@ -61,11 +68,12 @@ export async function renderPlayHub(mount, deps) {
     h('div.neon-hub-title', h('h1', t('hub_title')), h('p.muted', sub)),
     tabs,
     ...body,
-  ]);
+  ].flat().filter(Boolean));
 }
 
-function paintOnline(online, friends, ctx) {
+function paintOnline(online, friends, ctx, lobby) {
   const onlineFriends = (friends || []).filter((f) => f.online);
+  const nOnline = (lobby && lobby.onlineCount != null) ? lobby.onlineCount : online.length;
   return [
     h('div.neon-mode-row',
       modeCard({
@@ -73,30 +81,53 @@ function paintOnline(online, friends, ctx) {
         sub: t('mode_online_sub'),
         tone: 'blue',
         emoji: '🌐',
-        onClick: () => ctx.ensurePlayFlow().open(),
+        selected: modePick === 'online',
+        onClick: () => {
+          modePick = 'online';
+          ctx.ensurePlayFlow().open();
+        },
       }),
       modeCard({
         title: t('hub_mode_friend'),
         sub: t('mode_friend_sub'),
         tone: 'gold',
         emoji: '🤝',
-        onClick: () => ctx.startFriendGame(),
+        selected: modePick === 'friend',
+        onClick: () => {
+          modePick = 'friend';
+          ctx.startFriendGame();
+        },
       }),
       modeCard({
         title: t('hub_mode_ai'),
         sub: t('mode_ai_sub'),
         tone: 'violet',
         emoji: '🤖',
-        onClick: () => ctx.aiSheet(),
+        selected: modePick === 'ai',
+        onClick: () => {
+          modePick = 'ai';
+          ctx.aiSheet();
+        },
       })),
     sectionHead(t('hub_now_playing'), () => ctx.goTab('live'), t('see_all')),
-    h('p.muted.neon-sec-sub', t('online_now', { n: online.length })),
+    h('p.muted.neon-sec-sub', t('online_now', { n: nOnline })),
     online.length
       ? h('div.neon-list', ...online.slice(0, 40).map((u) => playerPlayRow(u, {
         onProfile: (id) => ctx.openProfile(id),
         onPlay: (x) => ctx.challenge(x.id),
       })))
       : h('div.empty', t('nobody')),
+    sectionHead(t('live_tourneys_sec'), () => goLiveTournaments(ctx), t('see_all')),
+    h('div.neon-tourney-list',
+      h('button.neon-tourney-line', {
+        type: 'button',
+        onclick: () => { haptic('light'); goLiveTournaments(ctx); },
+      },
+        h('span.neon-tourney-ic', '🏆'),
+        h('div.grow',
+          h('div.t', t('live_tab_intl')),
+          h('div.s', t('live_tourneys_sec'))),
+        icon('chevron', 16))),
     onlineFriends.length
       ? [
         sectionHead(t('online_friends_sec')),

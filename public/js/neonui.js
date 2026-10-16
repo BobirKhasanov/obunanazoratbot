@@ -2,6 +2,14 @@
 import { h, icon, haptic, avBlock, premIc } from './ui.js';
 import { t } from './i18n.js';
 import { isLite } from './perf.js';
+import { formatTashkentWhen } from './time.js';
+
+/** Normalize inbox slot: headerInboxBtns() returns one node, not an array. */
+function asKids(x) {
+  if (x == null) return [];
+  if (Array.isArray(x)) return x.filter(Boolean);
+  return [x];
+}
 
 export function seeAll(label, onClick) {
   return h('button.neon-seeall', {
@@ -33,18 +41,19 @@ export function appHeader({ me, onProfile, onGems, inboxBtns, elo }) {
           me.premium ? premIc(16) : null),
         h('div.neon-hdr-elo', icon('chart', 14), h('span', String(elo != null ? elo : (me.elo || 1200)))))),
     h('div.neon-hdr-actions',
-      ...(inboxBtns || []),
+      ...asKids(inboxBtns),
       h('button.neon-gem', {
         type: 'button',
         onclick: () => { haptic('light'); onGems && onGems(); },
       }, icon('gem', 16), h('b', String(me.diamonds || 0)), h('span.neon-gem-plus', '+'))));
 }
 
-export function modeCard({ title, sub, tone, emoji, onClick }) {
-  return h('button.neon-mode.' + (tone || 'blue'), {
+export function modeCard({ title, sub, tone, emoji, onClick, selected }) {
+  return h('button.neon-mode.' + (tone || 'blue') + (selected ? '.on' : ''), {
     type: 'button',
     onclick: () => { haptic('light'); onClick && onClick(); },
   },
+    selected ? h('span.neon-mode-check', icon('check', 12)) : null,
     h('span.neon-mode-ic', emoji || '♟'),
     h('b', title),
     h('small', sub),
@@ -54,6 +63,8 @@ export function modeCard({ title, sub, tone, emoji, onClick }) {
 export function liveMiniCard(g, onOpen) {
   const w = g.white || {};
   const b = g.black || {};
+  const score = (g.score != null ? g.score : null)
+    || (g.result && g.result !== '*' ? g.result : '–');
   return h('button.neon-live-card', {
     type: 'button',
     'data-noswipe': '',
@@ -66,7 +77,7 @@ export function liveMiniCard(g, onOpen) {
         h('small', String(w.elo || '—'))),
       h('div.neon-live-mid',
         h('span.neon-live-badge', '● LIVE'),
-        h('b', g.result || '–'),
+        h('b', score),
         h('small', g.timeControl && g.timeControl !== 'classic' ? g.timeControl : t('watching_live'))),
       h('div.neon-live-p',
         avBlock(b.name || '?', b.id || 0, { round: true, online: true, avatarKey: b.avatarKey }),
@@ -74,7 +85,8 @@ export function liveMiniCard(g, onOpen) {
         h('small', String(b.elo || '—')))));
 }
 
-export function playerPlayRow(u, { onPlay, onProfile, actionLabel } = {}) {
+export function playerPlayRow(u, { onPlay, onProfile, actionLabel, timeHint } = {}) {
+  const tc = timeHint || u.timeControl || u.preferredTime || '3+2';
   return h('div.neon-player-row',
     h('button.neon-player-main', {
       type: 'button',
@@ -85,10 +97,8 @@ export function playerPlayRow(u, { onPlay, onProfile, actionLabel } = {}) {
       }),
       h('div.grow',
         h('div.t', h('span.name', u.name || '…'), u.premium ? premIc() : null),
-        h('div.s', [
-          u.elo != null ? String(u.elo) : '',
-          u.inGame ? t('in_game') : (u.online ? t('online') : ''),
-        ].filter(Boolean).join(' · ')))),
+        h('div.s', u.elo != null ? String(u.elo) : (u.inGame ? t('in_game') : t('online'))))),
+    h('span.neon-tc', icon('bolt', 14), h('b', String(tc))),
     h('button.neon-play-btn', {
       type: 'button',
       disabled: !!u.invited || u.inGame || u.discoverable === false,
@@ -139,6 +149,8 @@ export function historyRow(g, onOpen) {
   const win = g.result === '1/2-1/2' ? null : (g.result === '1-0') === (g.you === 'w');
   const tag = win == null ? 'draw' : (win ? 'win' : 'loss');
   const label = win == null ? t('hist_draw') : (win ? t('hist_win') : t('hist_loss'));
+  const when = formatTashkentWhen(g.updatedAt) || '';
+  const detail = [g.timeControl, when].filter(Boolean).join(' · ');
   return h('button.neon-hist-row.' + tag, {
     type: 'button',
     onclick: () => { haptic('light'); onOpen && onOpen(g); },
@@ -148,8 +160,11 @@ export function historyRow(g, onOpen) {
     }),
     h('div.grow',
       h('div.t', o.name || '…'),
-      h('div.s', [g.timeControl, o.elo != null ? String(o.elo) : ''].filter(Boolean).join(' · '))),
-    h('span.neon-hist-tag.' + tag, label),
+      h('div.s', o.elo != null ? String(o.elo) : '')),
+    h('div.neon-hist-mid',
+      h('span.neon-hist-ic.' + tag, tag === 'win' ? '🏆' : (tag === 'loss' ? '✕' : '½')),
+      h('span.neon-hist-tag.' + tag, label),
+      detail ? h('small', detail) : null),
     icon('chevron', 16));
 }
 

@@ -1180,6 +1180,7 @@ export async function start(me) {
     const pageName = ev && ev.detail && ev.detail.page;
     if (!pageName) return;
     if (['play', 'puzzles', 'rankings', 'live', 'profile'].includes(pageName)) {
+      if (pageName === 'live' && ev.detail.tourneys) openLiveTournaments();
       go(TABS.indexOf(pageName), true);
       return;
     }

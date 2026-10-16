@@ -271,6 +271,7 @@ const P = {
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M16.5 16.5L21 21"/>',
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4z"/><path d="M7 6H4.5a2.5 2.5 0 0 0 0 5H7M17 6h2.5a2.5 2.5 0 0 1 0 5H17"/>',
+  bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   sparkles: '<path d="M12 3l1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2zM18 13l.7 2.1L21 16l-2.3.7L18 19l-.7-2.3L15 16l2.3-.9zM6 14l.6 1.8L8.5 16.5 6.6 17 6 19l-.6-2-1.9-.5L5.4 15.8z"/>',
 };
 export const icon = (name, size = 24, sw = 1.9) => h('span.ic', {
