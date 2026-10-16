@@ -93,8 +93,24 @@ export function openUserProfile(userId, opts = {}) {
 
         !u.you
           ? h('div.uprof-actions', ...[
+            h('button.cta', {
+              type: 'button',
+              onclick: async () => {
+                haptic('light');
+                try {
+                  const { openChatWithUser } = await import('./inbox.js');
+                  close(true);
+                  await openChatWithUser(u.id, {
+                    id: u.id,
+                    name: u.displayName,
+                    premium: !!u.premium,
+                    avatarKey: u.avatarKey || null,
+                  });
+                } catch (e) { fail(e); }
+              },
+            }, icon('send', 18), t('send_message')),
             opts.onChallenge
-              ? h('button.cta', {
+              ? h('button.btn', {
                 type: 'button',
                 disabled: !u.online,
                 onclick: () => {

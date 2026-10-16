@@ -563,21 +563,6 @@ export function openGame(opts, onClose) {
   function showResult(outcome, reason) {
     const when = formatTashkentWhen((S.game && S.game.updatedAt) || new Date().toISOString());
     const whenEl = when ? h('p.result-when', when) : null;
-    const onlineAnalyze = S.kind === 'online' && S.id
-      ? h('button.btn', {
-        onclick: () => {
-          openGameAnalysis({
-            id: S.id,
-            moves: S.moves,
-            white: S.game.white,
-            black: S.game.black,
-            you: S.game.you,
-            result: S.game.result,
-          });
-        },
-      }, icon('sparkles', 18), t('analyze'))
-      : null;
-    // onlineAnalyze used below; AI has its own analyze button
     if (S.kind === 'spectate') {
       haptic('light');
       const res = (S.game && S.game.result) || '½-½';
@@ -597,15 +582,32 @@ export function openGame(opts, onClose) {
     const emo = outcome === 'win' ? '🏆' : outcome === 'loss' ? '🤝' : '🤝';
     sheet((close) => [
       h('div.result', h('div.result-emoji', emo), h('h2', ttl), h('p.muted', t(reasonKey(reason))), whenEl),
-      onlineAnalyze,
+      S.kind === 'online' && S.id
+        ? h('button.btn', {
+          onclick: () => {
+            close();
+            openGameAnalysis({
+              id: S.id,
+              moves: S.moves,
+              white: S.game.white,
+              black: S.game.black,
+              you: S.game.you,
+              result: S.game.result,
+            });
+          },
+        }, icon('sparkles', 18), t('analyze'))
+        : null,
       S.kind === 'ai' ? h('button.btn', {
-        onclick: () => openGameAnalysis({
-          id: 'ai-local',
-          moves: S.moves,
-          white: S.colour === 'w' ? { name: (S.meta.me && S.meta.me.name) || 'You' } : { name: t('ai') },
-          black: S.colour === 'b' ? { name: (S.meta.me && S.meta.me.name) || 'You' } : { name: t('ai') },
-          result: outcome === 'win' ? (S.colour === 'w' ? '1-0' : '0-1') : outcome === 'loss' ? (S.colour === 'w' ? '0-1' : '1-0') : '1/2-1/2',
-        }),
+        onclick: () => {
+          close();
+          openGameAnalysis({
+            id: 'ai-local',
+            moves: S.moves,
+            white: S.colour === 'w' ? { name: (S.meta.me && S.meta.me.name) || 'You' } : { name: t('ai') },
+            black: S.colour === 'b' ? { name: (S.meta.me && S.meta.me.name) || 'You' } : { name: t('ai') },
+            result: outcome === 'win' ? (S.colour === 'w' ? '1-0' : '0-1') : outcome === 'loss' ? (S.colour === 'w' ? '0-1' : '1-0') : '1/2-1/2',
+          });
+        },
       }, icon('ai', 18), t('analyze')) : null,
       S.kind === 'ai' ? h('button.btn', { onclick: () => { close(); const o = { kind: 'ai', level: S.level, colour: S.colour === 'w' ? 'b' : 'w', meta: S.meta }; const cb = S.onClose, st = S.onStats; openGame(o, cb); ctx.onStats = st; } }, t('play_again')) : null,
       S.kind === 'online' && S.game.opponent ? h('button.btn', { onclick: async () => { close(); try { const r = await api('POST', '/games', { opponentId: S.game.opponent.id, timeControl: S.game.timeControl || 'classic' }); closeNow(); openGame({ kind: 'online', game: r.game, meta: S.meta }, S.onClose); } catch (e) { fail(e); } } }, t('rematch')) : null,

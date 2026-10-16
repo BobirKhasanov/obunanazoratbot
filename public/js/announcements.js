@@ -343,6 +343,7 @@ export function paintAnnouncementsCarousel(host, prepared, { onPage, botUsername
 
   const unbindSwipe = bindSwipe(host, track, n, go, { armAuto, stopAuto });
   go(0);
+  // Android WebView often reports clientWidth=0 on first paint — re-layout when sized.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => go(go.idx));
   });
@@ -350,10 +351,20 @@ export function paintAnnouncementsCarousel(host, prepared, { onPage, botUsername
 
   const onResize = () => go(go.idx);
   addEventListener('resize', onResize);
+  let ro = null;
+  try {
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        if (host.clientWidth > 0) go(go.idx);
+      });
+      ro.observe(host);
+    }
+  } catch { ro = null; }
   cleanups.push(() => {
     stopAuto();
     try { unbindSwipe(); } catch { /* ignore */ }
     removeEventListener('resize', onResize);
+    try { if (ro) ro.disconnect(); } catch { /* ignore */ }
   });
 
   return host;

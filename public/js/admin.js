@@ -614,6 +614,11 @@ export function openAdmin(onClose) {
     };
     redrawPacks();
     shopHost.replaceChildren(
+      h('div.card.admin-analysis-card',
+        h('div.h2', t('analyze_title')),
+        h('p.muted', t('admin_analysis_free_sub')),
+        h('div.label', t('admin_analysis_free')),
+        h('div.row', analysisIn, h('span.muted', '/ day'))),
       h('div.card',
         h('p.muted', t('admin_shop_sub')),
         h('div.label', t('admin_premium_plans')), plansBox,
@@ -625,9 +630,6 @@ export function openAdmin(onClose) {
         h('div.row', h('span.muted', t('admin_referral_inviter')), referralIn, h('span.muted', '💎')),
         h('div.row', h('span.muted', t('admin_referral_invitee')), inviteeIn, h('span.muted', '💎')),
         h('p.muted', t('admin_referral_sub')),
-        h('div.label', t('admin_analysis_free')),
-        h('div.row', analysisIn, h('span.muted', '/ day')),
-        h('p.muted', t('admin_analysis_free_sub')),
         h('div.label', t('shop_packs')), packsBox,
         h('button.btn.ghost.sm', {
           onclick: () => {
@@ -691,6 +693,13 @@ export function openAdmin(onClose) {
       shop = r.shop;
       drawShop();
     } catch (e) { fail(e); drawShop(); }
+  }
+
+  function focusShopAnalysis() {
+    requestAnimationFrame(() => {
+      const el = shopHost.querySelector('.admin-analysis-card');
+      try { if (el) el.scrollIntoView({ block: 'start', behavior: 'auto' }); } catch { /* ignore */ }
+    });
   }
 
   // ----- medal generator -----
@@ -891,10 +900,10 @@ export function openAdmin(onClose) {
     ];
   });
 
-  const openShop = () => openScreen((close) => {
-    loadShop();
+  const openShop = (focusAnalysis) => openScreen((close) => {
+    loadShop().then(() => { if (focusAnalysis) focusShopAnalysis(); });
     return [
-      ...subTop(t('admin_sec_shop'), close),
+      ...subTop(focusAnalysis ? t('analyze_title') : t('admin_sec_shop'), close),
       shopHost,
     ];
   });
@@ -1641,7 +1650,8 @@ export function openAdmin(onClose) {
     sec(t('admin_sec_economy')),
     menuCard(
       menuRow({ ic: 'friends', title: t('users_list'), sub: t('admin_users_sub'), onClick: openUsers }),
-      menuRow({ ic: 'gem', title: t('admin_sec_shop'), sub: t('admin_shop_sub'), onClick: openShop }),
+      menuRow({ ic: 'gem', title: t('admin_sec_shop'), sub: t('admin_shop_sub'), onClick: () => openShop(false) }),
+      menuRow({ ic: 'sparkles', title: t('analyze_title'), sub: t('admin_analysis_menu_sub'), onClick: () => openShop(true) }),
       menuRow({ ic: 'crown', title: t('promo_admin_title'), sub: t('promo_admin_sub'), onClick: openPromos }),
     ),
     sec(t('admin_sec_content')),

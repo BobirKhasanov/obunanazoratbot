@@ -3,19 +3,42 @@ import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData, onWs, 
 import { t } from './i18n.js';
 import { openScreen } from './screen.js';
 import { softPollMs, isLite } from './perf.js';
+import { openUserProfile } from './userprofile.js';
 
 /** Thread currently open in the chat UI (suppresses toast spam for that chat). */
 let activeThreadId = null;
 /** True while the global lobby chat screen is open. */
 let viewingGlobal = false;
 
-function inboxHead(title, close, emoji) {
-  return h('div.top.inbox-head',
+function openPeerProfile(peer) {
+  const id = peer && Number(peer.id);
+  if (!id) return;
+  haptic('light');
+  openUserProfile(id);
+}
+
+function inboxHead(title, close, emoji, opts = {}) {
+  const peer = opts.peer && opts.peer.id ? opts.peer : null;
+  const center = peer
+    ? h('button.inbox-peer', {
+      type: 'button',
+      'aria-label': peer.name || title,
+      onclick: () => openPeerProfile(peer),
+    },
+      avBlock(peer.name || '?', peer.id, {
+        premium: !!peer.premium,
+        round: true,
+        avatarKey: peer.avatarKey || null,
+      }),
+      h('span.inbox-peer-name', peer.name || title),
+      peer.premium ? premIc(16) : null)
+    : h('h1', (emoji ? emoji + ' ' : '') + title);
+  return h('div.top.inbox-head' + (peer ? '.has-peer' : ''),
     h('button.round.back', {
       type: 'button', 'aria-label': t('back'),
       onclick: () => { haptic('light'); close(); },
     }, icon('back', 22)),
-    h('h1', (emoji ? emoji + ' ' : '') + title),
+    center,
     h('span.inbox-head-spacer', { 'aria-hidden': 'true' }));
 }
 
@@ -312,15 +335,22 @@ export function openMessages() {
           threadsHost.replaceChildren(h('div.empty', h('div.empty-ic', '✉️'), t('msg_empty')));
           return;
         }
-        threadsHost.replaceChildren(...threads.map((th) => h('button.row.msg-thread', {
-          type: 'button',
-          onclick: () => openChat(th.id, th.peer),
-        },
-          avBlock(th.peer.name, th.peer.id, { premium: !!th.peer.premium, round: true, avatarKey: th.peer.avatarKey || null }),
-          h('div.grow',
-            h('div.t', th.peer.name, th.peer.premium ? premIc() : null),
-            h('div.s', th.lastBody || t('msg_start'))),
-          th.unread ? h('span.count-pill', String(th.unread)) : h('span.msg-time', fmtTime(th.updatedAt)),
+        threadsHost.replaceChildren(...threads.map((th) => h('div.row.msg-thread',
+          h('button.msg-av-hit', {
+            type: 'button',
+            'aria-label': th.peer.name || t('profile_title'),
+            onclick: () => openPeerProfile(th.peer),
+          }, avBlock(th.peer.name, th.peer.id, {
+            premium: !!th.peer.premium, round: true, avatarKey: th.peer.avatarKey || null,
+          })),
+          h('button.msg-thread-main', {
+            type: 'button',
+            onclick: () => openChat(th.id, th.peer),
+          },
+            h('div.grow',
+              h('div.t', th.peer.name, th.peer.premium ? premIc() : null),
+              h('div.s', th.lastBody || t('msg_start'))),
+            th.unread ? h('span.count-pill', String(th.unread)) : h('span.msg-time', fmtTime(th.updatedAt))),
         )));
         refreshInboxBadges();
       } catch (e) { fail(e); threadsHost.replaceChildren(h('div.empty', h('div.empty-ic', '✉️'), t('msg_empty'))); }
@@ -410,15 +440,23 @@ function replyPreview(reply, onClear) {
 }
 
 function bubbleEl(m, { onReply, showName } = {}) {
+  const from = m.from && m.from.id ? m.from : null;
+  const openFrom = (e) => {
+    if (e) e.stopPropagation();
+    if (from) openPeerProfile(from);
+  };
   const reply = m.replyTo
     ? h('div.chat-quote',
       h('b', m.replyTo.fromName || (m.replyTo.mine ? t('you') : '…')),
       h('span', String(m.replyTo.body || '').slice(0, 100)))
     : null;
-  const name = showName && !m.mine && m.from
-    ? h('div.chat-from', m.from.name || '…')
+  const name = showName && !m.mine && from
+    ? h('button.chat-from', {
+      type: 'button',
+      onclick: openFrom,
+    }, from.name || '…')
     : null;
-  return h('div.chat-bubble' + (m.mine ? '.mine' : ''),
+  const bubble = h('div.chat-bubble' + (m.mine ? '.mine' : ''),
     {
       onclick: onReply ? () => { haptic('select'); onReply(m); } : undefined,
     },
@@ -432,9 +470,23 @@ function bubbleEl(m, { onReply, showName } = {}) {
         'aria-label': t('chat_reply'),
         onclick: (e) => { e.stopPropagation(); haptic('select'); onReply(m); },
       }, icon('reply', 14)) : null));
+  if (showName && !m.mine && from) {
+    return h('div.chat-row',
+      h('button.chat-av', {
+        type: 'button',
+        'aria-label': from.name || t('profile_title'),
+        onclick: openFrom,
+      }, avBlock(from.name || '?', from.id, {
+        premium: !!from.premium,
+        round: true,
+        avatarKey: from.avatarKey || null,
+      })),
+      bubble);
+  }
+  return bubble;
 }
 
-function openChatShell({ title, loadUrl, sendUrl, wsMatch, pollMs, showNames, onCloseExtra }) {
+function openChatShell({ title, peer, loadUrl, sendUrl, wsMatch, pollMs, showNames, onCloseExtra }) {
   let cleanupChat = () => {};
   let replyTo = null;
   openScreen((close) => {
@@ -554,7 +606,7 @@ function openChatShell({ title, loadUrl, sendUrl, wsMatch, pollMs, showNames, on
 
     return [
       h('div.chat-screen',
-        inboxHead(title, finish),
+        inboxHead(title, finish, null, { peer: peer || null }),
         log,
         replyHost,
         h('div.chat-compose', input, sendBtn)),
@@ -586,6 +638,7 @@ function openChat(threadId, peer) {
   activeThreadId = tid;
   openChatShell({
     title: peer?.name || t('messages'),
+    peer: peer && peer.id ? peer : null,
     loadUrl: `/messages/threads/${tid}`,
     sendUrl: `/messages/threads/${tid}`,
     wsMatch: (m) => m.t === 'dm' && Number(m.threadId) === tid,

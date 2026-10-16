@@ -54,9 +54,19 @@ function classify(playedUci, bestUci) {
 export async function openGameAnalysis(game) {
   if (!game || !game.id) return;
   const localOnly = String(game.id).startsWith('ai-');
+  let payload = game;
+  if (!localOnly && !(payload.moves && payload.moves.length)) {
+    try {
+      const r = await api('GET', `/games/${game.id}`);
+      if (r.game) payload = { ...payload, ...r.game };
+    } catch (e) {
+      fail(e);
+      return;
+    }
+  }
   if (!localOnly) {
     try {
-      await api('POST', `/games/${game.id}/analyze`);
+      await api('POST', `/games/${payload.id}/analyze`);
     } catch (e) {
       fail(e);
       return;
@@ -66,7 +76,7 @@ export async function openGameAnalysis(game) {
   openScreen((close) => {
     const host = h('div.analyze-screen', h('p.muted', t('analyze_loading')));
     const run = async () => {
-      const moves = game.moves || [];
+      const moves = payload.moves || [];
       const lite = isLite();
       const step = lite ? 2 : 1; // Android lite: sample every other ply
       const timeMs = lite ? 180 : 350;
@@ -101,9 +111,9 @@ export async function openGameAnalysis(game) {
           await sleep(0);
         }
       }
-      const wName = (game.white && game.white.name) || t('white');
-      const bName = (game.black && game.black.name) || t('black');
-      const res = game.result || '½-½';
+      const wName = (payload.white && payload.white.name) || t('white');
+      const bName = (payload.black && payload.black.name) || t('black');
+      const res = payload.result || '½-½';
       let winnerLine = t('draw_title');
       if (res === '1-0') winnerLine = t('analyze_winner', { name: wName });
       else if (res === '0-1') winnerLine = t('analyze_winner', { name: bName });

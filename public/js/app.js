@@ -4,6 +4,7 @@ import { homeTabRefreshMs, softPollMs, isLite, isAndroid } from './perf.js';
 import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat, openGlobalChat } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
+import { openGameAnalysis } from './analyze.js';
 import { Chess } from '/vendor/chess.js';
 import { Board, restyleBoards } from './board.js';
 import { goodMoves, mateIn } from './puzzles.js';
@@ -748,6 +749,31 @@ refreshers.play = async function renderPlay() {
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
       saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('ai', 22)), h('div.grow', h('div.t', t('ai') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
+    (l.games.recent && l.games.recent.length) ? [
+      h('div.h2', t('recent')),
+      h('p.muted.analyze-home-sub', t('analyze_home_sub')),
+      h('div.list', l.games.recent.map((g) => {
+        const o = g.opponent || {};
+        return h('div.row.recent-analyze',
+          avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, avatarKey: o.avatarKey || null }),
+          h('div.grow', h('div.t', o.name || '…'), h('div.s', resultText(g))),
+          h('button.mini.ok', {
+            type: 'button',
+            'aria-label': t('analyze'),
+            onclick: () => {
+              haptic('light');
+              openGameAnalysis({
+                id: g.id,
+                moves: g.moves,
+                white: g.white,
+                black: g.black,
+                you: g.you,
+                result: g.result,
+              });
+            },
+          }, icon('sparkles', 16), t('analyze')));
+      })),
+    ] : null,
   ];
   mount('play', nodes);
   setPlaySticky(state.tab === 'play');
