@@ -461,13 +461,13 @@ setInterval(() => {
 }, 25000);
 
 // ---------- emoji effects ----------
-/** Floating emoji rising from a point (reactions) — slow so the emoji is readable */
+/** Floating emoji rising from a point (reactions) — slow float so it stays readable */
 export function floatEmoji(emoji, x, y) {
   const el = h('div.float-emoji', emoji);
   el.style.left = `${x}px`; el.style.top = `${y}px`;
   el.style.setProperty('--dx', `${(Math.random() - 0.5) * 80}px`);
   document.body.append(el);
-  setTimeout(() => el.remove(), 3600);
+  setTimeout(() => el.remove(), 5400);
 }
 
 /**
