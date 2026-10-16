@@ -2463,7 +2463,6 @@ api.post('/messages/threads', wrap(async (req, res) => {
   const u = await getUser.get(other);
   if (!u || u.blocked) throw new HttpError(404, 'Player not found', 'notfound');
   if (await blockedEither(uid, other)) throw bad('Blocked', 'blocked');
-  if (!(await areFriends(uid, other))) throw bad('Friends only', 'friends_only');
   const [a, b] = dmPair(uid, other);
   let row = await db.prepare('SELECT id FROM dm_threads WHERE user_a = ? AND user_b = ?').get(a, b);
   if (!row) {
@@ -2524,7 +2523,6 @@ api.post('/messages/threads/:id', wrap(async (req, res) => {
   }
   const other = Number(th.user_a) === uid ? Number(th.user_b) : Number(th.user_a);
   if (await blockedEither(uid, other)) throw bad('Blocked', 'blocked');
-  if (!(await areFriends(uid, other))) throw bad('Friends only', 'friends_only');
   let replyMeta = null;
   if (replyToId) {
     const parent = await db.prepare('SELECT id, body, sender_id FROM dm_messages WHERE id = ? AND thread_id = ?').get(replyToId, tid);

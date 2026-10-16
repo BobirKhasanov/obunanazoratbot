@@ -200,10 +200,13 @@ async function playMoves(game, players, moves, startPly = 0) {
       const bodies = (afterTtl.messages || []).map((m) => m.body);
       assert.ok(!bodies.includes('old-a') && !bodies.includes('old-b'), 'expired messages removed oldest-first');
       assert.ok(bodies.includes('keep-fresh') || bodies.includes('javob umumiy'), 'fresh messages kept');
-      await err('B', 'POST', '/messages/threads', { userId: USERS.C.id }, 400, 'friends_only');
-      // Search finds any player (not friends-only); opening chat still requires friendship
+      // Search + open DM with any player (not friends-only); blocks still apply
       const found = await ok('B', 'GET', `/messages/search?q=${encodeURIComponent('Car')}`);
       assert.ok((found.users || []).some((u) => u.id === USERS.C.id), 'search includes non-friends');
+      const thNonFriend = await ok('B', 'POST', '/messages/threads', { userId: USERS.C.id });
+      assert.ok(thNonFriend.id, 'can open DM with non-friend from search');
+      const msgNonFriend = await ok('B', 'POST', `/messages/threads/${thNonFriend.id}`, { body: 'salom Cara' });
+      assert.ok(msgNonFriend.id, 'can send DM to non-friend');
       // @ → username; without @ → first/last name only
       const byUser = await ok('B', 'GET', `/messages/search?q=${encodeURIComponent('@cara_user')}`);
       assert.ok((byUser.users || []).some((u) => u.id === USERS.C.id), '@username finds user');

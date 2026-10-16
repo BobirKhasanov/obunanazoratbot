@@ -351,7 +351,7 @@ export function openMessages() {
   });
 }
 
-/** Open (or create) a DM thread with a friend and show the chat screen. */
+/** Open (or create) a DM thread with any player and show the chat screen. */
 export async function openChatWithUser(userId, peerHint) {
   try {
     const th = await api('POST', '/messages/threads', { userId });
