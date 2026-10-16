@@ -131,13 +131,13 @@ export function statCard(ic, label, value, tone, onClick) {
 }
 
 /** Jonli turnirlar card (Lichess broadcast). */
-export function tourneyCard({ title, sub, live, art, primary, actionLabel, onClick }) {
+export function tourneyCard({ title, sub, live, soon, art, primary, actionLabel, onClick }) {
   return h('button.nx-tour' + (primary ? '.primary' : ''), { type: 'button', 'data-noswipe': '', onclick: tap(onClick) },
     art ? h('span.nx-tour-art', { style: { backgroundImage: `url(${art})` } }) : null,
     h('div.nx-tour-h', h('span.nx-tour-ic', icon('trophy', 16)), h('b', title)),
     h('small', sub),
-    live ? h('span.nx-live', h('i'), 'LIVE') : null,
-    h('span.' + (primary ? 'nx-btn-p' : 'nx-btn-o') + '.nx-tour-btn', icon(primary ? 'trophy' : 'eye', 15), actionLabel));
+    live ? h('span.nx-live', h('i'), 'LIVE') : soon ? h('span.nx-soon', icon('clock', 12), soon) : null,
+    h('span.' + (primary ? 'nx-btn-p' : 'nx-btn-o') + '.nx-tour-btn', icon('eye', 15), actionLabel));
 }
 
 export function onlineBubble(u, onOpen) {

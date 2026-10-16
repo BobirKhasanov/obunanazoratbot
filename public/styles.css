@@ -2464,6 +2464,12 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 .nx-stat.blue .nx-stat-ic { background: rgba(46, 139, 255, 0.16); color: var(--blue); }
 .nx-stat.gold .nx-stat-ic { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
 .nx-tour-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.nx-tour-strip > .nx-tour { flex: 0 0 calc((100% - 10px) / 2.1); scroll-snap-align: start; }
+.nx-tour-strip > .nx-lc-more { min-height: 168px; }
+.nx-soon {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 6px;
+  font-size: 10px; font-weight: 800; color: #fcd34d; background: rgba(245, 158, 11, 0.16);
+}
 .nx-tour {
   position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
   min-height: 168px; padding: 12px; border-radius: 18px; text-align: left; color: var(--text);

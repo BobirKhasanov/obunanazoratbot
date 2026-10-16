@@ -158,7 +158,9 @@ function startsLabel(ts) {
   const d = new Date(ts);
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
-  return t('starts_at', { t: `${hh}:${mm}` });
+  const today = d.toDateString() === new Date().toDateString();
+  const day = today ? '' : `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')} `;
+  return t('starts_at', { t: `${day}${hh}:${mm}` });
 }
 
 let hooks = {};
@@ -270,7 +272,14 @@ async function renderBot(mount, meta, onClose, onRefresh) {
   const onlineCount = lobby.onlineCount != null ? lobby.onlineCount : onlineUsers.length;
   const onlineFriends = (fr.friends || []).filter((f) => f.online);
   const activeTours = tours.active || [];
-  const tourCards = [...activeTours, ...(tours.upcoming || [])].slice(0, 2);
+  const ongoing = (it) => !!(it.round && it.round.ongoing);
+  const tourCards = [
+    ...activeTours.filter(ongoing),
+    ...activeTours.filter((it) => !ongoing(it)),
+    ...(tours.upcoming || []),
+  ];
+  const prevTourStrip = document.querySelector('.page[data-page="live"] .nx-tour-strip');
+  const tourScroll = prevTourStrip ? prevTourStrip.scrollLeft : 0;
 
   const challenge = (id) => (hooks.challenge ? hooks.challenge(id) : api('POST', '/games', { opponentId: id }).then(onRefresh, fail));
   const openProfile = (id) => openUserProfile(id, { onChallenge: (u) => challenge(u.id) });
@@ -294,15 +303,19 @@ async function renderBot(mount, meta, onClose, onRefresh) {
       : emptyNote(t('live_no_bot_games')),
     sectionHead(t('live_tourneys_sec'), () => openTour(null), t('see_all')),
     tourCards.length
-      ? h('div.nx-tour-grid', ...tourCards.map((it, i) => tourneyCard({
-        title: tourTitle(it),
-        sub: [tourSubtitle(it), it.round && it.round.name].filter(Boolean).join(' · '),
-        live: !!(it.round && it.round.ongoing),
-        art: i === 0 ? '/img/ui/tour-blitz.webp' : '/img/ui/tour-rapid.webp',
-        primary: i === 0,
-        actionLabel: i === 0 ? t('join_btn') : t('watch_btn'),
-        onClick: () => openTour(it),
-      })))
+      ? h('div.nx-hscroll.nx-tour-strip', { 'data-noswipe': '' },
+        ...tourCards.map((it, i) => tourneyCard({
+          title: tourTitle(it),
+          sub: [tourSubtitle(it), it.round && it.round.name].filter(Boolean).join(' · '),
+          live: ongoing(it),
+          soon: ongoing(it) ? '' : startsLabel(it.round && it.round.startsAt),
+          art: i % 2 ? '/img/ui/tour-rapid.webp' : '/img/ui/tour-blitz.webp',
+          primary: ongoing(it),
+          actionLabel: t('watch_btn'),
+          onClick: () => openTour(it),
+        })),
+        h('button.nx-lc-more', { type: 'button', onclick: () => openTour(null) },
+          h('span', icon('chevron', 18)), t('see_all')))
       : emptyNote(t('live_no_tours')),
     sectionHead(t('online_users_sec'), more(showAllUsers || onlineUsers.length <= 6, () => { showAllUsers = true; }), t('see_all')),
     onlineUsers.length
@@ -335,6 +348,10 @@ async function renderBot(mount, meta, onClose, onRefresh) {
       : emptyNote(t('analyze_empty')),
   ];
   mount(nodes);
+  if (tourScroll) {
+    const strip = document.querySelector('.page[data-page="live"] .nx-tour-strip');
+    if (strip) strip.scrollLeft = tourScroll;
+  }
 }
 
 // ---------- Lichess tournaments ----------
