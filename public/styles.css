@@ -2296,6 +2296,8 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
   display: inline-flex; align-items: center; gap: 6px; height: 42px; padding: 0 6px 0 12px; border-radius: 999px;
   background: var(--card); border: 1px solid var(--line); color: var(--text); font-weight: 800; font-size: 14px;
 }
+.nx-gem { cursor: pointer; touch-action: manipulation; }
+.nx-gem > * { pointer-events: none; }
 .nx-gem-ic { font-size: 15px; line-height: 1; }
 .nx-gem-plus {
   width: 24px; height: 24px; border-radius: 50%; background: var(--blue); color: #fff;

@@ -631,7 +631,17 @@ function openProfilePage(detail) {
   go(TABS.indexOf('profile'), true);
   setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail })), 200);
 }
-function openGemsPage() { openProfilePage('diamonds'); }
+/** Diamonds screen overlays the current tab (no tab switch) — back returns to where the user was. */
+let gemsOpening = false;
+async function openGemsPage() {
+  if (gemsOpening) return;
+  gemsOpening = true;
+  try {
+    // The diamonds screen lives in the profile page closure; build it once in the background if needed.
+    if (!document._profileOpenHandler) await refreshers.profile();
+    document.dispatchEvent(new CustomEvent('profile-open', { detail: 'diamonds' }));
+  } catch (e) { if (e.code !== 'net') fail(e); } finally { gemsOpening = false; }
+}
 
 refreshers.live = async function renderLive() {
   await renderLivePage(

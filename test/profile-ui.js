@@ -151,7 +151,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261017nx22"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261017nx22'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261017nx23"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261017nx23'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -301,6 +301,13 @@ assert.ok(html.includes('var(--text') && (html.includes('var(--bg') || html.incl
 assert.ok(css.includes('pill-thumb') && ui.includes('pillBar'), 'sliding pill bars for section selection');
 assert.ok(read('public/js/playhub.js').includes('segTabs(') && read('public/js/playhub.js').includes('underTabs('), 'Play hub uses segmented + underline tabs');
 assert.ok(app.includes('appHeader') && app.includes('headerInboxBtns') && css.includes('.nx-gem'), 'neon header has inbox + gems');
+{
+  const i = app.indexOf('async function openGemsPage(');
+  const gemsFn = app.slice(i, app.indexOf('\n}', i));
+  assert.ok(i >= 0 && gemsFn.includes("detail: 'diamonds'") && !gemsFn.includes('go(') && !gemsFn.includes('openProfilePage'), 'header gem opens diamonds page directly (no tab switch)');
+  assert.ok(app.includes('onGems: openGemsPage') && read('public/js/playhub.js').includes('deps.openGems()'), 'all header gem pills route to openGemsPage');
+  assert.ok(/button\.prof-gem\.nx-gem[\s\S]{0,200}openDiamonds\(\)/.test(profile), 'profile gem button opens diamonds');
+}
 for (const f of ['app', 'live', 'playhub', 'neonui']) assert.ok(!/\.\.\.\s*(deps\.)?headerInboxBtns\(|\.\.\.\s*inboxBtns/.test(read(`public/js/${f}.js`)), `${f}: headerInboxBtns() returns one element — never spread (iOS crash)`);
 assert.ok(!css.includes('.neon-') && !css.includes('nav-btn[data-tab="rankings"] .ic'), 'old neon CSS removed');
 assert.ok(read('src/server.js').indexOf("api.get('/games/history'") < read('src/server.js').indexOf("api.get('/games/:id'"), 'history route before /games/:id');

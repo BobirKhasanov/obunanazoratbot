@@ -34,7 +34,7 @@ export function appHeader({ me, elo, inboxBtns, onProfile, onGems }) {
         h('div.nx-hdr-elo', icon('chart', 13), h('span.nx-elo-v', String(elo != null ? elo : (me.elo || 1200)))))),
     h('div.nx-hdr-act',
       inboxBtns || null,
-      h('button.nx-gem', { type: 'button', 'data-noswipe': '', onclick: tap(onGems) },
+      h('button.nx-gem', { type: 'button', 'data-noswipe': '', 'aria-label': t('diamonds'), onclick: tap(onGems) },
         h('span.nx-gem-ic', '💎'), h('b', String(me.diamonds || 0)), h('span.nx-gem-plus', icon('plus', 12, 2.6)))));
 }
 
