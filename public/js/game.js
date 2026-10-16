@@ -129,7 +129,7 @@ export function openGame(opts, onClose) {
     if (S.kind === 'ai') {
       return {
         me: { name: meName(), id: meMeta.id || 1, premium: !!meMeta.premium, avatarKey: meMeta.avatarKey || null },
-        opp: { name: `${t('computer')} · ${t('lvl' + S.level)}`, id: 7 + S.level, ai: true },
+        opp: { name: `${t('ai')} · ${t('lvl' + S.level)}`, id: 7 + S.level, ai: true },
       };
     }
     if (S.kind === 'spectate') {
@@ -168,7 +168,7 @@ export function openGame(opts, onClose) {
 
   function fillBar(b, p, colour, cap, ai) {
     b.av.replaceChildren(ai
-      ? h('div.avatar.ai', icon('cpu', 22))
+      ? h('div.avatar.ai', icon('ai', 22))
       : avBlock(p.name, p.id, {
         premium: !!p.premium,
         online: !!p.online,
@@ -282,7 +282,7 @@ export function openGame(opts, onClose) {
     top.el.classList.toggle('turn', !S.over && c.turn() === (topIsOpp ? oppCol : S.colour));
     bot.el.classList.toggle('turn', !S.over && c.turn() === (topIsOpp ? S.colour : oppCol));
 
-    if (S.kind === 'ai') title.textContent = t('vs_computer');
+    if (S.kind === 'ai') title.textContent = t('vs_ai');
     else if (S.kind === 'spectate') title.textContent = `${me.name} – ${opp.name}`;
     else title.textContent = S.game.status === 'active' || S.game.status === 'finished' ? opp.name : t('new_game');
     // status line
@@ -476,8 +476,8 @@ export function openGame(opts, onClose) {
     S.thinking = true; render(false);
     const token = S.token = {};
     const t0 = Date.now();
-    // Realistic pause after the player moves (1–1.5s total, including engine time)
-    const thinkMs = 1000 + Math.floor(Math.random() * 501);
+    // Pause after the player moves (2s total, including engine time)
+    const thinkMs = 2000;
     const seen = []; { const c = new Chess(); seen.push(c.fen()); for (const [f, to, p] of S.moves) { c.move({ from: f, to, promotion: p }); seen.push(c.fen()); } }
     let mv = null;
     try { mv = await askEngine(S.chess.fen(), S.level, seen); } catch { mv = null; }

@@ -424,7 +424,7 @@ function aiSheet() {
       h('div', h('b', t('lvl' + n)), h('small', t('lvl' + n + '_d'))))));
     draw();
     return [
-      h('h2', t('vs_computer')),
+      h('h2', t('vs_ai')),
       h('div.label', t('level')), levels,
       h('div.label', t('play_as')),
       seg([['w', '♔ ' + t('white')], ['r', '🎲 ' + t('random')], ['b', '♚ ' + t('black')]], colour, (v) => { colour = v; }),
@@ -486,7 +486,7 @@ function newGameSheet() {
   sheet((close) => [
     h('h2', t('new_game')),
     h('div.stack',
-      tile(t('vs_computer'), t('vs_computer_sub'), 'cpu', () => { close(); setTimeout(aiSheet, 200); }, true),
+      tile(t('vs_ai'), t('vs_ai_sub'), 'ai', () => { close(); setTimeout(aiSheet, 200); }, true),
       tile(t('play_online'), t('quick_sub'), 'globe', () => { close(); setTimeout(onlineSheet, 200); }),
       tile(t('with_friend'), t('friend_sub'), 'friends', () => { close(); startFriendGame(); })),
   ]);
@@ -738,7 +738,7 @@ refreshers.play = async function renderPlay() {
       h('button.mini.ok', { onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); closeScreen(true); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 18)),
       h('button.mini', { onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } playSnap = ''; refresh(); } }, icon('x', 18)))))] : null,
     saved || l.games.active.length || l.games.waiting.length ? [h('div.h2', t('continue')), h('div.list',
-      saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('cpu', 22)), h('div.grow', h('div.t', t('computer') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
+      saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('ai', 22)), h('div.grow', h('div.t', t('ai') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
   ];
   mount('play', nodes);

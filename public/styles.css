@@ -623,7 +623,11 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .stat small { color: var(--muted); font-weight: 600; }
 .avatar { color: #fff; } .avatar.xl { width: 72px; height: 72px; border-radius: 50%; font-size: 30px; }
 .avatar.sm { width: 24px; height: 24px; border-radius: 8px; font-size: 12px; }
-.avatar.ai { background: var(--blue); }
+.avatar.ai {
+  background: linear-gradient(145deg, #0ea5e9 0%, #2563eb 55%, #1d4ed8 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.avatar.ai svg { stroke-width: 1.7; }
 .me .big { background: none; }
 .invite-card { text-align: center; display: grid; gap: 6px; justify-items: center; }
 .invite-card .btn { margin-top: 10px; }

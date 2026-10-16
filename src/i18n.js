@@ -4,7 +4,7 @@ const LANGS = ['uz', 'uzc', 'ru', 'en'];
 
 const STR = {
   en: {
-    welcome: (n) => `♟ Welcome${n}!\n\nPlay chess against the computer, challenge players who are online or invite your friends, right here in Telegram.`,
+    welcome: (n) => `♟ Welcome${n}!\n\nPlay chess against the AI, challenge players who are online or invite your friends, right here in Telegram.`,
     shareText: 'Join me for a game of chess in Telegram! ♟',
     open: '♟ Play',
     openGame: '♟ Open game',
@@ -36,11 +36,11 @@ const STR = {
         .replace(/\n{2,}/g, '\n').trim();
     },
     unknown: 'Tap the button below to start playing.',
-    description: 'Play chess against the computer, online players or your friends, right inside Telegram.',
-    shortDescription: 'Chess in Telegram: vs computer, online or friends',
+    description: 'Play chess against the AI, online players or your friends, right inside Telegram.',
+    shortDescription: 'Chess in Telegram: vs AI, online or friends',
   },
   ru: {
-    welcome: (n) => `♟ Добро пожаловать${n}!\n\nИграйте в шахматы с компьютером, вызывайте игроков онлайн или приглашайте друзей, прямо в Telegram.`,
+    welcome: (n) => `♟ Добро пожаловать${n}!\n\nИграйте в шахматы с ИИ, вызывайте игроков онлайн или приглашайте друзей, прямо в Telegram.`,
     shareText: 'Сыграем в шахматы в Telegram! ♟',
     open: '♟ Играть',
     openGame: '♟ Открыть партию',
@@ -72,11 +72,11 @@ const STR = {
         .replace(/\n{2,}/g, '\n').trim();
     },
     unknown: 'Нажмите кнопку ниже, чтобы начать игру.',
-    description: 'Играйте в шахматы с компьютером, игроками онлайн или друзьями, прямо в Telegram.',
-    shortDescription: 'Шахматы в Telegram: с компьютером, онлайн или с друзьями',
+    description: 'Играйте в шахматы с ИИ, игроками онлайн или друзьями, прямо в Telegram.',
+    shortDescription: 'Шахматы в Telegram: с ИИ, онлайн или с друзьями',
   },
   uz: {
-    welcome: (n) => `♟ Xush kelibsiz${n}!\n\nKompyuter bilan shaxmat o'ynang, onlayn o'yinchilarni o'yinga chorlang yoki do'stlaringizni taklif qiling, to'g'ridan-to'g'ri Telegramda.`,
+    welcome: (n) => `♟ Xush kelibsiz${n}!\n\nAI bilan shaxmat o'ynang, onlayn o'yinchilarni o'yinga chorlang yoki do'stlaringizni taklif qiling, to'g'ridan-to'g'ri Telegramda.`,
     shareText: "Telegramda men bilan shaxmat o'ynang! ♟",
     open: "♟ O'ynash",
     openGame: "♟ O'yinni ochish",
@@ -108,11 +108,11 @@ const STR = {
         .replace(/\n{2,}/g, '\n').trim();
     },
     unknown: "O'ynashni boshlash uchun pastdagi tugmani bosing.",
-    description: "Kompyuter, onlayn o'yinchilar yoki do'stlaringiz bilan shaxmat o'ynang, to'g'ridan-to'g'ri Telegramda.",
-    shortDescription: "Telegramda shaxmat: kompyuter, onlayn yoki do'stlar bilan",
+    description: "AI, onlayn o'yinchilar yoki do'stlaringiz bilan shaxmat o'ynang, to'g'ridan-to'g'ri Telegramda.",
+    shortDescription: "Telegramda shaxmat: AI, onlayn yoki do'stlar bilan",
   },
   uzc: {
-    welcome: (n) => `♟ Хуш келибсиз${n}!\n\nКомпьютер билан шахмат ўйнанг, онлайн ўйинчиларни ўйинга чорланг ёки дўстларингизни таклиф қилинг, тўғридан-тўғри Телеграмда.`,
+    welcome: (n) => `♟ Хуш келибсиз${n}!\n\nAI билан шахмат ўйнанг, онлайн ўйинчиларни ўйинга чорланг ёки дўстларингизни таклиф қилинг, тўғридан-тўғри Телеграмда.`,
     shareText: 'Телеграмда мен билан шахмат ўйнанг! ♟',
     open: '♟ Ўйнаш',
     openGame: '♟ Ўйинни очиш',
@@ -144,8 +144,8 @@ const STR = {
         .replace(/\n{2,}/g, '\n').trim();
     },
     unknown: 'Ўйнашни бошлаш учун пастдаги тугмани босинг.',
-    description: 'Компьютер, онлайн ўйинчилар ёки дўстларингиз билан шахмат ўйнанг, тўғридан-тўғри Телеграмда.',
-    shortDescription: 'Телеграмда шахмат: компьютер, онлайн ёки дўстлар билан',
+    description: 'AI, онлайн ўйинчилар ёки дўстларингиз билан шахмат ўйнанг, тўғридан-тўғри Телеграмда.',
+    shortDescription: 'Телеграмда шахмат: AI, онлайн ёки дўстлар билан',
   },
 };
 

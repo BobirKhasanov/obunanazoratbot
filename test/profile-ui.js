@@ -130,9 +130,12 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016aj"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016aj'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016ak"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016ak'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
+assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
+assert.ok(read('public/js/i18n.js').includes("vs_ai: 'Play vs AI'") && read('public/js/i18n.js').includes("play_card_ai: 'Vs AI'"), 'UI says AI not computer');
+assert.ok(read('public/js/game.js').includes("icon('ai'") && css.includes('.avatar.ai'), 'AI avatar uses sparkles icon');
 assert.ok(app.includes('firstPaint') && app.includes('deferPzMedia'), 'first paint skips friends wait + defers puzzle media on Android');
 assert.ok(indexHtml.includes('data-android') && indexHtml.includes("plat === 'android'"), 'Android marked early to lighten boot splash');
 assert.ok(app.includes('rank-info') && /rank-info[\s\S]{0,80}foot|foot[\s\S]{0,80}rank-info/.test(app), 'ranking info text above player list');
