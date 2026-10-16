@@ -128,12 +128,13 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016ac"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016ac'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016ad"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016ad'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('puzzleHost') && /time-heading[\s\S]{0,400}puzzleHost|pcards[\s\S]{0,200}puzzle/.test(app), 'puzzle carousel below time/play cards');
 assert.ok(read('public/js/game.js').includes('isMoveSoundOn') && read('public/js/game.js').includes('allowUndo'), 'move sound + optional AI undo');
 assert.ok(read('public/js/game.js').includes('sound-btn') && /icon\([^)]*soundOn[^)]*28\)/.test(read('public/js/game.js')), 'sound toggle icon larger');
 assert.ok(read('public/js/ui.js').includes('if (!isMoveSoundOn()) return') && read('public/js/game.js').includes('if (isMoveSoundOn()) unlockAudio()'), 'muted move sound skips unlock/play');
-assert.ok(app.includes('Promise.all') && app.includes('ann-loading') && read('public/js/announcements.js').includes('ann-skel'), 'carousels reserve height + mount in parallel after entry');
+assert.ok(app.includes('prepareAnnouncements') && app.includes('paintAnnouncementsCarousel') && read('public/js/announcements.js').includes('prepareAnnouncements'), 'carousels prepared before home mount');
+assert.ok(app.includes('dismissBootRevealApp') && read('public/js/entry.js').includes('appP'), 'splash stays until first paint; app.js loads with /me');
 assert.ok(read('public/js/inbox.js').includes('/chat/global') && read('public/js/inbox.js').includes('replyToId'), 'global chat + reply');
 assert.ok(read('src/db.js').includes('global_chat_messages') && read('src/server.js').includes("kind <> 'dm'"), 'global chat schema; bell ignores DM');
 assert.ok(read('src/server.js').includes('purgeGlobalChatExpired') && read('src/server.js').includes('ORDER BY created_at ASC'), 'global chat purges oldest expired first');
@@ -251,7 +252,7 @@ assert.ok(app.includes("online-heading") && app.includes("t('online_now'") && !/
 assert.ok(!app.includes('hdr-ic') && !app.includes("t('xabarnoma')"), 'header mail/bell icons removed');
 const entry = read('public/js/entry.js');
 assert.ok(entry.includes('timeoutMs') && entry.includes('showApp') && entry.includes('showGate'), 'entry has /me timeout and reveals app/gate');
-assert.ok(entry.includes("import('./app.js?v=") && app.includes('export async function start'), 'entry loads app after splash with cache bust');
+assert.ok(entry.includes("import('./app.js?v=") && entry.includes('appP') && app.includes('export async function start'), 'entry loads app in parallel with /me');
 assert.ok(html.includes('data-asset=') && entry.includes('assetV'), 'HTML data-asset drives module cache bust');
 assert.ok(entry.includes('chess-syntax-reload') && entry.includes('SyntaxError'), 'syntax load errors trigger one reload');
 assert.ok(read('public/js/ui.js').includes('timeoutMs') && read('public/js/ui.js').includes('AbortController'), 'api supports request timeout');
@@ -260,13 +261,15 @@ assert.ok(html.includes('/api/public/boot-splash') && html.includes('chess_lang'
 assert.ok(admin.includes('openBootSplash') && admin.includes('/admin/boot-splash'), 'admin can edit boot splash');
 assert.ok(css.includes('boot-admin-preview') && css.includes('boot-admin-stage'), 'admin splash preview styles');
 assert.ok(html.includes('failBoot') && html.includes('Juda uzoq kutildi'), 'boot watchdog if splash stalls');
-assert.ok(html.includes('forceLeaveSplash'), 'inline force-leave splash if modules stall');
+assert.ok(html.includes('forceLeaveIfHomeReady') && html.includes('forceLeaveSplash'), 'force-leave only when home painted');
+assert.ok(!html.includes('setTimeout(forceLeaveSplash, 2500)'), 'no early empty-shell splash dismiss at 2.5s');
 assert.ok(!html.includes('rel="modulepreload"'), 'no inbox modulepreload (was false-triggering boot fail UI)');
 assert.ok(html.includes('/js/entry.js') && html.includes('failBoot'), 'boot fails when entry.js load errors');
 assert.ok(!html.includes("addEventListener('unhandledrejection'"), 'boot does not treat unhandledrejection as fatal');
 assert.ok(read('src/server.js').includes("file.endsWith('.js')") && read('src/server.js').includes('text/javascript'), 'JS modules served with correct MIME');
 assert.ok(read('src/server.js').includes('getMe timeout'), 'getMe for /me is time-capped');
 assert.ok(entry.includes("getElementById('boot')"), 'entry hideBoot forcefully removes splash');
+assert.ok(app.includes('dismissBootRevealApp'), 'start dismisses splash after first home paint');
 assert.ok(read('src/db.js').includes('puzzle_daily_claims'), 'daily puzzle reward table');
 assert.ok(css.includes('.pclk') && css.includes('.gchat') && css.includes('.shop-pack.on'), 'clock + chat + pack select styles');
 

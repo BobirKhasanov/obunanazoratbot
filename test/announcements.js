@@ -24,8 +24,9 @@ assert.ok(server.includes('Asia/Tashkent') || server.includes('+05:00'));
 assert.ok(server.includes("api.get('/media/:id'"));
 assert.ok(server.includes('purgeExpiredAnnouncements'));
 
-assert.ok(app.includes('mountAnnouncementsCarousel'));
+assert.ok(app.includes('paintAnnouncementsCarousel') || app.includes('prepareAnnouncements'));
 assert.ok(app.includes('annHost') || app.includes('ann-carousel'));
+assert.ok(ann.includes('mountAnnouncementsCarousel') && ann.includes('paintAnnouncementsCarousel'));
 assert.ok(!app.includes("h('div.h2', t('recent'))"), 'recent games removed from home');
 assert.ok(profile.includes('openStats'));
 assert.ok(profile.includes("t('recent')"));
@@ -62,9 +63,9 @@ assert.ok(app.includes('reuseAnn') && app.includes('announcementsKey'), 'home re
 assert.ok(app.includes('pauseAnnouncementsCarousel') && app.includes('resumeAnnouncementsHost'), 'tab leave pauses; reuse resumes');
 assert.ok(!/prev === TABS\.indexOf\('play'\)\)\s*\{\s*stopAnnouncementsCarousel/.test(app), 'must not hard-stop carousels on leave play');
 assert.ok(app.includes('time-option') && app.includes("classList.toggle('selected'"), 'time pick in-place (no remount)');
-assert.ok(app.includes('ann-loading') && ann.includes('ann-skel') && ann.includes('ann-loading'), 'first paint reserves carousel box');
-assert.ok(app.includes('Promise.all(['), 'both carousels mount in parallel');
-assert.ok(css.includes('.ann-carousel.ann-loading') || css.includes('.ann-skel'), 'loading carousel keeps 140px height');
+assert.ok(ann.includes('prepareAnnouncements') && ann.includes('paintAnnouncementsCarousel'), 'carousel prepare + sync paint');
+assert.ok(app.includes('prepareAnnouncements') && app.includes('paintAnnouncementsCarousel'), 'home prepares carousels before mount');
+assert.ok(ann.includes('AbortController') && ann.includes('isLite()'), 'Android lite media fetch timeout');
 assert.ok(i18n.includes('ann_title_section:'));
 
 // Neon-only media path (no Supabase Storage)

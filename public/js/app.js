@@ -15,7 +15,8 @@ import { renderProfilePage, openUserProfile } from './profile.js';
 import { openScreen, closeScreen, screenOpen } from './screen.js';
 import {
   loadAnnouncements,
-  mountAnnouncementsCarousel,
+  prepareAnnouncements,
+  paintAnnouncementsCarousel,
   pauseAnnouncementsCarousel,
   resumeAnnouncementsCarousel,
   resumeAnnouncementsHost,
@@ -504,6 +505,23 @@ refreshers.play = async function renderPlay() {
   if (reusePz) prevPz.remove();
   else if (prevPz) stopAnnouncementsHost(prevPz);
 
+  // Prefetch carousel media BEFORE building home DOM — page + boards open together
+  const onPage = (pageName) => {
+    if (['play', 'puzzles', 'rankings', 'live', 'profile'].includes(pageName)) go(TABS.indexOf(pageName), true);
+    else if (pageName === 'premium' || pageName === 'friends' || pageName === 'settings' || pageName === 'diamonds' || pageName === 'gems' || pageName === 'stats' || pageName === 'promo') {
+      const idx = TABS.indexOf('profile');
+      const already = state.index === idx;
+      go(idx, true);
+      if (already) closeScreen(true);
+      setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: pageName })), already ? 60 : 520);
+    }
+  };
+  const annOpts = { botUsername: state.meta?.botUsername, userId: state.me?.id, onPage };
+  const [prepAnn, prepPz] = await Promise.all([
+    (!reuseAnn && anns && anns.length) ? prepareAnnouncements(anns) : Promise.resolve(null),
+    (!reusePz && puzzleAnns && puzzleAnns.length) ? prepareAnnouncements(puzzleAnns) : Promise.resolve(null),
+  ]);
+
   const controls = [
     ['1+0', '1+0', 'Bullet'],
     ['3+2', '3+2', 'Blitz'],
@@ -536,29 +554,33 @@ refreshers.play = async function renderPlay() {
   const banner = (cls, emoji, title, sub, fn) => h('button.home-banner.' + cls, { onclick: () => { haptic('light'); fn(); } },
     h('div.home-banner-text', h('b', title), h('small', sub)), h('span.home-banner-art', emoji));
   const card = (emoji, label, fn) => h('button.pcard', { onclick: () => { haptic('light'); fn(); } }, h('span.pcard-art', emoji), h('b', label));
-  // Reserve carousel height on first paint when content exists (avoids entry→home layout jump).
+  // Build carousels fully (media already fetched) so they mount with the rest of home
   const annHost = reuseAnn
     ? prevAnn
-    : h('div.ann-carousel' + (anns && anns.length ? '.ann-loading' : ''), {
-      ...(anns && anns.length ? {} : { hidden: true }),
+    : h('div.ann-carousel', {
+      ...(prepAnn && prepAnn.items.length ? {} : { hidden: true }),
       'data-noswipe': '',
       'data-ann-board': 'home',
     });
   if (!reuseAnn) {
     annHost.dataset.annBoard = 'home';
-    if (anns && anns.length && !annHost.querySelector('.ann-track')) annHost.replaceChildren(h('div.ann-skel'));
+    if (prepAnn && prepAnn.items.length) {
+      annHost.dataset.annKey = annKey;
+      paintAnnouncementsCarousel(annHost, prepAnn, annOpts);
+    }
   }
   const puzzleHost = reusePz
     ? prevPz
-    : h('div.ann-carousel.ann-puzzle' + (puzzleAnns && puzzleAnns.length ? '.ann-loading' : ''), {
-      ...(puzzleAnns && puzzleAnns.length ? {} : { hidden: true }),
+    : h('div.ann-carousel.ann-puzzle', {
+      ...(prepPz && prepPz.items.length ? {} : { hidden: true }),
       'data-noswipe': '',
       'data-ann-board': 'puzzle',
     });
   if (!reusePz) {
     puzzleHost.dataset.annBoard = 'puzzle';
-    if (puzzleAnns && puzzleAnns.length && !puzzleHost.querySelector('.ann-track')) {
-      puzzleHost.replaceChildren(h('div.ann-skel'));
+    if (prepPz && prepPz.items.length) {
+      puzzleHost.dataset.annKey = pzKey;
+      paintAnnouncementsCarousel(puzzleHost, prepPz, { ...annOpts, delayMs: CAROUSEL_STAGGER_MS });
     }
   }
   const openProfile = (id) => openUserProfile(id, {
@@ -647,31 +669,10 @@ refreshers.play = async function renderPlay() {
   ];
   mount('play', nodes);
   setPlaySticky(state.tab === 'play');
+  // Reused boards: restart auto-advance after remount into the page
   if (state.tab === 'play') {
-    const onPage = (page) => {
-      if (['play', 'puzzles', 'rankings', 'live', 'profile'].includes(page)) go(TABS.indexOf(page), true);
-      else if (page === 'premium' || page === 'friends' || page === 'settings' || page === 'diamonds' || page === 'gems' || page === 'stats' || page === 'promo') {
-        const idx = TABS.indexOf('profile');
-        const already = state.index === idx;
-        go(idx, true);
-        // go() only closeScreens on tab change — clear stack when already on profile
-        if (already) closeScreen(true);
-        setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: page })), already ? 60 : 520);
-      }
-    };
-    const opts = { botUsername: state.meta?.botUsername, userId: state.me?.id, onPage };
-    // Mount both boards in parallel so entry→home does not reveal them one-after-another
-    await Promise.all([
-      reuseAnn
-        ? Promise.resolve(resumeAnnouncementsHost(annHost))
-        : (annHost.dataset.annKey = annKey, mountAnnouncementsCarousel(annHost, anns, opts)),
-      puzzleAnns && puzzleAnns.length
-        ? (reusePz
-          ? Promise.resolve(resumeAnnouncementsHost(puzzleHost))
-          : (puzzleHost.dataset.annKey = pzKey,
-            mountAnnouncementsCarousel(puzzleHost, puzzleAnns, { ...opts, delayMs: CAROUSEL_STAGGER_MS })))
-        : Promise.resolve(),
-    ]);
+    if (reuseAnn) resumeAnnouncementsHost(annHost);
+    if (reusePz) resumeAnnouncementsHost(puzzleHost);
   }
 };
 refreshers.live = async function renderLive() {
@@ -1096,9 +1097,25 @@ async function handleDeepLink() {
   }
 }
 
-// ---------- start (called from entry.js AFTER splash is already dismissed) ----------
+// ---------- start (entry keeps #boot until first home paint finishes) ----------
+function dismissBootRevealApp() {
+  try {
+    const boot = document.getElementById('boot');
+    if (boot) {
+      boot.hidden = true;
+      boot.setAttribute('hidden', '');
+      boot.style.setProperty('display', 'none', 'important');
+      try { boot.remove(); } catch { /* ignore */ }
+    }
+    const gate = document.getElementById('gate');
+    const app = document.getElementById('app');
+    if (gate) gate.hidden = true;
+    if (app) { app.hidden = false; app.removeAttribute('hidden'); }
+  } catch { /* ignore */ }
+}
+
 /**
- * Wire the full Mini App after entry.js hid #boot and fetched /me.
+ * Wire the Mini App after /me. Keeps splash until play page (+ carousels) is painted.
  * @param {{ user: object, stats: object, meta: object, referralClaim?: object }} me
  */
 export async function start(me) {
@@ -1123,14 +1140,8 @@ export async function start(me) {
     console.error('[boot] theme', e);
   }
 
-  // Ensure shell visible (entry.js usually already did this)
+  // Paint home under the splash (boot z-index stays on top) so first reveal is complete
   try {
-    const boot = document.getElementById('boot');
-    if (boot) {
-      boot.hidden = true;
-      boot.style.setProperty('display', 'none', 'important');
-      try { boot.remove(); } catch { /* ignore */ }
-    }
     const gate = document.getElementById('gate');
     const app = document.getElementById('app');
     if (gate) gate.hidden = true;
@@ -1145,7 +1156,6 @@ export async function start(me) {
     else if (m.t === 'friend') { haptic('success'); if (m.reward) { state.me.diamonds = (state.me.diamonds || 0) + m.reward; toast(t('friend_reward', { n: m.reward })); } refresh(); }
     else if (m.t === 'dm') {
       try { refreshInboxBadges(); } catch { /* ignore */ }
-      // Already in that chat — inbox.js appends live; no toast spam
       if (isViewingDmThread(m.threadId)) return;
       haptic('success');
       toast(t('msg_new_from', { name: (m.from && m.from.name) || '…' }));
@@ -1154,7 +1164,6 @@ export async function start(me) {
       try { refreshInboxBadges(); } catch { /* ignore */ }
       if (isViewingGlobalChat()) return;
       const msg = m.message || {};
-      // Inbox red dot is for replies to you — toast only then
       if (msg.replyTo && msg.replyTo.mine) {
         haptic('success');
         toast(t('gchat_reply_from', { name: (msg.from && msg.from.name) || '…' }));
@@ -1172,7 +1181,6 @@ export async function start(me) {
       refresh();
     }
     else if (m.t === 'game') {
-      // Enter board only when waiting (friend/search/invite) — not on every move pushGame
       if (m.game.status === 'active' && m.game.id !== openGameId()) {
         const waiting = screenOpen() || !!$('.invite-pop');
         clearInvitePop();
@@ -1186,24 +1194,20 @@ export async function start(me) {
       } else if (m.game.id !== openGameId()) refresh();
     } else if (m.t === 'invite_gone') { clearInvitePop(); refresh(); }
   });
-  // Background soft refresh — WS pushes game/invite events; poll only for presence/lists
   setInterval(() => {
     if (document.hidden || openGameId()) return;
     if (state.tab === 'live' && liveBlocksAutoRefresh()) return;
-    // Profile is mostly static; rankings are cached server-side — skip to cut free-tier load
     if (state.tab === 'profile') return;
     if (['live', 'play', 'rankings'].includes(state.tab)) refresh();
   }, homeTabRefreshMs());
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) sendBye();
     else {
-      // WS skips reconnect while hidden — resume live pushes on foreground
       if (!wsConnected()) connectWs();
       refresh();
     }
   });
   window.addEventListener('pagehide', () => sendBye());
-  // Premium crown taps → Premium shop (works from Online list, profile, sheets)
   document.addEventListener('open-premium', () => {
     $$('#sheet-root .backdrop').forEach((el) => el.click());
     const idx = TABS.indexOf('profile');
@@ -1213,22 +1217,27 @@ export async function start(me) {
     setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: 'premium' })), already ? 60 : 520);
   });
 
-  // Referral toast from /me (pending_inviter or signed start_param) — before deep-link join
-  if (me.referralClaim && me.referralClaim.inviteeReward) {
-    toast(t('invitee_reward', {
+  // Defer referral toast until after splash dismiss (avoids toast under boot)
+  const referralToast = me.referralClaim && me.referralClaim.inviteeReward
+    ? {
       n: me.referralClaim.inviteeReward,
       name: (me.referralClaim.friend && me.referralClaim.friend.name) || '…',
-    }));
-    haptic('success');
-  }
+    }
+    : null;
 
   try { await refresh(); } catch (e) {
     console.error('[boot] refresh', e);
     fail(e);
   }
-  // Always try deep links even if refresh failed (referral/startapp must not be skipped)
   try { await handleDeepLink(); } catch (e) {
     console.error('[boot] deep link', e);
     fail(e);
+  }
+
+  // Home (+ carousels) painted — dismiss splash in one step
+  dismissBootRevealApp();
+  if (referralToast) {
+    toast(t('invitee_reward', referralToast));
+    haptic('success');
   }
 }

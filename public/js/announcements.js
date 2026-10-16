@@ -84,18 +84,41 @@ export function resumeAnnouncementsHost(host) {
 }
 
 async function resolveMedia(items, blobs) {
+  // Lite Android: short timeout so one slow image cannot stall home open
+  const timeoutMs = isLite() ? 2200 : 5000;
   return Promise.all(items.map(async (a) => {
     if (!a.mediaId) return { ...a, _src: null };
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    let timer = null;
     try {
-      const res = await fetch('/api/media/' + a.mediaId, { headers: { 'X-Init-Data': getInitData() } });
+      if (ctrl) timer = setTimeout(() => { try { ctrl.abort(); } catch { /* ignore */ } }, timeoutMs);
+      const res = await fetch('/api/media/' + a.mediaId, {
+        headers: { 'X-Init-Data': getInitData() },
+        signal: ctrl ? ctrl.signal : undefined,
+      });
       if (!res.ok) return { ...a, _src: null };
       const url = URL.createObjectURL(await res.blob());
       blobs.push(url);
       return { ...a, _src: url };
     } catch {
       return { ...a, _src: null };
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }));
+}
+
+/**
+ * Prefetch + cap slides before DOM mount so home + carousels can paint together.
+ * @returns {{ items: object[], blobs: string[] }}
+ */
+export async function prepareAnnouncements(items) {
+  if (!items || !items.length) return { items: [], blobs: [] };
+  const maxSlides = carouselMaxSlides();
+  const capped = Number.isFinite(maxSlides) ? items.slice(0, maxSlides) : items;
+  const blobs = [];
+  const resolved = await resolveMedia(capped, blobs);
+  return { items: resolved, blobs };
 }
 
 function referralLink(botUsername, userId) {
@@ -234,32 +257,19 @@ export function announcementsKey(items) {
   return JSON.stringify((items || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]));
 }
 
-/** Mount carousel into host (does not clear other carousels). Returns host or null. */
-export async function mountAnnouncementsCarousel(host, items, { onPage, botUsername, userId, delayMs = 0 } = {}) {
+/**
+ * Sync paint into host from prepareAnnouncements() result — no further network.
+ * Call before inserting host into the page so home + carousels appear together.
+ */
+export function paintAnnouncementsCarousel(host, prepared, { onPage, botUsername, userId, delayMs = 0 } = {}) {
   if (!host) return null;
-  if (!items || !items.length) {
+  const resolved = (prepared && prepared.items) || [];
+  const blobs = (prepared && prepared.blobs) || [];
+  if (!resolved.length) {
     stopHost(host);
     host.replaceChildren();
     host.hidden = true;
     host.classList.remove('ann-loading');
-    return null;
-  }
-
-  // Weak Android: fewer slides + fewer media blob fetches (iOS keeps full list).
-  const maxSlides = carouselMaxSlides();
-  const capped = Number.isFinite(maxSlides) ? items.slice(0, maxSlides) : items;
-
-  // Reserve fixed 140px box immediately (entry→home used to jump when hosts stayed [hidden]).
-  host.hidden = false;
-  host.classList.add('ann-loading');
-  if (!host.querySelector('.ann-track')) {
-    host.replaceChildren(h('div.ann-skel'));
-  }
-
-  // Fetch media first, then swap — avoids empty/emoji flash on remount (both boards can be media-only).
-  const blobs = [];
-  const resolved = await resolveMedia(capped, blobs);
-  if (!host.isConnected) {
     revokeBlobs(blobs);
     return null;
   }
@@ -306,7 +316,6 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
       timer = setInterval(() => go(go.idx + 1), dwell);
     };
     // First mount: optional phase offset so two carousels don't flip together.
-    // After swipe/interaction / resume: resume on the dwell cadence immediately once armed.
     if (!armed && delayMs > 0) timer = setTimeout(start, delayMs);
     else start();
   };
@@ -314,7 +323,6 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
   state.resume = armAuto;
 
   const unbindSwipe = bindSwipe(host, track, n, go, { armAuto, stopAuto });
-  // After entry reveal, first paint often has clientWidth 0 — remeasure on next frames
   go(0);
   requestAnimationFrame(() => {
     requestAnimationFrame(() => go(go.idx));
@@ -330,6 +338,20 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
   });
 
   return host;
+}
+
+/** Prepare media then paint (for callers that do not prefetch). */
+export async function mountAnnouncementsCarousel(host, items, opts = {}) {
+  if (!host) return null;
+  if (!items || !items.length) {
+    return paintAnnouncementsCarousel(host, { items: [], blobs: [] }, opts);
+  }
+  const prepared = await prepareAnnouncements(items);
+  // If host was removed while fetching, drop blobs
+  if (!host.isConnected && !(host.parentNode)) {
+    // Still allow paint into detached hosts (first home mount builds hosts off-DOM)
+  }
+  return paintAnnouncementsCarousel(host, prepared, opts);
 }
 
 export async function loadAnnouncements(api, board = 'home') {

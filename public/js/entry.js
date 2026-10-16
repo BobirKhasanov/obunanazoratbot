@@ -1,4 +1,4 @@
-// Light entry: dismiss splash + /me before downloading the heavy app graph (game/live/profile…).
+// Light entry: /me + app.js in parallel; keep splash until home first paint.
 import { api, setInitData, tg } from './ui.js';
 import { errText, setLang } from './i18n.js';
 import { applyPerfMode } from './perf.js';
@@ -28,6 +28,7 @@ function showGate(msg) {
   }
 }
 
+/** Reveal shell (used by start after first paint, or gate recovery). */
 function showApp() {
   hideBoot();
   const gate = document.getElementById('gate');
@@ -55,13 +56,13 @@ function assetV() {
 }
 
 async function loadMe() {
-  const req = api('GET', '/me', undefined, { timeoutMs: 6000 });
+  const req = api('GET', '/me', undefined, { timeoutMs: 5000 });
   req.catch(function () {});
   let timer;
   const backup = new Promise(function (_, reject) {
     timer = setTimeout(function () {
       reject(Object.assign(new Error('timeout'), { code: 'net' }));
-    }, 6500);
+    }, 5500);
   });
   try {
     return await Promise.race([req, backup]);
@@ -88,6 +89,10 @@ async function main() {
   }
   setInitData(tg.initData);
 
+  const v = assetV();
+  // Download app graph while /me runs — biggest open-time win on Android
+  const appP = import('./app.js?v=' + encodeURIComponent(v));
+
   let me;
   try {
     me = await loadMe();
@@ -96,14 +101,11 @@ async function main() {
     return;
   }
 
-  // Reveal shell BEFORE downloading game/live/profile modules
   try { if (me.user && me.user.lang) setLang(me.user.lang); } catch (e) { /* ignore */ }
-  showApp();
 
-  const v = assetV();
+  // Keep #boot until start() finishes first home paint (carousels included)
   try {
-    // MUST bust cache — bare ./app.js is cached separately from entry.js?v=… in Telegram WebView
-    const mod = await import('./app.js?v=' + encodeURIComponent(v));
+    const mod = await appP;
     await mod.start(me);
     try { sessionStorage.removeItem('chess-syntax-reload'); } catch (e) { /* ignore */ }
   } catch (e) {
@@ -117,7 +119,6 @@ async function main() {
         }
       } catch (err) { /* ignore */ }
     }
-    // showApp() already hid the gate — recover so the user is not stuck on an empty shell
     showGate(errText(e));
     try {
       const ui = await import('./ui.js?v=' + encodeURIComponent(v));
