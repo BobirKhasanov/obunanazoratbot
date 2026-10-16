@@ -848,7 +848,7 @@ export function renderProfilePage(ctx) {
     h('div.prof-body',
       h('div.nx-stats',
         statCard('chart', t('elo'), elo, 'blue', () => openHub('rating')),
-        statCard('trophy', t('wins'), s.w, 'green', () => openHub('history')),
+        statCard('trophy', t('hist_win'), s.w, 'green', () => openHub('history')),
         statCard('puzzles', t('prof_daily'), `${pzDone}/${pzTotal}`, 'gold', () => goTab('puzzles'))),
 
       h('button.nx-wdl', { type: 'button', onclick: () => { haptic('select'); openHub('history'); } },
