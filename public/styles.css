@@ -344,7 +344,11 @@ button.row:active { transform: scale(0.98); }
 
 /* ---------- admin / profile subpages ---------- */
 .screen {
-  position: absolute; inset: 0; z-index: 30; background: var(--bg-radial); overflow-y: auto;
+  position: absolute; inset: 0; z-index: 50; /* above #dock (20) — full cover on iOS + Android */
+  /* Solid fallback: some Android WebViews flash through gradient-only layers */
+  background-color: var(--bg, #0b1220);
+  background-image: var(--bg-radial);
+  overflow-y: auto;
   padding: calc(var(--safe-t) + 14px) 14px calc(40px + var(--safe-b));
   transform: translateX(108%) translateZ(0);
   transition: transform 0.95s var(--ease-scroll), opacity 0.55s var(--ease-scroll);
@@ -355,6 +359,11 @@ button.row:active { transform: scale(0.98); }
   scroll-padding-top: 8px;
 }
 .screen.show { transform: none; visibility: visible; opacity: 1; }
+/* Dock stays under the overlay; block taps that could leak through */
+#app:has(#screen.show) #dock,
+#app:has(#game.show) #dock {
+  pointer-events: none;
+}
 /* DM chat fills the sheet — compose sits above the keyboard / home indicator */
 #screen:has(.chat-screen) {
   display: flex; flex-direction: column;
