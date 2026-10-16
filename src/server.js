@@ -247,7 +247,7 @@ const touchPresent = db.prepare(`
 `);
 const clearPresent = db.prepare('UPDATE users SET present_until = NULL WHERE id = ?');
 const nameOf = db.prepare(`
-  SELECT first_name, last_name, username, present_until, avatar_key, premium, premium_until
+  SELECT first_name, last_name, username, present_until, avatar_key, premium, premium_until, elo
   FROM users WHERE id = ?
 `);
 
@@ -356,6 +356,7 @@ async function person(id) {
     online: isUserOnline(id, u.present_until),
     premium: isPremiumActive(u),
     avatarKey: u.avatar_key || null,
+    elo: Number(u.elo || DEFAULT_ELO),
   };
 }
 
@@ -441,15 +442,16 @@ async function applyRatingFinish(row, result) {
     await bump(white.id, 1, 0, 1, 0);
     await bump(black.id, 1, 0, 1, 0);
   }
+  await clearRankingCaches();
+}
+
+function clearRankingCaches() {
   const mk = monthKey();
-  await Promise.all([
-    ...['bullet', 'blitz', 'rapid', 'classic', 'all'].flatMap((c) => [
-      cacheDel(`rankings:elo:${c}:${mk}`),
-      cacheDel(`rankings:monthly:${c}:${mk}`),
-      cacheDel(`rankings:v2:elo:${c}:${mk}`),
-      cacheDel(`rankings:v2:monthly:${c}:${mk}`),
-    ]),
-  ]);
+  return Promise.all(['bullet', 'blitz', 'rapid', 'classic', 'all'].flatMap((c) => [
+    cacheDel(`rankings:v2:elo:${c}:${mk}`),
+    cacheDel(`rankings:v2:monthly:${c}:${mk}`),
+    ...['day', 'week', 'month'].map((p) => cacheDel(`rankings:v2:period:${p}:${c}:${mk}`)),
+  ]));
 }
 
 async function getMedalConfig() {
@@ -1216,13 +1218,7 @@ async function purgeUser(uid, { keepFinishedGames = false } = {}) {
   await clearPresent.run(uid).catch(() => {});
   // friends, results, DMs, medals, referrals, likes, blocks, scores, puzzle claims cascade
   await db.prepare('DELETE FROM users WHERE id = ?').run(uid);
-  await Promise.all([
-    cacheDel('lobby:busy'),
-    ...['bullet', 'blitz', 'rapid', 'classic', 'all'].flatMap((c) => [
-      cacheDel(`rankings:v2:elo:${c}:${monthKey()}`),
-      cacheDel(`rankings:v2:monthly:${c}:${monthKey()}`),
-    ]),
-  ]);
+  await Promise.all([cacheDel('lobby:busy'), clearRankingCaches()]);
   try { realtime.send(uid, { t: 'account_deleted' }); } catch { /* ignore */ }
 }
 
@@ -1678,6 +1674,16 @@ api.post('/games', wrap(async (req, res) => {
   res.status(201).json({ game: await gameFor(row, uid) });
 }));
 
+api.get('/games/history', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const rows = await db.prepare(`
+    SELECT * FROM games WHERE status = 'finished' AND (white_id = :u OR black_id = :u)
+      AND mode IN ('online', 'friend') AND result IS NOT NULL
+    ORDER BY updated_at DESC LIMIT 50
+  `).all({ u: uid });
+  res.json({ games: await Promise.all(rows.map((g) => gameFor(g, uid, false))) });
+}));
+
 api.get('/games/:id', wrap(async (req, res) => {
   const row = await getGame.get(String(req.params.id));
   if (!row) throw new HttpError(404, 'Game not found', 'notfound');
@@ -1731,15 +1737,7 @@ async function finish(row, result, reason) {
     .run(result, reason, row.id);
   try { await applyRatingFinish(row, result); } catch (e) { console.error('[rating]', e.message || e); }
   // Rankings / busy-set caches must not serve pre-finish data
-  const mk = monthKey();
-  await Promise.all([
-    ...['bullet', 'blitz', 'rapid', 'classic', 'all'].flatMap((c) => [
-      cacheDel(`rankings:${c}`),
-      cacheDel(`rankings:v2:elo:${c}:${mk}`),
-      cacheDel(`rankings:v2:monthly:${c}:${mk}`),
-    ]),
-    cacheDel('lobby:busy'),
-  ]);
+  await Promise.all([clearRankingCaches(), cacheDel('lobby:busy')]);
   const next = await getGame.get(row.id);
   await pushGame(next);
 
@@ -1988,7 +1986,7 @@ api.post('/puzzles/claim-daily', wrap(async (req, res) => {
 // ---------- computer games (local only — never counted in stats / ratings) ----------
 api.post('/results', wrap(async (req, res) => {
   const { level, outcome } = req.body || {};
-  if (![1, 2, 3, 4].includes(level) || !['win', 'draw', 'loss'].includes(outcome)) throw bad('Bad result', 'bad_request');
+  if (![1, 2, 3, 4, 5].includes(level) || !['win', 'draw', 'loss'].includes(outcome)) throw bad('Bad result', 'bad_request');
   // Accept the payload for older clients, but do not store or rate vs-computer games.
   res.json({ stats: await statsFor(req.user.id) });
 }));
@@ -2002,15 +2000,27 @@ const TC_CASE = `CASE COALESCE(g.time_control, 'classic')
 // ---------- live competitive rankings (Elo lifetime + monthly points) ----------
 api.get('/rankings', wrap(async (req, res) => {
   ensurePreviousMonthMedals().catch(() => {});
-  const board = req.query.board === 'monthly' ? 'monthly' : 'elo';
+  const board = ['monthly', 'period'].includes(req.query.board) ? req.query.board : 'elo';
+  const period = ['day', 'week', 'month'].includes(req.query.period) ? req.query.period : 'day';
   const category = ['bullet', 'blitz', 'rapid', 'classic', 'all'].includes(req.query.category)
     ? req.query.category
-    : (board === 'monthly' ? 'all' : 'bullet');
+    : (board === 'elo' ? 'bullet' : 'all');
   const month = monthKey();
   // v2: includes premium flag (old cache entries without it must not be reused)
-  const cacheKey = `rankings:v2:${board}:${category}:${month}`;
+  const cacheKey = board === 'period'
+    ? `rankings:v2:period:${period}:${category}:${month}`
+    : `rankings:v2:${board}:${category}:${month}`;
+  const myRank = async (list) => {
+    const uid = req.user.id;
+    const inList = (list || []).find((r) => sameId(r.id, uid));
+    const myElo = Number(req.user.elo || DEFAULT_ELO);
+    if (inList) return { rank: inList.rank, elo: Number(inList.elo || myElo), points: inList.points };
+    if (board !== 'elo' || category !== 'all') return { rank: null, elo: myElo, points: 0 };
+    const row = await db.prepare('SELECT COUNT(*)::int AS n FROM users WHERE blocked = 0 AND elo > ?').get(myElo);
+    return { rank: (row?.n || 0) + 1, elo: myElo, points: myElo };
+  };
   const cached = await cacheGet(cacheKey, 15_000);
-  if (cached) return res.json(cached);
+  if (cached) return res.json({ ...cached, me: await myRank(cached.rankings) });
 
   const mapPremium = (r) => isPremiumActive({
     premium: r.premium_flag ?? r.premium,
@@ -2018,7 +2028,36 @@ api.get('/rankings', wrap(async (req, res) => {
   });
 
   let rows;
-  if (board === 'elo') {
+  if (board === 'period') {
+    const since = period === 'day'
+      ? "date_trunc('day', timezone('Asia/Tashkent', now()))"
+      : period === 'week'
+        ? "date_trunc('week', timezone('Asia/Tashkent', now()))"
+        : "date_trunc('month', timezone('Asia/Tashkent', now()))";
+    const catClause = category === 'all' ? '' : ` AND (${TC_CASE}) = ?`;
+    rows = (await db.prepare(`
+      SELECT * FROM (
+        SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, u.avatar_key,
+          u.premium AS premium_flag, u.premium_until, u.elo,
+          COUNT(*) AS games,
+          SUM(CASE WHEN (g.white_id = u.id AND g.result = '1-0') OR (g.black_id = u.id AND g.result = '0-1') THEN 1 ELSE 0 END) AS wins,
+          SUM(CASE WHEN g.result = '1/2-1/2' THEN 1 ELSE 0 END) AS draws,
+          SUM(CASE WHEN (g.white_id = u.id AND g.result = '0-1') OR (g.black_id = u.id AND g.result = '1-0') THEN 1 ELSE 0 END) AS losses
+        FROM games g JOIN users u ON u.id = g.white_id OR u.id = g.black_id
+        WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online', 'friend')
+          AND timezone('Asia/Tashkent', g.updated_at) >= ${since}
+          AND u.blocked = 0${catClause}
+        GROUP BY u.id, u.first_name, u.username, u.avatar_key, u.premium, u.premium_until, u.elo
+      ) r
+      ORDER BY (wins * 2 + draws) DESC, wins DESC, games DESC, lower(name) ASC
+      LIMIT 100
+    `).all(...(category === 'all' ? [] : [category]))).map((r, i) => ({
+      rank: i + 1, id: r.id, name: r.name, username: r.username || '',
+      wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
+      games: Number(r.games), points: Number(r.wins) * 2 + Number(r.draws), elo: Number(r.elo || DEFAULT_ELO),
+      avatarKey: r.avatar_key || null, premium: mapPremium(r),
+    }));
+  } else if (board === 'elo') {
     const col = category === 'all' ? 'elo' : eloColumn(category);
     if (!ELO_COLS.has(col)) throw bad('Bad category', 'bad_request');
     const catClause = category === 'all' ? '' : ` AND (${TC_CASE}) = ?`;
@@ -2089,11 +2128,11 @@ api.get('/rankings', wrap(async (req, res) => {
   }
 
   const payload = {
-    board, category, month, monthLabel: monthLabelEn(month),
+    board, period: board === 'period' ? period : null, category, month, monthLabel: monthLabelEn(month),
     rankings: rows, updatedAt: new Date().toISOString(),
   };
   await cacheSet(cacheKey, payload, 15_000);
-  res.json(payload);
+  res.json({ ...payload, me: await myRank(rows) });
 }));
 
 // ---------- medals / avatar ----------

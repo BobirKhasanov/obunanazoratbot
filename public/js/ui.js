@@ -270,8 +270,12 @@ const P = {
   reply: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M16.5 16.5L21 21"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  bolt: '<path d="M13 2.5L5 13.5h6l-1 8 8-11h-6z"/>',
+  userPlus: '<circle cx="9.5" cy="8" r="3.6"/><path d="M3 20c.5-3.8 3.2-5.8 6.5-5.8s6 2 6.5 5.8M18.5 8v6M15.5 11h6"/>',
+  history: '<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5M12 8v4.2l2.8 1.8"/>',
+  users: '<circle cx="9" cy="8.5" r="3"/><circle cx="16.5" cy="9.5" r="2.4"/><path d="M3 20c.5-3.4 2.8-5.2 6-5.2s5.5 1.8 6 5.2M14 20c.3-2.2 1.6-3.5 3.8-3.5 1.2 0 2.2.4 2.9 1.2"/>',
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4z"/><path d="M7 6H4.5a2.5 2.5 0 0 0 0 5H7M17 6h2.5a2.5 2.5 0 0 1 0 5H17"/>',
-  bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   sparkles: '<path d="M12 3l1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2zM18 13l.7 2.1L21 16l-2.3.7L18 19l-.7-2.3L15 16l2.3-.9zM6 14l.6 1.8L8.5 16.5 6.6 17 6 19l-.6-2-1.9-.5L5.4 15.8z"/>',
 };
 export const icon = (name, size = 24, sw = 1.9) => h('span.ic', {

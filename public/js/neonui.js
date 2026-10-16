@@ -1,173 +1,257 @@
-// Shared neon-shell UI bits for Home / Play hub / Online (iOS + Android Lite safe).
+// Shared neon UI kit for Home / O'ynash / Online (iOS + Android Lite safe).
 import { h, icon, haptic, avBlock, premIc } from './ui.js';
 import { t } from './i18n.js';
-import { isLite } from './perf.js';
-import { formatTashkentWhen } from './time.js';
+import { remainingMs, formatClock } from './time.js';
 
-/** Normalize inbox slot: headerInboxBtns() returns one node, not an array. */
-function asKids(x) {
-  if (x == null) return [];
-  if (Array.isArray(x)) return x.filter(Boolean);
-  return [x];
-}
+const tap = (fn) => (e) => {
+  if (e) e.stopPropagation();
+  haptic('light');
+  if (fn) fn(e);
+};
 
 export function seeAll(label, onClick) {
-  return h('button.neon-seeall', {
-    type: 'button',
-    onclick: () => { haptic('light'); onClick && onClick(); },
-  }, label || t('see_all'), icon('chevron', 14));
+  return h('button.nx-seeall', { type: 'button', onclick: tap(onClick) },
+    h('span', label || t('see_all')), icon('chevron', 14));
 }
 
-export function sectionHead(title, onSeeAll, seeLabel) {
-  return h('div.neon-sec-h',
-    h('h2.neon-sec-title', title),
+/** Section title row: optional status dot, subtitle and "see all" link. */
+export function sectionHead(title, onSeeAll, seeLabel, { dot, sub } = {}) {
+  return h('div.nx-sec',
+    h('div.nx-sec-l',
+      h('h2.nx-sec-t', dot ? h('i.nx-dot.' + dot) : null, title),
+      sub ? h('small.nx-sec-sub', sub) : null),
     onSeeAll ? seeAll(seeLabel, onSeeAll) : null);
 }
 
-/** Compact app header: avatar + name/elo · inbox · notif · gems */
-export function appHeader({ me, onProfile, onGems, inboxBtns, elo }) {
+/** App header: avatar + name/crown/elo · mail · bell · gems(+). */
+export function appHeader({ me, elo, inboxBtns, onProfile, onGems }) {
   const name = me.displayName || me.firstName || 'Player';
-  return h('div.neon-hdr',
-    h('button.neon-hdr-me', {
-      type: 'button',
-      onclick: () => { haptic('light'); onProfile && onProfile(); },
-    },
-      avBlock(name, me.id, {
-        premium: !!me.premium, round: true, online: true, avatarKey: me.avatarKey,
-      }),
-      h('div.neon-hdr-meta',
-        h('div.neon-hdr-name',
-          h('b', name),
-          me.premium ? premIc(16) : null),
-        h('div.neon-hdr-elo', icon('chart', 14), h('span', String(elo != null ? elo : (me.elo || 1200)))))),
-    h('div.neon-hdr-actions',
-      ...asKids(inboxBtns),
-      h('button.neon-gem', {
-        type: 'button',
-        onclick: () => { haptic('light'); onGems && onGems(); },
-      }, icon('gem', 16), h('b', String(me.diamonds || 0)), h('span.neon-gem-plus', '+'))));
+  return h('div.nx-hdr',
+    h('button.nx-hdr-me', { type: 'button', onclick: tap(onProfile) },
+      avBlock(name, me.id, { premium: !!me.premium, round: true, online: true, avatarKey: me.avatarKey }),
+      h('div.nx-hdr-meta',
+        h('div.nx-hdr-name', h('b', name), me.premium ? premIc(16) : null),
+        h('div.nx-hdr-elo', icon('chart', 13), h('span.nx-elo-v', String(elo != null ? elo : (me.elo || 1200)))))),
+    h('div.nx-hdr-act',
+      inboxBtns || null,
+      h('button.nx-gem', { type: 'button', 'data-noswipe': '', onclick: tap(onGems) },
+        h('span.nx-gem-ic', '💎'), h('b', String(me.diamonds || 0)), h('span.nx-gem-plus', icon('plus', 12, 2.6)))));
 }
 
-export function modeCard({ title, sub, tone, emoji, onClick, selected }) {
-  return h('button.neon-mode.' + (tone || 'blue') + (selected ? '.on' : ''), {
-    type: 'button',
-    onclick: () => { haptic('light'); onClick && onClick(); },
+/** Page title block (O'ynash / Online). */
+export function pageTitle(title, sub, actions) {
+  return h('div.nx-title',
+    h('div.nx-title-l', h('h1', title), sub ? h('p', sub) : null),
+    actions && actions.length ? h('div.nx-title-act', ...actions) : null);
+}
+
+export function roundBtn(ic, label, onClick) {
+  return h('button.nx-round', { type: 'button', 'aria-label': label, 'data-noswipe': '', onclick: tap(onClick) }, icon(ic, 20));
+}
+
+/** Fallback hero when admins have no announcements. */
+export function heroBanner(onMore) {
+  return h('div.nx-hero',
+    h('div.nx-hero-art', { style: { backgroundImage: 'url(/img/ui/hero.webp)' } }),
+    h('div.nx-hero-txt',
+      h('h2', t('hero_t1'), h('br'), h('span', t('hero_t2'))),
+      h('p', t('hero_sub')),
+      h('button.nx-hero-btn', { type: 'button', onclick: tap(onMore) }, t('hero_more'), icon('chevron', 14))));
+}
+
+/** Big mode card with illustration (Home) or compact selectable card (O'ynash). */
+export function modeCard({ title, sub, art, glyph, tone, selected, compact, onClick }) {
+  return h('button.nx-mode.' + (tone || 'blue') + (compact ? '.compact' : '') + (selected ? '.on' : ''), {
+    type: 'button', 'data-noswipe': '', onclick: tap(onClick),
   },
-    selected ? h('span.neon-mode-check', icon('check', 12)) : null,
-    h('span.neon-mode-ic', emoji || '♟'),
-    h('b', title),
-    h('small', sub),
-    h('span.neon-mode-go', icon('chevron', 14)));
+    !compact && art ? h('span.nx-mode-art', { style: { backgroundImage: `url(${art})` } }) : null,
+    selected ? h('span.nx-mode-check', icon('check', 12, 3)) : null,
+    h('span.nx-mode-ic', glyph || '♟'),
+    h('b', title, compact ? null : h('span.nx-mode-go', icon('chevron', 14))),
+    h('small', sub));
 }
 
+function liveClock(g) {
+  if (!g.clock || g.status !== 'active') return null;
+  const side = g.turn === 'b' ? 'b' : 'w';
+  const ms = remainingMs(g.clock, side, g.turn, g.status);
+  return ms == null ? null : formatClock(ms);
+}
+
+const firstName = (n) => String(n || '?').split(' ')[0];
+const tcLabel = (g) => (g.timeControl && g.timeControl !== 'classic' ? g.timeControl : t('tc_classic'));
+const scoreOf = (g) => {
+  if (g.result === '1-0') return '1 - 0';
+  if (g.result === '0-1') return '0 - 1';
+  if (g.result === '1/2-1/2') return '½ - ½';
+  return '0 - 0';
+};
+
+/** Home "Hozir online o'ynayotganlar" compact card. */
 export function liveMiniCard(g, onOpen) {
   const w = g.white || {};
   const b = g.black || {};
-  const score = (g.score != null ? g.score : null)
-    || (g.result && g.result !== '*' ? g.result : '–');
-  return h('button.neon-live-card', {
-    type: 'button',
-    'data-noswipe': '',
-    onclick: () => { haptic('light'); onOpen && onOpen(g); },
+  const clock = liveClock(g);
+  const side = (p) => h('div.nx-lc-p',
+    avBlock(p.name || '?', p.id || 0, { round: true, avatarKey: p.avatarKey, premium: !!p.premium }),
+    h('b', firstName(p.name)),
+    h('small', String(p.elo || '—')));
+  return h('button.nx-lc', { type: 'button', 'data-noswipe': '', onclick: tap(() => onOpen && onOpen(g)) },
+    side(w),
+    h('div.nx-lc-mid',
+      h('span.nx-live', h('i'), 'LIVE'),
+      h('b', scoreOf(g)),
+      h('small', icon('clock', 11), clock || tcLabel(g))),
+    side(b));
+}
+
+/** Online page live row: player · LIVE score · player · Ko'rish. */
+export function liveMatchRow(g, { onWatch, onProfile } = {}) {
+  const w = g.white || {};
+  const b = g.black || {};
+  const side = (p, right) => h('button.nx-mr-p' + (right ? '.r' : ''), {
+    type: 'button', onclick: tap(() => p.id && onProfile && onProfile(p.id)),
   },
-    h('div.neon-live-vs',
-      h('div.neon-live-p',
-        avBlock(w.name || '?', w.id || 0, { round: true, online: true, avatarKey: w.avatarKey }),
-        h('b', (w.name || '?').split(' ')[0]),
-        h('small', String(w.elo || '—'))),
-      h('div.neon-live-mid',
-        h('span.neon-live-badge', '● LIVE'),
-        h('b', score),
-        h('small', g.timeControl && g.timeControl !== 'classic' ? g.timeControl : t('watching_live'))),
-      h('div.neon-live-p',
-        avBlock(b.name || '?', b.id || 0, { round: true, online: true, avatarKey: b.avatarKey }),
-        h('b', (b.name || '?').split(' ')[0]),
-        h('small', String(b.elo || '—')))));
+    avBlock(p.name || '?', p.id || 0, { round: true, online: true, avatarKey: p.avatarKey, premium: !!p.premium }),
+    h('div.nx-mr-n', h('b', firstName(p.name)), h('small', String(p.elo || '—'))));
+  return h('div.nx-mr',
+    side(w, false),
+    h('div.nx-mr-mid',
+      h('span.nx-live', h('i'), 'LIVE'),
+      h('b', scoreOf(g)),
+      h('small', tcLabel(g)),
+      h('span.nx-chip-s', t('ply_short', { n: Math.max(1, Math.ceil((g.ply || 0) / 2)) }))),
+    side(b, true),
+    h('button.nx-btn-o', { type: 'button', onclick: tap(() => onWatch && onWatch(g)) }, icon('eye', 15), t('watch_btn')));
 }
 
-export function playerPlayRow(u, { onPlay, onProfile, actionLabel, timeHint } = {}) {
-  const tc = timeHint || u.timeControl || u.preferredTime || '3+2';
-  return h('div.neon-player-row',
-    h('button.neon-player-main', {
-      type: 'button',
-      onclick: () => { haptic('select'); onProfile && onProfile(u.id); },
-    },
-      avBlock(u.name || '?', u.id, {
-        premium: !!u.premium, round: true, online: u.online !== false, avatarKey: u.avatarKey,
-      }),
-      h('div.grow',
-        h('div.t', h('span.name', u.name || '…'), u.premium ? premIc() : null),
-        h('div.s', u.elo != null ? String(u.elo) : (u.inGame ? t('in_game') : t('online'))))),
-    h('span.neon-tc', icon('bolt', 14), h('b', String(tc))),
-    h('button.neon-play-btn', {
-      type: 'button',
-      disabled: !!u.invited || u.inGame || u.discoverable === false,
-      onclick: () => { haptic('medium'); onPlay && onPlay(u); },
-    }, actionLabel || t('play_btn')));
+export function statCard(ic, label, value, tone) {
+  return h('div.nx-stat.' + (tone || 'blue'),
+    h('span.nx-stat-ic', icon(ic, 20)),
+    h('div', h('small', label), h('b', String(value))));
 }
 
-export function friendActionRow(f, { onMsg, onInvite, onProfile } = {}) {
-  const status = f.inGame
-    ? (t('in_game') + (f.elo != null ? ` · ${f.elo}` : ''))
-    : (`${t('online')}${f.elo != null ? ` · ${t('elo')} ${f.elo}` : ''}`);
-  return h('div.neon-friend-row',
-    h('button.neon-player-main', {
-      type: 'button',
-      onclick: () => { haptic('select'); onProfile && onProfile(f.id); },
-    },
-      avBlock(f.name || '?', f.id, {
-        premium: !!f.premium, round: true, online: !!f.online, avatarKey: f.avatarKey,
-      }),
-      h('div.grow', h('div.t', f.name || '…'), h('div.s', status))),
-    h('div.neon-friend-acts',
-      h('button.neon-btn-ghost', {
-        type: 'button',
-        onclick: () => { haptic('light'); onMsg && onMsg(f); },
-      }, icon('chat', 14), t('msg_write')),
-      h('button.neon-play-btn', {
-        type: 'button',
-        disabled: !f.online || f.inGame || f.invited,
-        onclick: () => { haptic('medium'); onInvite && onInvite(f); },
-      }, icon('gamepad', 14), t('invite_short'))));
+/** Jonli turnirlar card (Lichess broadcast). */
+export function tourneyCard({ title, sub, live, art, primary, actionLabel, onClick }) {
+  return h('button.nx-tour' + (primary ? '.primary' : ''), { type: 'button', 'data-noswipe': '', onclick: tap(onClick) },
+    art ? h('span.nx-tour-art', { style: { backgroundImage: `url(${art})` } }) : null,
+    h('div.nx-tour-h', h('span.nx-tour-ic', icon('trophy', 16)), h('b', title)),
+    h('small', sub),
+    live ? h('span.nx-live', h('i'), 'LIVE') : null,
+    h('span.' + (primary ? 'nx-btn-p' : 'nx-btn-o') + '.nx-tour-btn', icon(primary ? 'trophy' : 'eye', 15), actionLabel));
 }
 
-export function statCard(label, value, tone) {
-  return h('div.neon-stat.' + (tone || 'blue'),
-    h('small', label),
-    h('b', String(value)));
+export function onlineBubble(u, onOpen) {
+  return h('button.nx-ob', { type: 'button', 'data-noswipe': '', onclick: tap(() => onOpen && onOpen(u.id)) },
+    avBlock(u.name || '?', u.id, { premium: !!u.premium, round: true, online: true, avatarKey: u.avatarKey }),
+    h('b', firstName(u.name)),
+    h('small', String(u.elo || '—'), ' ♟'));
+}
+
+/** Friend row with Yozish (chat) + Taklif (challenge). */
+export function friendRow(f, { onMsg, onInvite, onProfile } = {}) {
+  const status = f.inGame ? t('friend_in_game') : `${t('online')} · ${t('rating_n', { n: f.elo || 1200 })}`;
+  return h('div.nx-fr',
+    h('button.nx-row-main', { type: 'button', onclick: tap(() => onProfile && onProfile(f.id)) },
+      avBlock(f.name || '?', f.id, { premium: !!f.premium, round: true, online: !!f.online, avatarKey: f.avatarKey }),
+      h('div.nx-row-tx', h('b', f.name || '…'), h('small', h('i.nx-dot.' + (f.inGame ? 'amber' : 'green')), status))),
+    h('button.nx-btn-o.sm', { type: 'button', onclick: tap(() => onMsg && onMsg(f)) }, icon('chat', 14), t('msg_write')),
+    h('button.nx-btn-p.sm', {
+      type: 'button', disabled: !f.online || !!f.inGame || !!f.invited, onclick: tap(() => onInvite && onInvite(f)),
+    }, icon('gamepad', 14), f.invited ? t('challenge_sent_short') : t('invite_short')));
+}
+
+/** O'ynash player row: avatar · name/elo · ⚡ time · O'ynash. */
+export function playerRow(u, { tc, onPlay, onProfile, actionLabel, actionIcon } = {}) {
+  const blocked = !!u.inGame || u.discoverable === false;
+  return h('div.nx-pr',
+    h('button.nx-row-main', { type: 'button', onclick: tap(() => onProfile && onProfile(u.id)) },
+      avBlock(u.name || '?', u.id, { premium: !!u.premium, round: true, online: u.online !== false, avatarKey: u.avatarKey }),
+      h('div.nx-row-tx', h('b', u.name || '…', u.premium ? premIc(14) : null), h('small', String(u.elo || 1200)))),
+    tc ? h('span.nx-tc', icon('bolt', 14), tc) : null,
+    h('button.nx-btn-p.play', {
+      type: 'button', disabled: blocked || !!u.invited, onclick: tap(() => onPlay && onPlay(u)),
+    }, actionIcon ? icon(actionIcon, 14) : null,
+    u.invited ? t('challenge_sent_short') : (u.inGame ? t('in_game') : (actionLabel || t('play_btn')))));
 }
 
 export function filterChip(id, label, on, onClick) {
-  return h('button.neon-chip' + (on ? '.on' : ''), {
-    type: 'button',
-    onclick: () => { haptic('select'); onClick && onClick(id); },
-  }, label);
+  return h('button.nx-chip' + (on ? '.on' : ''), { type: 'button', onclick: tap(() => onClick && onClick(id)) }, label);
+}
+
+/** Underline sub-tabs (Onlayn o'yinchilar / Jonli o'yinlar / Turnirlar). */
+export function underTabs(options, value, onChange) {
+  return h('div.nx-utabs', { 'data-noswipe': '' }, ...options.map(([id, label]) => h('button' + (id === value ? '.on' : ''), {
+    type: 'button', onclick: tap(() => id !== value && onChange(id)),
+  }, label)));
+}
+
+/** Segmented tabs with icons (Online / Reyting / Tarix). */
+export function segTabs(options, value, onChange, cls = '') {
+  return h('div.nx-seg' + (cls ? '.' + cls : ''), { 'data-noswipe': '' }, ...options.map(([id, label, ic]) => h('button' + (id === value ? '.on' : ''), {
+    type: 'button', onclick: tap(() => id !== value && onChange(id)),
+  }, ic ? icon(ic, 16) : null, h('span', label))));
+}
+
+export function rankRow(p, { you, onOpen } = {}) {
+  const place = p.rank;
+  const medal = place >= 1 && place <= 3 ? h('span.nx-medal.m' + place, String(place)) : h('span.nx-rank-n', String(place || '—'));
+  return h('button.nx-rank' + (place >= 1 && place <= 3 ? '.podium.t' + place : '') + (you ? '.you' : ''), {
+    type: 'button', onclick: tap(() => onOpen && onOpen(p.id)),
+  },
+    medal,
+    avBlock(p.name || '?', p.id, { premium: !!p.premium, round: true, avatarKey: p.avatarKey, online: !!p.online }),
+    h('b.nx-rank-name', you ? t('you_label') : p.name, !you && p.premium ? premIc(14) : null),
+    h('b.nx-rank-score', String(p.score)));
+}
+
+export function timeAgo(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms)) return '';
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return t('ago_now');
+  if (m < 60) return t('ago_min', { n: m });
+  const hr = Math.floor(m / 60);
+  if (hr < 24) return t('ago_hour', { n: hr });
+  return t('ago_day', { n: Math.floor(hr / 24) });
+}
+
+export function gameOutcome(g) {
+  if (g.result === '1/2-1/2') return 'draw';
+  return ((g.result === '1-0') === (g.you === 'w')) ? 'win' : 'loss';
 }
 
 export function historyRow(g, onOpen) {
   const o = g.opponent || {};
-  const win = g.result === '1/2-1/2' ? null : (g.result === '1-0') === (g.you === 'w');
-  const tag = win == null ? 'draw' : (win ? 'win' : 'loss');
-  const label = win == null ? t('hist_draw') : (win ? t('hist_win') : t('hist_loss'));
-  const when = formatTashkentWhen(g.updatedAt) || '';
-  const detail = [g.timeControl, when].filter(Boolean).join(' · ');
-  return h('button.neon-hist-row.' + tag, {
-    type: 'button',
-    onclick: () => { haptic('light'); onOpen && onOpen(g); },
-  },
-    avBlock(o.name || '?', o.id || 0, {
-      premium: !!o.premium, round: true, online: !!o.online, avatarKey: o.avatarKey,
-    }),
-    h('div.grow',
-      h('div.t', o.name || '…'),
-      h('div.s', o.elo != null ? String(o.elo) : '')),
-    h('div.neon-hist-mid',
-      h('span.neon-hist-ic.' + tag, tag === 'win' ? '🏆' : (tag === 'loss' ? '✕' : '½')),
-      h('span.neon-hist-tag.' + tag, label),
-      detail ? h('small', detail) : null),
+  const tag = gameOutcome(g);
+  const label = tag === 'win' ? t('hist_win') : tag === 'loss' ? t('hist_loss') : t('hist_draw');
+  const ic = tag === 'win' ? 'trophy' : tag === 'loss' ? 'x' : 'handshake';
+  return h('button.nx-hist', { type: 'button', onclick: tap(() => onOpen && onOpen(g)) },
+    avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, online: !!o.online, avatarKey: o.avatarKey }),
+    h('div.nx-row-tx', h('b', o.name || '…'), h('small', String(o.elo || 1200))),
+    h('span.nx-hist-ic.' + tag, icon(ic, 18)),
+    h('div.nx-hist-r', h('b.' + tag, label), h('small', [g.timeControl && g.timeControl !== 'classic' ? g.timeControl : t('tc_classic'), timeAgo(g.updatedAt)].filter(Boolean).join(' · '))),
     icon('chevron', 16));
 }
 
-export function liteSafe(fnHeavy, fnLite) {
-  return isLite() ? fnLite() : fnHeavy();
+/** AI level row: coloured bars · title · range · description. */
+export function levelRow({ n, title, range, desc, onClick }) {
+  return h('button.nx-lvl.l' + n, { type: 'button', onclick: tap(onClick) },
+    h('span.nx-lvl-bars', ...[1, 2, 3, 4, 5].map((i) => h('i' + (i <= n ? '.f' : '')))),
+    h('div.nx-row-tx', h('b', title), h('small', range)),
+    h('small.nx-lvl-d', desc),
+    icon('chevron', 16));
+}
+
+export function dailyCard({ reward, onClick }) {
+  return h('button.nx-daily', { type: 'button', 'data-noswipe': '', onclick: tap(onClick) },
+    h('span.nx-daily-art', { style: { backgroundImage: 'url(/img/ui/daily.webp)' } }),
+    h('span.nx-daily-ic', '🎯'),
+    h('div.nx-row-tx', h('b', t('home_daily_title')), h('small', t('home_daily_sub'))),
+    h('span.nx-daily-rw', '💎', h('b', '+' + reward)),
+    icon('chevron', 16));
+}
+
+export function emptyNote(text) {
+  return h('div.nx-empty', text);
 }

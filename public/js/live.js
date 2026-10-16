@@ -7,9 +7,11 @@ import { openGame } from './game.js';
 import { openGameAnalysis } from './analyze.js';
 import { formatTashkentWhen } from './time.js';
 import { liveRoundPollMs, liveGamePollMs, liveClockTickMs, liveMiniBoardBudget, isLite } from './perf.js';
-import { openChatWithUser, headerInboxBtns } from './inbox.js';
+import { openChatWithUser, openMessages, openNotifications } from './inbox.js';
 import { openUserProfile } from './profile.js';
-import { sectionHead, statCard, friendActionRow } from './neonui.js';
+import {
+  sectionHead, statCard, pageTitle, roundBtn, liveMatchRow, tourneyCard, onlineBubble, friendRow, emptyNote,
+} from './neonui.js';
 
 /** In-app circular back only (do not also show Telegram.BackButton — that doubles the control). */
 function backBtn(onClick) {
@@ -159,14 +161,7 @@ function startsLabel(ts) {
   return t('starts_at', { t: `${hh}:${mm}` });
 }
 
-function tabsEl(onRefresh) {
-  return pillBar(
-    [['bot', t('live_tab_bot')], ['intl', t('live_tab_intl')]],
-    section,
-    (s) => { setSection(s); onRefresh(); },
-    { className: 'rank-tabs live-tabs' },
-  );
-}
+let hooks = {};
 
 function empty(text, ic) {
   return h('div.empty', ic ? h('div.empty-ic', ic) : null, text);
@@ -228,178 +223,116 @@ function recentResultLine(g) {
   return when ? `${r} · ${when}` : r;
 }
 
-function liveMatchRow(g, meta, onClose) {
-  const w = g.white || {};
-  const b = g.black || {};
-  const tc = g.timeControl && g.timeControl !== 'classic' ? g.timeControl : 'Blitz';
-  return h('div.neon-match-row',
-    h('button.neon-match-side', {
-      type: 'button',
-      onclick: () => { if (w.id) openUserProfile(w.id); },
-    },
-      avBlock(w.name || '?', w.id || 0, { round: true, online: true, avatarKey: w.avatarKey }),
-      h('div.grow',
-        h('div.t', h('span.name', (w.name || '?').split(' ')[0])),
-        h('div.s', String(w.elo || '—')))),
-    h('div.neon-match-mid',
-      h('span.neon-live-badge', '● LIVE'),
-      h('b', g.result || '–'),
-      h('small', tc),
-      h('small', t('ply_n', { n: g.ply || 0 }))),
-    h('button.neon-match-side', {
-      type: 'button',
-      onclick: () => { if (b.id) openUserProfile(b.id); },
-    },
-      avBlock(b.name || '?', b.id || 0, { round: true, online: true, avatarKey: b.avatarKey }),
-      h('div.grow',
-        h('div.t', h('span.name', (b.name || '?').split(' ')[0])),
-        h('div.s', String(b.elo || '—')))),
-    h('button.neon-watch-btn', {
-      type: 'button',
-      onclick: async () => {
-        haptic('light');
-        try { await openSpectate(g, meta, onClose); } catch (e) { fail(e); }
-      },
-    }, icon('eye', 16), t('watch_btn')));
+/** Spectate (or rejoin) a bot game from any page. */
+export async function spectateGame(game, meta, onClose) {
+  try { await openSpectate(game, meta, onClose); } catch (e) { fail(e); }
 }
+
+/** Open one Lichess broadcast (round when known, else tour page) inside the Online tab. */
+export function openBroadcast(it) {
+  setSection('intl');
+  if (!it) { nav = { view: 'list' }; return; }
+  const round = it.round || {};
+  const tour = it.tour || {};
+  if (!tour.id) { nav = { view: 'list' }; return; }
+  const m = String(round.url || '').match(/\/broadcast\/([^/]+)\/([^/]+)\/([a-zA-Z0-9]{8})\b/);
+  if (round.id && /^[a-zA-Z0-9]{8}$/.test(round.id)) {
+    openRoundNav({
+      tourId: tour.id,
+      tourName: tourTitle(it),
+      tourSlug: (m && m[1]) || tour.slug,
+      roundId: round.id,
+      roundName: round.name,
+      roundSlug: (m && m[2]) || round.slug,
+      roundUrl: round.url,
+      filter: 'all',
+    });
+  } else {
+    nav = { view: 'tour', tourId: tour.id, tourName: tourTitle(it), tourSlug: tour.slug, preferRound: round.id };
+  }
+}
+
+let showAllLive = false;
+let showAllUsers = false;
+let showAllFriends = false;
 
 async function renderBot(mount, meta, onClose, onRefresh) {
   hideTgBack();
-  let data;
-  let lobby = { online: [], onlineCount: 0, games: {} };
-  let friends = [];
-  try {
-    const [live, lob, fr] = await Promise.all([
-      api('GET', '/live/games'),
-      api('GET', '/lobby').catch(() => ({ online: [], onlineCount: 0, games: {} })),
-      api('GET', '/friends').catch(() => ({ friends: [] })),
-    ]);
-    data = live;
-    lobby = lob || lobby;
-    friends = (fr && fr.friends) || [];
-  } catch (e) {
-    fail(e);
-    return mount([
-      h('div.neon-hub-title', h('h1', t('nav_live')), h('p.muted', t('online_realtime'))),
-      tabsEl(onRefresh),
-      empty(t('live_load_fail'), '🛰️'),
-      h('button.btn', { onclick: () => onRefresh() }, t('retry_live')),
-    ]);
-  }
-  const games = data.games || [];
+  const [live, lobby, fr, tours] = await Promise.all([
+    api('GET', '/live/games').catch((e) => { fail(e); return { games: [] }; }),
+    api('GET', '/lobby').catch(() => ({ online: [], onlineCount: 0, games: {} })),
+    api('GET', '/friends').catch(() => ({ friends: [] })),
+    api('GET', '/lichess/broadcasts').catch(() => ({ active: [], upcoming: [] })),
+  ]);
+  const games = live.games || [];
   const recent = (lobby.games && lobby.games.recent) || [];
   const onlineUsers = lobby.online || [];
   const onlineCount = lobby.onlineCount != null ? lobby.onlineCount : onlineUsers.length;
-  const onlineFriends = friends.filter((f) => f.online);
-  const tourneyHint = 0;
+  const onlineFriends = (fr.friends || []).filter((f) => f.online);
+  const activeTours = tours.active || [];
+  const tourCards = [...activeTours, ...(tours.upcoming || [])].slice(0, 2);
 
-  const openProfile = (id) => openUserProfile(id, {
-    onChallenge: async (u) => {
-      try {
-        await api('POST', '/games', { opponentId: u.id });
-        onRefresh();
-      } catch (e) { fail(e); }
-    },
-  });
+  const challenge = (id) => (hooks.challenge ? hooks.challenge(id) : api('POST', '/games', { opponentId: id }).then(onRefresh, fail));
+  const openProfile = (id) => openUserProfile(id, { onChallenge: (u) => challenge(u.id) });
+  const watch = (g) => spectateGame(g, meta, onClose);
+  const openTour = (it) => { openBroadcast(it); onRefresh(); };
+  const more = (flag, set) => (flag ? null : () => { set(); onRefresh(); });
 
   const nodes = [
-    h('div.neon-online-top',
-      h('div.neon-hub-title', h('h1', t('nav_live')), h('p.muted', t('online_realtime'))),
-      h('div.neon-hdr-actions',
-        h('button.round', {
-          type: 'button',
-          'aria-label': t('live_tab_intl'),
-          onclick: () => { haptic('light'); setSection('intl'); onRefresh(); },
-        }, icon('search', 20)),
-        headerInboxBtns(),
-        h('button.round', {
-          type: 'button',
-          'aria-label': t('nav_friends'),
-          onclick: () => {
-            haptic('light');
-            document.dispatchEvent(new CustomEvent('app-open', { detail: { page: 'friends' } }));
-          },
-        }, icon('friends', 20)))),
-    h('div.neon-stats',
-      statCard(t('stat_online'), onlineCount, 'green'),
-      statCard(t('stat_games'), games.length, 'blue'),
-      statCard(t('stat_tourneys'), tourneyHint || '·', 'gold')),
-    sectionHead(t('live_now_sec'), () => { setSection('intl'); onRefresh(); }, t('see_all')),
+    pageTitle(t('nav_live'), t('online_realtime'), [
+      roundBtn('search', t('messages'), () => openMessages()),
+      roundBtn('bell', t('xabarnoma'), () => openNotifications()),
+      roundBtn('userPlus', t('nav_friends'), () => document.dispatchEvent(new CustomEvent('app-open', { detail: { page: 'friends' } }))),
+    ]),
+    h('div.nx-stats',
+      statCard('users', t('stat_online'), onlineCount, 'green'),
+      statCard('gamepad', t('stat_games'), lobby.liveGames != null ? lobby.liveGames : games.length, 'blue'),
+      statCard('trophy', t('stat_tourneys'), activeTours.length, 'gold')),
+    sectionHead(t('live_now_sec'), more(showAllLive || games.length <= 3, () => { showAllLive = true; }), t('see_all')),
     games.length
-      ? h('div.neon-list', ...games.slice(0, 12).map((g) => liveMatchRow(g, meta, onClose)))
-      : empty(t('live_no_bot_games'), '♟'),
-    sectionHead(t('live_tourneys_sec'), () => { setSection('intl'); onRefresh(); }, t('see_all')),
-    h('div.neon-tourney-row',
-      h('button.neon-tourney-card', {
-        type: 'button',
-        onclick: () => { haptic('light'); setSection('intl'); onRefresh(); },
-      },
-        h('span.neon-live-badge', '● LIVE'),
-        h('b', t('live_tab_intl')),
-        h('small', t('live_tourneys_sec')),
-        h('span.neon-play-btn', icon('trophy', 14), t('watch_btn'))),
-      h('button.neon-tourney-card.alt', {
-        type: 'button',
-        onclick: () => { haptic('light'); setSection('intl'); onRefresh(); },
-      },
-        h('span.neon-live-badge', '● LIVE'),
-        h('b', t('tournaments_menu')),
-        h('small', t('live_tab_intl')),
-        h('span.neon-watch-btn', icon('eye', 14), t('watch_btn')))),
-    sectionHead(t('online_users_sec'), () => {
-      document.dispatchEvent(new CustomEvent('app-open', { detail: { page: 'rankings' } }));
-    }, t('see_all')),
-    onlineUsers.length
-      ? h('div.neon-hscroll', { 'data-noswipe': '' }, ...onlineUsers.slice(0, 24).map((u) => h('button.neon-online-user', {
-        type: 'button',
-        onclick: () => { haptic('select'); openProfile(u.id); },
-      },
-        avBlock(u.name || '?', u.id, { premium: !!u.premium, round: true, online: true, avatarKey: u.avatarKey }),
-        h('b', (u.name || '…').split(' ')[0]),
-        h('small', String(u.elo || '—')))))
-      : h('p.muted.neon-sec-sub', t('nobody')),
-    sectionHead(
-      t('online_friends_sec') + (onlineFriends.length ? ` · ${onlineFriends.length}` : ''),
-      () => document.dispatchEvent(new CustomEvent('app-open', { detail: { page: 'friends' } })),
-      t('see_all'),
-    ),
-    onlineFriends.length
-      ? h('div.neon-list', ...onlineFriends.map((f) => friendActionRow(f, {
-        onProfile: (id) => openProfile(id),
-        onMsg: (x) => openChatWithUser(x.id, { id: x.id, name: x.name, premium: !!x.premium }),
-        onInvite: async (x) => {
-          try {
-            await api('POST', '/games', { opponentId: x.id });
-            onRefresh();
-          } catch (e) { fail(e); }
-        },
+      ? h('div.nx-list', ...(showAllLive ? games : games.slice(0, 3)).map((g) => liveMatchRow(g, { onWatch: watch, onProfile: openProfile })))
+      : emptyNote(t('live_no_bot_games')),
+    sectionHead(t('live_tourneys_sec'), () => openTour(null), t('see_all')),
+    tourCards.length
+      ? h('div.nx-tour-grid', ...tourCards.map((it, i) => tourneyCard({
+        title: tourTitle(it),
+        sub: [tourSubtitle(it), it.round && it.round.name].filter(Boolean).join(' · '),
+        live: !!(it.round && it.round.ongoing),
+        art: i === 0 ? '/img/ui/tour-blitz.webp' : '/img/ui/tour-rapid.webp',
+        primary: i === 0,
+        actionLabel: i === 0 ? t('join_btn') : t('watch_btn'),
+        onClick: () => openTour(it),
       })))
-      : h('p.muted.neon-sec-sub', t('no_friends')),
-    sectionHead(t('analyze_title')),
-    h('p.muted.analyze-home-sub', t('analyze_home_sub')),
+      : emptyNote(t('live_no_tours')),
+    sectionHead(t('online_users_sec'), more(showAllUsers || onlineUsers.length <= 6, () => { showAllUsers = true; }), t('see_all')),
+    onlineUsers.length
+      ? h('div.nx-hscroll' + (showAllUsers ? '.wrap' : ''), { 'data-noswipe': '' }, ...onlineUsers.map((u) => onlineBubble(u, openProfile)))
+      : emptyNote(t('nobody')),
+    sectionHead(t('online_friends_sec'), more(showAllFriends || onlineFriends.length <= 3, () => { showAllFriends = true; }), t('see_all')),
+    onlineFriends.length
+      ? h('div.nx-card-list', ...(showAllFriends ? onlineFriends : onlineFriends.slice(0, 3)).map((f) => friendRow(f, {
+        onProfile: openProfile,
+        onMsg: (x) => openChatWithUser(x.id, { id: x.id, name: x.name, premium: !!x.premium }),
+        onInvite: (x) => challenge(x.id),
+      })))
+      : emptyNote(t('no_friends')),
+    sectionHead(t('analyze_title'), null, null, { sub: t('analyze_home_sub') }),
     recent.length
-      ? h('div.list.analyze-live-list', recent.map((g) => {
+      ? h('div.nx-list', ...recent.map((g) => {
         const o = g.opponent || {};
-        return h('div.row.recent-analyze',
-          avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, avatarKey: o.avatarKey || null }),
-          h('div.grow', h('div.t', o.name || '…'), h('div.s', recentResultLine(g))),
-          h('button.mini.ok', {
+        return h('div.nx-pr',
+          h('div.nx-row-main',
+            avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, avatarKey: o.avatarKey || null }),
+            h('div.nx-row-tx', h('b', o.name || '…'), h('small', recentResultLine(g)))),
+          h('button.nx-btn-o.sm', {
             type: 'button',
-            'aria-label': t('analyze'),
             onclick: () => {
               haptic('light');
-              openGameAnalysis({
-                id: g.id,
-                moves: g.moves,
-                white: g.white,
-                black: g.black,
-                you: g.you,
-                result: g.result,
-              });
+              openGameAnalysis({ id: g.id, moves: g.moves, white: g.white, black: g.black, you: g.you, result: g.result });
             },
-          }, icon('sparkles', 16), t('analyze')));
+          }, icon('sparkles', 14), t('analyze')));
       }))
-      : empty(t('analyze_empty'), '♟'),
+      : emptyNote(t('analyze_empty')),
   ];
   mount(nodes);
 }
@@ -441,8 +374,7 @@ async function renderIntlList(mount, onRefresh) {
   catch (e) {
     fail(e);
     return mount([
-      h('div.top', h('h1', t('live_title'))),
-      tabsEl(onRefresh),
+      h('div.top', backBtn(() => { setSection('bot'); onRefresh(); }), h('h1', t('live_title'))),
       empty(t('live_load_fail'), '🌐'),
       h('button.btn', { onclick: () => onRefresh() }, t('retry_live')),
     ]);
@@ -451,33 +383,15 @@ async function renderIntlList(mount, onRefresh) {
   const upcoming = data.upcoming || [];
   const all = [...active, ...upcoming];
   mount([
-    h('div.top', h('h1', t('live_title')), h('div.livepill', h('i.dot'), t('jonli'))),
-    tabsEl(onRefresh),
+    h('div.top',
+      backBtn(() => { setSection('bot'); onRefresh(); }),
+      h('h1', t('live_title')),
+      h('div.livepill', h('i.dot'), t('jonli'))),
     h('div.h2', t('tournaments'), h('span.count-pill', t('count_ta', { n: all.length }))),
     all.length ? h('div.list', all.map((item) => broadcastRow(item, (it) => {
       haptic('light');
-      const round = it.round || {};
-      const tour = it.tour || {};
-      if (!tour.id) { fail({ code: 'notfound' }); return; }
-      const m = String(round.url || '').match(/\/broadcast\/([^/]+)\/([^/]+)\/([a-zA-Z0-9]{8})\b/);
-      // Prefer opening the live round directly; fall back to tour page if id missing
-      if (round.id && /^[a-zA-Z0-9]{8}$/.test(round.id)) {
-        openRoundNav({
-          tourId: tour.id,
-          tourName: tourTitle(it),
-          tourSlug: (m && m[1]) || tour.slug,
-          roundId: round.id,
-          roundName: round.name,
-          roundSlug: (m && m[2]) || round.slug,
-          roundUrl: round.url,
-          filter: 'all',
-        });
-      } else {
-        nav = {
-          view: 'tour', tourId: tour.id, tourName: tourTitle(it),
-          tourSlug: tour.slug, preferRound: round.id,
-        };
-      }
+      if (!(it.tour || {}).id) { fail({ code: 'notfound' }); return; }
+      openBroadcast(it);
       onRefresh();
     }))) : empty(t('live_no_tours'), '🌐'),
   ]);
@@ -513,7 +427,6 @@ async function renderTour(mount, onRefresh) {
     h('div.top',
       backBtn(goBack),
       h('h1', nav.tourName || tour.name || t('live_tab_intl'))),
-    tabsEl(onRefresh),
     h('div.card.live-tour-head',
       h('b', tour.name || nav.tourName),
       tour.info && tour.info.location ? h('div.muted', tour.info.location) : null,
@@ -677,7 +590,6 @@ async function renderRound(mount, onRefresh) {
     h('div.top',
       backBtn(goBack),
       h('h1', tour.name || nav.tourName || t('live_tab_intl'))),
-    tabsEl(() => { clearPoll(); onRefresh(); }),
     h('div.card.live-tour-head',
       h('b', tour.name || nav.tourName),
       h('div.muted', [
@@ -969,7 +881,8 @@ async function renderGame(mount, onRefresh) {
  * @param {() => void} onCloseGame
  * @param {() => void} onRefresh
  */
-export async function renderLivePage(mount, meta, onCloseGame, onRefresh) {
+export async function renderLivePage(mount, meta, onCloseGame, onRefresh, liveHooks) {
+  if (liveHooks) hooks = liveHooks;
   destroyBoards();
   if (section === 'bot') {
     clearPoll();

@@ -21,6 +21,7 @@ export const LEVELS = [
   { id: 2, depth: 1, qdepth: 0, time: 300, noise: 70 },  // casual: greedy, sometimes careless
   { id: 3, depth: 3, qdepth: 2, time: 900, noise: 12 },  // club
   { id: 4, depth: 5, qdepth: 4, time: 1800, noise: 0 },  // strong
+  { id: 5, depth: 6, qdepth: 5, time: 2600, noise: 0 },  // strongest
 ];
 
 const MATE = 100000;

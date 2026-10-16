@@ -29,7 +29,7 @@ assert.ok(app.includes('annHost') || app.includes('ann-carousel'));
 assert.ok(ann.includes('mountAnnouncementsCarousel') && ann.includes('paintAnnouncementsCarousel'));
 assert.ok(!app.includes("h('div.h2', t('recent'))"), 'recent/analyze moved off home');
 assert.ok(read('public/js/live.js').includes('openGameAnalysis') && read('public/js/live.js').includes('analyze_title'), 'Online tab hosts game analysis');
-assert.ok(app.includes('neon-mode-row') && app.includes("t('home_modes')"), 'neon home game modes under carousel');
+assert.ok(app.includes('nx-mode-row') && app.includes("t('home_modes')") && app.includes('heroBanner'), 'neon home game modes under carousel');
 assert.ok(ann.includes('ResizeObserver'), 'Android carousel re-layouts when width becomes available');
 assert.ok(profile.includes('openStats'));
 assert.ok(profile.includes("t('recent')"));
@@ -67,7 +67,7 @@ assert.ok(ann.includes('resolveMedia') && /await resolveMedia[\s\S]*stopHost\(ho
 assert.ok(app.includes('reuseAnn') && app.includes('announcementsKey'), 'home reuses carousel to avoid flicker');
 assert.ok(app.includes('pauseAnnouncementsCarousel') && app.includes('resumeAnnouncementsHost'), 'tab leave pauses; reuse resumes');
 assert.ok(!/prev === TABS\.indexOf\('play'\)\)\s*\{\s*stopAnnouncementsCarousel/.test(app), 'must not hard-stop carousels on leave play');
-assert.ok(app.includes('playSnap') && app.includes('.neon-gem b'), 'home soft-refresh updates gem without remount');
+assert.ok(app.includes('playSnap') && app.includes('.nx-gem b'), 'home soft-refresh updates gem without remount');
 assert.ok(ann.includes('prepareAnnouncements') && ann.includes('paintAnnouncementsCarousel'), 'carousel prepare + sync paint');
 assert.ok(app.includes('prepareAnnouncements') && app.includes('paintAnnouncementsCarousel'), 'home prepares carousels before mount');
 assert.ok(ann.includes('AbortController') && ann.includes('mediaFetchTimeoutMs'), 'Android media fetch timeout');

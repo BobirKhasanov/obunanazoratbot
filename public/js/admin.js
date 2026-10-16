@@ -117,7 +117,7 @@ export function openAdmin(onClose) {
           );
         }
         return h('div.row.admin-user-row' + (u.blocked ? '.off' : ''),
-          h('div.avwrap', avatar(u.first_name, u.id), u.online ? h('i.dot.on') : null),
+        h('div.avwrap', avatar(u.first_name, u.id), u.online ? h('i.dot.on') : null),
           h('div.grow',
             h('div.t', h('span.name', name), u.isAdmin ? h('span.pill', t('admin_tag')) : null),
             h('div.s', meta)),
@@ -876,7 +876,7 @@ export function openAdmin(onClose) {
       ...subTop(t('admin_sec_live'), close),
       liveBox,
       h('div.h2', t('stats')), kpis,
-      h('div.h2', t('signups')), h('div.card', bars),
+    h('div.h2', t('signups')), h('div.card', bars),
     ];
   }, { onClose: () => { clearInterval(timer); timer = null; } });
 
@@ -1015,8 +1015,8 @@ export function openAdmin(onClose) {
     drawMedia(); drawButtons(); drawPreview(); loadHistory();
     return [
       ...subTop(t('composer'), close),
-      h('div.card', text, mediaBox, file, h('div.label', t('buttons') + ' · ' + t('up_to')), btnBox, h('div.label', t('audience')), audience, h('div.label', t('preview')), preview, sendTest, sendAll),
-      h('div.h2', t('history')), histBox,
+    h('div.card', text, mediaBox, file, h('div.label', t('buttons') + ' · ' + t('up_to')), btnBox, h('div.label', t('audience')), audience, h('div.label', t('preview')), preview, sendTest, sendAll),
+    h('div.h2', t('history')), histBox,
     ];
   });
 

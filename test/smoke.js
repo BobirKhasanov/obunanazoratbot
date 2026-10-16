@@ -556,6 +556,20 @@ async function playMoves(game, players, moves, startPly = 0) {
       const meA = (await ok('A', 'GET', '/me')).user;
       const meB = (await ok('B', 'GET', '/me')).user;
       assert.ok(meB.eloBullet > meA.eloBullet);
+
+      const day = await ok('B', 'GET', '/rankings?board=period&period=day&category=all');
+      assert.strictEqual(day.board, 'period');
+      assert.strictEqual(day.period, 'day');
+      assert.ok(pts(day.rankings, USERS.B.id) >= 2, 'daily board counts today\'s win');
+      assert.ok(day.me && day.me.rank >= 1, 'daily board returns my rank');
+      const overall = await ok('A', 'GET', '/rankings?board=elo&category=all');
+      assert.ok(overall.me && overall.me.rank >= 1 && overall.me.elo > 0, 'overall board returns my rank + elo');
+
+      const hist = (await ok('A', 'GET', '/games/history')).games;
+      const h = hist.find((g) => g.id === challenge.id);
+      assert.ok(h, 'finished game listed in history');
+      assert.ok(h.result !== '1/2-1/2' && (h.result === '1-0') !== (h.you === 'w'), 'resigner sees a loss');
+      assert.ok(h.opponent && h.opponent.id === USERS.B.id && h.opponent.elo > 0, 'history opponent has elo');
     });
 
     await step('admin in-app notification to everyone', async () => {

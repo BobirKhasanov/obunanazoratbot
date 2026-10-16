@@ -4,6 +4,7 @@ export const LANGS = ['uz', 'uzc', 'ru', 'en'];
 export const LANG_NAMES = { uz: "O'zbekcha", uzc: 'Ўзбекча', ru: 'Русский', en: 'English' };
 
 const en = {
+  hero_t1: "Play chess", hero_t2: "with your friends", hero_sub: "Strategy, friendship and competition in one place.", hero_more: "Learn more", ply_short: "Move {n}", friend_in_game: "In a game", rating_n: "Rating {n}", challenge_sent_short: "Sent", you_label: "You", ago_now: "just now", ago_min: "{n} min ago", ago_hour: "{n} h ago", ago_day: "{n} d ago", home_daily_title: "Daily puzzle", hub_sub_players: "Online players", hub_sub_live: "Live games", hub_sub_tours: "Tournaments", quick_match_btn: "Quick match", see_all_short: "All", tours_running: "{n} live", online_people: "{n} online", invite_full: "Invite", friend_search_ph: "Search friends…", friend_link_game: "Play via invite link", ai_pick_level: "Choose a level", ai_custom: "Colour & settings", rank_all_time: "Overall", rank_day: "Daily", rank_week: "Weekly", rank_month: "Monthly", rating_col: "Rating", points_col: "Points", join_btn: "Join", ai_l1: "Beginner", ai_l2: "Intermediate", ai_l3: "Strong", ai_l4: "Very strong", ai_l5: "Strongest", ai_l1_d: "For those learning chess", ai_l2_d: "For practice", ai_l3_d: "For experienced players", ai_l4_d: "A real challenge", ai_l5_d: "Test yourself", lvl5: "Master", lvl5_d: "Strongest engine",
   app: 'Chess',
   nav_play: 'Play', nav_live: 'Live', nav_friends: 'Friends', nav_profile: 'Profile',
   vs_ai: 'Play vs AI', vs_ai_sub: 'Four levels',
@@ -94,6 +95,7 @@ const en = {
 };
 
 const ru = {
+  hero_t1: "Играйте в шахматы", hero_t2: "с друзьями", hero_sub: "Стратегия, дружба и соревнование в одном месте.", hero_more: "Подробнее", ply_short: "{n}-й ход", friend_in_game: "В игре", rating_n: "Рейтинг {n}", challenge_sent_short: "Отправлено", you_label: "Вы", ago_now: "только что", ago_min: "{n} мин назад", ago_hour: "{n} ч назад", ago_day: "{n} д назад", home_daily_title: "Ежедневная задача", hub_sub_players: "Игроки онлайн", hub_sub_live: "Живые партии", hub_sub_tours: "Турниры", quick_match_btn: "Быстрая игра", see_all_short: "Все", tours_running: "{n} идёт", online_people: "{n} онлайн", invite_full: "Пригласить", friend_search_ph: "Поиск друзей…", friend_link_game: "Играть по ссылке", ai_pick_level: "Выберите уровень", ai_custom: "Цвет и настройки", rank_all_time: "Общий", rank_day: "День", rank_week: "Неделя", rank_month: "Месяц", rating_col: "Рейтинг", points_col: "Очки", join_btn: "Участвовать", ai_l1: "Начальный", ai_l2: "Средний", ai_l3: "Сильный", ai_l4: "Очень сильный", ai_l5: "Сильнейший", ai_l1_d: "Для изучающих шахматы", ai_l2_d: "Для практики", ai_l3_d: "Для опытных игроков", ai_l4_d: "Настоящий вызов", ai_l5_d: "Проверьте себя", lvl5: "Мастер", lvl5_d: "Самый сильный движок",
   app: 'Шахматы',
   nav_play: 'Игра', nav_live: 'Онлайн', nav_friends: 'Друзья', nav_profile: 'Профиль',
   vs_ai: 'Играть с ИИ', vs_ai_sub: 'Четыре уровня',
@@ -181,6 +183,7 @@ const ru = {
 };
 
 const uz = {
+  hero_t1: "Do'stlaringiz bilan", hero_t2: "shaxmat o'ynang", hero_sub: "Strategiya, do'stlik va raqobat bir joyda.", hero_more: "Batafsil", ply_short: "{n}-yurish", friend_in_game: "O'yinda", rating_n: "Reyting {n}", challenge_sent_short: "Yuborildi", you_label: "Siz", ago_now: "hozirgina", ago_min: "{n} daqiqa oldin", ago_hour: "{n} soat oldin", ago_day: "{n} kun oldin", home_daily_title: "Kunlik topshiriq", hub_sub_players: "Onlayn o'yinchilar", hub_sub_live: "Jonli o'yinlar", hub_sub_tours: "Turnirlar", quick_match_btn: "Tezkor o'yin", see_all_short: "Barchasi", tours_running: "{n} ta jonli", online_people: "{n} kishi online", invite_full: "Taklif qilish", friend_search_ph: "Do'st izlash…", friend_link_game: "Havola orqali o'ynash", ai_pick_level: "Darajani tanlang", ai_custom: "Rang va sozlamalar", rank_all_time: "Umumiy", rank_day: "Kunlik", rank_week: "Haftalik", rank_month: "Oylik", rating_col: "Reyting", points_col: "Ochko", join_btn: "Qo'shilish", ai_l1: "Boshlang'ich", ai_l2: "O'rtacha", ai_l3: "Kuchli", ai_l4: "Juda kuchli", ai_l5: "Eng kuchli", ai_l1_d: "Shaxmatni o'rganayotganlar uchun", ai_l2_d: "Amaliy mashg'ulot uchun", ai_l3_d: "Tajribali o'yinchilar uchun", ai_l4_d: "Haqiqiy chaqiriq", ai_l5_d: "O'zingizni sinab ko'ring", lvl5: "Usta", lvl5_d: "Eng kuchli dvigatel",
   app: 'Shaxmat',
   nav_play: "O'yin", nav_live: 'Onlayn', nav_friends: "Do'stlar", nav_profile: 'Profil',
   vs_ai: 'AI bilan o‘ynash', vs_ai_sub: 'To‘rt daraja',
@@ -268,6 +271,7 @@ const uz = {
 };
 
 const uzc = {
+  hero_t1: "Дўстларингиз билан", hero_t2: "шахмат ўйнанг", hero_sub: "Стратегия, дўстлик ва рақобат бир жойда.", hero_more: "Батафсил", ply_short: "{n}-юриш", friend_in_game: "Ўйинда", rating_n: "Рейтинг {n}", challenge_sent_short: "Юборилди", you_label: "Сиз", ago_now: "ҳозиргина", ago_min: "{n} дақиқа олдин", ago_hour: "{n} соат олдин", ago_day: "{n} кун олдин", home_daily_title: "Кунлик топшириқ", hub_sub_players: "Онлайн ўйинчилар", hub_sub_live: "Жонли ўйинлар", hub_sub_tours: "Турнирлар", quick_match_btn: "Тезкор ўйин", see_all_short: "Барчаси", tours_running: "{n} та жонли", online_people: "{n} киши онлайн", invite_full: "Таклиф қилиш", friend_search_ph: "Дўст излаш…", friend_link_game: "Ҳавола орқали ўйнаш", ai_pick_level: "Даражани танланг", ai_custom: "Ранг ва созламалар", rank_all_time: "Умумий", rank_day: "Кунлик", rank_week: "Ҳафталик", rank_month: "Ойлик", rating_col: "Рейтинг", points_col: "Очко", join_btn: "Қўшилиш", ai_l1: "Бошланғич", ai_l2: "Ўртача", ai_l3: "Кучли", ai_l4: "Жуда кучли", ai_l5: "Энг кучли", ai_l1_d: "Шахматни ўрганаётганлар учун", ai_l2_d: "Амалий машғулот учун", ai_l3_d: "Тажрибали ўйинчилар учун", ai_l4_d: "Ҳақиқий чақириқ", ai_l5_d: "Ўзингизни синаб кўринг", lvl5: "Уста", lvl5_d: "Энг кучли двигател",
   app: 'Шахмат',
   nav_play: 'Ўйин', nav_live: 'Онлайн', nav_friends: 'Дўстлар', nav_profile: 'Профил',
   vs_ai: 'AI билан ўйнаш', vs_ai_sub: 'Тўрт даража',
@@ -525,7 +529,7 @@ Object.assign(en, {
   mode_online_sub: 'Players around the world', mode_friend_sub: 'Invite your friends', mode_ai_sub: 'Bots at every level',
   online_friends_sec: 'Online friends', online_users_sec: 'Online users', live_now_sec: 'Playing now',
   live_tourneys_sec: 'Live tournaments', msg_write: 'Chat', invite_short: 'Invite', watch_btn: 'Watch',
-  home_modes: 'Game modes', home_live_now: 'Playing online now',   home_daily: 'Daily puzzle',
+  home_modes: 'Game modes', home_live_now: 'Playing online now', home_daily: 'Daily challenge',
   home_daily_sub: 'Solve the puzzle and earn a reward', online_realtime: 'Real-time activity',
   stat_online: 'Online', stat_games: 'Games', stat_tourneys: 'Tournaments',
   nav_play: 'Home', nav_puzzles: 'Puzzles', nav_rankings: 'Play', nav_live: 'Online', nav_profile: 'Profile',
@@ -541,7 +545,7 @@ Object.assign(ru, {
   mode_online_sub: 'С игроками со всего мира', mode_friend_sub: 'Пригласите друзей', mode_ai_sub: 'Боты разных уровней',
   online_friends_sec: 'Друзья онлайн', online_users_sec: 'Пользователи онлайн', live_now_sec: 'Сейчас играют',
   live_tourneys_sec: 'Живые турниры', msg_write: 'Написать', invite_short: 'Вызов', watch_btn: 'Смотреть',
-  home_modes: 'Режимы игры', home_live_now: 'Сейчас играют онлайн',   home_daily: 'Ежедневная задача',
+  home_modes: 'Режимы игры', home_live_now: 'Сейчас играют онлайн', home_daily: 'Ежедневное задание',
   home_daily_sub: 'Решите задачу и получите награду', online_realtime: 'Активность в реальном времени',
   stat_online: 'Онлайн', stat_games: 'Партии', stat_tourneys: 'Турниры',
   nav_play: 'Главная', nav_puzzles: 'Задачи', nav_rankings: 'Играть', nav_live: 'Онлайн', nav_profile: 'Профиль',
@@ -557,7 +561,7 @@ Object.assign(uz, {
   mode_online_sub: "Dunyo bo'ylab o'yinchilar bilan", mode_friend_sub: "Do'stlaringizni taklif qiling", mode_ai_sub: 'Har xil darajadagi botlarga qarshi',
   online_friends_sec: "Online do'stlar", online_users_sec: 'Online foydalanuvchilar', live_now_sec: "Hozir o'ynayotganlar",
   live_tourneys_sec: 'Jonli turnirlar', msg_write: 'Yozish', invite_short: 'Taklif', watch_btn: "Ko'rish",
-  home_modes: "O'yin rejimlari", home_live_now: "Hozir online o'ynayotganlar",   home_daily: 'Kunlik boshqotirma',
+  home_modes: "O'yin rejimlari", home_live_now: "Hozir online o'ynayotganlar", home_daily: 'Kunlik topshiriq',
   home_daily_sub: 'Aqlingizni sinang va mukofot oling', online_realtime: 'Real vaqt faolligi',
   stat_online: 'Onlayn', stat_games: 'Partiyalar', stat_tourneys: 'Turnirlar',
   nav_play: 'Asosiy', nav_puzzles: 'Boshqotirma', nav_rankings: "O'ynash", nav_live: 'Online', nav_profile: 'Profil',
@@ -573,7 +577,7 @@ Object.assign(uzc, {
   mode_online_sub: 'Дунё бўйлаб ўйинчилар билан', mode_friend_sub: 'Дўстларингизни таклиф қилинг', mode_ai_sub: 'Ҳар хил даражадаги ботларга қарши',
   online_friends_sec: 'Онлайн дўстлар', online_users_sec: 'Онлайн фойдаланувчилар', live_now_sec: 'Ҳозир ўйнайотганлар',
   live_tourneys_sec: 'Жонли турнирлар', msg_write: 'Ёзиш', invite_short: 'Таклиф', watch_btn: 'Кўриш',
-  home_modes: 'Ўйин режимлари', home_live_now: 'Ҳозир онлайн ўйнайотганлар',   home_daily: 'Кунлик бошқотирма',
+  home_modes: 'Ўйин режимлари', home_live_now: 'Ҳозир онлайн ўйнайотганлар', home_daily: 'Кунлик топшириқ',
   home_daily_sub: 'Ақлингизни синанг ва мукофот олинг', online_realtime: 'Реал вақт фаоллиги',
   stat_online: 'Онлайн', stat_games: 'Партиялар', stat_tourneys: 'Турнирлар',
   nav_play: 'Асосий', nav_puzzles: 'Бошқотирма', nav_rankings: 'Ўйнаш', nav_live: 'Онлайн', nav_profile: 'Профил',

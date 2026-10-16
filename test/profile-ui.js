@@ -54,7 +54,7 @@ assert.ok(read('src/server.js').includes('MAX_AVATAR = 5') && read('src/server.j
 assert.ok(profile.includes('openChatWithUser') && profile.includes("from './inbox.js'"), 'friends list opens DM chat');
 assert.ok(app.includes("from './playhub.js'") && app.includes('renderPlayHub'), 'Play hub wired on rankings tab');
 assert.ok(app.includes("from './neonui.js'") && app.includes('appHeader') && app.includes('modeCard'), 'neon home shell');
-assert.ok(app.includes('neon-mode-row') && app.includes('neon-daily') && app.includes('liveMiniCard'), 'home neon sections');
+assert.ok(app.includes('nx-mode-row') && app.includes('dailyCard') && app.includes('liveMiniCard') && app.includes('/img/ui/mode-online.webp'), 'home neon sections');
 assert.ok(app.includes("rankings: 'gamepad'") && app.includes("'data-tab': k"), 'nav icons map Oynash to gamepad');
 assert.ok(app.includes('r.already') && app.includes('game_ended'), 'stale invite/game deep links do not reopen boards');
 assert.ok(read('src/welcome.js').includes('startapp=i'), 'invite share uses startapp for Mini App claim');
@@ -139,7 +139,7 @@ assert.ok(/\.screen\s*\{[^}]*z-index:\s*50/.test(css) && css.includes('#app:has(
 assert.ok(app.includes('createPlayFlow') && app.includes('setPlaySticky'), 'home wires play flow + sticky Play');
 assert.ok(read('public/js/playflow.js').includes("h1', t('nav_game')") && !read('public/js/playflow.js').includes('pf-title'), 'Game hub has one title (top bar only)');
 assert.ok(!app.includes("t('home_rank')"), 'live ranking banner removed from home');
-assert.ok(app.includes("t('home_modes')") && app.includes("t('home_live_now')") && app.includes("t('home_daily')"), 'neon home section titles');
+assert.ok(app.includes("t('home_modes')") && app.includes("t('home_live_now')") && app.includes('dailyCard('), 'neon home section titles');
 const playflow = read('public/js/playflow.js');
 assert.ok(playflow.includes('openSearching') && playflow.includes('/games/quick'), 'play flow searching + quick match');
 assert.ok(playflow.includes('preferredColor') && playflow.includes('TIME_GROUPS'), 'time/color setup in play flow');
@@ -150,9 +150,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016neon2"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016neon2'), 'HTML data-asset matches entry cache bust');
-assert.ok(read('public/js/neonui.js').includes('asKids') || read('public/js/neonui.js').includes('Array.isArray(inboxBtns)'), 'inboxBtns never spread as non-iterable');
-assert.ok(!read('public/js/live.js').includes('...headerInboxBtns()'), 'Online header does not spread inbox node');
+assert.ok(/data-asset="20261016nx"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016nx'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -160,7 +158,7 @@ assert.ok(read('public/js/i18n.js').includes("vs_ai: 'Play vs AI'") && read('pub
 assert.ok(read('public/js/game.js').includes("icon('ai'") && css.includes('.avatar.ai'), 'AI avatar uses sparkles icon');
 assert.ok(app.includes('firstPaint') && app.includes('loadFriends'), 'first paint skips friends wait then hydrates');
 assert.ok(indexHtml.includes('data-android') && indexHtml.includes("plat === 'android'"), 'Android marked early to lighten boot splash');
-assert.ok(read('public/js/playhub.js').includes('neon-rank-you') && read('public/js/playhub.js').includes('/rankings?'), 'Play hub rating board + pinned you row');
+assert.ok(read('public/js/playhub.js').includes('you: true') && read('public/js/playhub.js').includes('nx-rank-pin') && read('public/js/playhub.js').includes('/rankings?'), 'Play hub rating board + pinned you row');
 assert.ok(app.includes('initScrollTop') && app.includes('scroll-top') && css.includes('.scroll-top'), 'scroll-to-top on scrollable pages');
 assert.ok(app.includes('scrollToTopSmooth') && read('public/js/ui.js').includes('scrollToTopSmooth') && read('public/js/ui.js').includes('cancelSmoothScroll'), 'scroll-top uses slow smooth glide');
 assert.ok(read('public/js/ui.js').includes('isiOSScroll') && read('public/js/ui.js').includes("behavior: 'smooth'") && read('public/js/ui.js').includes('stopScrollMomentum'), 'iOS scroll-top uses native smooth + momentum kill');
@@ -177,7 +175,7 @@ assert.ok(css.includes('.list.player-list') && /player-list[\s\S]{0,120}padding:
 assert.ok(app.includes('.filter(Boolean)') && app.includes('puzzle_retry'), 'puzzle actions skip null (no literal "null" text)');
 assert.ok(read('src/server.js').includes('PODIUM_PREMIUM') && read('src/server.js').includes('grantPodiumPremium'), 'monthly podium auto-Premium');
 assert.ok(read('src/server.js').includes('medal_premium_') && /days:\s*20/.test(read('src/server.js')) && /days:\s*15/.test(read('src/server.js')), 'podium Premium 1mo/20d/15d');
-assert.ok(app.includes('neon-daily') && app.includes("TABS.indexOf('puzzles')"), 'home daily challenge opens puzzles');
+assert.ok(app.includes('dailyCard') && app.includes("TABS.indexOf('puzzles')"), 'home daily challenge opens puzzles');
 assert.ok(read('public/js/game.js').includes('isMoveSoundOn') && read('public/js/game.js').includes('allowUndo'), 'move sound + optional AI undo');
 assert.ok(read('public/js/game.js').includes('sound-btn') && /icon\([^)]*soundOn[^)]*28\)/.test(read('public/js/game.js')), 'sound toggle icon larger');
 assert.ok(read('public/js/ui.js').includes('if (!isMoveSoundOn()) return') && read('public/js/game.js').includes('if (isMoveSoundOn()) unlockAudio()'), 'muted move sound skips unlock/play');
@@ -212,10 +210,10 @@ assert.ok(css.includes('prem-ring') && css.includes('prem-spin'), 'single rotati
 assert.ok(css.includes('tg-star-twinkle') || css.includes('prem-spark'), 'Telegram Stars–style sparkles');
 assert.ok(/\.prem-ic[\s\S]{0,160}width:\s*(2[8-9]|3[0-9])px/.test(css), 'premIc badge at least 28px');
 const playhub = read('public/js/playhub.js');
-assert.ok(playhub.includes('openProfile') && playhub.includes('neon-rank-row'), 'Play hub rating rows open profile');
-assert.ok(playhub.includes('avBlock(p.name') || playhub.includes('avBlock(p.name,'), 'rankings show avatars');
+assert.ok(playhub.includes('openProfile') && playhub.includes('rankRow('), 'Play hub rating rows open profile');
+assert.ok(read('public/js/neonui.js').includes('avBlock(p.name'), 'rankings show avatars');
 assert.ok(playhub.includes('hub_tab_online') && playhub.includes('hub_tab_rating') && playhub.includes('hub_tab_history'), 'Play hub Online/Reyting/Tarix');
-assert.ok(playhub.includes('p.premium') || playhub.includes('!!p.premium'), 'rankings premium from API');
+assert.ok(read('public/js/neonui.js').includes('!!p.premium'), 'rankings premium from API');
 assert.ok(read('public/js/userprofile.js').includes('filter(Boolean)'), 'user profile does not append null text nodes');
 assert.ok(profile.includes('.filter(Boolean)') && profile.includes('host.replaceChildren'), 'my info does not append null text nodes');
 assert.ok(read('public/js/userprofile.js').includes('uprof-statgrid.wdl'), 'profile W/D/L is a full 3-col row');
@@ -277,7 +275,7 @@ assert.ok(profile.includes('openUserProfile') || read('public/js/userprofile.js'
 assert.ok(css.includes('prem-glow') && css.includes('uprof-hero'), 'premium glow + public profile styles');
 assert.ok(admin.includes('ann_board_puzzle') && admin.includes("board: annBoard"), 'admin puzzle board');
 assert.ok(app.includes("loadAnnouncements(api, 'home')") || app.includes('loadAnnouncements(api, "home")'), 'home carousel load');
-assert.ok(live.includes('neon-match-row') && live.includes('statCard') && live.includes('friendActionRow'), 'Online tab neon layout');
+assert.ok(live.includes('liveMatchRow') && live.includes('statCard(') && live.includes('friendRow(') && live.includes('tourneyCard(') && live.includes('onlineBubble'), 'Online tab neon layout');
 assert.ok(admin.includes('/admin/profile-banner') && admin.includes('admin_banner'), 'admin can change profile banner');
 assert.ok(i18n.includes('profile_edit:') && i18n.includes('admin_banner:') && i18n.includes('my_info:'));
 const server = read('src/server.js');
@@ -300,8 +298,13 @@ assert.ok(html.includes('id="play-sticky"') && html.includes('id="dock"'), 'Play
 assert.ok(html.includes('id="boot"'), 'boot splash in HTML');
 assert.ok(html.includes('var(--text') && (html.includes('var(--bg') || html.includes('radial-gradient')), 'boot splash uses theme vars / radial (light text not stuck white)');
 assert.ok(css.includes('pill-thumb') && ui.includes('pillBar'), 'sliding pill bars for section selection');
-assert.ok(read('public/js/playhub.js').includes('neon-hub-tabs') && read('public/js/playhub.js').includes('pillBar'), 'Play hub uses sliding section pills');
-assert.ok(app.includes('appHeader') && app.includes('headerInboxBtns') && css.includes('.neon-gem'), 'neon header has inbox + gems');
+assert.ok(read('public/js/playhub.js').includes('segTabs(') && read('public/js/playhub.js').includes('underTabs('), 'Play hub uses segmented + underline tabs');
+assert.ok(app.includes('appHeader') && app.includes('headerInboxBtns') && css.includes('.nx-gem'), 'neon header has inbox + gems');
+for (const f of ['app', 'live', 'playhub', 'neonui']) assert.ok(!/\.\.\.\s*(deps\.)?headerInboxBtns\(|\.\.\.\s*inboxBtns/.test(read(`public/js/${f}.js`)), `${f}: headerInboxBtns() returns one element — never spread (iOS crash)`);
+assert.ok(!css.includes('.neon-') && !css.includes('nav-btn[data-tab="rankings"] .ic'), 'old neon CSS removed');
+assert.ok(read('src/server.js').indexOf("api.get('/games/history'") < read('src/server.js').indexOf("api.get('/games/:id'"), 'history route before /games/:id');
+assert.ok(read('public/js/playhub.js').includes("api('GET', '/games/history')") && read('public/js/playhub.js').includes('board=period'), 'Play hub history + period boards');
+assert.ok(read('public/js/ai.mjs').includes('id: 5') && read('src/server.js').includes('[1, 2, 3, 4, 5].includes(level)'), 'AI level 5');
 assert.ok(!app.includes('hdr-ic') && !app.includes("t('xabarnoma')"), 'header mail/bell icons removed');
 const entry = read('public/js/entry.js');
 assert.ok(entry.includes('timeoutMs') && entry.includes('showApp') && entry.includes('showGate'), 'entry has /me timeout and reveals app/gate');
