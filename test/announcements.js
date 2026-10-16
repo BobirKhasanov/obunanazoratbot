@@ -62,6 +62,9 @@ assert.ok(app.includes('reuseAnn') && app.includes('announcementsKey'), 'home re
 assert.ok(app.includes('pauseAnnouncementsCarousel') && app.includes('resumeAnnouncementsHost'), 'tab leave pauses; reuse resumes');
 assert.ok(!/prev === TABS\.indexOf\('play'\)\)\s*\{\s*stopAnnouncementsCarousel/.test(app), 'must not hard-stop carousels on leave play');
 assert.ok(app.includes('time-option') && app.includes("classList.toggle('selected'"), 'time pick in-place (no remount)');
+assert.ok(app.includes('ann-loading') && ann.includes('ann-skel') && ann.includes('ann-loading'), 'first paint reserves carousel box');
+assert.ok(app.includes('Promise.all(['), 'both carousels mount in parallel');
+assert.ok(css.includes('.ann-carousel.ann-loading') || css.includes('.ann-skel'), 'loading carousel keeps 140px height');
 assert.ok(i18n.includes('ann_title_section:'));
 
 // Neon-only media path (no Supabase Storage)

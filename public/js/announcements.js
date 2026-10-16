@@ -241,12 +241,20 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
     stopHost(host);
     host.replaceChildren();
     host.hidden = true;
+    host.classList.remove('ann-loading');
     return null;
   }
 
   // Weak Android: fewer slides + fewer media blob fetches (iOS keeps full list).
   const maxSlides = carouselMaxSlides();
   const capped = Number.isFinite(maxSlides) ? items.slice(0, maxSlides) : items;
+
+  // Reserve fixed 140px box immediately (entry→home used to jump when hosts stayed [hidden]).
+  host.hidden = false;
+  host.classList.add('ann-loading');
+  if (!host.querySelector('.ann-track')) {
+    host.replaceChildren(h('div.ann-skel'));
+  }
 
   // Fetch media first, then swap — avoids empty/emoji flash on remount (both boards can be media-only).
   const blobs = [];
@@ -262,6 +270,7 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
   hostState.set(host, state);
 
   host.hidden = false;
+  host.classList.remove('ann-loading');
   const opts = { onPage, botUsername, userId };
   const lite = isLite();
   const track = h('div.ann-track' + (lite ? '.lite' : ''), resolved.map((a) => slide(a, opts)));
@@ -305,6 +314,11 @@ export async function mountAnnouncementsCarousel(host, items, { onPage, botUsern
   state.resume = armAuto;
 
   const unbindSwipe = bindSwipe(host, track, n, go, { armAuto, stopAuto });
+  // After entry reveal, first paint often has clientWidth 0 — remeasure on next frames
+  go(0);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => go(go.idx));
+  });
   armAuto();
 
   const onResize = () => go(go.idx);

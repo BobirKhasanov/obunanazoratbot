@@ -79,7 +79,7 @@ export function openGame(opts, onClose) {
   const banner = h('div.gbanner'); banner.hidden = true;
   const back = h('button.round.back', { 'aria-label': t('back'), onclick: () => closeGame() }, icon('back', 22));
   const title = h('div.gtitle');
-  const soundBtn = h('button.round', {
+  const soundBtn = h('button.round.sound-btn', {
     type: 'button',
     'aria-label': t('move_sound'),
     onclick: () => {
@@ -92,7 +92,7 @@ export function openGame(opts, onClose) {
   });
   const paintSoundBtn = () => {
     const on = isMoveSoundOn();
-    soundBtn.replaceChildren(icon(on ? 'soundOn' : 'soundOff', 22));
+    soundBtn.replaceChildren(icon(on ? 'soundOn' : 'soundOff', 28));
     soundBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
     soundBtn.classList.toggle('off', !on);
   };
@@ -118,8 +118,8 @@ export function openGame(opts, onClose) {
     status, top.el, boardHost, bot.el, moveStrip, banner, reactBar, chatPanel, actions,
   );
   const board = S.board = new Board(boardHost, { onMove: (f, to, p) => humanMove(f, to, p) });
-  // Telegram/iOS: unlock on every board touch (drag can outlive a one-shot unlock)
-  boardHost.addEventListener('pointerdown', () => unlockAudio(), { passive: true });
+  // Telegram/iOS: unlock on board touch only when sound is on (muted unlock still clicks on some TG builds)
+  boardHost.addEventListener('pointerdown', () => { if (isMoveSoundOn()) unlockAudio(); }, { passive: true });
 
   const orientation = () => ((S.colour === 'b') !== S.flipped ? 'b' : 'w');
   const meName = () => (S.meta.me && S.meta.me.name) || t('you');
@@ -419,7 +419,7 @@ export function openGame(opts, onClose) {
   // ----- moves -----
   async function humanMove(from, to, promotion) {
     if (S.over || S.kind === 'spectate' || S.busy || S.thinking) return;
-    unlockAudio(); // ensure Telegram WebView allows sound on this gesture
+    if (isMoveSoundOn()) unlockAudio(); // ensure Telegram WebView allows sound on this gesture
     if (S.kind === 'ai') {
       try { S.chess.move({ from, to, promotion }); } catch { return render(); }
       playMoveSound();

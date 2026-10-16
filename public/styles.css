@@ -372,6 +372,8 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .ghead .round, .ghead-spacer { width: 44px; height: 44px; flex: none; }
 .ghead-tools { flex: none; display: flex; align-items: center; gap: 6px; }
 .ghead-tools .round { width: 40px; height: 40px; }
+.ghead-tools .round.sound-btn { width: 46px; height: 46px; }
+.ghead-tools .round.sound-btn svg { width: 28px; height: 28px; }
 .gtitle { flex: 1; min-width: 0; font-weight: 800; font-size: 18px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status { text-align: center; font-weight: 750; font-size: 15px; color: var(--muted); min-height: 22px; transition: color 0.3s; letter-spacing: 0.01em; }
 .status.alert { color: var(--red); font-weight: 800; }
@@ -1312,8 +1314,14 @@ html[data-perf="lite"] .live-mini-ph {
   -webkit-user-select: none; background: #0b1220;
 }
 /* Fixed box so media never grows the page / clips outside the rounded carousel */
-.ann-carousel:not([hidden]) {
+.ann-carousel:not([hidden]),
+.ann-carousel.ann-loading {
   height: 140px; min-height: 140px; max-height: 140px;
+}
+.ann-skel {
+  width: 100%; height: 100%; min-height: 140px;
+  background: linear-gradient(110deg, #0b1220 30%, #152238 50%, #0b1220 70%);
+  background-size: 200% 100%;
 }
 .ann-track {
   display: flex; width: 100%; height: 100%; will-change: transform;

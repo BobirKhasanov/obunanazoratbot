@@ -536,14 +536,31 @@ refreshers.play = async function renderPlay() {
   const banner = (cls, emoji, title, sub, fn) => h('button.home-banner.' + cls, { onclick: () => { haptic('light'); fn(); } },
     h('div.home-banner-text', h('b', title), h('small', sub)), h('span.home-banner-art', emoji));
   const card = (emoji, label, fn) => h('button.pcard', { onclick: () => { haptic('light'); fn(); } }, h('span.pcard-art', emoji), h('b', label));
+  // Reserve carousel height on first paint when content exists (avoids entry→home layout jump).
   const annHost = reuseAnn
     ? prevAnn
-    : h('div.ann-carousel', { hidden: true, 'data-noswipe': '', 'data-ann-board': 'home' });
-  if (!reuseAnn) annHost.dataset.annBoard = 'home';
+    : h('div.ann-carousel' + (anns && anns.length ? '.ann-loading' : ''), {
+      ...(anns && anns.length ? {} : { hidden: true }),
+      'data-noswipe': '',
+      'data-ann-board': 'home',
+    });
+  if (!reuseAnn) {
+    annHost.dataset.annBoard = 'home';
+    if (anns && anns.length && !annHost.querySelector('.ann-track')) annHost.replaceChildren(h('div.ann-skel'));
+  }
   const puzzleHost = reusePz
     ? prevPz
-    : h('div.ann-carousel.ann-puzzle', { hidden: true, 'data-noswipe': '', 'data-ann-board': 'puzzle' });
-  if (!reusePz) puzzleHost.dataset.annBoard = 'puzzle';
+    : h('div.ann-carousel.ann-puzzle' + (puzzleAnns && puzzleAnns.length ? '.ann-loading' : ''), {
+      ...(puzzleAnns && puzzleAnns.length ? {} : { hidden: true }),
+      'data-noswipe': '',
+      'data-ann-board': 'puzzle',
+    });
+  if (!reusePz) {
+    puzzleHost.dataset.annBoard = 'puzzle';
+    if (puzzleAnns && puzzleAnns.length && !puzzleHost.querySelector('.ann-track')) {
+      puzzleHost.replaceChildren(h('div.ann-skel'));
+    }
+  }
   const openProfile = (id) => openUserProfile(id, {
     onChallenge: (u) => challenge(u.id),
     refreshHome: () => { playSnap = ''; refresh('play'); },
@@ -643,18 +660,18 @@ refreshers.play = async function renderPlay() {
       }
     };
     const opts = { botUsername: state.meta?.botUsername, userId: state.me?.id, onPage };
-    if (reuseAnn) resumeAnnouncementsHost(annHost);
-    else {
-      annHost.dataset.annKey = annKey;
-      await mountAnnouncementsCarousel(annHost, anns, opts);
-    }
-    if (puzzleAnns && puzzleAnns.length) {
-      if (reusePz) resumeAnnouncementsHost(puzzleHost);
-      else {
-        puzzleHost.dataset.annKey = pzKey;
-        await mountAnnouncementsCarousel(puzzleHost, puzzleAnns, { ...opts, delayMs: CAROUSEL_STAGGER_MS });
-      }
-    }
+    // Mount both boards in parallel so entry→home does not reveal them one-after-another
+    await Promise.all([
+      reuseAnn
+        ? Promise.resolve(resumeAnnouncementsHost(annHost))
+        : (annHost.dataset.annKey = annKey, mountAnnouncementsCarousel(annHost, anns, opts)),
+      puzzleAnns && puzzleAnns.length
+        ? (reusePz
+          ? Promise.resolve(resumeAnnouncementsHost(puzzleHost))
+          : (puzzleHost.dataset.annKey = pzKey,
+            mountAnnouncementsCarousel(puzzleHost, puzzleAnns, { ...opts, delayMs: CAROUSEL_STAGGER_MS })))
+        : Promise.resolve(),
+    ]);
   }
 };
 refreshers.live = async function renderLive() {

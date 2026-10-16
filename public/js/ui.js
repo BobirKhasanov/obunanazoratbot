@@ -364,12 +364,14 @@ function ensureMoveCtx() {
 /** Must run inside a user gesture (board pointerdown). Unlocks audio without an audible click. */
 export function unlockAudio() {
   try {
+    // Respect local mute — otherwise HTMLAudio unlock still clicks on some TG WebViews
+    if (!isMoveSoundOn()) return;
     // WebAudio resume alone is silent — preferred for Telegram WebViews
     const ctx = ensureMoveCtx();
     if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+    if (moveAudioReady) return;
     const el = ensureMoveAudio();
-    // muted unlock: volume=0 still clicks on some iOS/Telegram builds
-    const wasMuted = el.muted;
+    // Keep proto element muted forever — playMoveSound uses a fresh Audio each move
     el.muted = true;
     el.volume = 0;
     const p = el.play();
@@ -377,8 +379,8 @@ export function unlockAudio() {
       try {
         el.pause();
         el.currentTime = 0;
-        el.muted = wasMuted;
-        el.volume = 0.55;
+        el.muted = true;
+        el.volume = 0;
         moveAudioReady = true;
       } catch { moveAudioReady = true; }
     };
@@ -420,6 +422,17 @@ export function isMoveSoundOn() {
 }
 export function setMoveSoundOn(on) {
   try { localStorage.setItem(MOVE_SOUND_KEY, on ? '1' : '0'); } catch { /* ignore */ }
+  if (!on) {
+    // Drop unlock state so a later unmute re-arms inside a gesture
+    moveAudioReady = false;
+    try {
+      if (moveAudioProto) {
+        moveAudioProto.pause();
+        moveAudioProto.muted = true;
+        moveAudioProto.volume = 0;
+      }
+    } catch { /* ignore */ }
+  }
 }
 
 /** Piece-drop when a move lands (player, opponent, AI, puzzles). */
@@ -431,22 +444,18 @@ export function playMoveSound() {
     lastMoveSoundAt = now;
     // Fresh element per move — avoids currentTime/play races in WebView
     const el = new Audio(moveWavUrl());
+    el.muted = false;
     el.volume = 0.55;
     const played = el.play();
     if (played && typeof played.catch === 'function') {
       played.catch(() => {
-        // Gesture may have ended — try shared element, then oscillator
-        try {
-          const shared = ensureMoveAudio();
-          shared.volume = 0.55;
-          shared.currentTime = 0;
-          const again = shared.play();
-          if (again && again.catch) again.catch(() => playMoveSoundOsc());
-        } catch { playMoveSoundOsc(); }
+        if (!isMoveSoundOn()) return;
+        // Gesture may have ended — try oscillator (shared proto stays muted for unlock)
+        try { playMoveSoundOsc(); } catch { /* ignore */ }
       });
     }
   } catch {
-    playMoveSoundOsc();
+    if (isMoveSoundOn()) playMoveSoundOsc();
   }
 }
 

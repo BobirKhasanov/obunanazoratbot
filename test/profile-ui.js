@@ -128,9 +128,12 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016ab"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016ab'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016ac"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016ac'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('puzzleHost') && /time-heading[\s\S]{0,400}puzzleHost|pcards[\s\S]{0,200}puzzle/.test(app), 'puzzle carousel below time/play cards');
 assert.ok(read('public/js/game.js').includes('isMoveSoundOn') && read('public/js/game.js').includes('allowUndo'), 'move sound + optional AI undo');
+assert.ok(read('public/js/game.js').includes('sound-btn') && /icon\([^)]*soundOn[^)]*28\)/.test(read('public/js/game.js')), 'sound toggle icon larger');
+assert.ok(read('public/js/ui.js').includes('if (!isMoveSoundOn()) return') && read('public/js/game.js').includes('if (isMoveSoundOn()) unlockAudio()'), 'muted move sound skips unlock/play');
+assert.ok(app.includes('Promise.all') && app.includes('ann-loading') && read('public/js/announcements.js').includes('ann-skel'), 'carousels reserve height + mount in parallel after entry');
 assert.ok(read('public/js/inbox.js').includes('/chat/global') && read('public/js/inbox.js').includes('replyToId'), 'global chat + reply');
 assert.ok(read('src/db.js').includes('global_chat_messages') && read('src/server.js').includes("kind <> 'dm'"), 'global chat schema; bell ignores DM');
 assert.ok(read('src/server.js').includes('purgeGlobalChatExpired') && read('src/server.js').includes('ORDER BY created_at ASC'), 'global chat purges oldest expired first');
