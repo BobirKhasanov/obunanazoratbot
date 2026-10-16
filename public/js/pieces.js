@@ -1,5 +1,5 @@
 // Chess piece SVGs. Style set is chosen via <html data-pieces="…"> (outline | classic | neo | staunton | studio).
-// "studio" = ivory/ebony Staunton with soft 3D shading (CSS/SVG — no WebGL; safe on Android TG WebView).
+// Non-lite devices get extruded "3D" pieces (stacked offset silhouettes) — no WebGL.
 export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio'];
 export const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio'];
 export const BOARD_SWATCH = {
@@ -21,7 +21,6 @@ const OUTLINE = {
   k: '<path d="M22.5 6v7M19 9.5h7"/><path d="M22.5 13c-5 0-9 3-9 8 0 3 2 5 4 6.5V31h10v-3.5c2-1.5 4-3.5 4-6.5 0-5-4-8-9-8z"/><path d="M12 33.5h21v3H12z"/>',
 };
 
-// Classic / neo reuse outline silhouettes; CSS fill/stroke does the heavy lifting.
 const CLASSIC = OUTLINE;
 const NEO = {
   p: '<path d="M22.5 9.5a5.5 5.5 0 0 0-3.2 9.5c-3.2 1.3-5.3 4.2-5.3 8h17c0-3.8-2.1-6.7-5.3-8a5.5 5.5 0 0 0-3.2-9.5z"/><path d="M11.5 33h22v3.5h-22z"/>',
@@ -32,7 +31,6 @@ const NEO = {
   k: '<path d="M22.5 5.5v7.5M18.5 9h8"/><path d="M22.5 12.5c-5.2 0-9.5 3.2-9.5 8.5 0 3.2 2.1 5.2 4.2 6.8V31.5h10.6v-3.7c2.1-1.6 4.2-3.6 4.2-6.8 0-5.3-4.3-8.5-9.5-8.5z"/><path d="M11.5 33h22v3.5h-22z"/>',
 };
 
-// Staunton-ish: extra base rings / crown detail
 const STAUNTON = {
   p: '<path d="M22.5 9a4.8 4.8 0 0 0-2.8 8.6c-3.2 1.2-5.2 4-5.2 7.9h16c0-3.9-2-6.7-5.2-7.9A4.8 4.8 0 0 0 22.5 9z"/><ellipse cx="22.5" cy="27.5" rx="9" ry="2.2"/><path d="M12 33h21v2.8H12z"/><path d="M13.5 35.8h18v1.6h-18z"/>',
   r: '<path d="M10.5 9h4v3.5h4V9h8v3.5h4V9h4v7.5l-2.8 2.8v11l2.8 2.2v3.2H10.5v-3.2l2.8-2.2v-11L10.5 16.5z"/><path d="M13.2 20.5h18.6"/><path d="M12 35.5h21v2H12z"/>',
@@ -42,11 +40,8 @@ const STAUNTON = {
   k: '<path d="M22.5 5v8M18.8 8.5h7.4"/><path d="M22.5 13c-5.5 0-9.5 3.5-9.5 8.8 0 3.5 2.2 5.5 4.5 7V30.5h10v-1.7c2.3-1.5 4.5-3.5 4.5-7 0-5.3-4-8.8-9.5-8.8z"/><ellipse cx="22.5" cy="32" rx="11" ry="2"/><path d="M12 34.2h21v3H12z"/>',
 };
 
-// Studio reuses Staunton silhouettes; felt pad is drawn separately (green, not body fill)
 const STUDIO = STAUNTON;
-const STUDIO_FELT = {
-  p: 8.5, r: 9.2, n: 9, b: 9, q: 9.5, k: 9.5,
-};
+const STUDIO_FELT = { p: 8.5, r: 9.2, n: 9, b: 9, q: 9.5, k: 9.5 };
 
 const SETS = { outline: OUTLINE, classic: CLASSIC, neo: NEO, staunton: STAUNTON, studio: STUDIO };
 const STROKE = {
@@ -68,55 +63,84 @@ export function clearPieceCache() {
   for (const k of Object.keys(cache)) delete cache[k];
 }
 
-function view3dOn() {
-  try { return typeof document !== 'undefined' && document.documentElement.dataset.view3d === '1'; }
-  catch { return false; }
+/** Lite Android keeps flat pieces; everyone else gets extruded 3D SVGs. */
+function useExtruded3d() {
+  try {
+    if (typeof document === 'undefined') return true;
+    if (document.documentElement.dataset.perf === 'lite') return false;
+    return true;
+  } catch { return true; }
 }
 
-/** Studio-like ivory/ebony body for view3d (used by neo default + studio set). */
-function studioShadedSvg(colour, type, shape, sw) {
-  const gid = `st-${colour}${type}`;
-  const hilite = `st-h-${colour}${type}`;
+/**
+ * Extruded faux-3D piece: stacked offset silhouettes (depth) + ivory/ebony face.
+ * Readable as 3D even when CSS perspective is ignored by Telegram WebView.
+ */
+function extruded3dSvg(colour, type, shape, sw) {
+  const uid = `e3d-${colour}${type}`;
+  const face = `${uid}-f`;
+  const shine = `${uid}-s`;
+  const isW = colour === 'w';
+  // Depth / side colors (darker, shifted down-right)
+  const depthFar = isW ? '#8a7358' : '#050506';
+  const depthNear = isW ? '#b59a78' : '#121214';
+  const stroke = isW ? '#4a3a28' : '#000000';
+  const eye = isW ? '#4a3a28' : '#d4d4d8';
+  const feltR = STUDIO_FELT[type] || 9;
+  const defs = isW
+    ? `<linearGradient id="${face}" x1="0.18" y1="0" x2="0.82" y2="1"><stop offset="0%" stop-color="#fffef9"/><stop offset="35%" stop-color="#f5ebe0"/><stop offset="70%" stop-color="#e0cdb4"/><stop offset="100%" stop-color="#c4a882"/></linearGradient>`
+      + `<linearGradient id="${shine}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#fff" stop-opacity="0.65"/><stop offset="40%" stop-color="#fff" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity="0.14"/></linearGradient>`
+    : `<linearGradient id="${face}" x1="0.18" y1="0" x2="0.82" y2="1"><stop offset="0%" stop-color="#4a4a4e"/><stop offset="40%" stop-color="#1a1a1d"/><stop offset="100%" stop-color="#050506"/></linearGradient>`
+      + `<linearGradient id="${shine}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#fff" stop-opacity="0.28"/><stop offset="45%" stop-color="#fff" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity="0.4"/></linearGradient>`;
+
+  // Replace currentColor eye dots so they stay visible on the face layer
+  const faceShape = shape.replace(/fill="currentColor"/g, `fill="${eye}"`);
+  const depthShape = shape.replace(/fill="currentColor"/g, `fill="${depthFar}"`);
+
+  const body = `stroke-linejoin="round" stroke-linecap="round" stroke-width="${sw}"`;
+  // Contact shadow + green felt under the base
+  const ground = `<ellipse cx="23.5" cy="40.2" rx="${feltR + 2}" ry="2.6" fill="rgba(0,0,0,0.34)" stroke="none"/>`
+    + `<ellipse cx="22.5" cy="38.6" rx="${feltR}" ry="1.45" fill="#2f6b3a" stroke="none"/>`;
+
+  // Three depth plates (far → near) then lit face — classic isometric extrusion
+  return `<svg viewBox="0 0 45 45" class="pc ${colour} extruded3d" ${body} aria-hidden="true">`
+    + `<defs>${defs}</defs>`
+    + ground
+    + `<g transform="translate(3.2,4.4)" fill="${depthFar}" stroke="${depthFar}" stroke-width="${sw}">${depthShape}</g>`
+    + `<g transform="translate(2.1,2.9)" fill="${depthNear}" stroke="${depthNear}" stroke-width="${sw}">${depthShape}</g>`
+    + `<g transform="translate(1.0,1.4)" fill="${depthNear}" stroke="${stroke}" stroke-width="${Number(sw) * 0.85}" opacity="0.95">${depthShape}</g>`
+    + `<g fill="url(#${face})" stroke="${stroke}" stroke-width="${sw}">${faceShape}</g>`
+    + `<rect x="9.5" y="5.5" width="11" height="29" rx="5.5" fill="url(#${shine})" opacity="0.7" stroke="none"/>`
+    + `</svg>`;
+}
+
+/** Flat neo (lite / outline fallback). */
+function neoFlatSvg(colour, type, shape, sw) {
+  const gid = `neo-${colour}${type}`;
   const body = `stroke-linejoin="round" stroke-linecap="round" stroke-width="${sw}"`;
   const defs = colour === 'w'
-    ? `<linearGradient id="${gid}" x1="0.2" y1="0.02" x2="0.85" y2="1"><stop offset="0%" stop-color="#fffdf8"/><stop offset="40%" stop-color="#f3ebe0"/><stop offset="78%" stop-color="#e2d2bc"/><stop offset="100%" stop-color="#cbb79a"/></linearGradient>`
-      + `<linearGradient id="${hilite}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/><stop offset="45%" stop-color="#ffffff" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.12"/></linearGradient>`
-    : `<linearGradient id="${gid}" x1="0.2" y1="0.02" x2="0.85" y2="1"><stop offset="0%" stop-color="#3a3a3c"/><stop offset="42%" stop-color="#1c1c1e"/><stop offset="100%" stop-color="#0a0a0b"/></linearGradient>`
-      + `<linearGradient id="${hilite}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/><stop offset="50%" stop-color="#ffffff" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.35"/></linearGradient>`;
-  const stroke = colour === 'w' ? '#5c4a36' : '#000000';
-  const feltR = STUDIO_FELT[type] || 9;
-  // Soft elliptical “base” so the tilted SVG reads as a 3D foot on the square
-  const base = `<ellipse cx="22.5" cy="39.2" rx="${feltR + 1.2}" ry="2.2" fill="rgba(0,0,0,0.28)" stroke="none"/>`;
-  return `<svg viewBox="0 0 45 45" class="pc ${colour} studio" ${body} stroke="${stroke}" aria-hidden="true"><defs>${defs}</defs>`
-    + base
-    + `<ellipse class="felt" cx="22.5" cy="38.4" rx="${feltR}" ry="1.4" fill="#2f6b3a" stroke="none"/>`
-    + `<g fill="url(#${gid})">${shape}</g>`
-    + `<rect x="10" y="6" width="10" height="28" rx="5" fill="url(#${hilite})" opacity="0.55" stroke="none"/>`
-    + `</svg>`;
+    ? `<linearGradient id="${gid}" x1="0.15" y1="0.05" x2="0.9" y2="0.95"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#f8fafc"/><stop offset="100%" stop-color="#dbe3ee"/></linearGradient>`
+    : `<linearGradient id="${gid}" x1="0.15" y1="0.05" x2="0.9" y2="0.95"><stop offset="0%" stop-color="#334155"/><stop offset="45%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient>`;
+  const stroke = colour === 'w' ? '#334155' : '#020617';
+  return `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} stroke="${stroke}" aria-hidden="true"><defs>${defs}</defs><g fill="url(#${gid})">${shape}</g></svg>`;
 }
 
 /** SVG markup for a piece: colour 'w'|'b', type 'pnbrqk'. Optional setOverride for style pickers. */
 export function pieceSvg(colour, type, setOverride) {
   const set = PIECE_SETS.includes(setOverride) ? setOverride : currentPieceSet();
-  const shapes = SETS[set] || OUTLINE;
-  // When view3d is on, neo/classic get studio ivory-ebony shading so pieces look 3D by default
-  const solid3d = view3dOn() && (set === 'neo' || set === 'classic' || set === 'studio' || set === 'staunton');
-  const key = `${set}:${colour}${type}${solid3d ? ':v3d' : ''}`;
+  const extruded = useExtruded3d() && set !== 'outline';
+  const key = `${set}:${colour}${type}${extruded ? ':x3d' : ''}`;
   if (cache[key]) return cache[key];
+
   const sw = STROKE[set] || '1.6';
   const body = `stroke-linejoin="round" stroke-linecap="round" stroke-width="${sw}"`;
-  const shape = (solid3d ? (SETS.studio || STAUNTON)[type] : shapes[type]) || OUTLINE.p;
-  if (solid3d) {
-    cache[key] = studioShadedSvg(colour, type, shape, set === 'studio' ? STROKE.studio : '1.4');
+  // Prefer Staunton silhouette for extruded look (reads more like real pieces)
+  const shape = (extruded ? (STAUNTON[type] || NEO[type]) : (SETS[set] || OUTLINE)[type]) || OUTLINE.p;
+
+  if (extruded) {
+    cache[key] = extruded3dSvg(colour, type, shape, set === 'outline' ? '1.5' : '1.35');
   } else if (set === 'neo') {
-    const gid = `neo-${colour}${type}`;
-    const defs = colour === 'w'
-      ? `<linearGradient id="${gid}" x1="0.15" y1="0.05" x2="0.9" y2="0.95"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#f8fafc"/><stop offset="100%" stop-color="#dbe3ee"/></linearGradient>`
-      : `<linearGradient id="${gid}" x1="0.15" y1="0.05" x2="0.9" y2="0.95"><stop offset="0%" stop-color="#334155"/><stop offset="45%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient>`;
-    const stroke = colour === 'w' ? '#334155' : '#020617';
-    cache[key] = `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} stroke="${stroke}" aria-hidden="true"><defs>${defs}</defs><g fill="url(#${gid})">${shape}</g></svg>`;
-  } else if (set === 'studio') {
-    cache[key] = studioShadedSvg(colour, type, shape, STROKE.studio);
+    cache[key] = neoFlatSvg(colour, type, shape, sw);
   } else {
     cache[key] = `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} aria-hidden="true">${shape}</svg>`;
   }

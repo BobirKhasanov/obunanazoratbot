@@ -14,9 +14,10 @@ const perf = fs.readFileSync(path.join(__dirname, '../public/js/perf.js'), 'utf8
 assert.ok(server.includes("const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio']"));
 assert.ok(server.includes("const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio']"));
 assert.ok(pieces.includes("export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio']"));
-assert.ok(pieces.includes('studioShadedSvg') && pieces.includes('STUDIO_FELT'), 'studio ivory/ebony SVG materials');
+assert.ok(pieces.includes('extruded3dSvg') && pieces.includes('STUDIO_FELT'), 'extruded 3D SVG pieces');
 assert.ok(perf.includes('dataset.view3d') && css.includes('data-view3d="1"'), 'view3d CSS/SVG board depth');
-assert.ok(pieces.includes('solid3d') && css.includes('rotateX(32deg)'), 'default pieces get 3D shading when view3d on');
+assert.ok(pieces.includes('useExtruded3d') && pieces.includes('translate(3.2,4.4)') && pieces.includes('extruded3d'), 'default pieces use stacked extrusion (not CSS rotateX)');
+assert.ok(!css.includes('rotateX(32deg)'), 'no CSS rotateX piece tilt (WebView ignores it)');
 
 for (const set of PIECE_SETS) {
   assert.ok(pieces.includes(set), `pieces.js mentions ${set}`);

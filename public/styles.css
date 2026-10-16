@@ -464,40 +464,42 @@ html[data-view3d="1"] .squares i.dk {
     linear-gradient(145deg, rgba(255, 255, 255, 0.1) 0%, transparent 40%, rgba(0, 0, 0, 0.22) 100%),
     var(--sq-dk);
 }
-/* Standing 3D look: tilt pieces in perspective so they read as upright on the board */
-html[data-view3d="1"] .board .pieces {
-  perspective: 520px;
-  perspective-origin: 50% 80%;
+/* Extruded SVG pieces already carry depth; soft contact shadow under each */
+html[data-view3d="1"] .board .piece .pc.extruded3d,
+html[data-perf="full"] .board .piece .pc.extruded3d {
+  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.28));
+  overflow: visible;
 }
-html[data-view3d="1"] .board .piece .pc {
-  transform: rotateX(32deg) scale(0.94, 0.86);
-  transform-origin: 50% 92%;
-  filter: drop-shadow(0 5px 2px rgba(0, 0, 0, 0.42)) drop-shadow(0 1px 0 rgba(255, 255, 255, 0.12));
-}
-html[data-view3d="1"] .board .piece.drag .pc {
-  transform: rotateX(12deg) scale(1.06, 1);
-  filter: drop-shadow(0 12px 10px rgba(0, 0, 0, 0.5));
-}
-html[data-view3d="1"] .piece {
-  filter: none;
-}
-html[data-view3d="1"] .piece.drag {
-  filter: none;
+html[data-view3d="1"] .board .piece.drag .pc.extruded3d,
+html[data-perf="full"] .board .piece.drag .pc.extruded3d {
+  filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.45));
   z-index: 6;
+}
+html[data-view3d="1"] .board,
+html[data-perf="full"] .board {
+  overflow: visible; /* don't clip extruded depth / shadows */
+}
+html[data-view3d="1"] .squares,
+html[data-perf="full"] .squares {
+  border-radius: 6px;
+  overflow: hidden;
 }
 html[data-view3d="1"] .coords b {
   color: rgba(245, 230, 205, 0.72);
   font-weight: 700;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
 }
-/* Mini live boards: flat pieces (many on screen — no perspective cost) */
-html[data-view3d="1"] .live-mini-board .pieces { perspective: none; }
-html[data-view3d="1"] .live-mini-board .piece .pc {
-  transform: none;
-  filter: none;
+/* Mini live boards: lighter shadow only */
+html[data-view3d="1"] .live-mini-board .piece .pc.extruded3d,
+html[data-perf="full"] .live-mini-board .piece .pc.extruded3d {
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
 }
 html[data-view3d="1"] .live-mini-board .squares i.lt { background: var(--sq-lt); }
 html[data-view3d="1"] .live-mini-board .squares i.dk { background: var(--sq-dk); }
+html[data-view3d="1"] .live-mini-board .board,
+html[data-perf="full"] .live-mini-board .board {
+  overflow: hidden;
+}
 /* Lite: never pay for filters / wood frame */
 html[data-perf="lite"] .board-host {
   padding: 0;
