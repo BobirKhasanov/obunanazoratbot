@@ -20,6 +20,8 @@ export class Board {
   constructor(root, opts = {}) {
     this.root = root; this.opts = opts;
     this.orientation = 'w'; this.chess = null; this.lastMove = null; this.mine = null; // colour allowed to move, or null
+    this.premoveEnabled = false; // Chess.com-style premove (bullet 1+0)
+    this.premove = null; // { from, to, promotion } queued while waiting
     this.pieces = new Map(); // square -> {el, c, t}
     this.selected = null; this.legal = [];
     this.squares = h('div.squares'); this.hl = h('div.hl'); this.layer = h('div.pieces'); this.coords = h('div.coords');
@@ -84,9 +86,10 @@ export class Board {
   }
 
   /** Show a position. chess: chess.js instance. mine: colour that may move ('w'|'b') or null for view-only. */
-  set(chess, { lastMove = null, orientation = this.orientation, mine = null, animate = true } = {}) {
+  set(chess, { lastMove = null, orientation = this.orientation, mine = null, animate = true, premoveEnabled = this.premoveEnabled } = {}) {
     const flipped = orientation !== this.orientation;
     this.chess = chess; this.lastMove = lastMove; this.mine = mine; this.orientation = orientation;
+    this.premoveEnabled = !!premoveEnabled;
     this.deselect();
     // Weak Android (data-perf=lite): skip piece glides. iOS stays animated.
     const lite = document.documentElement.dataset.perf === 'lite';
@@ -164,17 +167,46 @@ export class Board {
       this.mark(this.selected, 'sel');
       for (const m of this.legal) this.mark(m.to, m.captured || m.flags.includes('e') ? 'cap' : 'mv');
     }
+    if (this.premove) {
+      this.mark(this.premove.from, 'pre');
+      this.mark(this.premove.to, 'pre');
+    }
     if (this.hintMove) { this.mark(this.hintMove.from, 'hint'); this.mark(this.hintMove.to, 'hint'); }
   }
   showHint(m) { this.hintMove = m; this.drawHighlights(); clearTimeout(this.hintT); this.hintT = setTimeout(() => { this.hintMove = null; this.drawHighlights(); }, 2500); }
+  clearPremove() { this.premove = null; this.drawHighlights(); }
+  takePremove() { const p = this.premove; this.premove = null; this.drawHighlights(); return p; }
 
   canTouch(sq) {
-    if (!this.chess || !this.mine || this.chess.turn() !== this.mine) return false;
+    if (!this.chess || !this.mine) return false;
     const p = this.chess.get(sq);
-    return !!p && p.color === this.mine;
+    if (!p || p.color !== this.mine) return false;
+    // Own turn: normal. Opponent's turn + premoveEnabled: queue a premove (Chess.com).
+    if (this.chess.turn() === this.mine) return true;
+    return !!this.premoveEnabled;
   }
   select(sq) {
-    this.selected = sq; this.legal = this.chess.moves({ square: sq, verbose: true }); this.drawHighlights();
+    this.selected = sq;
+    if (this.chess.turn() === this.mine) {
+      this.legal = this.chess.moves({ square: sq, verbose: true });
+    } else {
+      // Pseudo-legal destinations from a cloned board with side-to-move flipped for UI dots
+      this.legal = this.premoveDests(sq);
+    }
+    this.drawHighlights();
+  }
+  /** Destinations for a premove (ignore whose turn it is — Chess.com style). */
+  premoveDests(from) {
+    try {
+      const tmp = new (this.chess.constructor)();
+      const parts = this.chess.fen().split(' ');
+      parts[1] = this.mine;
+      parts[3] = '-';
+      tmp.load(parts.join(' '));
+      return tmp.moves({ square: from, verbose: true });
+    } catch {
+      return [];
+    }
   }
   deselect() { this.selected = null; this.legal = []; this.promo && this.closePromo(); }
 
@@ -258,16 +290,31 @@ export class Board {
   }
 
   tryMove(from, to) {
+    const myTurn = this.chess.turn() === this.mine;
+    if (!myTurn && this.premoveEnabled) {
+      const cand = this.premoveDests(from).filter((m) => m.to === to);
+      if (!cand.length) { const p = this.pieces.get(from); if (p) this.place(p.el, from); return; }
+      if (cand[0].promotion) { this.askPromotion(from, to, cand[0].color, true); return; }
+      this.commitPremove(from, to);
+      return;
+    }
     const cand = this.chess.moves({ square: from, verbose: true }).filter((m) => m.to === to);
     if (!cand.length) { const p = this.pieces.get(from); if (p) this.place(p.el, from); return; }
-    if (cand[0].promotion) { this.askPromotion(from, to, cand[0].color); return; }
+    if (cand[0].promotion) { this.askPromotion(from, to, cand[0].color, false); return; }
     this.commit(from, to);
   }
+  commitPremove(from, to, promotion) {
+    this.deselect();
+    this.premove = { from, to, promotion };
+    this.drawHighlights();
+    haptic('select');
+    this.opts.onPremove && this.opts.onPremove(from, to, promotion);
+  }
   commit(from, to, promotion) {
-    this.deselect(); haptic('light');
+    this.deselect(); this.premove = null; haptic('light');
     this.opts.onMove && this.opts.onMove(from, to, promotion);
   }
-  askPromotion(from, to, colour) {
+  askPromotion(from, to, colour, asPremove = false) {
     const p = this.pieces.get(from); if (p) this.place(p.el, from);
     const { x, y } = this.xy(to);
     // Chess.com: vertical Q/N/R/B column on the promotion file, starting at the promo square
@@ -288,7 +335,12 @@ export class Board {
         type: 'button',
         role: 'option',
         'aria-label': o,
-        onclick: (ev) => { ev.stopPropagation(); this.closePromo(); this.commit(from, to, o); },
+        onclick: (ev) => {
+          ev.stopPropagation();
+          this.closePromo();
+          if (asPremove) this.commitPremove(from, to, o);
+          else this.commit(from, to, o);
+        },
         html: pieceSvg(colour, o),
       }));
     }

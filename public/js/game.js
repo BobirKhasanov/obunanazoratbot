@@ -6,6 +6,7 @@ import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
 import { formatClock, remainingMs, isTimed, formatTashkentWhen, categoryOf } from './time.js';
 import { liveGamePollMs, gameClockTickMs, boardAnimateDefault } from './perf.js';
+import { openGameAnalysis } from './analyze.js';
 
 const AI_KEY = 'chess-ai-game';
 const EMOTES = ['🤔', '😎', '😮', '👏', '🙈', '😀'];
@@ -87,9 +88,13 @@ export function openGame(opts, onClose) {
       setMoveSoundOn(on);
       paintSoundBtn();
       haptic('select');
-      if (on) { unlockAudio(); playMoveSound(); }
+      // Spectators: toggle only — do not play a "player move" preview sound
+      if (on && S.kind !== 'spectate') { unlockAudio(); playMoveSound(); }
+      else if (on) unlockAudio();
     },
   });
+  // Hide move-sound control while spectating (watching ≠ playing)
+  if (opts.kind === 'spectate') soundBtn.hidden = true;
   const paintSoundBtn = () => {
     const on = isMoveSoundOn();
     soundBtn.replaceChildren(icon(on ? 'soundOn' : 'soundOff', 28));
@@ -117,7 +122,11 @@ export function openGame(opts, onClose) {
         h('button.round', { 'aria-label': t('flip'), onclick: () => { S.flipped = !S.flipped; render(false); haptic('light'); } }, icon('flip', 22)))),
     status, top.el, boardHost, bot.el, moveStrip, banner, reactBar, chatPanel, actions,
   );
-  const board = S.board = new Board(boardHost, { onMove: (f, to, p) => humanMove(f, to, p) });
+  const board = S.board = new Board(boardHost, {
+    onMove: (f, to, p) => humanMove(f, to, p),
+    onPremove: () => { /* highlight only — executed in applyServer */ },
+  });
+  S.spectators = (opts.game && opts.game.spectators) || 0;
   // Telegram/iOS: unlock on board touch only when sound is on (muted unlock still clicks on some TG builds)
   boardHost.addEventListener('pointerdown', () => { if (isMoveSoundOn()) unlockAudio(); }, { passive: true });
 
@@ -273,12 +282,23 @@ export function openGame(opts, onClose) {
     const myTurn = S.kind === 'ai' ? (!S.over && !S.thinking && c.turn() === S.colour)
       : S.kind === 'spectate' ? false
       : (!S.busy && S.game.status === 'active' && S.game.you && c.turn() === S.game.you);
-    const mine = !S.over && myTurn ? S.colour : null;
-    board.set(c, { lastMove: lm ? { from: lm.from, to: lm.to } : null, orientation: ori, mine, animate });
+    // Bullet 1+0: Chess.com premoves while waiting for opponent
+    const premoveOk = S.kind === 'online' && !S.over && S.game && S.game.status === 'active'
+      && S.game.timeControl === '1+0' && !!S.colour;
+    const mine = S.kind === 'spectate' ? null
+      : (S.over ? null : (myTurn || premoveOk ? S.colour : null));
+    board.set(c, {
+      lastMove: lm ? { from: lm.from, to: lm.to } : null,
+      orientation: ori,
+      mine,
+      animate,
+      premoveEnabled: premoveOk && !myTurn,
+    });
     const oppCol = S.colour === 'w' ? 'b' : 'w';
     const topIsOpp = ori === S.colour;
     fillBar(topIsOpp ? top : bot, opp, oppCol, cap, opp.ai);
     fillBar(topIsOpp ? bot : top, me, S.colour, cap, false);
+    paintSpectators();
     top.el.classList.toggle('turn', !S.over && c.turn() === (topIsOpp ? oppCol : S.colour));
     bot.el.classList.toggle('turn', !S.over && c.turn() === (topIsOpp ? S.colour : oppCol));
 
@@ -513,27 +533,84 @@ export function openGame(opts, onClose) {
     try { applyServer((await api('POST', `/games/${S.id}/draw`, { action })).game); if (action === 'offer') toast(t('draw_sent')); } catch (e) { fail(e); }
   }
 
+  function winnerHeadline(outcome) {
+    const g = S.game || {};
+    const wName = (g.white && g.white.name) || t('white');
+    const bName = (g.black && g.black.name) || t('black');
+    const res = g.result || '';
+    if (res === '1-0') return t('analyze_winner', { name: wName });
+    if (res === '0-1') return t('analyze_winner', { name: bName });
+    if (outcome === 'win') return t('you_won');
+    if (outcome === 'loss') return t('you_lost');
+    return t('draw_title');
+  }
+
+  function paintSpectators() {
+    const n = Number(S.spectators || (S.game && S.game.spectators) || 0);
+    // Show viewer count on the local player's bar (online games only)
+    const bar = bot;
+    let el = bar.el.querySelector('.spectators');
+    if (S.kind === 'online' && n > 0 && !S.over) {
+      if (!el) {
+        el = h('span.spectators', icon('eye', 14), h('b', '0'));
+        bar.name.after(el);
+      }
+      const b = el.querySelector('b');
+      if (b) b.textContent = String(n);
+    } else if (el) el.remove();
+  }
+
   function showResult(outcome, reason) {
     const when = formatTashkentWhen((S.game && S.game.updatedAt) || new Date().toISOString());
     const whenEl = when ? h('p.result-when', when) : null;
+    const onlineAnalyze = S.kind === 'online' && S.id
+      ? h('button.btn', {
+        onclick: () => {
+          openGameAnalysis({
+            id: S.id,
+            moves: S.moves,
+            white: S.game.white,
+            black: S.game.black,
+            you: S.game.you,
+            result: S.game.result,
+          });
+        },
+      }, icon('sparkles', 18), t('analyze'))
+      : null;
+    // onlineAnalyze used below; AI has its own analyze button
     if (S.kind === 'spectate') {
       haptic('light');
       const res = (S.game && S.game.result) || '½-½';
       sheet((close) => [
-        h('div.result', h('div.result-emoji', '♟'), h('h2', t('result_label', { r: res })), h('p.muted', t(reasonKey(reason))), whenEl),
+        h('div.result',
+          h('div.result-emoji', '♟'),
+          h('h2', winnerHeadline('draw')),
+          h('p.muted', t('result_label', { r: res })),
+          h('p.muted', t(reasonKey(reason))),
+          whenEl),
         h('button.btn.ghost', { onclick: () => { close(); closeGame(); } }, t('close')),
       ]);
       return;
     }
     if (outcome === 'win') { rain(); haptic('success'); } else haptic(outcome === 'loss' ? 'error' : 'warning');
-    const ttl = outcome === 'win' ? t('you_won') : outcome === 'loss' ? t('you_lost') : t('draw_title');
+    const ttl = winnerHeadline(outcome);
     const emo = outcome === 'win' ? '🏆' : outcome === 'loss' ? '🤝' : '🤝';
     sheet((close) => [
       h('div.result', h('div.result-emoji', emo), h('h2', ttl), h('p.muted', t(reasonKey(reason))), whenEl),
+      onlineAnalyze,
+      S.kind === 'ai' ? h('button.btn', {
+        onclick: () => openGameAnalysis({
+          id: 'ai-local',
+          moves: S.moves,
+          white: S.colour === 'w' ? { name: (S.meta.me && S.meta.me.name) || 'You' } : { name: t('ai') },
+          black: S.colour === 'b' ? { name: (S.meta.me && S.meta.me.name) || 'You' } : { name: t('ai') },
+          result: outcome === 'win' ? (S.colour === 'w' ? '1-0' : '0-1') : outcome === 'loss' ? (S.colour === 'w' ? '0-1' : '1-0') : '1/2-1/2',
+        }),
+      }, icon('ai', 18), t('analyze')) : null,
       S.kind === 'ai' ? h('button.btn', { onclick: () => { close(); const o = { kind: 'ai', level: S.level, colour: S.colour === 'w' ? 'b' : 'w', meta: S.meta }; const cb = S.onClose, st = S.onStats; openGame(o, cb); ctx.onStats = st; } }, t('play_again')) : null,
       S.kind === 'online' && S.game.opponent ? h('button.btn', { onclick: async () => { close(); try { const r = await api('POST', '/games', { opponentId: S.game.opponent.id, timeControl: S.game.timeControl || 'classic' }); closeNow(); openGame({ kind: 'online', game: r.game, meta: S.meta }, S.onClose); } catch (e) { fail(e); } } }, t('rematch')) : null,
       h('button.btn.ghost', { onclick: () => { close(); closeGame(); } }, t('close')),
-    ]);
+    ].filter(Boolean));
   }
 
   // ----- server updates (online) -----
@@ -541,6 +618,7 @@ export function openGame(opts, onClose) {
     if (!ctx || ctx !== S || g.id !== S.id) return;
     S.busy = false;
     const prev = S.game; S.game = g;
+    if (g.spectators != null) S.spectators = g.spectators;
     const moves = g.moves || [];
     if (S.kind !== 'spectate') S.colour = g.you || S.colour;
     const prevLen = S.moves.length;
@@ -548,11 +626,11 @@ export function openGame(opts, onClose) {
     const oppMoved = moves.length > prevLen && S.kind !== 'spectate' && prev && prev.status === 'active';
     S.moves = moves;
     if (grew) S.chess = build(moves);
-    // Opponent just moved (our own click already played sound in humanMove)
-    if (oppMoved && S.chess.turn() === S.colour) playMoveSound();
+    // Never play move sound while spectating
+    if (oppMoved && S.kind !== 'spectate' && S.chess.turn() === S.colour) playMoveSound();
     const was = prev && prev.status;
     if (g.status === 'finished' && was !== 'finished') {
-      S.over = true; S.chat = []; S.chatOpen = false; render(grew);
+      S.over = true; S.chat = []; S.chatOpen = false; board.clearPremove(); render(grew);
       const outcome = S.kind === 'spectate' ? 'draw'
         : g.result === '1/2-1/2' ? 'draw' : (g.result === '1-0') === (g.you === 'w') ? 'win' : 'loss';
       setTimeout(() => showResult(outcome, g.reason), 500);
@@ -570,21 +648,35 @@ export function openGame(opts, onClose) {
     }
     S.over = g.status === 'finished';
     render(grew);
+    // Fire queued premove when it becomes our turn (1+0 Chess.com rules)
+    if (S.kind === 'online' && !S.over && g.status === 'active' && S.chess.turn() === S.colour && !S.busy) {
+      const pm = board.takePremove();
+      if (pm) {
+        try {
+          S.chess.move({ from: pm.from, to: pm.to, promotion: pm.promotion });
+          S.chess.undo();
+          setTimeout(() => { if (ctx === S) humanMove(pm.from, pm.to, pm.promotion); }, 30);
+        } catch { board.clearPremove(); }
+      }
+    }
   }
   S.unsub = onWs((m) => {
-    if (ctx !== S || S.kind !== 'online') return;
-    if (m.t === 'game' && m.game.id === S.id) applyServer(m.game);
-    else if (m.t === 'react' && m.id === S.id) { const b = top.av.getBoundingClientRect(); floatEmoji(m.emoji, b.left + 24, b.bottom); haptic('light'); }
-    else if (m.t === 'chat' && m.id === S.id && !S.over) {
-      const meId = S.meta.me && S.meta.me.id;
-      if (m.by === meId) return;
-      S.chat.push({ by: m.by, name: m.name || '…', text: m.text });
-      if (S.chat.length > 40) S.chat.shift();
-      if (!S.chatOpen) S.chatOpen = true;
-      paintChat();
-      haptic('light');
+    if (ctx !== S) return;
+    if (S.kind === 'online') {
+      if (m.t === 'game' && m.game.id === S.id) applyServer(m.game);
+      else if (m.t === 'spectators' && m.id === S.id) { S.spectators = m.count || 0; paintSpectators(); }
+      else if (m.t === 'react' && m.id === S.id) { const b = top.av.getBoundingClientRect(); floatEmoji(m.emoji, b.left + 24, b.bottom); haptic('light'); }
+      else if (m.t === 'chat' && m.id === S.id && !S.over) {
+        const meId = S.meta.me && S.meta.me.id;
+        if (m.by === meId) return;
+        S.chat.push({ by: m.by, name: m.name || '…', text: m.text });
+        if (S.chat.length > 40) S.chat.shift();
+        if (!S.chatOpen) S.chatOpen = true;
+        paintChat();
+        haptic('light');
+      }
+      else if (m.t === 'hello') api('GET', `/games/${S.id}`).then((r) => applyServer(r.game, true)).catch(() => {});
     }
-    else if (m.t === 'hello') api('GET', `/games/${S.id}`).then((r) => applyServer(r.game, true)).catch(() => {});
   });
 
   S.render = render;

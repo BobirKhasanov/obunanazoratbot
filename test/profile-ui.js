@@ -145,7 +145,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016bb"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016bb'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016bc"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016bc'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -317,6 +317,11 @@ assert.ok(read('src/server.js').includes('runBotForever') && read('src/server.js
 assert.ok(read('src/server.js').includes('unhandledRejection') && read('src/server.js').includes('uncaughtException'), 'process error handlers keep process supervised');
 assert.ok(read('workers/proxy.js').includes('RETRY_STATUSES') && read('workers/proxy.js').includes('maxAttempts'), 'Worker retries origin 502/503');
 assert.ok(require('fs').existsSync(require('path').join(__dirname, '..', 'render.yaml')), 'render.yaml blueprint present');
+assert.ok(read('public/js/app.js').includes('openGlobalChat') && read('public/js/inbox.js').includes('export function openGlobalChat'), 'global chat on Live/Friends bar');
+assert.ok(read('public/js/board.js').includes('premoveEnabled') && read('public/js/game.js').includes("timeControl === '1+0'"), '1+0 premoves');
+assert.ok(read('public/js/analyze.js').includes('openGameAnalysis') && read('src/server.js').includes('/games/:id/analyze'), 'game analysis flow');
+assert.ok(read('src/server.js').includes('friend_requests') && read('public/js/userprofile.js').includes('add_friend'), 'friend requests from profile');
+assert.ok(read('public/js/game.js').includes("kind !== 'spectate'") && read('public/js/game.js').includes('spectators'), 'spectate sound + viewer count');
 assert.ok(entry.includes("getElementById('boot')"), 'entry hideBoot forcefully removes splash');
 assert.ok(app.includes('dismissBootRevealApp'), 'start dismisses splash after first home paint');
 assert.ok(read('src/db.js').includes('puzzle_daily_claims'), 'daily puzzle reward table');

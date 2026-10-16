@@ -318,6 +318,30 @@ CREATE TABLE IF NOT EXISTS global_chat_reads (
   last_read_id BIGINT NOT NULL DEFAULT 0,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Pending friend requests (accept / decline in notifications)
+CREATE TABLE IF NOT EXISTS friend_requests (
+  id BIGSERIAL PRIMARY KEY,
+  from_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending', -- pending | accepted | declined
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  responded_at TIMESTAMPTZ,
+  UNIQUE (from_id, to_id),
+  CHECK (from_id <> to_id)
+);
+CREATE INDEX IF NOT EXISTS idx_friend_requests_to ON friend_requests(to_id, status, created_at DESC);
+ALTER TABLE friend_requests ENABLE ROW LEVEL SECURITY;
+-- Daily free game-analysis claims (premium bypasses)
+CREATE TABLE IF NOT EXISTS game_analysis_claims (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id TEXT NOT NULL,
+  day_key TEXT NOT NULL, -- Asia/Tashkent YYYY-MM-DD
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, game_id)
+);
+CREATE INDEX IF NOT EXISTS idx_analysis_claims_user_day ON game_analysis_claims(user_id, day_key);
+ALTER TABLE game_analysis_claims ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profile_likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
@@ -455,7 +479,8 @@ db.ready = (async () => {
          ('premium_plans', $1),
          ('diamond_packs', $2),
          ('pay_username', 'hasanovbobur'),
-         ('medal_gen_config', $3)
+         ('medal_gen_config', $3),
+         ('analysis_daily_free', '3')
        ON CONFLICT (key) DO NOTHING`,
       [DEFAULT_PREMIUM_PLANS, DEFAULT_DIAMOND_PACKS, JSON.stringify({
         botHandle: '@Chess_uz_bot',

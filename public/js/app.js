@@ -1,7 +1,7 @@
 // Main app: boot, swipe pager, pages, deep links.
 import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, toggle, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopSmooth, shareUrl, copyText } from './ui.js';
 import { homeTabRefreshMs, softPollMs, isLite, isAndroid } from './perf.js';
-import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat } from './inbox.js';
+import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat, openGlobalChat } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -716,6 +716,10 @@ refreshers.play = async function renderPlay() {
   const onlineBlock = [
     h('div.h2.online-heading', t('online_players'),
       h('div.livepill', h('i.dot'), t('online_now', { n: l.onlineCount }))),
+    h('button.btn.ghost.home-gchat-btn', {
+      type: 'button',
+      onclick: () => { haptic('light'); openGlobalChat(); },
+    }, icon('chat', 18), t('gchat_open')),
     peopleBar,
     peopleListHost,
   ];
@@ -1280,6 +1284,11 @@ export async function start(me) {
   onWs((m) => {
     if (m.t === 'invite') { showInvite(m.game, m.ttl || 10000); refresh('play'); }
     else if (m.t === 'friend') { haptic('success'); if (m.reward) { state.me.diamonds = (state.me.diamonds || 0) + m.reward; toast(t('friend_reward', { n: m.reward })); } refresh(); }
+    else if (m.t === 'friend_request') {
+      haptic('light');
+      toast(t('friend_req_toast', { name: (m.from && m.from.name) || '…' }));
+      refreshInboxBadges();
+    }
     else if (m.t === 'dm') {
       try { refreshInboxBadges(); } catch { /* ignore */ }
       if (isViewingDmThread(m.threadId)) return;

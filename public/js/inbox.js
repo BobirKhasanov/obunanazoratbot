@@ -1,5 +1,5 @@
 // In-app messages (global chat + DM) and notifications (admin → users; feedback → admins).
-import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData, onWs, confirmSheet, pillBar } from './ui.js';
+import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData, onWs, confirmSheet } from './ui.js';
 import { t } from './i18n.js';
 import { openScreen } from './screen.js';
 import { softPollMs, isLite } from './perf.js';
@@ -156,22 +156,48 @@ export function openNotifications() {
           const feedbackHint = n.kind === 'feedback' && n.meta?.username
             ? '@' + n.meta.username
             : (n.kind === 'feedback' && n.meta?.fromName ? n.meta.fromName : '');
-          nodes.push(h('button.notif-row' + (n.read ? '' : '.unread'), {
-            type: 'button',
-            onclick: async () => {
-              try { if (!n.read) await api('POST', `/notifications/${n.id}/read`); } catch { /* ignore */ }
-              n.read = true;
-              openNotifDetail(n, () => { load(); refreshInboxBadges(); });
+          const friendReq = n.kind === 'friend_request' && n.meta && n.meta.requestId;
+          nodes.push(h('div.notif-row' + (n.read ? '' : '.unread') + (friendReq ? '.friend-req' : ''),
+            h('button.notif-main', {
+              type: 'button',
+              onclick: async () => {
+                try { if (!n.read) await api('POST', `/notifications/${n.id}/read`); } catch { /* ignore */ }
+                n.read = true;
+                openNotifDetail(n, () => { load(); refreshInboxBadges(); });
+              },
             },
-          },
-            h('div.notif-ic' + (n.kind === 'feedback' ? '.feedback' : ''),
-              icon(n.kind === 'feedback' ? 'help' : 'bell', 18)),
-            h('div.notif-body',
-              h('div.notif-head', h('b', n.title), h('span.notif-time', fmtTime(n.createdAt))),
-              bodyPreview ? h('div.notif-snippet', bodyPreview) : null,
-              feedbackHint ? h('div.notif-snippet.meta', feedbackHint) : null,
-              notifMediaEl(n),
-            )));
+              h('div.notif-ic' + (n.kind === 'feedback' ? '.feedback' : (friendReq ? '.friend' : '')),
+                icon(n.kind === 'feedback' ? 'help' : (friendReq ? 'friends' : 'bell'), 18)),
+              h('div.notif-body',
+                h('div.notif-head', h('b', n.title), h('span.notif-time', fmtTime(n.createdAt))),
+                bodyPreview ? h('div.notif-snippet', bodyPreview) : null,
+                feedbackHint ? h('div.notif-snippet.meta', feedbackHint) : null,
+                notifMediaEl(n),
+              )),
+            friendReq ? h('div.notif-actions',
+              h('button.mini.ok', {
+                type: 'button',
+                onclick: async (ev) => {
+                  ev.stopPropagation();
+                  try {
+                    await api('POST', `/friends/request/${n.meta.requestId}/respond`, { accept: true });
+                    toast(t('friend_req_accepted')); haptic('success');
+                    load(); refreshInboxBadges();
+                  } catch (e) { fail(e); }
+                },
+              }, icon('check', 16)),
+              h('button.mini', {
+                type: 'button',
+                onclick: async (ev) => {
+                  ev.stopPropagation();
+                  try {
+                    await api('POST', `/friends/request/${n.meta.requestId}/respond`, { accept: false });
+                    toast(t('friend_req_declined'));
+                    load(); refreshInboxBadges();
+                  } catch (e) { fail(e); }
+                },
+              }, icon('x', 16))) : null,
+          ));
         }
         list.replaceChildren(...nodes.filter(Boolean));
         refreshInboxBadges();
@@ -228,6 +254,27 @@ function openNotifDetail(n, onBack) {
         }, icon('trash', 18), t('admin_notif_delete')));
       }).catch(() => {});
     }
+    const friendActions = n.kind === 'friend_request' && n.meta?.requestId
+      ? h('div.row2',
+        h('button.btn.sm', {
+          onclick: async () => {
+            try {
+              await api('POST', `/friends/request/${n.meta.requestId}/respond`, { accept: true });
+              toast(t('friend_req_accepted')); haptic('success');
+              goBack();
+            } catch (e) { fail(e); }
+          },
+        }, t('accept')),
+        h('button.btn.sm.ghost', {
+          onclick: async () => {
+            try {
+              await api('POST', `/friends/request/${n.meta.requestId}/respond`, { accept: false });
+              toast(t('friend_req_declined'));
+              goBack();
+            } catch (e) { fail(e); }
+          },
+        }, t('decline')))
+      : null;
     return [
       inboxHead(n.title || t('xabarnoma'), goBack),
       h('div.card.notif-detail',
@@ -238,6 +285,7 @@ function openNotifDetail(n, onBack) {
           : null,
         notifMediaEl(n),
       ),
+      friendActions,
       replyBox,
       delHost,
     ].filter(Boolean);
@@ -246,7 +294,6 @@ function openNotifDetail(n, onBack) {
 
 export function openMessages() {
   let searchTimer = null;
-  let tab = 'global';
   openScreen((close) => {
     const body = h('div.inbox-body');
     const threadsHost = h('div.msg-threads');
@@ -308,39 +355,18 @@ export function openMessages() {
       }, 280);
     });
 
-    const paint = () => {
-      if (tab === 'global') {
-        body.replaceChildren(
-          h('p.muted.msg-sub', t('gchat_sub')),
-          h('button.btn.gchat-open', {
-            type: 'button',
-            onclick: () => openGlobalChat(),
-          }, icon('chat', 18), t('gchat_open')),
-          h('p.muted.gchat-hint', t('gchat_ttl')),
-        );
-      } else {
-        body.replaceChildren(
-          h('p.muted.msg-sub', t('msg_sub')),
-          h('div.field.msg-search-field', searchInput),
-          searchResults,
-          h('div.h2', t('msg_chats')),
-          threadsHost,
-        );
-        loadThreads();
-      }
-    };
-
-    const tabs = pillBar(
-      [['global', t('gchat_tab')], ['dm', t('msg_chats')]],
-      tab,
-      (v) => { tab = v; paint(); },
-      { className: 'pill-bar inbox-tabs' },
+    // Global lobby chat lives on Home → Live/Friends bar (openGlobalChat)
+    body.replaceChildren(
+      h('p.muted.msg-sub', t('msg_sub')),
+      h('div.field.msg-search-field', searchInput),
+      searchResults,
+      h('div.h2', t('msg_chats')),
+      threadsHost,
     );
-    paint();
+    loadThreads();
     return [
       h('div.inbox-shell',
         inboxHead(t('messages'), close, '✉️'),
-        tabs,
         h('div.inbox-scroll', body)),
     ];
   }, {
@@ -542,7 +568,7 @@ function openChatShell({ title, loadUrl, sendUrl, wsMatch, pollMs, showNames, on
   });
 }
 
-function openGlobalChat() {
+export function openGlobalChat() {
   viewingGlobal = true;
   openChatShell({
     title: t('gchat_title'),

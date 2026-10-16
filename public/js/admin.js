@@ -516,6 +516,7 @@ export function openAdmin(onClose) {
     puzzleDailyReward: 1,
     referralReward: 20,
     referralInviteeReward: 10,
+    analysisDailyFree: 3,
   };
   const shopHost = h('div');
 
@@ -531,6 +532,7 @@ export function openAdmin(onClose) {
     if (shop.puzzleDailyReward == null) shop.puzzleDailyReward = 1;
     if (shop.referralReward == null) shop.referralReward = 20;
     if (shop.referralInviteeReward == null) shop.referralInviteeReward = 10;
+    if (shop.analysisDailyFree == null) shop.analysisDailyFree = 3;
     const payIn = h('input.input', {
       value: shop.payUsername, maxlength: 64,
       oninput: (e) => { shop.payUsername = e.target.value.replace(/^@/, ''); },
@@ -549,6 +551,11 @@ export function openAdmin(onClose) {
       type: 'number', value: String(shop.referralInviteeReward ?? 10), min: '0', max: '1000000',
       style: { maxWidth: '120px' },
       oninput: (e) => { shop.referralInviteeReward = Math.floor(Number(e.target.value) || 0); },
+    });
+    const analysisIn = h('input.input', {
+      type: 'number', value: String(shop.analysisDailyFree ?? 3), min: '0', max: '100',
+      style: { maxWidth: '120px' },
+      oninput: (e) => { shop.analysisDailyFree = Math.floor(Number(e.target.value) || 0); },
     });
     const plansBox = h('div.list');
     const redrawPlans = () => {
@@ -618,6 +625,9 @@ export function openAdmin(onClose) {
         h('div.row', h('span.muted', t('admin_referral_inviter')), referralIn, h('span.muted', '💎')),
         h('div.row', h('span.muted', t('admin_referral_invitee')), inviteeIn, h('span.muted', '💎')),
         h('p.muted', t('admin_referral_sub')),
+        h('div.label', t('admin_analysis_free')),
+        h('div.row', analysisIn, h('span.muted', '/ day')),
+        h('p.muted', t('admin_analysis_free_sub')),
         h('div.label', t('shop_packs')), packsBox,
         h('button.btn.ghost.sm', {
           onclick: () => {
@@ -644,14 +654,19 @@ export function openAdmin(onClose) {
               }
               const referralReward = Math.floor(Number(shop.referralReward) || 0);
               const referralInviteeReward = Math.floor(Number(shop.referralInviteeReward) || 0);
+              const analysisDailyFree = Math.floor(Number(shop.analysisDailyFree) || 0);
               if (!(referralReward >= 0 && referralReward <= 1000000)
                 || !(referralInviteeReward >= 0 && referralInviteeReward <= 1000000)) {
                 toast(t('admin_referral_bad'), true); return;
+              }
+              if (!(analysisDailyFree >= 0 && analysisDailyFree <= 100)) {
+                toast(t('admin_analysis_bad'), true); return;
               }
               shop.diamondPacks = packs;
               shop.puzzleDailyReward = puzzleDailyReward;
               shop.referralReward = referralReward;
               shop.referralInviteeReward = referralInviteeReward;
+              shop.analysisDailyFree = analysisDailyFree;
               const r = await api('PATCH', '/admin/shop', {
                 premiumPlans: shop.premiumPlans,
                 diamondPacks: packs,
@@ -659,6 +674,7 @@ export function openAdmin(onClose) {
                 puzzleDailyReward,
                 referralReward,
                 referralInviteeReward,
+                analysisDailyFree,
               });
               shop = r.shop;
               toast(t('admin_shop_saved')); haptic('success');

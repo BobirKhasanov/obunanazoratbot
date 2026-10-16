@@ -762,6 +762,40 @@ function normalizePuzzleDailyReward(raw) {
   return n;
 }
 
+const ANALYSIS_DAILY_FREE_FALLBACK = 3;
+function normalizeAnalysisDailyFree(raw) {
+  const n = Math.floor(Number(raw));
+  if (!(n >= 0 && n <= 100)) return ANALYSIS_DAILY_FREE_FALLBACK;
+  return n;
+}
+
+/** In-memory spectators per game (single Render instance). */
+const spectatorWatch = new Map(); // gameId -> Map(userId -> expiresAtMs)
+function pruneSpectators(gameId) {
+  const m = spectatorWatch.get(gameId);
+  if (!m) return 0;
+  const now = Date.now();
+  for (const [uid, exp] of m) if (exp <= now) m.delete(uid);
+  if (!m.size) spectatorWatch.delete(gameId);
+  return m ? m.size : 0;
+}
+function touchSpectator(gameId, userId, ttlMs = 25_000) {
+  if (!gameId || !userId) return 0;
+  let m = spectatorWatch.get(gameId);
+  if (!m) { m = new Map(); spectatorWatch.set(gameId, m); }
+  m.set(Number(userId), Date.now() + ttlMs);
+  return pruneSpectators(gameId);
+}
+function spectatorCount(gameId) {
+  return pruneSpectators(gameId);
+}
+function pushSpectatorCount(gameId, row) {
+  const n = spectatorCount(gameId);
+  for (const id of [row.white_id, row.black_id].filter(Boolean)) {
+    realtime.send(id, { t: 'spectators', id: gameId, count: n });
+  }
+}
+
 function normalizeReferralAmount(raw, fallback) {
   const n = Math.floor(Number(raw));
   if (!(n >= 0 && n <= 1_000_000)) return fallback;
@@ -776,9 +810,10 @@ async function getShopSettings() {
       referralReward: normalizeReferralAmount(cached.referralReward, REFERRAL_REWARD),
       referralInviteeReward: normalizeReferralAmount(cached.referralInviteeReward, REFERRAL_INVITEE_REWARD),
       puzzleDailyReward: normalizePuzzleDailyReward(cached.puzzleDailyReward),
+      analysisDailyFree: normalizeAnalysisDailyFree(cached.analysisDailyFree),
     };
   }
-  const [priceRaw, plansRaw, packsRaw, payRaw, puzzleRewardRaw, referralRaw, inviteeRaw] = await Promise.all([
+  const [priceRaw, plansRaw, packsRaw, payRaw, puzzleRewardRaw, referralRaw, inviteeRaw, analysisFreeRaw] = await Promise.all([
     getSetting('premium_price_diamonds', String(PREMIUM_PRICE_FALLBACK)),
     getSetting('premium_plans', JSON.stringify(DEFAULT_PREMIUM_PLANS)),
     getSetting('diamond_packs', JSON.stringify(DEFAULT_DIAMOND_PACKS)),
@@ -786,6 +821,7 @@ async function getShopSettings() {
     getSetting('puzzle_daily_reward', String(PUZZLE_DAILY_REWARD_FALLBACK)),
     getSetting('referral_reward', String(REFERRAL_REWARD)),
     getSetting('referral_invitee_reward', String(REFERRAL_INVITEE_REWARD)),
+    getSetting('analysis_daily_free', String(ANALYSIS_DAILY_FREE_FALLBACK)),
   ]);
   let premiumPriceDiamonds = Math.floor(Number(priceRaw));
   if (!(premiumPriceDiamonds >= 1 && premiumPriceDiamonds <= 1_000_000)) {
@@ -805,6 +841,7 @@ async function getShopSettings() {
     puzzleDailyReward: normalizePuzzleDailyReward(puzzleRewardRaw),
     referralReward: normalizeReferralAmount(referralRaw, REFERRAL_REWARD),
     referralInviteeReward: normalizeReferralAmount(inviteeRaw, REFERRAL_INVITEE_REWARD),
+    analysisDailyFree: normalizeAnalysisDailyFree(analysisFreeRaw),
   };
   await cacheSet('shop:settings', shop, 30_000);
   return shop;
@@ -996,6 +1033,7 @@ api.get('/me', wrap(async (req, res) => {
       diamondPacks: shop.diamondPacks,
       payUsername: shop.payUsername,
       puzzleDailyReward: shop.puzzleDailyReward,
+      analysisDailyFree: shop.analysisDailyFree,
       botUsername: await getBotUsername(),
       profileBannerUrl: banner.url,
       profileBannerMediaId: banner.mediaId,
@@ -1251,6 +1289,7 @@ async function gameFor(row, uid, full = true) {
   };
   if (row.status === 'invited' && row.creator_id === uid) g.invitees = await Promise.all((await invitesOf(row.id)).map(person));
   if (full) g.moves = moves;
+  g.spectators = spectatorCount(row.id);
   return g;
 }
 
@@ -1789,6 +1828,69 @@ api.post('/games/:id/resign', wrap(async (req, res) => {
   res.json({ game: await gameFor(await finish(row, colour === 'w' ? '0-1' : '1-0', 'resign'), req.user.id) });
 }));
 
+/** Claim a game-analysis slot: free users get N/day (admin), premium unlimited. */
+api.post('/games/:id/analyze', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const gameId = String(req.params.id);
+  const row = await getGame.get(gameId);
+  if (!row || row.status !== 'finished') throw new HttpError(404, 'Game not found', 'notfound');
+  const seated = sameId(row.white_id, uid) || sameId(row.black_id, uid);
+  if (!seated) throw new HttpError(403, 'Only players can analyze', 'forbidden');
+  const shop = await getShopSettings();
+  const premium = isPremiumActive(req.user);
+  const day = tashkentDateKey();
+  const already = await db.prepare(
+    'SELECT id FROM game_analysis_claims WHERE user_id = ? AND game_id = ?',
+  ).get(uid, gameId);
+  if (already) {
+    return res.json({
+      ok: true, allowed: true, premium, remaining: premium ? null : null, reused: true,
+    });
+  }
+  if (!premium) {
+    const used = Number((await db.prepare(
+      'SELECT COUNT(*)::int AS n FROM game_analysis_claims WHERE user_id = ? AND day_key = ?',
+    ).get(uid, day))?.n || 0);
+    const limit = shop.analysisDailyFree;
+    if (used >= limit) {
+      throw bad('Daily analysis limit reached', 'analysis_limit');
+    }
+    await db.prepare(
+      'INSERT INTO game_analysis_claims (user_id, game_id, day_key) VALUES (?, ?, ?)',
+    ).run(uid, gameId, day);
+    return res.json({
+      ok: true, allowed: true, premium: false, remaining: Math.max(0, limit - used - 1), limit,
+    });
+  }
+  await db.prepare(
+    'INSERT INTO game_analysis_claims (user_id, game_id, day_key) VALUES (?, ?, ?)',
+  ).run(uid, gameId, day);
+  res.json({ ok: true, allowed: true, premium: true, remaining: null });
+}));
+
+api.get('/games/:id/analyze/status', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const gameId = String(req.params.id);
+  const shop = await getShopSettings();
+  const premium = isPremiumActive(req.user);
+  const day = tashkentDateKey();
+  const claimed = !!(await db.prepare(
+    'SELECT 1 FROM game_analysis_claims WHERE user_id = ? AND game_id = ?',
+  ).get(uid, gameId));
+  const used = Number((await db.prepare(
+    'SELECT COUNT(*)::int AS n FROM game_analysis_claims WHERE user_id = ? AND day_key = ?',
+  ).get(uid, day))?.n || 0);
+  const limit = shop.analysisDailyFree;
+  res.json({
+    claimed,
+    premium,
+    used,
+    limit,
+    remaining: premium ? null : Math.max(0, limit - used),
+    canAnalyze: premium || claimed || used < limit,
+  });
+}));
+
 api.post('/games/:id/draw', wrap(async (req, res) => {
   const uid = req.user.id;
   const { row, colour } = await activeGame(req.params.id, uid);
@@ -2117,6 +2219,13 @@ api.get('/live/games/:id', wrap(async (req, res) => {
   if (row.status !== 'active' && row.status !== 'finished') throw new HttpError(404, 'Game not found', 'notfound');
   const g = await gameFor(row, uid, true);
   g.spectating = !g.you;
+  // Spectators (not seated players) keep the watch counter warm
+  if (!g.you && row.status === 'active') {
+    g.spectators = touchSpectator(row.id, uid);
+    pushSpectatorCount(row.id, row);
+  } else {
+    g.spectators = spectatorCount(row.id);
+  }
   res.json({ game: g });
 }));
 
@@ -2208,6 +2317,18 @@ api.get('/users/:id', wrap(async (req, res) => {
     : !!(await db.prepare('SELECT 1 AS ok FROM user_blocks WHERE user_id = ? AND blocked_id = ?').get(uid, id));
   const premium = isPremiumActive(u);
   const presence = stillPresent(u.present_until) || realtime.isOnline(id);
+  const isFriend = id === uid ? false : await areFriends(uid, id);
+  let friendRequest = null;
+  if (id !== uid && !isFriend) {
+    const pendingOut = await db.prepare(
+      `SELECT id, status FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'`,
+    ).get(uid, id);
+    const pendingIn = await db.prepare(
+      `SELECT id, status FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'`,
+    ).get(id, uid);
+    if (pendingOut) friendRequest = { id: pendingOut.id, direction: 'out', status: 'pending' };
+    else if (pendingIn) friendRequest = { id: pendingIn.id, direction: 'in', status: 'pending' };
+  }
   const medalRows = await db.prepare(`
     SELECT id, month, place, title FROM medals WHERE user_id = ? ORDER BY month DESC, place ASC LIMIT 24
   `).all(id);
@@ -2231,11 +2352,99 @@ api.get('/users/:id', wrap(async (req, res) => {
     likes,
     likedByMe,
     blockedByMe,
+    isFriend,
+    friendRequest,
     medals: medalRows.map((r) => ({
       id: r.id, month: r.month, monthLabel: monthLabelEn(r.month), place: r.place,
       title: r.title, url: `/api/medals/${r.id}.svg`, key: `medal:${r.id}`,
     })),
   });
+}));
+
+api.post('/friends/request', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const other = intParam(req.body && req.body.userId);
+  if (other === uid) throw bad('Invalid user', 'bad_request');
+  const u = await getUser.get(other);
+  if (!u || u.blocked) throw new HttpError(404, 'Player not found', 'notfound');
+  if (await blockedEither(uid, other)) throw bad('Blocked', 'blocked');
+  if (await areFriends(uid, other)) throw bad('Already friends', 'already_friends');
+  const reverse = await db.prepare(
+    `SELECT id FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'`,
+  ).get(other, uid);
+  if (reverse) {
+    // They already asked us — accept
+    await db.prepare(
+      `UPDATE friend_requests SET status = 'accepted', responded_at = now() WHERE id = ?`,
+    ).run(reverse.id);
+    await befriend(uid, other);
+    const me = await person(uid);
+    const them = await person(other);
+    await db.prepare(`
+      INSERT INTO notifications (user_id, kind, title, body, meta) VALUES (?, 'friend_accepted', ?, ?, ?::jsonb)
+    `).run(other, '✅ Friend request accepted', `${me.name} accepted your friend request.`, JSON.stringify({ fromUserId: uid, fromName: me.name }));
+    realtime.send(other, { t: 'friend', id: uid, reward: 0 });
+    realtime.send(uid, { t: 'friend', id: other, reward: 0 });
+    return res.status(201).json({ ok: true, friend: them, accepted: true });
+  }
+  const existing = await db.prepare(
+    `SELECT id, status FROM friend_requests WHERE from_id = ? AND to_id = ?`,
+  ).get(uid, other);
+  if (existing && existing.status === 'pending') {
+    return res.json({ ok: true, requestId: existing.id, pending: true });
+  }
+  const ins = existing
+    ? await db.prepare(
+      `UPDATE friend_requests SET status = 'pending', responded_at = NULL, created_at = now() WHERE id = ? RETURNING id`,
+    ).run(existing.id)
+    : await db.prepare(
+      `INSERT INTO friend_requests (from_id, to_id) VALUES (?, ?) RETURNING id`,
+    ).run(uid, other);
+  const requestId = ins.rows?.[0]?.id || existing?.id;
+  const me = await person(uid);
+  await db.prepare(`
+    INSERT INTO notifications (user_id, kind, title, body, meta) VALUES (?, 'friend_request', ?, ?, ?::jsonb)
+  `).run(
+    other,
+    '👋 Friend request',
+    `${me.name} wants to be your friend.`,
+    JSON.stringify({ requestId, fromUserId: uid, fromName: me.name }),
+  );
+  realtime.send(other, {
+    t: 'friend_request',
+    requestId,
+    from: { id: uid, name: me.name },
+  });
+  res.status(201).json({ ok: true, requestId, pending: true });
+}));
+
+api.post('/friends/request/:id/respond', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const rid = intParam(req.params.id);
+  const accept = !(req.body && req.body.accept === false);
+  const row = await db.prepare('SELECT * FROM friend_requests WHERE id = ?').get(rid);
+  if (!row || Number(row.to_id) !== uid || row.status !== 'pending') {
+    throw new HttpError(404, 'Request not found', 'notfound');
+  }
+  await db.prepare(
+    `UPDATE friend_requests SET status = ?, responded_at = now() WHERE id = ?`,
+  ).run(accept ? 'accepted' : 'declined', rid);
+  // Mark related notifications read
+  await db.prepare(`
+    UPDATE notifications SET read_at = now()
+    WHERE user_id = ? AND kind = 'friend_request' AND read_at IS NULL
+      AND (meta->>'requestId')::bigint = ?
+  `).run(uid, rid);
+  if (accept) {
+    await befriend(uid, row.from_id);
+    const me = await person(uid);
+    await db.prepare(`
+      INSERT INTO notifications (user_id, kind, title, body, meta) VALUES (?, 'friend_accepted', ?, ?, ?::jsonb)
+    `).run(row.from_id, '✅ Friend request accepted', `${me.name} accepted your friend request.`, JSON.stringify({ fromUserId: uid, fromName: me.name }));
+    realtime.send(row.from_id, { t: 'friend', id: uid, reward: 0 });
+    realtime.send(uid, { t: 'friend', id: row.from_id, reward: 0 });
+  }
+  res.json({ ok: true, accepted: accept });
 }));
 
 api.post('/users/:id/like', wrap(async (req, res) => {
@@ -3588,6 +3797,11 @@ admin.patch('/shop', wrap(async (req, res) => {
     const n = Math.floor(Number(b.referralInviteeReward));
     if (!(n >= 0 && n <= 1_000_000)) throw bad('Invitee reward must be 0…1000000 diamonds', 'bad_request');
     await setSetting('referral_invitee_reward', String(n));
+  }
+  if (b.analysisDailyFree !== undefined) {
+    const n = Math.floor(Number(b.analysisDailyFree));
+    if (!(n >= 0 && n <= 100)) throw bad('Analysis daily free must be 0…100', 'bad_request');
+    await setSetting('analysis_daily_free', String(n));
   }
   await cacheDel('shop:settings');
   res.json({ shop: await getShopSettings() });

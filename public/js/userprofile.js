@@ -107,6 +107,43 @@ export function openUserProfile(userId, opts = {}) {
                 },
               }, u.online ? t('challenge') : t('offline'))
               : null,
+            (() => {
+              if (data.isFriend) return h('button.btn.ghost', { type: 'button', disabled: true }, t('already_friends'));
+              if (data.friendRequest && data.friendRequest.direction === 'out') {
+                return h('button.btn.ghost', { type: 'button', disabled: true }, t('friend_req_sent'));
+              }
+              if (data.friendRequest && data.friendRequest.direction === 'in') {
+                return h('button.btn', {
+                  type: 'button',
+                  onclick: async () => {
+                    haptic('select');
+                    try {
+                      await api('POST', `/friends/request/${data.friendRequest.id}/respond`, { accept: true });
+                      toast(t('friend_req_accepted')); haptic('success');
+                      opts.refreshHome && opts.refreshHome();
+                      draw();
+                    } catch (e) { fail(e); }
+                  },
+                }, t('accept_friend'));
+              }
+              return h('button.btn', {
+                type: 'button',
+                onclick: async () => {
+                  haptic('select');
+                  try {
+                    const r = await api('POST', '/friends/request', { userId: u.id });
+                    if (r.accepted) {
+                      toast(t('friend_added', { name: u.displayName }));
+                      haptic('success');
+                    } else {
+                      toast(t('friend_req_sent'));
+                    }
+                    opts.refreshHome && opts.refreshHome();
+                    draw();
+                  } catch (e) { fail(e); }
+                },
+              }, t('add_friend'));
+            })(),
             h('button.btn.ghost' + (data.blockedByMe ? '.ok' : ''), {
               type: 'button',
               onclick: async () => {

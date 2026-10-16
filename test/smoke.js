@@ -220,6 +220,23 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok(Array.isArray(meta.diamondPacks) && meta.diamondPacks.length >= 1);
       assert.ok(Array.isArray(meta.premiumPlans) && meta.premiumPlans.some((p) => p.months === 12));
       assert.strictEqual(meta.payUsername, 'hasanovbobur');
+      assert.ok(meta.analysisDailyFree >= 0, 'analysis daily free in meta');
+
+      // Friend request from profile → notification → accept
+      await ok('C', 'GET', '/me');
+      await ok('D', 'GET', '/me'); // ensure target user exists
+      const fr = await ok('C', 'POST', '/friends/request', { userId: USERS.D.id });
+      assert.ok(fr.requestId || fr.pending, 'friend request created');
+      const notifsD = await ok('D', 'GET', '/notifications');
+      const frN = (notifsD.notifications || []).find((n) => n.kind === 'friend_request');
+      assert.ok(frN && frN.meta && frN.meta.requestId, 'friend request notification');
+      await ok('D', 'POST', `/friends/request/${frN.meta.requestId}/respond`, { accept: true });
+      const friendsD = await ok('D', 'GET', '/friends');
+      assert.ok((friendsD.friends || []).some((f) => f.id === USERS.C.id), 'C and D are friends after accept');
+
+      // Admin can set free analysis limit
+      const shopA = await ok('ADMIN', 'PATCH', '/admin/shop', { analysisDailyFree: 3 });
+      assert.strictEqual(shopA.shop.analysisDailyFree, 3);
 
       const adminBefore = tg.to(ADMIN_ID).length;
       const ord = await ok('A', 'POST', '/shop/order', { diamonds: 100, sum: 100000 });
@@ -760,6 +777,14 @@ async function playMoves(game, players, moves, startPly = 0) {
       const end = (await ok(p.w, 'POST', `/games/${g.id}/resign`)).game;
       assert.deepStrictEqual([end.result, end.reason], ['0-1', 'resign']);
       await err(p.b, 'POST', `/games/${g.id}/resign`, null, 400, 'game_over');
+      // Players can claim post-game analysis (free daily quota)
+      const an = await ok(p.b, 'POST', `/games/${g.id}/analyze`);
+      assert.ok(an.allowed, 'analysis claim allowed');
+      const st = await ok(p.b, 'GET', `/games/${g.id}/analyze/status`);
+      assert.ok(st.claimed, 'analysis marked claimed');
+      // Spectator poll reports viewer count to seated players
+      const live = await ok('C', 'GET', `/live/games/${g.id}`);
+      assert.ok(live.game && live.game.spectators >= 0, 'spectator count on live game');
     });
 
     // ---------------------------------------------------------------- reactions
