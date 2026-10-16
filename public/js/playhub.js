@@ -214,9 +214,13 @@ async function paintRating(ctx) {
     subTabs,
     h('div.nx-rank-cols', h('span', '#'), h('span', t('hub_user_col')), h('span', isElo ? t('rating_col') : t('points_col'))),
     rows.length
-      ? h('div.nx-list.rank', ...rows.map((p) => rankRow(p, { onOpen: ctx.openProfile })))
+      ? h('div.nx-list.rank', ...rows.map((p) => (String(p.id) === String(meId)
+        ? rankRow(p, { you: true, onOpen: () => ctx.goTab('profile') })
+        : rankRow(p, { onOpen: ctx.openProfile }))))
       : emptyNote(t('rankings_empty')),
-    h('div.nx-rank-pin', rankRow(myRow, { you: true, onOpen: () => ctx.goTab('profile') })),
+    rows.some((p) => String(p.id) === String(meId))
+      ? null
+      : h('div.nx-rank-pin', rankRow(myRow, { you: true, onOpen: () => ctx.goTab('profile') })),
   ];
 }
 
