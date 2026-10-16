@@ -51,11 +51,45 @@ export function scrollToTopNow(el) {
   try {
     el.scrollTop = 0;
   } finally {
-    // Restore next frame so CSS smooth still applies to user flicks
     requestAnimationFrame(() => {
       try { el.style.scrollBehavior = prev; } catch { /* ignore */ }
     });
   }
+}
+
+/**
+ * Slow, smooth scroll to top for the FAB.
+ * Cancels prior tweens and disables CSS scroll-behavior during the animation (prevents WebView freeze).
+ */
+export function scrollToTopSmooth(el, ms) {
+  if (!el) return;
+  cancelSmoothScroll(el);
+  const reduce = typeof matchMedia === 'function'
+    && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) { scrollToTopNow(el); return; }
+  const from = el.scrollTop;
+  if (from < 2) { scrollToTopNow(el); return; }
+  // Longer glide — scales a bit with distance, stays calm (not snappy)
+  const lite = document.documentElement.dataset.perf === 'lite';
+  const base = ms != null ? ms : Math.min(1200, Math.max(780, 520 + from * 0.42));
+  const duration = lite ? Math.min(base, 920) : base;
+  const prevBeh = el.style.scrollBehavior;
+  el.style.scrollBehavior = 'auto';
+  const t0 = performance.now();
+  // Softer ease-out so the finish feels gradual
+  const ease = (t) => 1 - Math.pow(1 - t, 4);
+  const tick = (now) => {
+    const p = Math.min(1, (now - t0) / duration);
+    el.scrollTop = from * (1 - ease(p));
+    if (p < 1) {
+      scrollAnimIds.set(el, requestAnimationFrame(tick));
+    } else {
+      scrollAnimIds.delete(el);
+      el.scrollTop = 0;
+      try { el.style.scrollBehavior = prevBeh; } catch { /* ignore */ }
+    }
+  };
+  scrollAnimIds.set(el, requestAnimationFrame(tick));
 }
 
 /** High-smooth programmatic scroll (longer ease than browser default). */
@@ -64,10 +98,7 @@ export function smoothScrollTo(el, top = 0, ms = 520) {
   cancelSmoothScroll(el);
   const reduce = typeof matchMedia === 'function'
     && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const android = document.documentElement.dataset.android === '1'
-    || document.documentElement.dataset.perf === 'lite';
-  // Instant on Android/lite/reduced — rAF + CSS smooth stacks and freezes WebViews
-  if (reduce || android || ms <= 0) {
+  if (reduce || ms <= 0) {
     const prev = el.style.scrollBehavior;
     el.style.scrollBehavior = 'auto';
     el.scrollTop = top;

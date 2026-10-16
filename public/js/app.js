@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, toggle, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopNow, shareUrl, copyText } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, toggle, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopSmooth, shareUrl, copyText } from './ui.js';
 import { homeTabRefreshMs, softPollMs, isLite, isAndroid } from './perf.js';
 import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat } from './inbox.js';
 import { t, setLang } from './i18n.js';
@@ -116,12 +116,18 @@ function initScrollTop() {
       const el = scrollTarget();
       if (!el) return;
       haptic('select');
-      // Instant jump — animated scroll froze pages in Telegram WebView
-      scrollToTopNow(el);
-      scrollTopBtn.classList.remove('show');
-      scrollTopBtn.setAttribute('aria-hidden', 'true');
-      scrollTopBtn.tabIndex = -1;
-      requestAnimationFrame(() => syncScrollTopBtn());
+      // Slow glide up (CSS smooth disabled during tween — no WebView freeze)
+      scrollToTopSmooth(el);
+      // Hide FAB once near top; sync again after the glide settles
+      const hideWhenNearTop = () => {
+        if (!el || el.scrollTop <= 200) {
+          scrollTopBtn.classList.remove('show');
+          scrollTopBtn.setAttribute('aria-hidden', 'true');
+          scrollTopBtn.tabIndex = -1;
+        }
+      };
+      hideWhenNearTop();
+      setTimeout(() => { hideWhenNearTop(); syncScrollTopBtn(); }, 1300);
     },
   }, icon('chevronUp', 22));
   app.append(scrollTopBtn);
