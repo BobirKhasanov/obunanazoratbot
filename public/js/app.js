@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, toggle, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopSmooth, shareUrl, copyText } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, pillBar, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopSmooth, shareUrl, copyText } from './ui.js';
 import { homeTabRefreshMs, softPollMs, isLite, isAndroid } from './perf.js';
 import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat, openGlobalChat } from './inbox.js';
 import { t, setLang } from './i18n.js';
@@ -53,7 +53,11 @@ function ensurePlayFlow() {
     getState: () => state,
     openOnline,
     startFriendGame,
-    aiSheet,
+    openAiHub: () => {
+      openPlayHubMode('ai');
+      if (state.tab === 'rankings') refresh('rankings');
+      else go(TABS.indexOf('rankings'), true);
+    },
     goTab: (name) => go(TABS.indexOf(name), true),
     openLiveTournaments: () => {
       openLiveTournaments();
@@ -410,26 +414,6 @@ function resumeAi() {
   S.onStats = (st) => { state.stats = st; };
 }
 
-function aiSheet() {
-  let level = 2, colour = 'w', allowUndo = true;
-  sheet((close) => {
-    const levels = h('div.levels');
-    const draw = () => levels.replaceChildren(...[1, 2, 3, 4, 5].map((n) => h('button.lvl' + (n === level ? '.on' : ''), { onclick: () => { level = n; haptic('select'); draw(); } },
-      h('div.lvl-bars', ...[1, 2, 3, 4, 5].map((i) => h('i' + (i <= n ? '.f' : '')))),
-      h('div', h('b', t('lvl' + n)), h('small', t('lvl' + n + '_d'))))));
-    draw();
-    return [
-      h('h2', t('vs_ai')),
-      h('div.label', t('level')), levels,
-      h('div.label', t('play_as')),
-      seg([['w', '♔ ' + t('white')], ['r', '🎲 ' + t('random')], ['b', '♚ ' + t('black')]], colour, (v) => { colour = v; }),
-      h('div.setting.ai-undo-row',
-        h('div', h('b', t('ai_undo')), h('small', t('ai_undo_sub'))),
-        toggle(allowUndo, (v) => { allowUndo = v; })),
-      h('button.btn', { onclick: () => { close(); setTimeout(() => startAi(level, colour, { allowUndo }), 120); } }, t('start')),
-    ];
-  });
-}
 
 const playerRow = (u, close) => h('div.row',
   avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true, avatarKey: u.avatarKey || null }),
@@ -476,18 +460,6 @@ function onlineSheet() {
     ];
   }, { onClose: () => { alive = false; clearInterval(timer); } });
 }
-
-function newGameSheet() {
-  sheet((close) => [
-    h('h2', t('new_game')),
-    h('div.stack',
-      tile(t('vs_ai'), t('vs_ai_sub'), 'ai', () => { close(); setTimeout(aiSheet, 200); }, true),
-      tile(t('play_online'), t('quick_sub'), 'globe', () => { close(); setTimeout(onlineSheet, 200); }),
-      tile(t('with_friend'), t('friend_sub'), 'friends', () => { close(); startFriendGame(); })),
-  ]);
-}
-const tile = (title, sub, ic, fn, hero) => h('button.tile' + (hero ? '.hero' : ''), { onclick: () => { haptic('light'); fn(); } },
-  h('b', title), h('small', sub), icon(ic, 26));
 
 // ---------- pages ----------
 const gameRow = (g, kind) => {
@@ -679,7 +651,6 @@ refreshers.rankings = async function renderRankings() {
     headerInboxBtns,
     ensurePlayFlow,
     startFriendGame,
-    aiSheet,
     startAi,
     challenge,
     getSelectedTime: () => selectedTime,

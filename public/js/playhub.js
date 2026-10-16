@@ -14,6 +14,15 @@ let ratingPeriod = 'all'; // all | day | week | month
 let histFilter = 'all';
 let friendQuery = '';
 
+const AI_COLOUR_KEY = 'chess-ai-colour';
+let aiColour = (() => {
+  try { const v = localStorage.getItem(AI_COLOUR_KEY); return v === 'w' || v === 'b' || v === 'r' ? v : 'w'; } catch { return 'w'; }
+})();
+function setAiColour(v) {
+  aiColour = v;
+  try { localStorage.setItem(AI_COLOUR_KEY, v); } catch { /* storage blocked */ }
+}
+
 const TIMES = ['1+0', '3+2', '5+0', '10+0', '15+10'];
 
 export function openPlayHubTab(tab) {
@@ -182,14 +191,17 @@ function paintAi(ctx) {
     [5, 'ai_l5', '2000+'],
   ];
   return [
+    sectionHead(t('play_as')),
+    segTabs([
+      ['w', '♔ ' + t('white')],
+      ['r', '🎲 ' + t('random')],
+      ['b', '♚ ' + t('black')],
+    ], aiColour, (v) => { setAiColour(v); ctx.remount(); }, 'sub'),
     sectionHead(t('ai_pick_level')),
     h('div.nx-list', ...levels.map(([n, key, range]) => levelRow({
       n, title: t(key), range, desc: t(key + '_d'),
-      onClick: () => ctx.startAi(n, 'r'),
+      onClick: () => ctx.startAi(n, aiColour, { allowUndo: true }),
     }))),
-    h('button.nx-cta.ghost', {
-      type: 'button', onclick: () => { haptic('light'); ctx.aiSheet(); },
-    }, icon('gear', 18), t('ai_custom')),
   ];
 }
 

@@ -36,7 +36,7 @@ function chipLabel(id) {
  * @param {() => object} deps.getState
  * @param {(g: object) => void} deps.openOnline
  * @param {() => void} deps.startFriendGame
- * @param {() => void} deps.aiSheet
+ * @param {() => void} deps.openAiHub
  * @param {(tab: string) => void} deps.goTab
  * @param {(tc: string) => void} deps.setSelectedTime
  * @param {() => string} deps.getSelectedTime
@@ -86,7 +86,7 @@ export function createPlayFlow(deps) {
           }, h('span.art', '🤝'), t('play_card_friend')),
           h('button.pf-menu-row', {
             type: 'button',
-            onclick: () => { haptic('light'); close(); setTimeout(() => deps.aiSheet(), 180); },
+            onclick: () => { haptic('light'); close(); deps.openAiHub(); },
           }, h('span.art', '🤖'), t('play_card_ai')),
           h('button.pf-menu-row', {
             type: 'button',
