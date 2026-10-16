@@ -94,12 +94,18 @@ h1, h2, h3, p { margin: 0; }
 /* Extra room for dock + Play CTA stacked above the nav */
 /* Home: one screen, no scroll — flex column; hero + mode cards stretch on tall phones, shrink on short ones */
 .page[data-page="play"] {
-  padding-bottom: calc(92px + var(--safe-b));
+  padding-bottom: calc(86px + var(--safe-b));
   display: flex; flex-direction: column;
 }
 .page[data-page="play"] > * { flex: none; }
 .page[data-page="play"] .nx-hdr { margin-bottom: 10px; }
 .page[data-page="play"] .ann-carousel[hidden] { display: none; margin: 0; }
+.page[data-page="play"] .ann-carousel:not([hidden]),
+.page[data-page="play"] .ann-carousel.ann-loading {
+  height: clamp(108px, 17dvh, 140px); min-height: 0; max-height: 140px; margin: 0;
+}
+.page[data-page="play"] .ann-carousel .ann-skel { min-height: 0; }
+.page[data-page="play"] .ann-carousel:not([hidden]) ~ .nx-hero { display: none; }
 .page[data-page="play"] .nx-hero { flex: 1 1 auto; min-height: 108px; max-height: 150px; margin-bottom: 0; }
 .page[data-page="play"] .nx-hero-txt { padding: 14px 16px; gap: 6px; }
 .page[data-page="play"] .nx-hero h2 { font-size: 19px; }
