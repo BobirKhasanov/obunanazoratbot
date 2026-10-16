@@ -4,7 +4,7 @@ import { t } from './i18n.js';
 import { openGameAnalysis } from './analyze.js';
 import {
   appHeader, pageTitle, segTabs, underTabs, modeCard, sectionHead, playerRow, filterChip,
-  rankRow, historyRow, gameOutcome, levelRow, liveMatchRow, emptyNote,
+  rankRow, historyRow, analysisCard, gameOutcome, levelRow, liveMatchRow, emptyNote,
 } from './neonui.js';
 
 let hubTab = 'online'; // online | rating | history
@@ -229,6 +229,7 @@ async function paintHistory(ctx) {
   try { games = (await api('GET', '/games/history')).games || []; } catch (e) { fail(e); }
   const filtered = games.filter((g) => histFilter === 'all' || gameOutcome(g) === histFilter);
   return [
+    analysisCard(),
     sectionHead(t('hub_history_title')),
     h('div.nx-chips', { 'data-noswipe': '' },
       ...[['all', t('hist_all')], ['win', t('hist_win')], ['loss', t('hist_loss')], ['draw', t('hist_draw')]]

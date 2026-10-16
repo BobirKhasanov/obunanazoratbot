@@ -2569,9 +2569,25 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 .nx-rank-pin { margin-top: 8px; }
 .nx-rank.you { background: #13284a; border: 1.5px solid var(--blue); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); }
 .nx-hist {
-  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 16px; text-align: left;
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 10px 10px 12px; border-radius: 16px;
   background: var(--card); border: 1px solid var(--line); color: var(--text);
 }
+.nx-hist-main {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 0; text-align: left;
+  background: none; border: 0; color: inherit;
+}
+.nx-hist-main > .avwrap, .nx-hist-main > .avatar { width: 40px; height: 40px; font-size: 15px; flex: none; }
+.nx-hist-an {
+  width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; flex: none; padding: 0;
+  background: rgba(46, 139, 255, 0.12); color: #9cc8ff; border: 1px solid rgba(46, 139, 255, 0.4);
+}
+.nx-hist-main .nx-hist-ic { width: 28px; height: 28px; border-radius: 9px; }
+.nx-an-card {
+  display: flex; align-items: center; gap: 12px; padding: 14px; margin: 0 0 4px; border-radius: 18px;
+  background: linear-gradient(110deg, rgba(46, 139, 255, 0.16), var(--card) 70%); border: 1px solid rgba(46, 139, 255, 0.3);
+}
+.nx-an-ic { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; flex: none; background: rgba(46, 139, 255, 0.18); color: #9cc8ff; }
+.nx-row-tx small.wrap { white-space: normal; line-height: 1.35; }
 .nx-hist-ic { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; flex: none; }
 .nx-hist-ic.win { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
 .nx-hist-ic.loss { background: rgba(239, 68, 68, 0.14); color: #ef4444; }

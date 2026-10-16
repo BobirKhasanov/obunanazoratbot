@@ -4,6 +4,7 @@ export const LANGS = ['uz', 'uzc', 'ru', 'en'];
 export const LANG_NAMES = { uz: "O'zbekcha", uzc: 'Ўзбекча', ru: 'Русский', en: 'English' };
 
 const en = {
+  analyze_hist_sub: "Engine review of your finished games: mistakes, best moves, accuracy. 3 free/day · Premium unlimited.",
   hero_t1: "Play chess", hero_t2: "with your friends", hero_sub: "Strategy, friendship and competition in one place.", hero_more: "Learn more", ply_short: "Move {n}", friend_in_game: "In a game", rating_n: "Rating {n}", challenge_sent_short: "Sent", you_label: "You", ago_now: "just now", ago_min: "{n} min ago", ago_hour: "{n} h ago", ago_day: "{n} d ago", home_daily_title: "Daily puzzle", hub_sub_players: "Online players", hub_sub_live: "Live games", hub_sub_tours: "Tournaments", quick_match_btn: "Quick match", see_all_short: "All", tours_running: "{n} live", online_people: "{n} online", invite_full: "Invite", friend_search_ph: "Search friends…", friend_link_game: "Play via invite link", ai_pick_level: "Choose a level", ai_custom: "Colour & settings", rank_all_time: "Overall", rank_day: "Daily", rank_week: "Weekly", rank_month: "Monthly", rating_col: "Rating", points_col: "Points", join_btn: "Join", ai_l1: "Beginner", ai_l2: "Intermediate", ai_l3: "Strong", ai_l4: "Very strong", ai_l5: "Strongest", ai_l1_d: "For those learning chess", ai_l2_d: "For practice", ai_l3_d: "For experienced players", ai_l4_d: "A real challenge", ai_l5_d: "Test yourself", lvl5: "Master", lvl5_d: "Strongest engine",
   app: 'Chess',
   nav_play: 'Play', nav_live: 'Live', nav_friends: 'Friends', nav_profile: 'Profile',
@@ -95,6 +96,7 @@ const en = {
 };
 
 const ru = {
+  analyze_hist_sub: "Разбор ваших партий движком: ошибки, лучшие ходы, точность. 3 бесплатно/день · Premium безлимит.",
   hero_t1: "Играйте в шахматы", hero_t2: "с друзьями", hero_sub: "Стратегия, дружба и соревнование в одном месте.", hero_more: "Подробнее", ply_short: "{n}-й ход", friend_in_game: "В игре", rating_n: "Рейтинг {n}", challenge_sent_short: "Отправлено", you_label: "Вы", ago_now: "только что", ago_min: "{n} мин назад", ago_hour: "{n} ч назад", ago_day: "{n} д назад", home_daily_title: "Ежедневная задача", hub_sub_players: "Игроки онлайн", hub_sub_live: "Живые партии", hub_sub_tours: "Турниры", quick_match_btn: "Быстрая игра", see_all_short: "Все", tours_running: "{n} идёт", online_people: "{n} онлайн", invite_full: "Пригласить", friend_search_ph: "Поиск друзей…", friend_link_game: "Играть по ссылке", ai_pick_level: "Выберите уровень", ai_custom: "Цвет и настройки", rank_all_time: "Общий", rank_day: "День", rank_week: "Неделя", rank_month: "Месяц", rating_col: "Рейтинг", points_col: "Очки", join_btn: "Участвовать", ai_l1: "Начальный", ai_l2: "Средний", ai_l3: "Сильный", ai_l4: "Очень сильный", ai_l5: "Сильнейший", ai_l1_d: "Для изучающих шахматы", ai_l2_d: "Для практики", ai_l3_d: "Для опытных игроков", ai_l4_d: "Настоящий вызов", ai_l5_d: "Проверьте себя", lvl5: "Мастер", lvl5_d: "Самый сильный движок",
   app: 'Шахматы',
   nav_play: 'Игра', nav_live: 'Онлайн', nav_friends: 'Друзья', nav_profile: 'Профиль',
@@ -183,6 +185,7 @@ const ru = {
 };
 
 const uz = {
+  analyze_hist_sub: "Tugagan o'yinlaringiz dvigatel tahlili: xatolar, eng yaxshi yurishlar, aniqlik. Kuniga 3 bepul · Premium cheksiz.",
   hero_t1: "Do'stlaringiz bilan", hero_t2: "shaxmat o'ynang", hero_sub: "Strategiya, do'stlik va raqobat bir joyda.", hero_more: "Batafsil", ply_short: "{n}-yurish", friend_in_game: "O'yinda", rating_n: "Reyting {n}", challenge_sent_short: "Yuborildi", you_label: "Siz", ago_now: "hozirgina", ago_min: "{n} daqiqa oldin", ago_hour: "{n} soat oldin", ago_day: "{n} kun oldin", home_daily_title: "Kunlik topshiriq", hub_sub_players: "Onlayn o'yinchilar", hub_sub_live: "Jonli o'yinlar", hub_sub_tours: "Turnirlar", quick_match_btn: "Tezkor o'yin", see_all_short: "Barchasi", tours_running: "{n} ta jonli", online_people: "{n} kishi online", invite_full: "Taklif qilish", friend_search_ph: "Do'st izlash…", friend_link_game: "Havola orqali o'ynash", ai_pick_level: "Darajani tanlang", ai_custom: "Rang va sozlamalar", rank_all_time: "Umumiy", rank_day: "Kunlik", rank_week: "Haftalik", rank_month: "Oylik", rating_col: "Reyting", points_col: "Ochko", join_btn: "Qo'shilish", ai_l1: "Boshlang'ich", ai_l2: "O'rtacha", ai_l3: "Kuchli", ai_l4: "Juda kuchli", ai_l5: "Eng kuchli", ai_l1_d: "Shaxmatni o'rganayotganlar uchun", ai_l2_d: "Amaliy mashg'ulot uchun", ai_l3_d: "Tajribali o'yinchilar uchun", ai_l4_d: "Haqiqiy chaqiriq", ai_l5_d: "O'zingizni sinab ko'ring", lvl5: "Usta", lvl5_d: "Eng kuchli dvigatel",
   app: 'Shaxmat',
   nav_play: "O'yin", nav_live: 'Onlayn', nav_friends: "Do'stlar", nav_profile: 'Profil',
@@ -271,6 +274,7 @@ const uz = {
 };
 
 const uzc = {
+  analyze_hist_sub: "Тугаган ўйинларингиз двигател таҳлили: хатолар, энг яхши юришлар, аниқлик. Кунига 3 бепул · Premium чексиз.",
   hero_t1: "Дўстларингиз билан", hero_t2: "шахмат ўйнанг", hero_sub: "Стратегия, дўстлик ва рақобат бир жойда.", hero_more: "Батафсил", ply_short: "{n}-юриш", friend_in_game: "Ўйинда", rating_n: "Рейтинг {n}", challenge_sent_short: "Юборилди", you_label: "Сиз", ago_now: "ҳозиргина", ago_min: "{n} дақиқа олдин", ago_hour: "{n} соат олдин", ago_day: "{n} кун олдин", home_daily_title: "Кунлик топшириқ", hub_sub_players: "Онлайн ўйинчилар", hub_sub_live: "Жонли ўйинлар", hub_sub_tours: "Турнирлар", quick_match_btn: "Тезкор ўйин", see_all_short: "Барчаси", tours_running: "{n} та жонли", online_people: "{n} киши онлайн", invite_full: "Таклиф қилиш", friend_search_ph: "Дўст излаш…", friend_link_game: "Ҳавола орқали ўйнаш", ai_pick_level: "Даражани танланг", ai_custom: "Ранг ва созламалар", rank_all_time: "Умумий", rank_day: "Кунлик", rank_week: "Ҳафталик", rank_month: "Ойлик", rating_col: "Рейтинг", points_col: "Очко", join_btn: "Қўшилиш", ai_l1: "Бошланғич", ai_l2: "Ўртача", ai_l3: "Кучли", ai_l4: "Жуда кучли", ai_l5: "Энг кучли", ai_l1_d: "Шахматни ўрганаётганлар учун", ai_l2_d: "Амалий машғулот учун", ai_l3_d: "Тажрибали ўйинчилар учун", ai_l4_d: "Ҳақиқий чақириқ", ai_l5_d: "Ўзингизни синаб кўринг", lvl5: "Уста", lvl5_d: "Энг кучли двигател",
   app: 'Шахмат',
   nav_play: 'Ўйин', nav_live: 'Онлайн', nav_friends: 'Дўстлар', nav_profile: 'Профил',

@@ -220,17 +220,27 @@ export function gameOutcome(g) {
   return ((g.result === '1-0') === (g.you === 'w')) ? 'win' : 'loss';
 }
 
-export function historyRow(g, onOpen) {
+export function historyRow(g, onAnalyze) {
   const o = g.opponent || {};
   const tag = gameOutcome(g);
   const label = tag === 'win' ? t('hist_win') : tag === 'loss' ? t('hist_loss') : t('hist_draw');
   const ic = tag === 'win' ? 'trophy' : tag === 'loss' ? 'x' : 'handshake';
-  return h('button.nx-hist', { type: 'button', onclick: tap(() => onOpen && onOpen(g)) },
-    avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, online: !!o.online, avatarKey: o.avatarKey }),
-    h('div.nx-row-tx', h('b', o.name || '…'), h('small', String(o.elo || 1200))),
-    h('span.nx-hist-ic.' + tag, icon(ic, 18)),
-    h('div.nx-hist-r', h('b.' + tag, label), h('small', [g.timeControl && g.timeControl !== 'classic' ? g.timeControl : t('tc_classic'), timeAgo(g.updatedAt)].filter(Boolean).join(' · '))),
-    icon('chevron', 16));
+  const open = tap(() => onAnalyze && onAnalyze(g));
+  return h('div.nx-hist',
+    h('button.nx-hist-main', { type: 'button', onclick: open },
+      avBlock(o.name || '?', o.id || 0, { premium: !!o.premium, round: true, online: !!o.online, avatarKey: o.avatarKey }),
+      h('div.nx-row-tx', h('b', o.name || '…'), h('small', String(o.elo || 1200))),
+      h('span.nx-hist-ic.' + tag, icon(ic, 18)),
+      h('div.nx-hist-r', h('b.' + tag, label), h('small', [g.timeControl && g.timeControl !== 'classic' ? g.timeControl : t('tc_classic'), timeAgo(g.updatedAt)].filter(Boolean).join(' · ')))),
+    h('button.nx-hist-an', { type: 'button', 'aria-label': t('analyze'), title: t('analyze'), onclick: open },
+      icon('sparkles', 17)));
+}
+
+/** Tarix header: what game analysis gives you. */
+export function analysisCard() {
+  return h('div.nx-an-card',
+    h('span.nx-an-ic', icon('sparkles', 22)),
+    h('div.nx-row-tx', h('b', t('analyze_title')), h('small.wrap', t('analyze_hist_sub'))));
 }
 
 /** AI level row: coloured bars · title · range · description. */
