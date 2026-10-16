@@ -116,7 +116,7 @@ function initScrollTop() {
       const el = scrollTarget();
       if (!el) return;
       haptic('select');
-      // Slow glide up (CSS smooth disabled during tween — no WebView freeze)
+      // Slow glide up (iOS: native smooth; others: JS tween — no WebView freeze)
       scrollToTopSmooth(el);
       // Hide FAB once near top; sync again after the glide settles
       const hideWhenNearTop = () => {
@@ -127,7 +127,7 @@ function initScrollTop() {
         }
       };
       hideWhenNearTop();
-      setTimeout(() => { hideWhenNearTop(); syncScrollTopBtn(); }, 1300);
+      setTimeout(() => { hideWhenNearTop(); syncScrollTopBtn(); }, 1000);
     },
   }, icon('chevronUp', 22));
   app.append(scrollTopBtn);

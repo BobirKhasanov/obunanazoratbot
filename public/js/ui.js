@@ -42,14 +42,37 @@ function cancelSmoothScroll(el) {
   }
 }
 
+function isiOSScroll() {
+  try {
+    if (document.documentElement.dataset.ios === '1') return true;
+    const tw = window.Telegram && window.Telegram.WebApp;
+    const plat = String((tw && tw.platform) || '').toLowerCase();
+    if (plat === 'ios') return true;
+  } catch { /* ignore */ }
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+}
+
+/** Stop iOS rubber-band / momentum so a new scroll animation can start cleanly. */
+function stopScrollMomentum(el) {
+  if (!el) return;
+  const y = el.scrollTop;
+  const prev = el.style.overflowY;
+  el.style.overflowY = 'hidden';
+  try { el.scrollTop = y; } catch { /* ignore */ }
+  void el.offsetHeight;
+  el.style.overflowY = prev;
+}
+
 /** Jump to top without fighting CSS scroll-behavior (TG WebView–safe). */
 export function scrollToTopNow(el) {
   if (!el) return;
   cancelSmoothScroll(el);
+  stopScrollMomentum(el);
   const prev = el.style.scrollBehavior;
   el.style.scrollBehavior = 'auto';
   try {
-    el.scrollTop = 0;
+    if (typeof el.scrollTo === 'function') el.scrollTo(0, 0);
+    else el.scrollTop = 0;
   } finally {
     requestAnimationFrame(() => {
       try { el.style.scrollBehavior = prev; } catch { /* ignore */ }
@@ -59,7 +82,8 @@ export function scrollToTopNow(el) {
 
 /**
  * Slow, smooth scroll to top for the FAB.
- * Cancels prior tweens and disables CSS scroll-behavior during the animation (prevents WebView freeze).
+ * iOS: one native smooth scroll (RAF scrollTop + CSS smooth freezes WKWebView).
+ * Others: JS tween with CSS scroll-behavior forced to auto.
  */
 export function scrollToTopSmooth(el, ms) {
   if (!el) return;
@@ -69,6 +93,34 @@ export function scrollToTopSmooth(el, ms) {
   if (reduce) { scrollToTopNow(el); return; }
   const from = el.scrollTop;
   if (from < 2) { scrollToTopNow(el); return; }
+
+  // iOS Telegram WebView: kill momentum, then a single native smooth scroll
+  if (isiOSScroll()) {
+    stopScrollMomentum(el);
+    const prevBeh = el.style.scrollBehavior;
+    el.style.scrollBehavior = 'auto';
+    try {
+      if (typeof el.scrollTo === 'function') {
+        el.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        el.scrollTop = 0;
+      }
+    } catch {
+      el.scrollTop = 0;
+    }
+    // Ensure we land exactly at 0 after the native glide
+    setTimeout(() => {
+      try {
+        if (el.scrollTop > 0) {
+          el.style.scrollBehavior = 'auto';
+          el.scrollTop = 0;
+        }
+        el.style.scrollBehavior = prevBeh;
+      } catch { /* ignore */ }
+    }, 900);
+    return;
+  }
+
   // Longer glide — scales a bit with distance, stays calm (not snappy)
   const lite = document.documentElement.dataset.perf === 'lite';
   const base = ms != null ? ms : Math.min(1200, Math.max(780, 520 + from * 0.42));

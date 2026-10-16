@@ -1297,6 +1297,13 @@ html[data-android="1"] .page {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
+/* iOS: CSS scroll-behavior:smooth + JS/native scroll freezes WKWebView — keep auto */
+html[data-ios="1"] .page,
+html[data-ios="1"] #screen,
+html[data-ios="1"] .sheet {
+  scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
+}
 html[data-android="1"] .page > *,
 html[data-perf="lite"] .page > * { animation: none !important; }
 html[data-android="1"] .list .row,

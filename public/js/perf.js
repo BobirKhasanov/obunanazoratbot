@@ -62,18 +62,21 @@ function detect() {
   return cached;
 }
 
-/** Apply html[data-perf] / data-android for CSS. Safe to call multiple times. */
+/** Apply html[data-perf] / data-android / data-ios for CSS. Safe to call multiple times. */
 export function applyPerfMode() {
   const p = detect();
   const root = document.documentElement;
   root.dataset.perf = p.lite ? 'lite' : 'full';
   if (p.isAndroid) root.dataset.android = '1';
   else delete root.dataset.android;
+  if (p.isIOS) root.dataset.ios = '1';
+  else delete root.dataset.ios;
   return p;
 }
 
 export function isLite() { return detect().lite; }
 export function isAndroid() { return detect().isAndroid; }
+export function isIOS() { return detect().isIOS; }
 export function getPerf() { return detect(); }
 
 /** Lichess round grid poll (ms). Slower on Android; even slower on lite. iOS unchanged. */
