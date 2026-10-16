@@ -202,8 +202,8 @@ CREATE INDEX IF NOT EXISTS idx_announcements_ends ON announcements(ends_at);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS diamonds BIGINT NOT NULL DEFAULT 0;   -- in-app currency
 ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER NOT NULL DEFAULT 0;   -- 1 while premium_until is in the future (or legacy)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TIMESTAMPTZ;            -- monthly Premium expiry (UTC); null + premium=1 = legacy permanent
-ALTER TABLE users ADD COLUMN IF NOT EXISTS piece_set TEXT NOT NULL DEFAULT 'neo';   -- outline | classic | neo | staunton (default neo until Premium changes)
-ALTER TABLE users ADD COLUMN IF NOT EXISTS board_theme TEXT NOT NULL DEFAULT 'green'; -- classic | green | wood | blue | brown (default green until Premium changes)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS piece_set TEXT NOT NULL DEFAULT 'neo';   -- outline | classic | neo | staunton | studio (default neo until Premium changes)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS board_theme TEXT NOT NULL DEFAULT 'green'; -- classic | green | wood | blue | brown | studio (default green until Premium changes)
 ALTER TABLE users ALTER COLUMN piece_set SET DEFAULT 'neo';
 ALTER TABLE users ALTER COLUMN board_theme SET DEFAULT 'green';
 ALTER TABLE games ADD COLUMN IF NOT EXISTS white_ms BIGINT;

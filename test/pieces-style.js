@@ -3,16 +3,19 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
-const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton'];
-const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown'];
+const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio'];
+const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio'];
 
 const server = fs.readFileSync(path.join(__dirname, '../src/server.js'), 'utf8');
 const pieces = fs.readFileSync(path.join(__dirname, '../public/js/pieces.js'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '../public/styles.css'), 'utf8');
+const perf = fs.readFileSync(path.join(__dirname, '../public/js/perf.js'), 'utf8');
 
-assert.ok(server.includes("const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton']"));
-assert.ok(server.includes("const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown']"));
-assert.ok(pieces.includes("export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton']"));
+assert.ok(server.includes("const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio']"));
+assert.ok(server.includes("const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio']"));
+assert.ok(pieces.includes("export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio']"));
+assert.ok(pieces.includes("set === 'studio'") && pieces.includes('STUDIO_FELT'), 'studio ivory/ebony SVG materials');
+assert.ok(perf.includes('dataset.view3d') && css.includes('data-view3d="1"'), 'view3d CSS/SVG board depth');
 
 for (const set of PIECE_SETS) {
   assert.ok(pieces.includes(set), `pieces.js mentions ${set}`);

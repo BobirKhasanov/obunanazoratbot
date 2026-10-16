@@ -62,7 +62,7 @@ function detect() {
   return cached;
 }
 
-/** Apply html[data-perf] / data-android / data-ios for CSS. Safe to call multiple times. */
+/** Apply html[data-perf] / data-android / data-ios / data-view3d for CSS. Safe to call multiple times. */
 export function applyPerfMode() {
   const p = detect();
   const root = document.documentElement;
@@ -71,8 +71,14 @@ export function applyPerfMode() {
   else delete root.dataset.android;
   if (p.isIOS) root.dataset.ios = '1';
   else delete root.dataset.ios;
+  // CSS/SVG "studio 3D" depth — on for iOS + normal Android; off on weak Android lite
+  if (p.lite) delete root.dataset.view3d;
+  else root.dataset.view3d = '1';
   return p;
 }
+
+/** Whether the CSS/SVG 3D board presentation is active. */
+export function isView3d() { return !detect().lite; }
 
 export function isLite() { return detect().lite; }
 export function isAndroid() { return detect().isAndroid; }

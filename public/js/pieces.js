@@ -1,12 +1,14 @@
-// Chess piece SVGs. Style set is chosen via <html data-pieces="…"> (outline | classic | neo | staunton).
-export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton'];
-export const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown'];
+// Chess piece SVGs. Style set is chosen via <html data-pieces="…"> (outline | classic | neo | staunton | studio).
+// "studio" = ivory/ebony Staunton with soft 3D shading (CSS/SVG — no WebGL; safe on Android TG WebView).
+export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio'];
+export const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio'];
 export const BOARD_SWATCH = {
   classic: { lt: '#b9c4d6', dk: '#5f7391' },
   green: { lt: '#eedfbb', dk: '#769656' },
   wood: { lt: '#f0d9b5', dk: '#b58863' },
   blue: { lt: '#cdd7e8', dk: '#5b7fa6' },
   brown: { lt: '#d8c3a5', dk: '#8b5e3c' },
+  studio: { lt: '#d7b48a', dk: '#6b4428' },
 };
 export const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 
@@ -40,12 +42,19 @@ const STAUNTON = {
   k: '<path d="M22.5 5v8M18.8 8.5h7.4"/><path d="M22.5 13c-5.5 0-9.5 3.5-9.5 8.8 0 3.5 2.2 5.5 4.5 7V30.5h10v-1.7c2.3-1.5 4.5-3.5 4.5-7 0-5.3-4-8.8-9.5-8.8z"/><ellipse cx="22.5" cy="32" rx="11" ry="2"/><path d="M12 34.2h21v3H12z"/>',
 };
 
-const SETS = { outline: OUTLINE, classic: CLASSIC, neo: NEO, staunton: STAUNTON };
+// Studio reuses Staunton silhouettes; felt pad is drawn separately (green, not body fill)
+const STUDIO = STAUNTON;
+const STUDIO_FELT = {
+  p: 8.5, r: 9.2, n: 9, b: 9, q: 9.5, k: 9.5,
+};
+
+const SETS = { outline: OUTLINE, classic: CLASSIC, neo: NEO, staunton: STAUNTON, studio: STUDIO };
 const STROKE = {
   outline: '2.35',
   classic: '1.7',
   neo: '2.05',
   staunton: '1.55',
+  studio: '1.35',
 };
 
 const cache = Object.create(null);
@@ -76,6 +85,22 @@ export function pieceSvg(colour, type, setOverride) {
       : `<linearGradient id="${gid}" x1="0.15" y1="0.05" x2="0.9" y2="0.95"><stop offset="0%" stop-color="#334155"/><stop offset="45%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient>`;
     const stroke = colour === 'w' ? '#334155' : '#020617';
     cache[key] = `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} stroke="${stroke}" aria-hidden="true"><defs>${defs}</defs><g fill="url(#${gid})">${shape}</g></svg>`;
+  } else if (set === 'studio') {
+    // Ivory / ebony studio materials + green felt (reference sheet) — still flat SVG for mobile perf
+    const gid = `st-${colour}${type}`;
+    const hilite = `st-h-${colour}${type}`;
+    const defs = colour === 'w'
+      ? `<linearGradient id="${gid}" x1="0.2" y1="0.02" x2="0.85" y2="1"><stop offset="0%" stop-color="#fffdf8"/><stop offset="40%" stop-color="#f3ebe0"/><stop offset="78%" stop-color="#e2d2bc"/><stop offset="100%" stop-color="#cbb79a"/></linearGradient>`
+        + `<linearGradient id="${hilite}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/><stop offset="45%" stop-color="#ffffff" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.12"/></linearGradient>`
+      : `<linearGradient id="${gid}" x1="0.2" y1="0.02" x2="0.85" y2="1"><stop offset="0%" stop-color="#3a3a3c"/><stop offset="42%" stop-color="#1c1c1e"/><stop offset="100%" stop-color="#0a0a0b"/></linearGradient>`
+        + `<linearGradient id="${hilite}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/><stop offset="50%" stop-color="#ffffff" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.35"/></linearGradient>`;
+    const stroke = colour === 'w' ? '#5c4a36' : '#000000';
+    const feltR = STUDIO_FELT[type] || 9;
+    cache[key] = `<svg viewBox="0 0 45 45" class="pc ${colour} studio" ${body} stroke="${stroke}" aria-hidden="true"><defs>${defs}</defs>`
+      + `<ellipse class="felt" cx="22.5" cy="38.4" rx="${feltR}" ry="1.4" fill="#2f6b3a" stroke="none"/>`
+      + `<g fill="url(#${gid})">${shape}</g>`
+      + `<rect x="10" y="6" width="10" height="28" rx="5" fill="url(#${hilite})" opacity="0.55" stroke="none"/>`
+      + `</svg>`;
   } else {
     cache[key] = `<svg viewBox="0 0 45 45" class="pc ${colour}" ${body} aria-hidden="true">${shape}</svg>`;
   }
