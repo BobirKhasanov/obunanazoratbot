@@ -130,7 +130,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016al"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016al'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016am"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016am'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -144,6 +144,8 @@ assert.ok(app.includes('scrollToTopSmooth') && read('public/js/ui.js').includes(
 assert.ok(read('public/js/ui.js').includes('isiOSScroll') && read('public/js/ui.js').includes("behavior: 'smooth'") && read('public/js/ui.js').includes('stopScrollMomentum'), 'iOS scroll-top uses native smooth + momentum kill');
 assert.ok(css.includes('data-ios="1"') && /data-ios="1"[\s\S]{0,120}\.page/.test(css) && /data-ios="1"[\s\S]{0,200}scroll-behavior:\s*auto/.test(css), 'iOS pages force scroll-behavior auto');
 assert.ok(read('public/js/perf.js').includes('dataset.ios') && indexHtml.includes('data-ios'), 'iOS marked for CSS/JS scroll fixes');
+assert.ok(read('public/js/ui.js').includes('armScrollUserAbort') && read('public/js/ui.js').includes('forceScrollAuto') && !/scrollTop = 0;\s*\n\s*el\.style\.scrollBehavior = prevBeh/.test(read('public/js/ui.js')), 'scroll-top aborts on touch and does not yank back to 0');
+assert.ok(/\.page\s*\{[^}]*scroll-behavior:\s*auto/.test(css) && /\.screen\s*\{[^}]*scroll-behavior:\s*auto/.test(css), 'pages/screens default scroll-behavior auto (no post-FAB shake)');
 assert.ok(css.includes('.list.player-list') && /player-list[\s\S]{0,120}padding:\s*7px/.test(css), 'compact player rows keep text size');
 assert.ok(app.includes('.filter(Boolean)') && app.includes('puzzle_retry'), 'puzzle actions skip null (no literal "null" text)');
 assert.ok(read('src/server.js').includes('PODIUM_PREMIUM') && read('src/server.js').includes('grantPodiumPremium'), 'monthly podium auto-Premium');

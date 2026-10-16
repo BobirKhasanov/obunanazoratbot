@@ -34,11 +34,25 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Cancel in-flight smoothScrollTo on an element (avoids freeze when stacked). */
 const scrollAnimIds = new WeakMap();
+const scrollAbort = new WeakMap(); // { timer, onUser } cleanup for active glide
 function cancelSmoothScroll(el) {
+  if (!el) return;
   const id = scrollAnimIds.get(el);
   if (id != null) {
     try { cancelAnimationFrame(id); } catch { /* ignore */ }
     scrollAnimIds.delete(el);
+  }
+  const ab = scrollAbort.get(el);
+  if (ab) {
+    scrollAbort.delete(el);
+    if (ab.timer != null) clearTimeout(ab.timer);
+    if (ab.onUser) {
+      try {
+        el.removeEventListener('touchstart', ab.onUser, true);
+        el.removeEventListener('pointerdown', ab.onUser, true);
+        el.removeEventListener('wheel', ab.onUser, true);
+      } catch { /* ignore */ }
+    }
   }
 }
 
@@ -52,6 +66,12 @@ function isiOSScroll() {
   return /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
 }
 
+/** Keep auto — restoring '' re-enables CSS smooth and makes the next finger-scroll jitter. */
+function forceScrollAuto(el) {
+  if (!el) return;
+  el.style.scrollBehavior = 'auto';
+}
+
 /** Stop iOS rubber-band / momentum so a new scroll animation can start cleanly. */
 function stopScrollMomentum(el) {
   if (!el) return;
@@ -60,7 +80,26 @@ function stopScrollMomentum(el) {
   el.style.overflowY = 'hidden';
   try { el.scrollTop = y; } catch { /* ignore */ }
   void el.offsetHeight;
-  el.style.overflowY = prev;
+  el.style.overflowY = prev || '';
+}
+
+/** If the user touches/wheels during a glide, abort so we never fight their scroll. */
+function armScrollUserAbort(el) {
+  const onUser = () => {
+    // Freeze at current offset — stops native iOS smooth mid-flight too
+    forceScrollAuto(el);
+    const y = el.scrollTop;
+    try {
+      if (typeof el.scrollTo === 'function') el.scrollTo(0, y);
+      else el.scrollTop = y;
+    } catch { /* ignore */ }
+    cancelSmoothScroll(el);
+  };
+  scrollAbort.set(el, { timer: null, onUser });
+  el.addEventListener('touchstart', onUser, { capture: true, passive: true });
+  el.addEventListener('pointerdown', onUser, { capture: true, passive: true });
+  el.addEventListener('wheel', onUser, { capture: true, passive: true });
+  return onUser;
 }
 
 /** Jump to top without fighting CSS scroll-behavior (TG WebView–safe). */
@@ -68,22 +107,19 @@ export function scrollToTopNow(el) {
   if (!el) return;
   cancelSmoothScroll(el);
   stopScrollMomentum(el);
-  const prev = el.style.scrollBehavior;
-  el.style.scrollBehavior = 'auto';
+  forceScrollAuto(el);
   try {
     if (typeof el.scrollTo === 'function') el.scrollTo(0, 0);
     else el.scrollTop = 0;
-  } finally {
-    requestAnimationFrame(() => {
-      try { el.style.scrollBehavior = prev; } catch { /* ignore */ }
-    });
+  } catch {
+    try { el.scrollTop = 0; } catch { /* ignore */ }
   }
 }
 
 /**
  * Slow, smooth scroll to top for the FAB.
- * iOS: one native smooth scroll (RAF scrollTop + CSS smooth freezes WKWebView).
- * Others: JS tween with CSS scroll-behavior forced to auto.
+ * Never re-enables CSS smooth afterward (that makes the next downward scroll shake).
+ * Aborts immediately if the user touches the page mid-glide.
  */
 export function scrollToTopSmooth(el, ms) {
   if (!el) return;
@@ -94,11 +130,12 @@ export function scrollToTopSmooth(el, ms) {
   const from = el.scrollTop;
   if (from < 2) { scrollToTopNow(el); return; }
 
+  forceScrollAuto(el);
+  armScrollUserAbort(el);
+
   // iOS Telegram WebView: kill momentum, then a single native smooth scroll
   if (isiOSScroll()) {
     stopScrollMomentum(el);
-    const prevBeh = el.style.scrollBehavior;
-    el.style.scrollBehavior = 'auto';
     try {
       if (typeof el.scrollTo === 'function') {
         el.scrollTo({ top: 0, behavior: 'smooth' });
@@ -108,16 +145,14 @@ export function scrollToTopSmooth(el, ms) {
     } catch {
       el.scrollTop = 0;
     }
-    // Ensure we land exactly at 0 after the native glide
-    setTimeout(() => {
-      try {
-        if (el.scrollTop > 0) {
-          el.style.scrollBehavior = 'auto';
-          el.scrollTop = 0;
-        }
-        el.style.scrollBehavior = prevBeh;
-      } catch { /* ignore */ }
-    }, 900);
+    // Only finish cleanup — never force scrollTop=0 later (fights user scrolling down)
+    const ab = scrollAbort.get(el);
+    if (ab) {
+      ab.timer = setTimeout(() => {
+        cancelSmoothScroll(el);
+        forceScrollAuto(el);
+      }, 850);
+    }
     return;
   }
 
@@ -125,12 +160,11 @@ export function scrollToTopSmooth(el, ms) {
   const lite = document.documentElement.dataset.perf === 'lite';
   const base = ms != null ? ms : Math.min(1200, Math.max(780, 520 + from * 0.42));
   const duration = lite ? Math.min(base, 920) : base;
-  const prevBeh = el.style.scrollBehavior;
-  el.style.scrollBehavior = 'auto';
   const t0 = performance.now();
   // Softer ease-out so the finish feels gradual
   const ease = (t) => 1 - Math.pow(1 - t, 4);
   const tick = (now) => {
+    if (!scrollAbort.has(el)) return; // user aborted
     const p = Math.min(1, (now - t0) / duration);
     el.scrollTop = from * (1 - ease(p));
     if (p < 1) {
@@ -138,7 +172,8 @@ export function scrollToTopSmooth(el, ms) {
     } else {
       scrollAnimIds.delete(el);
       el.scrollTop = 0;
-      try { el.style.scrollBehavior = prevBeh; } catch { /* ignore */ }
+      cancelSmoothScroll(el);
+      forceScrollAuto(el);
     }
   };
   scrollAnimIds.set(el, requestAnimationFrame(tick));
@@ -151,27 +186,27 @@ export function smoothScrollTo(el, top = 0, ms = 520) {
   const reduce = typeof matchMedia === 'function'
     && matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (reduce || ms <= 0) {
-    const prev = el.style.scrollBehavior;
-    el.style.scrollBehavior = 'auto';
+    forceScrollAuto(el);
     el.scrollTop = top;
-    requestAnimationFrame(() => { try { el.style.scrollBehavior = prev; } catch { /* ignore */ } });
     return;
   }
   const from = el.scrollTop;
   const dist = top - from;
   if (Math.abs(dist) < 1) return;
-  const prevBeh = el.style.scrollBehavior;
-  el.style.scrollBehavior = 'auto'; // disable CSS smooth during JS tween
+  forceScrollAuto(el); // never leave CSS smooth fighting finger scroll afterward
+  armScrollUserAbort(el);
   const t0 = performance.now();
   const ease = (t) => 1 - Math.pow(1 - t, 3); // ease-out cubic
   const tick = (now) => {
+    if (!scrollAbort.has(el)) return; // user aborted
     const p = Math.min(1, (now - t0) / ms);
     el.scrollTop = from + dist * ease(p);
     if (p < 1) {
       scrollAnimIds.set(el, requestAnimationFrame(tick));
     } else {
       scrollAnimIds.delete(el);
-      try { el.style.scrollBehavior = prevBeh; } catch { /* ignore */ }
+      cancelSmoothScroll(el);
+      forceScrollAuto(el);
     }
   };
   scrollAnimIds.set(el, requestAnimationFrame(tick));
