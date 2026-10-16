@@ -1409,18 +1409,20 @@ html[data-perf="lite"] .prem-sparkle,
 html[data-perf="lite"] .float-emoji,
 html[data-perf="lite"] .rain { display: none !important; }
 html[data-perf="lite"] .prem-ring { animation: none !important; }
-/* Lite: fade/short slide — long translateX fights Android WebView */
+/* Lite: short slide in — MUST keep .show after closed-state rules (same specificity order) */
 html[data-perf="lite"] .screen {
   transform: translateX(24%) translateZ(0);
   transition: transform 0.16s ease-out, opacity 0.12s ease-out !important;
   will-change: auto;
 }
-html[data-perf="lite"] .screen.show {
-  transform: none;
-}
 html[data-android="1"][data-perf="lite"] .screen {
   transform: translateX(18%) translateZ(0);
   transition: transform 0.14s ease-out, opacity 0.1s ease-out !important;
+}
+/* Open state wins — without this Android lite left ~18% of home visible under Game */
+html[data-perf="lite"] .screen.show,
+html[data-android="1"][data-perf="lite"] .screen.show {
+  transform: none;
 }
 html[data-perf="lite"] .piece {
   transition: none !important;
