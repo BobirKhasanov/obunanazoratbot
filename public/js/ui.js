@@ -158,8 +158,14 @@ export function scrollToTopSmooth(el, ms) {
 
   // Longer glide — scales a bit with distance, stays calm (not snappy)
   const lite = document.documentElement.dataset.perf === 'lite';
+  const android = document.documentElement.dataset.android === '1';
+  // Don't fight tab slide compositing on Android
+  if (android && document.getElementById('track')?.classList.contains('settle')) {
+    scrollToTopNow(el);
+    return;
+  }
   const base = ms != null ? ms : Math.min(1200, Math.max(780, 520 + from * 0.42));
-  const duration = lite ? Math.min(base, 920) : base;
+  const duration = lite || android ? Math.min(base, android ? 520 : 920) : base;
   const t0 = performance.now();
   // Softer ease-out so the finish feels gradual
   const ease = (t) => 1 - Math.pow(1 - t, 4);

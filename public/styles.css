@@ -1371,10 +1371,9 @@ html[data-ios="1"] .sheet {
 }
 html[data-android="1"] .page > *,
 html[data-perf="lite"] .page > * { animation: none !important; }
-html[data-android="1"] .list .row,
-html[data-perf="lite"] .list .row {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 64px;
+/* content-visibility:auto blanks rows during Android fling — keep off */
+html[data-perf="lite"] .list .row:not(.admin-user-row) {
+  content-visibility: visible;
 }
 html[data-perf="lite"] #track.settle,
 html[data-perf="lite"] #nav-ind {
@@ -1382,6 +1381,13 @@ html[data-perf="lite"] #nav-ind {
 }
 html[data-android="1"] .sheet {
   transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  scroll-behavior: auto;
+}
+html[data-perf="lite"] .sheet,
+html[data-android="1"] .sheet-list,
+html[data-perf="lite"] .sheet-list,
+html[data-android="1"] .chat-log {
+  scroll-behavior: auto;
 }
 html[data-android="1"] .piece {
   transition: transform 0.22s ease-out, opacity 0.18s ease-out;
@@ -1429,9 +1435,11 @@ html[data-perf="lite"] .invite-pop .pbar-fill,
 html[data-perf="lite"] #boot .boot-glow,
 html[data-perf="lite"] #boot .boot-orbit,
 html[data-perf="lite"] #boot .boot-ic,
+html[data-perf="lite"] #boot .boot-bar > i,
 html[data-android="1"] #boot .boot-glow,
 html[data-android="1"] #boot .boot-orbit,
-html[data-android="1"] #boot .boot-ic {
+html[data-android="1"] #boot .boot-ic,
+html[data-android="1"] #boot .boot-bar > i {
   animation: none !important;
 }
 html[data-perf="lite"] .live-mini-ph {
@@ -1481,9 +1489,18 @@ html[data-perf="lite"] .ann-carousel:not([hidden]) {
   -webkit-user-drag: none;
 }
 .ann-slide:active { cursor: grabbing; }
-.ann-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; z-index: 1; }
-.ann-title { font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
-.ann-body { font-weight: 700; line-height: 1.25; opacity: 0.95; }
+.ann-copy {
+  flex: 1; min-width: 0; max-height: 100%; overflow: hidden;
+  display: flex; flex-direction: column; gap: 4px; z-index: 1;
+}
+.ann-title {
+  font-weight: 800; line-height: 1.2; letter-spacing: -0.02em;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.ann-body {
+  font-weight: 700; line-height: 1.25; opacity: 0.95;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
 .ann-media {
   flex: none; width: 88px; height: 72px; border-radius: 14px; overflow: hidden;
   display: grid; place-items: center; background: rgba(0,0,0,.18);
@@ -1738,8 +1755,11 @@ button.rating-tile:active { transform: scale(0.98); }
 /* Inbox hub: fixed head + scrollable body (fixes Android sticky/clip scroll) */
 .inbox-shell {
   display: flex; flex-direction: column;
-  min-height: calc(100dvh - var(--safe-t) - var(--safe-b) - 24px);
+  flex: 1; min-height: 0; height: 100%;
   margin: 0 -2px;
+}
+#screen:has(.inbox-shell) .inbox-shell {
+  flex: 1 1 auto; min-height: 0;
 }
 .inbox-shell > .inbox-head { flex: none; margin-bottom: 8px; }
 .inbox-shell > .inbox-tabs { flex: none; margin: 0 0 12px; }
@@ -1759,9 +1779,11 @@ button.rating-tile:active { transform: scale(0.98); }
 /* Full-height DM / global chat layout inside #screen */
 .chat-screen {
   display: flex; flex-direction: column;
-  min-height: calc(100dvh - var(--safe-t) - var(--safe-b) - 28px);
-  height: 100%;
+  flex: 1; min-height: 0; height: 100%;
   margin: 0 -2px;
+}
+#screen:has(.chat-screen) .chat-screen {
+  flex: 1 1 auto; min-height: 0;
 }
 .chat-screen .inbox-head { margin-bottom: 8px; flex: none; }
 .chat-log {

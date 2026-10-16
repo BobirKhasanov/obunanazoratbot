@@ -163,6 +163,9 @@ function slide(a, opts) {
   const mediaOnly = hasImg && !hasCopy(a);
   const bgFrom = a.bgFrom || '#1a2740';
   const bgTo = a.bgTo || '#0b1220';
+  // Cap type size so 140px carousel doesn't clip on Android
+  const titlePx = Math.min(22, Math.max(14, Number(a.fontSize) || 18));
+  const bodyPx = Math.min(16, Math.max(12, titlePx - 4));
   const mediaNode = hasImg
     ? h('div.ann-media', h('img', {
       src: a._src,
@@ -184,8 +187,8 @@ function slide(a, opts) {
     } : undefined,
   },
     mediaOnly || !hasCopy(a) ? null : h('div.ann-copy',
-      a.title ? h('b.ann-title', { style: { color: a.titleColor, fontSize: `${a.fontSize}px` } }, a.title) : null,
-      a.body ? h('span.ann-body', { style: { color: a.bodyColor, fontSize: `${Math.max(12, a.fontSize - 4)}px` } }, a.body) : null),
+      a.title ? h('b.ann-title', { style: { color: a.titleColor, fontSize: `${titlePx}px` } }, a.title) : null,
+      a.body ? h('span.ann-body', { style: { color: a.bodyColor, fontSize: `${bodyPx}px` } }, a.body) : null),
     mediaNode);
 }
 
@@ -354,6 +357,51 @@ export function paintAnnouncementsCarousel(host, prepared, { onPage, botUsername
   });
 
   return host;
+}
+
+/**
+ * Swap in fetched media without remounting the track (Android first-paint hydrate).
+ * Preserves slide index and avoids emoji→image remount flash.
+ */
+export function hydrateAnnouncementsMedia(host, prepared) {
+  if (!host || !prepared) return;
+  const items = prepared.items || [];
+  const blobs = prepared.blobs || [];
+  const st = hostState.get(host);
+  if (st && blobs.length) {
+    for (const u of blobs) st.blobs.push(u);
+  } else if (!st && blobs.length) {
+    // Host painted without state (single slide) — keep blobs for later teardown
+    hostState.set(host, { blobs: blobs.slice(), cleanups: [], pause: null, resume: null });
+  }
+  const slides = host.querySelectorAll('.ann-slide');
+  items.forEach((a, i) => {
+    if (!a || !a._src) return;
+    const slideEl = slides[i];
+    if (!slideEl) return;
+    let media = slideEl.querySelector('.ann-media');
+    if (!media) {
+      media = h('div.ann-media');
+      slideEl.append(media);
+    }
+    media.classList.remove('emoji');
+    const img = media.querySelector('img');
+    if (img) {
+      if (img.src !== a._src) img.src = a._src;
+    } else {
+      media.replaceChildren(h('img', {
+        src: a._src, alt: '', draggable: 'false', decoding: 'async',
+      }));
+    }
+    // Promote to media-only layout when there is no copy text
+    if (!hasCopy(a) && !slideEl.classList.contains('media-only')) {
+      slideEl.classList.add('media-only');
+      const copy = slideEl.querySelector('.ann-copy');
+      if (copy) copy.remove();
+      slideEl.style.fontFamily = FONT_CSS[a.fontFamily] || FONT_CSS.system;
+      media.style.cssText = '';
+    }
+  });
 }
 
 /** Prepare media then paint (for callers that do not prefetch). */

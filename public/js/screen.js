@@ -4,11 +4,11 @@ import { $, tg } from './ui.js';
 /** @type {{ build: Function, opts: object, close: Function }[]} */
 const stack = [];
 
-function isLiteShell() {
-  try {
-    return document.documentElement.dataset.perf === 'lite'
-      || document.documentElement.dataset.android === '1';
-  } catch { return false; }
+function isLitePerf() {
+  try { return document.documentElement.dataset.perf === 'lite'; } catch { return false; }
+}
+function isAndroidShell() {
+  try { return document.documentElement.dataset.android === '1'; } catch { return false; }
 }
 
 function hideShell() {
@@ -17,8 +17,9 @@ function hideShell() {
   el.classList.remove('show');
   el.setAttribute('aria-hidden', 'true');
   try { tg.BackButton.hide(); } catch { /* ignore */ }
-  const lite = isLiteShell();
-  setTimeout(() => { if (!el.classList.contains('show')) el.replaceChildren(); }, lite ? 200 : 820);
+  // Wait for CSS close transition: lite ~160ms, Android ~340ms, iOS ~950ms
+  const ms = isLitePerf() ? 200 : (isAndroidShell() ? 400 : 820);
+  setTimeout(() => { if (!el.classList.contains('show')) el.replaceChildren(); }, ms);
 }
 
 function bindBack(close) {
@@ -43,8 +44,9 @@ function renderTop({ animate } = { animate: true }) {
   el.replaceChildren(...[].concat(top.build(top.close)).flat(Infinity).filter(Boolean));
   el.scrollTop = 0;
   el.removeAttribute('aria-hidden');
-  // Lite/Android: skip reflow restart — cheaper open, less jank
-  if (animate && !isLiteShell()) {
+  // Lite: skip reflow on first open (faster). If already open (stacked), always restart enter anim.
+  const alreadyOpen = el.classList.contains('show');
+  if (animate && (alreadyOpen || !isLitePerf())) {
     el.classList.remove('show');
     void el.offsetWidth;
   }

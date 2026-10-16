@@ -17,6 +17,7 @@ import {
   loadAnnouncements,
   prepareAnnouncements,
   paintAnnouncementsCarousel,
+  hydrateAnnouncementsMedia,
   pauseAnnouncementsCarousel,
   resumeAnnouncementsCarousel,
   resumeAnnouncementsHost,
@@ -583,7 +584,10 @@ refreshers.play = async function renderPlay() {
       const already = state.index === idx;
       go(idx, true);
       if (already) closeScreen(true);
-      setTimeout(() => document.dispatchEvent(new CustomEvent('profile-open', { detail: pageName })), already ? 60 : 520);
+      setTimeout(
+        () => document.dispatchEvent(new CustomEvent('profile-open', { detail: pageName })),
+        already ? 60 : (isAndroid() || isLite() ? 400 : 520),
+      );
     }
   };
   const annOpts = { botUsername: state.meta?.botUsername, userId: state.me?.id, onPage };
@@ -753,7 +757,8 @@ refreshers.play = async function renderPlay() {
     prepareAnnouncements(puzzleAnns).then((prep) => {
       if (!puzzleHost.isConnected || !prep || !prep.items.length) return;
       puzzleHost.dataset.annKey = pzKey;
-      paintAnnouncementsCarousel(puzzleHost, prep, { ...annOpts, delayMs: CAROUSEL_STAGGER_MS });
+      // In-place hydrate — avoid remount flash / index reset
+      hydrateAnnouncementsMedia(puzzleHost, prep);
     }).catch(() => {});
   }
 };
@@ -1090,10 +1095,14 @@ function initPager() {
     clearTimeout(stickyAfterSlideT);
     clearTimeout(refreshAfterSlideT);
     const afterMs = animate && android ? 360 : 0;
-    if (afterMs) {
-      stickyAfterSlideT = setTimeout(() => setPlaySticky(state.tab === 'play'), afterMs);
+    // Hide Play sticky immediately when leaving Play (don't leave it over other tabs for 360ms)
+    const wantSticky = state.tab === 'play';
+    if (!wantSticky) {
+      setPlaySticky(false);
+    } else if (afterMs) {
+      stickyAfterSlideT = setTimeout(() => setPlaySticky(true), afterMs);
     } else {
-      requestAnimationFrame(() => setPlaySticky(state.tab === 'play'));
+      requestAnimationFrame(() => setPlaySticky(true));
     }
     if (changed) {
       if (afterMs) {
