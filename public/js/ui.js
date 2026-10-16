@@ -32,23 +32,66 @@ export const $ = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Cancel in-flight smoothScrollTo on an element (avoids freeze when stacked). */
+const scrollAnimIds = new WeakMap();
+function cancelSmoothScroll(el) {
+  const id = scrollAnimIds.get(el);
+  if (id != null) {
+    try { cancelAnimationFrame(id); } catch { /* ignore */ }
+    scrollAnimIds.delete(el);
+  }
+}
+
+/** Jump to top without fighting CSS scroll-behavior (TG WebView–safe). */
+export function scrollToTopNow(el) {
+  if (!el) return;
+  cancelSmoothScroll(el);
+  const prev = el.style.scrollBehavior;
+  el.style.scrollBehavior = 'auto';
+  try {
+    el.scrollTop = 0;
+  } finally {
+    // Restore next frame so CSS smooth still applies to user flicks
+    requestAnimationFrame(() => {
+      try { el.style.scrollBehavior = prev; } catch { /* ignore */ }
+    });
+  }
+}
+
 /** High-smooth programmatic scroll (longer ease than browser default). */
 export function smoothScrollTo(el, top = 0, ms = 520) {
   if (!el) return;
+  cancelSmoothScroll(el);
   const reduce = typeof matchMedia === 'function'
     && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduce || ms <= 0) { el.scrollTop = top; return; }
+  const android = document.documentElement.dataset.android === '1'
+    || document.documentElement.dataset.perf === 'lite';
+  // Instant on Android/lite/reduced — rAF + CSS smooth stacks and freezes WebViews
+  if (reduce || android || ms <= 0) {
+    const prev = el.style.scrollBehavior;
+    el.style.scrollBehavior = 'auto';
+    el.scrollTop = top;
+    requestAnimationFrame(() => { try { el.style.scrollBehavior = prev; } catch { /* ignore */ } });
+    return;
+  }
   const from = el.scrollTop;
   const dist = top - from;
   if (Math.abs(dist) < 1) return;
+  const prevBeh = el.style.scrollBehavior;
+  el.style.scrollBehavior = 'auto'; // disable CSS smooth during JS tween
   const t0 = performance.now();
   const ease = (t) => 1 - Math.pow(1 - t, 3); // ease-out cubic
   const tick = (now) => {
     const p = Math.min(1, (now - t0) / ms);
     el.scrollTop = from + dist * ease(p);
-    if (p < 1) requestAnimationFrame(tick);
+    if (p < 1) {
+      scrollAnimIds.set(el, requestAnimationFrame(tick));
+    } else {
+      scrollAnimIds.delete(el);
+      try { el.style.scrollBehavior = prevBeh; } catch { /* ignore */ }
+    }
   };
-  requestAnimationFrame(tick);
+  scrollAnimIds.set(el, requestAnimationFrame(tick));
 }
 
 const P = {

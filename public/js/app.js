@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, toggle, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, shareUrl, copyText } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, seg, pillBar, toggle, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopNow, shareUrl, copyText } from './ui.js';
 import { homeTabRefreshMs, softPollMs, isLite, isAndroid } from './perf.js';
 import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat } from './inbox.js';
 import { t, setLang } from './i18n.js';
@@ -110,12 +110,17 @@ function initScrollTop() {
     'aria-label': t('scroll_top'),
     'aria-hidden': 'true',
     tabIndex: -1,
-    onclick: () => {
+    onclick: (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       const el = scrollTarget();
       if (!el) return;
       haptic('select');
-      smoothScrollTo(el, 0, 480);
-      // Hide promptly after jump (scroll event may lag on Android)
+      // Instant jump — animated scroll froze pages in Telegram WebView
+      scrollToTopNow(el);
+      scrollTopBtn.classList.remove('show');
+      scrollTopBtn.setAttribute('aria-hidden', 'true');
+      scrollTopBtn.tabIndex = -1;
       requestAnimationFrame(() => syncScrollTopBtn());
     },
   }, icon('chevronUp', 22));

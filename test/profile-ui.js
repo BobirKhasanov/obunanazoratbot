@@ -130,11 +130,12 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261016ag"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016ag'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261016ah"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261016ah'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('firstPaint') && app.includes('deferPzMedia'), 'first paint skips friends wait + defers puzzle media on Android');
 assert.ok(indexHtml.includes('data-android') && indexHtml.includes("plat === 'android'"), 'Android marked early to lighten boot splash');
 assert.ok(app.includes('rank-info') && /rank-info[\s\S]{0,80}foot|foot[\s\S]{0,80}rank-info/.test(app), 'ranking info text above player list');
 assert.ok(app.includes('initScrollTop') && app.includes('scroll-top') && css.includes('.scroll-top'), 'scroll-to-top on scrollable pages');
+assert.ok(app.includes('scrollToTopNow') && read('public/js/ui.js').includes('scrollToTopNow') && read('public/js/ui.js').includes('cancelSmoothScroll'), 'scroll-top jumps instantly (no freeze)');
 assert.ok(css.includes('.list.player-list') && /player-list[\s\S]{0,120}padding:\s*7px/.test(css), 'compact player rows keep text size');
 assert.ok(app.includes('.filter(Boolean)') && app.includes('puzzle_retry'), 'puzzle actions skip null (no literal "null" text)');
 assert.ok(read('src/server.js').includes('PODIUM_PREMIUM') && read('src/server.js').includes('grantPodiumPremium'), 'monthly podium auto-Premium');
