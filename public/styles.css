@@ -711,8 +711,38 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
   overflow: hidden; text-overflow: ellipsis;
 }
 .home-online { margin-bottom: 8px; }
-.home-online .row { margin-bottom: 2px; }
+/* Compact player rows — shorter padding only; keep avatar/name sizes */
+.list.player-list,
+.list.home-online { gap: 4px; }
+.list.player-list .row,
+.list.home-online .row {
+  padding: 7px 12px; gap: 10px;
+}
 .count-pill { background: var(--card); color: var(--muted); padding: 3px 9px; border-radius: 20px; font-size: 12px; }
+
+/* Floating scroll-to-top on tab pages / screens */
+.scroll-top {
+  position: fixed; right: 14px; z-index: 28;
+  bottom: calc(102px + var(--safe-b));
+  width: 46px; height: 46px; border-radius: 50%;
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38);
+  display: grid; place-items: center; padding: 0;
+  opacity: 0; pointer-events: none; transform: translateY(10px) scale(0.92);
+  transition: opacity 0.22s var(--ease), transform 0.22s var(--ease);
+}
+.scroll-top.show {
+  opacity: 1; pointer-events: auto; transform: none;
+}
+.scroll-top:active { transform: scale(0.92); }
+html.play-sticky-on .scroll-top {
+  bottom: calc(178px + var(--safe-b));
+}
+html[data-android="1"] .scroll-top,
+html[data-perf="lite"] .scroll-top {
+  transition-duration: 0.12s;
+}
 
 /* Live rankings */
 .rank-board-bar {
@@ -742,11 +772,11 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .rank-summary-title { font-size: 18px; font-weight: 800; }
 .page[data-page="rankings"] { overflow-x: visible; }
 .rank-root, .rank-body { overflow: visible; }
-.rank-list { margin-top: 10px; overflow: visible; }
+.rank-list { margin-top: 8px; gap: 2px; overflow: visible; }
 .rank-row {
-  gap: 10px; width: 100%; text-align: left; cursor: pointer;
+  gap: 8px; width: 100%; text-align: left; cursor: pointer;
   background: none; border: 0; color: inherit; font: inherit;
-  padding: 12px 6px; border-radius: 14px;
+  padding: 6px 4px; border-radius: 12px;
   overflow: visible;
 }
 .rank-row:active { background: color-mix(in srgb, var(--text) 6%, transparent); }
@@ -760,6 +790,9 @@ textarea.input { min-height: 110px; resize: none; line-height: 1.4; }
 .rank-points { min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
 .rank-points b { display: block; font-size: 20px; font-weight: 850; }
 .rank-points small { display: block; color: var(--muted); font-size: 11px; }
+.rank-info {
+  margin: 10px 0 2px; color: var(--muted); font-size: 12px; line-height: 1.45;
+}
 .rank-footnote { margin: 16px 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .avatar.medal { padding: 0; overflow: hidden; }
 .avatar.medal.char { background: transparent !important; }
@@ -1805,6 +1838,7 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
   color: #475569;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 3px 0 rgba(15, 23, 42, 0.12);
 }
+:root[data-theme="light"] .rank-info,
 :root[data-theme="light"] .rank-footnote,
 :root[data-theme="light"] .app-ver { color: var(--muted); }
 :root[data-theme="light"] .prof-user { color: var(--muted); }

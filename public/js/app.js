@@ -79,6 +79,54 @@ function setPlaySticky(show) {
   }
   el.classList.toggle('show', !!show);
   el.setAttribute('aria-hidden', show ? 'false' : 'true');
+  document.documentElement.classList.toggle('play-sticky-on', !!show);
+  try { syncScrollTopBtn(); } catch { /* not ready yet */ }
+}
+
+/** Active scroll container: open screen stack, else current tab page. */
+function scrollTarget() {
+  const screen = $('#screen');
+  if (screen && screen.classList.contains('show') && screen.getAttribute('aria-hidden') !== 'true') {
+    return screen;
+  }
+  return page(state.tab);
+}
+
+let scrollTopBtn = null;
+function syncScrollTopBtn() {
+  if (!scrollTopBtn) return;
+  const el = scrollTarget();
+  const show = !!(el && el.scrollTop > 200);
+  scrollTopBtn.classList.toggle('show', show);
+  scrollTopBtn.setAttribute('aria-hidden', show ? 'false' : 'true');
+  scrollTopBtn.tabIndex = show ? 0 : -1;
+}
+
+function initScrollTop() {
+  const app = $('#app');
+  if (!app || scrollTopBtn) return;
+  scrollTopBtn = h('button.scroll-top', {
+    type: 'button',
+    'aria-label': t('scroll_top'),
+    'aria-hidden': 'true',
+    tabIndex: -1,
+    onclick: () => {
+      const el = scrollTarget();
+      if (!el) return;
+      haptic('select');
+      smoothScrollTo(el, 0, 480);
+      // Hide promptly after jump (scroll event may lag on Android)
+      requestAnimationFrame(() => syncScrollTopBtn());
+    },
+  }, icon('chevronUp', 22));
+  app.append(scrollTopBtn);
+  const onScroll = () => syncScrollTopBtn();
+  $$('.page').forEach((p) => p.addEventListener('scroll', onScroll, { passive: true }));
+  const screen = $('#screen');
+  if (screen) screen.addEventListener('scroll', onScroll, { passive: true });
+  // Mutation/visibility: tab change & screen open also need a sync
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncScrollTopBtn(); });
+  syncScrollTopBtn();
 }
 
 function themeBg(theme) {
@@ -393,7 +441,7 @@ const playerRow = (u, close) => h('div.row',
 function onlineSheet() {
   let alive = true; let timer;
   sheet((close) => {
-    const list = h('div.list');
+    const list = h('div.list.player-list');
     const load = async () => {
       try {
         const l = await api('GET', '/lobby');
@@ -592,7 +640,7 @@ refreshers.play = async function renderPlay() {
   const paintPeopleList = (tab) => {
     if (tab === 'friends') {
       peopleListHost.replaceChildren(friends.length
-        ? h('div.list.home-online', ...friends.map((f) => {
+        ? h('div.list.home-online.player-list', ...friends.map((f) => {
           const row = { ...f, friend: true, online: !!f.online, discoverable: true };
           return h('div.row',
             h('button.plain', { type: 'button', onclick: () => openProfile(f.id) },
@@ -605,7 +653,7 @@ refreshers.play = async function renderPlay() {
         : empty(t('no_friends'), '👋'));
     } else {
       peopleListHost.replaceChildren(onlinePlayers.length
-        ? h('div.list.home-online', ...onlinePlayers.map((u) => h('div.row',
+        ? h('div.list.home-online.player-list', ...onlinePlayers.map((u) => h('div.row',
           h('button.plain', { type: 'button', onclick: () => openProfile(u.id) },
             avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true, avatarKey: u.avatarKey || null })),
           h('button.grow.plain', { type: 'button', onclick: () => openProfile(u.id) },
@@ -702,6 +750,8 @@ function paintRankBody(host, data, isElo) {
     h('div.card.rank-summary',
       h('div.rank-summary-title', rankingCategory()[selectedRanking] + ' · ' + (isElo ? t('rank_board_elo') : t('rank_board_monthly'))),
       h('div.muted', hint),
+      // Scoring / Premium copy sits above the list (not under the players)
+      h('div.rank-info', foot),
       rows.length ? h('div.list.rank-list', rows.map((p) => {
         const prem = !!(p.premium || (state.me && p.id === state.me.id && state.me.premium));
         return h('button.row.rank-row', {
@@ -717,7 +767,6 @@ function paintRankBody(host, data, isElo) {
               : t('rank_record', { w: p.wins || 0, d: p.draws || 0, l: p.losses || 0 }))),
           h('div.rank-points', h('b', String(isElo ? (p.elo ?? p.points) : p.points)), h('small', unit)));
       })) : h('div.empty.rank-empty', t('rankings_empty'))),
-    h('div.rank-footnote', foot),
   );
 }
 refreshers.rankings = async function renderRankings() {
@@ -994,6 +1043,7 @@ function initPager() {
       }
       refresh();
     }
+    requestAnimationFrame(() => syncScrollTopBtn());
   };
   addEventListener('resize', () => { W = pager.clientWidth; go(state.index, false); });
   let drag = null;
@@ -1027,10 +1077,12 @@ function initPager() {
   };
   pager.addEventListener('pointerup', finish); pager.addEventListener('pointercancel', finish);
   go(0, false);
+  try { initScrollTop(); } catch (e) { console.error('[boot] scroll-top', e); }
 }
 
 function rebuildNav() {
   $('#nav').querySelectorAll('.nav-btn').forEach((b, i) => { b.querySelector('span:last-child').textContent = t('nav_' + TABS[i]); b.setAttribute('aria-label', t('nav_' + TABS[i])); });
+  if (scrollTopBtn) scrollTopBtn.setAttribute('aria-label', t('scroll_top'));
 }
 async function rebuildAll() {
   try {
