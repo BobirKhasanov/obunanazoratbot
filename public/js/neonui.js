@@ -58,16 +58,37 @@ export function heroBanner() {
       h('p', t('hero_sub'))));
 }
 
-/** Big mode card with illustration (Home) or compact selectable card (O'ynash). */
+/** Tag icon for the home mode-card pill. */
+function modeTag(tone) {
+  if (tone === 'gold') return icon('friends', 12);
+  if (tone === 'violet') return icon('gem', 12);
+  return h('i.nx-mode-dot');
+}
+
+/**
+ * Big mode card with illustration (Home) or compact selectable card (O'ynash).
+ * Home cards: tag pill + art + title/sub + Boshlash CTA (screenshot design).
+ */
 export function modeCard({ title, sub, art, glyph, tone, selected, compact, onClick }) {
-  return h('button.nx-mode.' + (tone || 'blue') + (compact ? '.compact' : '') + (selected ? '.on' : ''), {
+  const tOne = tone || 'blue';
+  if (compact) {
+    return h('button.nx-mode.' + tOne + '.compact' + (selected ? '.on' : ''), {
+      type: 'button', 'data-noswipe': '', onclick: tap(onClick),
+    },
+      selected ? h('span.nx-mode-check', icon('check', 12, 3)) : null,
+      h('span.nx-mode-ic', glyph || '♟'),
+      h('b', title),
+      h('small', sub));
+  }
+  return h('button.nx-mode.' + tOne + '.rich', {
     type: 'button', 'data-noswipe': '', onclick: tap(onClick),
   },
-    !compact && art ? h('span.nx-mode-art', { style: { backgroundImage: `url(${art})` } }) : null,
-    selected ? h('span.nx-mode-check', icon('check', 12, 3)) : null,
-    h('span.nx-mode-ic', glyph || '♟'),
-    h('b', title, compact ? null : h('span.nx-mode-go', icon('chevron', 14))),
-    h('small', sub));
+    h('span.nx-mode-tag', modeTag(tOne), h('em', title)),
+    art ? h('span.nx-mode-art', { style: { backgroundImage: `url(${art})` } }) : h('span.nx-mode-ic', glyph || '♟'),
+    h('span.nx-mode-body',
+      h('b', title),
+      h('small', sub),
+      h('span.nx-mode-cta', icon('playTri', 12), t('start'))));
 }
 
 function liveClock(g) {

@@ -56,6 +56,9 @@ assert.ok(profile.includes('openChatWithUser') && profile.includes("from './inbo
 assert.ok(app.includes("from './playhub.js'") && app.includes('renderPlayHub'), 'Play hub wired on rankings tab');
 assert.ok(app.includes("from './neonui.js'") && app.includes('appHeader') && app.includes('modeCard'), 'neon home shell');
 assert.ok(app.includes('nx-mode-row') && app.includes('dailyCard') && app.includes('liveMiniCard') && app.includes('/img/ui/mode-online.webp'), 'home neon sections');
+assert.ok(read('public/js/neonui.js').includes("nx-mode-cta") && read('public/js/neonui.js').includes("t('start')") && read('public/js/neonui.js').includes('.rich'), 'home mode cards: Boshlash CTA design');
+assert.ok(read('public/js/inbox.js').includes('tgBack: false') && read('public/js/screen.js').includes("opts.tgBack === false"), 'inbox hides Telegram BackButton (no double back)');
+assert.ok(css.includes('.nx-mode.rich') && css.includes('.nx-mode-cta') && css.includes('.notif-day'), 'rich mode + notif day styles');
 assert.ok(app.includes("rankings: 'gamepad'") && app.includes("'data-tab': k"), 'nav icons map Oynash to gamepad');
 assert.ok(app.includes('r.already') && app.includes('game_ended'), 'stale invite/game deep links do not reopen boards');
 assert.ok(read('src/welcome.js').includes('startapp=i'), 'invite share uses startapp for Mini App claim');
@@ -151,7 +154,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261017nx27"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261017nx27'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261017nx29"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261017nx29'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -247,6 +250,9 @@ assert.ok(read('src/server.js').includes("kind, title, body, meta) VALUES (?, 'd
 assert.ok(read('src/server.js').includes('referralRowExists'), 'pending invite cleared only after referral pay');
 assert.ok(app.includes('puzzleDailyReward') || app.includes('puzzleRewardN'), 'puzzles use admin-configured diamond reward');
 assert.ok(admin.includes('puzzleDailyReward') && admin.includes('admin_puzzle_reward'), 'admin shop controls puzzle reward');
+assert.ok(read('src/server.js').includes('PUZZLE_DAILY_REWARD_FALLBACK = 2') && /return n >= 0 \? n : 2;/.test(app)
+  && admin.includes('puzzleDailyReward: 2,') && read('src/db.js').includes('migr_puzzle_daily_reward_2'), 'daily puzzle reward defaults to 2 diamonds');
+assert.ok(app.includes('const pzReward = puzzleRewardN();') && !/\+1 💎/.test(read('public/js/i18n.js')), 'home daily card shows the real reward from meta');
 assert.ok(read('src/server.js').includes('premium_flag') && read('src/server.js').includes('mapPremium'), 'rankings API maps premium');
 assert.ok(profile.includes("t('delete_account')") && profile.includes("DELETE', '/me'"), 'profile settings can delete account');
 assert.ok(read('src/server.js').includes("api.delete('/me'") && read('src/server.js').includes('DELETE FROM games WHERE'), 'account delete wipes user games + row');
@@ -288,7 +294,7 @@ assert.ok(profile.includes('delete_account') && profile.includes('confirmSheet')
 assert.ok(profile.includes('/feedback') && profile.includes('feedback_send'), 'help feedback chat');
 assert.ok(profile.includes('openUserProfile') || read('public/js/userprofile.js').includes('openUserProfile'), 'user profile view');
 assert.ok(css.includes('prem-glow') && css.includes('.uprof-like'), 'premium glow + public profile styles');
-assert.ok(admin.includes('ann_board_puzzle') && admin.includes("board: annBoard"), 'admin puzzle board');
+assert.ok(admin.includes("board: 'home'") && !admin.includes("board: 'puzzle'") && !admin.includes('ann_board_puzzle'), 'admin announcements: home board only');
 assert.ok(app.includes("loadAnnouncements(api, 'home')") || app.includes('loadAnnouncements(api, "home")'), 'home carousel load');
 assert.ok(live.includes('liveMatchRow') && live.includes('statCard(') && live.includes('friendRow(') && live.includes('tourneyCard(') && live.includes('onlineBubble'), 'Online tab neon layout');
 assert.ok(admin.includes('/admin/profile-banner') && admin.includes('admin_banner'), 'admin can change profile banner');

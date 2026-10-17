@@ -1,6 +1,9 @@
-// Chess piece SVGs. Style set via <html data-pieces="…"> (outline | classic | neo | staunton | studio).
-// Default "neo" matches Chess.com Neo: soft shaded fills, dark outlines, large centered silhouettes.
-export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio'];
+// Chess pieces. Style set via <html data-pieces="…"> (cartoon | outline | classic | neo | staunton | studio).
+// Default "cartoon" is a raster set (public/img/pieces/cartoon/wK.webp …); the rest are inline SVG.
+export const PIECE_SETS = ['cartoon', 'outline', 'classic', 'neo', 'staunton', 'studio'];
+export const DEFAULT_PIECE_SET = 'cartoon';
+const IMAGE_SETS = { cartoon: '/img/pieces/cartoon' };
+const IMAGE_V = '2';
 export const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio'];
 export const BOARD_SWATCH = {
   classic: { lt: '#b9c4d6', dk: '#5f7391' },
@@ -56,7 +59,19 @@ const cache = Object.create(null);
 
 export function currentPieceSet() {
   const v = typeof document !== 'undefined' ? document.documentElement.dataset.pieces : '';
-  return PIECE_SETS.includes(v) ? v : 'neo';
+  return PIECE_SETS.includes(v) ? v : DEFAULT_PIECE_SET;
+}
+
+const pieceUrl = (set, colour, type) => `${IMAGE_SETS[set]}/${colour}${type.toUpperCase()}.webp?v=${IMAGE_V}`;
+
+/** Warm the HTTP/decode cache so the first board paint doesn't pop in piece by piece. */
+export function preloadPieceSet(set = currentPieceSet()) {
+  if (!IMAGE_SETS[set] || typeof Image === 'undefined') return;
+  for (const c of 'wb') for (const t of 'pnbrqk') {
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = pieceUrl(set, c, t);
+  }
 }
 
 export function clearPieceCache() {
@@ -84,6 +99,11 @@ export function pieceSvg(colour, type, setOverride) {
   const set = PIECE_SETS.includes(setOverride) ? setOverride : currentPieceSet();
   const key = `${set}:${colour}${type}`;
   if (cache[key]) return cache[key];
+
+  if (IMAGE_SETS[set]) {
+    cache[key] = `<img class="pc pc-img ${colour}" src="${pieceUrl(set, colour, type)}" alt="" draggable="false" decoding="async" aria-hidden="true">`;
+    return cache[key];
+  }
 
   const sw = STROKE[set] || '1.6';
   const body = `stroke-linejoin="round" stroke-linecap="round" stroke-width="${sw}"`;

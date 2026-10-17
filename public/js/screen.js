@@ -51,7 +51,11 @@ function renderTop({ animate } = { animate: true }) {
     void el.offsetWidth;
   }
   el.classList.add('show');
-  bindBack(top.close);
+  if (top.opts && top.opts.tgBack === false) {
+    try { tg.BackButton.hide(); } catch { /* ignore */ }
+  } else {
+    bindBack(top.close);
+  }
 }
 
 /** build(close) → nodes to put inside #screen. opts.onClose runs after this level is dismissed. */

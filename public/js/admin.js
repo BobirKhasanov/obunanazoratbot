@@ -1,29 +1,23 @@
-// Admin panel: sectioned hub (live, announcements, users/grants, shop, broadcast, style).
-import { h, icon, haptic, toast, api, fail, getInitData, avatar, confirmSheet, seg } from './ui.js';
+// Admin panel: nx hub (overview stats + grouped sections) → live, users, shop, promos, messages, content.
+import { h, icon, haptic, toast, api, fail, getInitData, avatar, avBlock, confirmSheet } from './ui.js';
 import { t, LANGS, LANG_NAMES } from './i18n.js';
-import { restyleBoards } from './board.js';
-import { restyleOpenGame } from './game.js';
-import { stylePickerCard } from './style-ui.js';
+import { sectionHead, statCard, emptyNote, filterChip } from './neonui.js';
 import { openScreen } from './screen.js';
 
 let timer = null;
 const COLOR_KEYS = ['default', 'primary', 'success', 'danger'];
 const swatch = { default: 'var(--card-2)', primary: '#2f81f7', success: '#2ea043', danger: '#e5484d' };
 
-function sec(label) {
-  return h('div.sec-label', label);
-}
-
 function menuCard(...rows) {
   return h('div.menu-card', rows.filter(Boolean));
 }
 
-function menuRow({ ic, title, sub, onClick }) {
+function menuRow({ ic, title, sub, tone, onClick }) {
   return h('button.menu-row', {
     type: 'button',
     onclick: () => { haptic('select'); onClick(); },
   },
-    h('span.menu-ic', icon(ic, 22)),
+    h('span.menu-ic' + (tone ? '.' + tone : ''), icon(ic, 22)),
     h('div.grow', h('div.t', title), sub ? h('div.s', sub) : null),
     icon('chevron', 18));
 }
@@ -41,17 +35,98 @@ function subTop(title, close) {
   ];
 }
 
+/** nx chip selector (replaces pill segments in admin forms); `.set(v)` updates selection. */
+function chipSeg(options, value, onChange) {
+  let cur = value;
+  const el = h('div.nx-chips.adm-chips', { 'data-noswipe': '' });
+  const draw = () => el.replaceChildren(...options.map(([id, label]) => filterChip(id, label, id === cur, (v) => {
+    if (v === cur) return;
+    cur = v; draw(); onChange(v);
+  })));
+  draw();
+  el.set = (v) => { cur = v; draw(); };
+  return el;
+}
+
+const card = (...kids) => h('div.adm-card', ...kids);
+const field = (label, ...kids) => h('div.adm-field', h('div.label', label), ...kids);
+const primaryBtn = (ic, label, onclick) => h('button.nx-btn-p.adm-btn', { type: 'button', onclick }, ic ? icon(ic, 18) : null, label);
+const ghostBtn = (ic, label, onclick) => h('button.nx-btn-o.adm-btn', { type: 'button', onclick }, ic ? icon(ic, 18) : null, label);
+const icBtn = (ic, title, onclick, tone) => h('button.adm-ic' + (tone ? '.' + tone : ''), { type: 'button', title, 'aria-label': title, onclick }, icon(ic, 16));
+const listRow = (title, subs, ...actions) => h('div.adm-row',
+  h('div.nx-row-tx', h('b', title), ...[].concat(subs).filter(Boolean).map((s) => h('small.wrap', s))),
+  actions.length ? h('div.adm-row-act', ...actions.filter(Boolean)) : null);
+const cardList = (rows, empty) => (rows.length ? h('div.nx-card-list', ...rows) : emptyNote(empty));
+
+async function uploadMedia(f) {
+  const res = await fetch('/api/admin/upload', {
+    method: 'POST',
+    headers: { 'X-Init-Data': getInitData(), 'Content-Type': 'application/octet-stream' },
+    body: f,
+  });
+  const d = await res.json();
+  if (!res.ok) throw Object.assign(new Error(d.error || d.message || 'upload'), { code: d.code });
+  return d;
+}
+
+/** Default end date (YYYY-MM-DDT23:59) N days after the server's Tashkent "now". */
+function tashkentDefault(nowTashkent, days) {
+  const d = new Date(nowTashkent.slice(0, 10) + 'T12:00:00+05:00');
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T23:59`;
+}
+
+const broadcastSub = (b) => `#${b.id} · ${b.lang} · ${b.sent}/${b.total}${b.failed ? ` · ✗${b.failed}` : ''} · ${t('status_' + b.status)}`;
+
+/** Inline-keyboard button editor shared by broadcast + welcome. */
+function buttonEditor(host, buttons, redraw) {
+  host.replaceChildren(...buttons.map((b, i) => h('div.beditor',
+    h('input.input', { value: b.text, placeholder: t('btn_text'), maxlength: 64, oninput: (e) => { b.text = e.target.value; redraw(false); } }),
+    chipSeg(
+      [['app', t('btn_app')], ['invite', t('btn_invite')], ['url', t('btn_url')]],
+      b.type,
+      (v) => { b.type = v; redraw(true); },
+    ),
+    b.type === 'url'
+      ? h('input.input', { value: b.url || '', placeholder: t('btn_link'), inputmode: 'url', oninput: (e) => { b.url = e.target.value; } })
+      : b.type === 'invite'
+        ? h('p.muted', t('btn_invite_hint'))
+        : null,
+    h('div.beditor-foot',
+      h('div.swatches', COLOR_KEYS.map((c) => h('button.sw' + (b.color === c ? '.on' : ''), {
+        type: 'button',
+        'aria-label': t('c_' + (c === 'default' ? 'default' : c)),
+        style: { background: swatch[c] },
+        onclick: () => { b.color = c; redraw(true); },
+      }))),
+      icBtn('trash', t('remove'), () => { buttons.splice(i, 1); redraw(true); }, 'danger')))));
+  if (buttons.length < 6) {
+    host.append(h('button.nx-btn-o.sm.adm-add', {
+      type: 'button',
+      onclick: () => { buttons.push({ text: '', type: 'app', url: '', color: 'primary' }); redraw(true); },
+    }, icon('plus', 16), t('add_button')));
+  }
+}
+
 export function openAdmin(onClose) {
-  const liveBox = h('div.card.live'), kpis = h('div.kpis'), bars = h('div.spark'), liveHead = h('div.livehead');
-  const usersBox = h('div.list'), histBox = h('div.list');
+  const liveHost = h('div'), kpis = h('div.nx-stats'), bars = h('div.spark');
+  const usersBox = h('div'), histBox = h('div');
 
   async function loadLive() {
     try {
       const [live, st] = await Promise.all([api('GET', '/admin/live'), api('GET', '/admin/stats')]);
-      liveHead.replaceChildren(h('i.dot.on'), h('b', String(live.count)), h('span.muted', ' ' + t('live_users')));
-      liveBox.replaceChildren(liveHead, live.users.length ? h('div.livelist', live.users.map((u) => h('div.chipuser', avatar(u.name, u.id, 'sm'), h('span', u.name), u.inGame ? h('em', '♟') : null))) : h('div.muted', t('nobody_live')));
-      const k = (label, v) => h('div.kpi', h('small.muted', label), h('b', String(v)));
-      kpis.replaceChildren(k(t('k_users'), st.users), k(t('k_new'), st.newToday), k(t('k_active'), st.active7d), k(t('k_games_live'), st.gamesLive), k(t('k_games_played'), st.gamesPlayed), k(t('k_unreachable'), st.unreachable));
+      liveHost.replaceChildren(
+        sectionHead(t('live_users'), null, null, { dot: 'green', sub: String(live.count) }),
+        live.users.length
+          ? h('div.adm-live', live.users.map((u) => h('span.adm-live-u', avatar(u.name, u.id, 'sm'), h('span', u.name), u.inGame ? h('em', '♟') : null)))
+          : emptyNote(t('nobody_live')));
+      kpis.replaceChildren(
+        statCard('users', t('k_users'), st.users, 'blue'),
+        statCard('userPlus', t('k_new'), st.newToday, 'green'),
+        statCard('chart', t('k_active'), st.active7d, 'gold'),
+        statCard('gamepad', t('k_games_live'), st.gamesLive, 'green'),
+        statCard('trophy', t('k_games_played'), st.gamesPlayed, 'blue'),
+        statCard('x', t('k_unreachable'), st.unreachable, 'gold'));
       const max = Math.max(1, ...st.signups.map((d) => d.count));
       bars.replaceChildren(...st.signups.map((d, i) => h('i' + (i === st.signups.length - 1 ? '.on' : ''), { title: `${d.date}: ${d.count}`, style: { height: `${Math.max(6, (d.count / max) * 100)}%` } })));
     } catch (e) { if (e.code !== 'net') fail(e); }
@@ -70,67 +145,55 @@ export function openAdmin(onClose) {
           `♟ ${u.games || 0}`,
         ].filter(Boolean).join(' · ');
         const actions = [
-          h('button.mini.admin-user-act', {
-            type: 'button',
-            title: t('admin_grant_diamonds'),
-            onclick: async () => {
-              const raw = window.prompt(t('admin_grant_prompt', { name: name || u.id }), '100');
-              if (raw == null || raw === '') return;
-              const amount = Math.floor(Number(raw));
-              if (!Number.isFinite(amount) || amount === 0) return toast(t('e_bad_request'), true);
-              try {
-                await api('POST', `/admin/users/${u.id}/diamonds`, { amount });
-                toast(amount < 0
-                  ? t('admin_remove_ok', { n: Math.abs(amount) })
-                  : t('admin_grant_ok', { n: amount }));
-                haptic('success');
-                loadUsers(q);
-              } catch (e) { fail(e); }
-            },
-          }, icon('gem', 16)),
+          icBtn('gem', t('admin_grant_diamonds'), async () => {
+            const raw = window.prompt(t('admin_grant_prompt', { name: name || u.id }), '100');
+            if (raw == null || raw === '') return;
+            const amount = Math.floor(Number(raw));
+            if (!Number.isFinite(amount) || amount === 0) return toast(t('e_bad_request'), true);
+            try {
+              await api('POST', `/admin/users/${u.id}/diamonds`, { amount });
+              toast(amount < 0
+                ? t('admin_remove_ok', { n: Math.abs(amount) })
+                : t('admin_grant_ok', { n: amount }));
+              haptic('success');
+              loadUsers(q);
+            } catch (e) { fail(e); }
+          }),
         ];
         if (!u.isAdmin) {
           actions.push(
-            h('button.mini.admin-user-act' + (u.blocked ? '.ok' : ''), {
-              type: 'button',
-              title: u.blocked ? t('unblock') : t('block'),
-              onclick: async () => {
-                try {
-                  await api('POST', `/admin/users/${u.id}/block`, { blocked: !u.blocked });
-                  loadUsers(q);
-                } catch (e) { fail(e); }
-              },
-            }, u.blocked ? icon('check', 16) : icon('x', 16)),
-            h('button.mini.admin-user-act.danger', {
-              type: 'button',
-              title: t('admin_delete_user'),
-              onclick: async () => {
-                if (!(await confirmSheet(t('admin_delete_confirm', { name }), t('admin_delete_user'), true))) return;
-                try {
-                  await api('DELETE', `/admin/users/${u.id}`);
-                  toast(t('admin_user_deleted'));
-                  haptic('success');
-                  loadUsers(q);
-                } catch (e) { fail(e); }
-              },
-            }, icon('trash', 16)),
+            icBtn(u.blocked ? 'check' : 'x', u.blocked ? t('unblock') : t('block'), async () => {
+              try {
+                await api('POST', `/admin/users/${u.id}/block`, { blocked: !u.blocked });
+                loadUsers(q);
+              } catch (e) { fail(e); }
+            }, u.blocked ? 'ok' : ''),
+            icBtn('trash', t('admin_delete_user'), async () => {
+              if (!(await confirmSheet(t('admin_delete_confirm', { name }), t('admin_delete_user'), true))) return;
+              try {
+                await api('DELETE', `/admin/users/${u.id}`);
+                toast(t('admin_user_deleted'));
+                haptic('success');
+                loadUsers(q);
+              } catch (e) { fail(e); }
+            }, 'danger'),
           );
         }
-        return h('div.row.admin-user-row' + (u.blocked ? '.off' : ''),
-          h('div.avwrap', avatar(u.first_name, u.id), u.online ? h('i.dot.on') : null),
-          h('div.grow',
-            h('div.t', h('span.name', name), u.isAdmin ? h('span.pill', t('admin_tag')) : null),
-            h('div.s', meta)),
-          h('div.admin-user-actions', ...actions));
+        return h('div.adm-row.admin-user-row' + (u.blocked ? '.off' : ''),
+          avBlock(name, u.id, { round: true, online: !!u.online, premium: !!u.premium }),
+          h('div.nx-row-tx',
+            h('b', h('span.name', name), u.isAdmin ? h('span.nx-chip-s.blue', t('admin_tag')) : null),
+            h('small.wrap', meta)),
+          h('div.adm-row-act', ...actions));
       });
-      usersBox.replaceChildren(...(rows.length ? rows : [h('div.empty', t('nobody_live'))]));
+      usersBox.replaceChildren(cardList(rows, t('admin_users_empty')));
     } catch (e) { fail(e); }
   }
 
   async function loadHistory() {
     try {
       const r = await api('GET', '/admin/broadcasts');
-      histBox.replaceChildren(...r.broadcasts.map((b) => h('div.row', h('div.grow', h('div.t', (b.text || '📎').slice(0, 60)), h('div.s', `#${b.id} · ${b.lang} · ${b.sent}/${b.total}${b.failed ? ` · ✗${b.failed}` : ''} · ${t('status_' + b.status)}`)))));
+      histBox.replaceChildren(cardList(r.broadcasts.map((b) => listRow((b.text || '📎').slice(0, 60), broadcastSub(b))), t('msg_stats_empty')));
       return r.busy;
     } catch { return false; }
   }
@@ -144,9 +207,7 @@ export function openAdmin(onClose) {
   async function upload(f) {
     toast(t('uploading'));
     try {
-      const res = await fetch('/api/admin/upload', { method: 'POST', headers: { 'X-Init-Data': getInitData(), 'Content-Type': 'application/octet-stream' }, body: f });
-      const d = await res.json();
-      if (!res.ok) throw Object.assign(new Error(d.error), { code: d.code });
+      const d = await uploadMedia(f);
       post.media = { id: d.id, kind: d.kind, url: URL.createObjectURL(f), isVideo: f.type.startsWith('video') };
       drawMedia(); drawPreview(); haptic('success');
     } catch (e) { fail(e); }
@@ -155,25 +216,11 @@ export function openAdmin(onClose) {
     mediaBox.replaceChildren();
     if (post.media) {
       const m = post.media.isVideo ? h('video', { src: post.media.url, muted: true, playsinline: true, loop: true, autoplay: true }) : h('img', { src: post.media.url, alt: '' });
-      mediaBox.append(m, h('button.mini', { onclick: () => { post.media = null; drawMedia(); drawPreview(); } }, icon('x', 16), t('remove')));
-    } else mediaBox.append(h('button.btn.ghost.sm', { onclick: () => file.click() }, icon('image', 18), t('add_media')));
+      mediaBox.append(m, h('button.nx-btn-o.sm', { type: 'button', onclick: () => { post.media = null; drawMedia(); drawPreview(); } }, icon('x', 14), t('remove')));
+    } else mediaBox.append(h('button.nx-btn-o.sm', { type: 'button', onclick: () => file.click() }, icon('image', 16), t('add_media')));
   }
   function drawButtons() {
-    btnBox.replaceChildren(...post.buttons.map((b, i) => h('div.beditor',
-      h('input.input', { value: b.text, placeholder: t('btn_text'), maxlength: 64, oninput: (e) => { b.text = e.target.value; drawPreview(); } }),
-      seg(
-        [['app', t('btn_app')], ['invite', t('btn_invite')], ['url', t('btn_url')]],
-        b.type,
-        (v) => { b.type = v; drawButtons(); drawPreview(); },
-      ),
-      b.type === 'url'
-        ? h('input.input', { value: b.url, placeholder: t('btn_link'), inputmode: 'url', oninput: (e) => { b.url = e.target.value; } })
-        : b.type === 'invite'
-          ? h('p.muted', t('btn_invite_hint'))
-          : null,
-      h('div.swatches', COLOR_KEYS.map((c) => h('button.sw' + (b.color === c ? '.on' : ''), { 'aria-label': t('c_' + (c === 'default' ? 'default' : c)), style: { background: swatch[c] }, onclick: () => { b.color = c; drawButtons(); drawPreview(); } }))),
-      h('button.mini', { onclick: () => { post.buttons.splice(i, 1); drawButtons(); drawPreview(); } }, icon('trash', 16), t('remove')))));
-    if (post.buttons.length < 6) btnBox.append(h('button.btn.ghost.sm', { onclick: () => { post.buttons.push({ text: '', type: 'app', url: '', color: 'primary' }); drawButtons(); drawPreview(); } }, icon('plus', 18), t('add_button')));
+    buttonEditor(btnBox, post.buttons, (full) => { if (full) drawButtons(); drawPreview(); });
   }
   function drawPreview() {
     preview.replaceChildren(...[
@@ -194,8 +241,8 @@ export function openAdmin(onClose) {
       url: b.type === 'url' ? b.url : undefined,
     })),
   });
-  const sendTest = h('button.btn.ghost', { onclick: async () => { try { await api('POST', '/admin/broadcast', payload(true)); toast(t('test_sent')); } catch (e) { fail(e); } } }, icon('send', 18), t('send_test'));
-  const sendAll = h('button.btn', { onclick: async () => {
+  const sendTest = ghostBtn('send', t('send_test'), async () => { try { await api('POST', '/admin/broadcast', payload(true)); toast(t('test_sent')); } catch (e) { fail(e); } });
+  const sendAll = primaryBtn('send', t('send_all'), async () => {
     try {
       const st = await api('GET', '/admin/stats');
       const n = post.lang === 'all' ? st.users : (st.byLang.find((x) => x.lang === post.lang) || { c: 0 }).c;
@@ -204,51 +251,12 @@ export function openAdmin(onClose) {
       toast(t('sending', { n: r.queued })); haptic('success');
       setTimeout(loadHistory, 2500);
     } catch (e) { fail(e); }
-  } }, icon('send', 18), t('send_all'));
-  const audience = seg([['all', t('all_users')], ...LANGS.map((l) => [l, LANG_NAMES[l].slice(0, 3)])], 'all', (v) => { post.lang = v; });
-  const search = h('input.input.search', { placeholder: t('search'), oninput: (e) => { clearTimeout(search._t); search._t = setTimeout(() => loadUsers(e.target.value), 250); } });
-
-  // Admin appearance
-  let styleUser = { pieceSet: 'neo', boardTheme: 'green' };
-  const styleHost = h('div');
-  const applyLocal = (pieceSet, boardTheme) => {
-    document.documentElement.dataset.pieces = pieceSet;
-    document.documentElement.dataset.board = boardTheme;
-    restyleBoards();
-    try { restyleOpenGame(); } catch { /* ignore */ }
-  };
-  const drawStyle = () => {
-    const pickPiece = async (id) => {
-      try {
-        styleUser = (await api('PATCH', '/me', { pieceSet: id })).user;
-        applyLocal(styleUser.pieceSet, styleUser.boardTheme);
-        drawStyle(); haptic('select'); toast(t('piece_' + id));
-      } catch (e) { fail(e); }
-    };
-    const pickBoard = async (id) => {
-      try {
-        styleUser = (await api('PATCH', '/me', { boardTheme: id })).user;
-        applyLocal(styleUser.pieceSet, styleUser.boardTheme);
-        drawStyle(); haptic('select'); toast(t('board_' + id));
-      } catch (e) { fail(e); }
-    };
-    styleHost.replaceChildren(stylePickerCard({
-      pieceSet: styleUser.pieceSet,
-      boardTheme: styleUser.boardTheme,
-      locked: false,
-      onPiece: pickPiece,
-      onBoard: pickBoard,
-    }), h('p.muted', t('admin_style_sub')));
-  };
-  api('GET', '/me').then((r) => {
-    styleUser = r.user;
-    applyLocal(styleUser.pieceSet || 'neo', styleUser.boardTheme || 'green');
-    drawStyle();
-  }).catch(() => drawStyle());
+  });
+  const audience = chipSeg([['all', t('all_users')], ...LANGS.map((l) => [l, LANG_NAMES[l].slice(0, 3)])], 'all', (v) => { post.lang = v; });
+  const search = h('input.input', { type: 'search', placeholder: t('search'), oninput: (e) => { clearTimeout(search._t); search._t = setTimeout(() => loadUsers(e.target.value), 250); } });
 
   // ----- home announcements -----
-  const annList = h('div.list');
-  let annBoard = 'home';
+  const annList = h('div');
   let editingAnnId = null;
   const annForm = {
     title: '', body: '', titleColor: '#ffffff', bodyColor: '#fbbf24',
@@ -265,13 +273,7 @@ export function openAdmin(onClose) {
       if (!f) return;
       toast(t('uploading'));
       try {
-        const res = await fetch('/api/admin/upload', {
-          method: 'POST',
-          headers: { 'X-Init-Data': getInitData(), 'Content-Type': 'application/octet-stream' },
-          body: f,
-        });
-        const d = await res.json();
-        if (!res.ok) throw Object.assign(new Error(d.error || d.message || 'upload'), { code: d.code });
+        const d = await uploadMedia(f);
         annForm.mediaId = d.id;
         annForm.mediaPreview = URL.createObjectURL(f);
         drawAnnMedia(); haptic('success');
@@ -283,9 +285,9 @@ export function openAdmin(onClose) {
     if (annForm.mediaPreview) {
       annMediaBox.append(
         h('img', { src: annForm.mediaPreview, alt: '' }),
-        h('button.mini', { onclick: () => { annForm.mediaId = null; annForm.mediaPreview = null; drawAnnMedia(); } }, icon('x', 16), t('remove')),
+        h('button.nx-btn-o.sm', { type: 'button', onclick: () => { annForm.mediaId = null; annForm.mediaPreview = null; drawAnnMedia(); } }, icon('x', 14), t('remove')),
       );
-    } else annMediaBox.append(h('button.btn.ghost.sm', { onclick: () => annFile.click() }, icon('image', 18), t('add_media')));
+    } else annMediaBox.append(h('button.nx-btn-o.sm', { type: 'button', onclick: () => annFile.click() }, icon('image', 16), t('add_media')));
   }
   drawAnnMedia();
   async function loadAnnMediaPreview(mediaId) {
@@ -310,8 +312,8 @@ export function openAdmin(onClose) {
     colorInputs[key] = inp;
     return h('div.ann-color', h('span', label), inp);
   };
-  const fontSeg = seg([['system', 'Aa'], ['rounded', 'Rd'], ['serif', 'Se'], ['mono', 'Mo']], 'system', (v) => { annForm.fontFamily = v; });
-  const linkSeg = seg([
+  const fontSeg = chipSeg([['system', 'Aa'], ['rounded', 'Rd'], ['serif', 'Se'], ['mono', 'Mo']], 'system', (v) => { annForm.fontFamily = v; });
+  const linkSeg = chipSeg([
     ['none', t('ann_link_none')],
     ['invite', t('ann_link_invite')],
     ['url', t('ann_link_url')],
@@ -335,10 +337,7 @@ export function openAdmin(onClose) {
         ['profile', 'profile'], ['premium', 'premium'], ['friends', 'friends'],
         ['settings', 'settings'], ['diamonds', 'diamonds'], ['promo', t('promo_title')],
       ];
-      linkExtra.append(h('div.chips', pages.map(([p, label]) => h('button.chip' + (annForm.linkPage === p ? '.on' : ''), {
-        type: 'button',
-        onclick: () => { annForm.linkPage = p; drawAnnLink(); },
-      }, label))));
+      linkExtra.append(chipSeg(pages, annForm.linkPage, (p) => { annForm.linkPage = p; }));
     }
   }
   drawAnnLink();
@@ -350,8 +349,8 @@ export function openAdmin(onClose) {
     for (const [k, inp] of Object.entries(colorInputs)) {
       if (annForm[k]) inp.value = annForm[k];
     }
-    if (fontSeg && fontSeg.set) fontSeg.set(annForm.fontFamily || 'system');
-    if (linkSeg && linkSeg.set) linkSeg.set(annForm.linkType || 'none');
+    fontSeg.set(annForm.fontFamily || 'system');
+    linkSeg.set(annForm.linkType || 'none');
     drawAnnLink();
     drawAnnMedia();
     syncAnnSaveBtn();
@@ -392,8 +391,8 @@ export function openAdmin(onClose) {
     try { titleIn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* ignore */ }
   }
 
-  const saveAnn = h('button.btn', { type: 'button' }, icon('plus', 18), t('ann_publish'));
-  const cancelEditAnn = h('button.btn.ghost', {
+  const saveAnn = h('button.nx-btn-p.adm-btn', { type: 'button' });
+  const cancelEditAnn = h('button.nx-btn-o.adm-btn', {
     type: 'button',
     hidden: true,
     onclick: () => resetAnnForm(true),
@@ -408,7 +407,8 @@ export function openAdmin(onClose) {
   syncAnnSaveBtn();
   saveAnn.onclick = async () => {
     const payload = {
-      board: annBoard,
+      // Only the home carousel is rendered by the client
+      board: 'home',
       title: annForm.title,
       body: annForm.body,
       titleColor: annForm.titleColor,
@@ -439,70 +439,47 @@ export function openAdmin(onClose) {
 
   async function loadAnnouncements() {
     try {
-      const r = await api('GET', '/admin/announcements?board=' + encodeURIComponent(annBoard));
+      const r = await api('GET', '/admin/announcements?board=home');
       if (!annForm.endsAtTashkent && r.nowTashkent) {
-        const base = r.nowTashkent.slice(0, 10);
-        const d = new Date(base + 'T12:00:00+05:00');
-        d.setDate(d.getDate() + 1);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        annForm.endsAtTashkent = `${y}-${m}-${day}T23:59`;
+        annForm.endsAtTashkent = tashkentDefault(r.nowTashkent, 1);
         endsIn.value = annForm.endsAtTashkent;
       }
       const active = (r.announcements || []).filter((a) => {
         const end = a.endsAt ? new Date(a.endsAt).getTime() : 0;
         return !end || end > Date.now();
       });
-      annList.replaceChildren(...active.map((a) => h('div.row',
-        h('div.grow',
-          h('div.t', a.title || a.body || '—'),
-          h('div.s', `${t('ann_until')}: ${(a.endsAtTashkent || '').replace('T', ' ')} (Tashkent)`)),
-        h('button.mini', {
-          type: 'button',
-          title: t('ann_edit'),
-          onclick: () => { haptic('select'); beginEditAnn(a); },
-        }, icon('pencil', 16)),
-        h('button.mini', {
-          type: 'button',
-          onclick: async () => {
-            if (!(await confirmSheet(t('ann_delete_confirm'), t('remove'), true))) return;
-            try {
-              await api('DELETE', `/admin/announcements/${a.id}`);
-              if (editingAnnId === a.id) resetAnnForm(true);
-              loadAnnouncements();
-              toast(t('ann_deleted'));
-            } catch (e) { fail(e); }
-          },
-        }, icon('trash', 16)))));
-      if (!active.length) annList.append(h('div.muted', t('ann_empty')));
+      annList.replaceChildren(cardList(active.map((a) => listRow(
+        a.title || a.body || '—',
+        `${t('ann_until')}: ${(a.endsAtTashkent || '').replace('T', ' ')} (Tashkent)`,
+        icBtn('pencil', t('ann_edit'), () => { haptic('select'); beginEditAnn(a); }),
+        icBtn('trash', t('remove'), async () => {
+          if (!(await confirmSheet(t('ann_delete_confirm'), t('remove'), true))) return;
+          try {
+            await api('DELETE', `/admin/announcements/${a.id}`);
+            if (editingAnnId === a.id) resetAnnForm(true);
+            loadAnnouncements();
+            toast(t('ann_deleted'));
+          } catch (e) { fail(e); }
+        }, 'danger'))), t('ann_empty')));
     } catch (e) { fail(e); }
   }
 
-  const boardSeg = seg(
-    [['home', t('ann_board_home')], ['puzzle', t('ann_board_puzzle')]],
-    'home',
-    (v) => { annBoard = v; if (editingAnnId) resetAnnForm(true); loadAnnouncements(); },
-  );
-
-  const annCard = h('div.card',
+  const annCard = card(
     h('p.muted', t('ann_sub')),
-    h('div.label', t('ann_board')), boardSeg,
-    h('div.label', t('ann_title')), titleIn,
-    h('div.label', t('ann_body')), bodyIn,
-    h('div.label', t('ann_font')), fontSeg,
-    h('div.label', t('ann_colors')),
-    h('div.ann-colors',
+    field(t('ann_title'), titleIn),
+    field(t('ann_body'), bodyIn),
+    field(t('ann_font'), fontSeg),
+    field(t('ann_colors'), h('div.ann-colors',
       colorRow(t('ann_title_color'), 'titleColor', '#ffffff'),
       colorRow(t('ann_body_color'), 'bodyColor', '#fbbf24'),
       colorRow(t('ann_bg_from'), 'bgFrom', '#3b82f6'),
-      colorRow(t('ann_bg_to'), 'bgTo', '#6366f1')),
-    h('div.label', t('ann_media')), annMediaBox, annFile,
-    h('div.label', t('ann_link')), linkSeg, linkExtra,
-    h('div.label', t('ann_ends') + ' · Tashkent (UTC+5)'), endsIn,
-    h('div.ann-actions', saveAnn, cancelEditAnn));
+      colorRow(t('ann_bg_to'), 'bgTo', '#6366f1'))),
+    field(t('ann_media'), annMediaBox, annFile),
+    field(t('ann_link'), linkSeg, linkExtra),
+    field(t('ann_ends') + ' · Tashkent (UTC+5)', endsIn),
+    h('div.adm-actions', saveAnn, cancelEditAnn));
 
-  // ----- shop settings -----
+  // ----- shop settings (incl. game analysis limit) -----
   let shop = {
     premiumPriceDiamonds: 200,
     premiumPlans: [
@@ -513,7 +490,7 @@ export function openAdmin(onClose) {
     ],
     diamondPacks: [],
     payUsername: 'hasanovbobur',
-    puzzleDailyReward: 1,
+    puzzleDailyReward: 2,
     referralReward: 20,
     referralInviteeReward: 10,
     analysisDailyFree: 3,
@@ -529,47 +506,27 @@ export function openAdmin(onClose) {
         { months: 12, diamonds: 1600 },
       ];
     }
-    if (shop.puzzleDailyReward == null) shop.puzzleDailyReward = 1;
+    if (shop.puzzleDailyReward == null) shop.puzzleDailyReward = 2;
     if (shop.referralReward == null) shop.referralReward = 20;
     if (shop.referralInviteeReward == null) shop.referralInviteeReward = 10;
     if (shop.analysisDailyFree == null) shop.analysisDailyFree = 3;
+    const num = (key, def, max) => h('input.input.adm-num-in', {
+      type: 'number', inputmode: 'numeric', value: String(shop[key] ?? def), min: '0', max: String(max),
+      oninput: (e) => { shop[key] = Math.floor(Number(e.target.value) || 0); },
+    });
+    const numRow = (label, input, unit) => h('div.adm-num', h('span', label), input, h('small', unit));
     const payIn = h('input.input', {
       value: shop.payUsername, maxlength: 64,
       oninput: (e) => { shop.payUsername = e.target.value.replace(/^@/, ''); },
     });
-    const puzzleRewardIn = h('input.input', {
-      type: 'number', value: String(shop.puzzleDailyReward ?? 1), min: '0', max: '1000000',
-      style: { maxWidth: '120px' },
-      oninput: (e) => { shop.puzzleDailyReward = Math.floor(Number(e.target.value) || 0); },
-    });
-    const referralIn = h('input.input', {
-      type: 'number', value: String(shop.referralReward ?? 20), min: '0', max: '1000000',
-      style: { maxWidth: '120px' },
-      oninput: (e) => { shop.referralReward = Math.floor(Number(e.target.value) || 0); },
-    });
-    const inviteeIn = h('input.input', {
-      type: 'number', value: String(shop.referralInviteeReward ?? 10), min: '0', max: '1000000',
-      style: { maxWidth: '120px' },
-      oninput: (e) => { shop.referralInviteeReward = Math.floor(Number(e.target.value) || 0); },
-    });
-    const analysisIn = h('input.input', {
-      type: 'number', value: String(shop.analysisDailyFree ?? 3), min: '0', max: '100',
-      style: { maxWidth: '120px' },
-      oninput: (e) => { shop.analysisDailyFree = Math.floor(Number(e.target.value) || 0); },
-    });
-    const plansBox = h('div.list');
-    const redrawPlans = () => {
-      plansBox.replaceChildren(...(shop.premiumPlans || []).map((p) => h('div.row',
-        h('span.muted', p.months === 12 ? t('premium_plan_year') : t('premium_plan_months', { n: p.months })),
-        h('input.input', {
-          type: 'number', value: String(p.diamonds), style: { maxWidth: '110px' },
-          oninput: (e) => { p.diamonds = Math.floor(Number(e.target.value) || 0); },
-        }),
-        h('span.muted', '💎'),
-      )));
-    };
-    redrawPlans();
-    const packsBox = h('div.list');
+    const plansBox = h('div.nx-card-list', ...(shop.premiumPlans || []).map((p) => numRow(
+      p.months === 12 ? t('premium_plan_year') : t('premium_plan_months', { n: p.months }),
+      h('input.input.adm-num-in', {
+        type: 'number', inputmode: 'numeric', value: String(p.diamonds),
+        oninput: (e) => { p.diamonds = Math.floor(Number(e.target.value) || 0); },
+      }),
+      '💎')));
+    const packsBox = h('div');
     const movePack = (i, dir) => {
       const packs = shop.diamondPacks || [];
       const j = i + dir;
@@ -582,108 +539,107 @@ export function openAdmin(onClose) {
     };
     const redrawPacks = () => {
       const packs = shop.diamondPacks || [];
-      packsBox.replaceChildren(...packs.map((p, i) => h('div.row.admin-pack-row',
+      packsBox.replaceChildren(cardList(packs.map((p, i) => h('div.adm-row.admin-pack-row',
         h('div.admin-pack-order',
-          h('button.mini', {
+          h('button.adm-ic.sm', {
             type: 'button',
             disabled: i === 0,
             title: t('admin_pack_up'),
             onclick: () => movePack(i, -1),
-          }, icon('chevronUp', 16)),
-          h('button.mini', {
+          }, icon('chevronUp', 14)),
+          h('button.adm-ic.sm', {
             type: 'button',
             disabled: i === packs.length - 1,
             title: t('admin_pack_down'),
             onclick: () => movePack(i, 1),
-          }, icon('chevronDown', 16))),
-        h('input.input', {
-          type: 'number', value: String(p.diamonds), style: { maxWidth: '90px' },
+          }, icon('chevronDown', 14))),
+        h('input.input.adm-num-in', {
+          type: 'number', inputmode: 'numeric', value: String(p.diamonds),
           oninput: (e) => { p.diamonds = Math.floor(Number(e.target.value) || 0); },
         }),
-        h('span.muted', '💎 →'),
-        h('input.input', {
-          type: 'number', value: String(p.sum), style: { flex: '1' },
+        h('small.adm-unit', '💎 →'),
+        h('input.input.grow', {
+          type: 'number', inputmode: 'numeric', value: String(p.sum),
           oninput: (e) => { p.sum = Math.floor(Number(e.target.value) || 0); },
         }),
-        h('span.muted', "so'm"),
-        h('button.mini', {
-          type: 'button',
-          onclick: () => { shop.diamondPacks.splice(i, 1); redrawPacks(); },
-        }, icon('trash', 16)),
-      )));
+        h('small.adm-unit', "so'm"),
+        icBtn('trash', t('remove'), () => { shop.diamondPacks.splice(i, 1); redrawPacks(); }, 'danger'),
+      )), t('admin_pack_need')));
     };
     redrawPacks();
+    const save = async () => {
+      try {
+        const packs = (shop.diamondPacks || []).map((p) => ({
+          diamonds: Math.floor(Number(p.diamonds) || 0),
+          sum: Math.floor(Number(p.sum) || 0),
+        }));
+        if (!packs.length) { toast(t('admin_pack_need'), true); return; }
+        for (const p of packs) {
+          if (!(p.diamonds >= 1 && p.diamonds <= 1000000)) { toast(t('admin_pack_diamonds'), true); return; }
+          if (!(p.sum >= 1000 && p.sum <= 1000000000)) { toast(t('admin_pack_sum'), true); return; }
+        }
+        const puzzleDailyReward = Math.floor(Number(shop.puzzleDailyReward) || 0);
+        if (!(puzzleDailyReward >= 0 && puzzleDailyReward <= 1000000)) {
+          toast(t('admin_puzzle_reward_bad'), true); return;
+        }
+        const referralReward = Math.floor(Number(shop.referralReward) || 0);
+        const referralInviteeReward = Math.floor(Number(shop.referralInviteeReward) || 0);
+        const analysisDailyFree = Math.floor(Number(shop.analysisDailyFree) || 0);
+        if (!(referralReward >= 0 && referralReward <= 1000000)
+          || !(referralInviteeReward >= 0 && referralInviteeReward <= 1000000)) {
+          toast(t('admin_referral_bad'), true); return;
+        }
+        if (!(analysisDailyFree >= 0 && analysisDailyFree <= 100)) {
+          toast(t('admin_analysis_bad'), true); return;
+        }
+        shop.diamondPacks = packs;
+        shop.puzzleDailyReward = puzzleDailyReward;
+        shop.referralReward = referralReward;
+        shop.referralInviteeReward = referralInviteeReward;
+        shop.analysisDailyFree = analysisDailyFree;
+        const r = await api('PATCH', '/admin/shop', {
+          premiumPlans: shop.premiumPlans,
+          diamondPacks: packs,
+          payUsername: shop.payUsername,
+          puzzleDailyReward,
+          referralReward,
+          referralInviteeReward,
+          analysisDailyFree,
+        });
+        shop = r.shop;
+        toast(t('admin_shop_saved')); haptic('success');
+        drawShop();
+      } catch (e) { fail(e); }
+    };
     shopHost.replaceChildren(
-      h('div.card.admin-analysis-card',
-        h('div.h2', t('analyze_title')),
-        h('p.muted', t('admin_analysis_free_sub')),
-        h('div.label', t('admin_analysis_free')),
-        h('div.row', analysisIn, h('span.muted', '/ day'))),
-      h('div.card',
-        h('p.muted', t('admin_shop_sub')),
-        h('div.label', t('admin_premium_plans')), plansBox,
-        h('div.label', t('admin_pay_user')), payIn,
-        h('div.label', t('admin_puzzle_reward')),
-        h('div.row', puzzleRewardIn, h('span.muted', '💎')),
-        h('p.muted', t('admin_puzzle_reward_sub')),
-        h('div.label', t('admin_referral_rewards')),
-        h('div.row', h('span.muted', t('admin_referral_inviter')), referralIn, h('span.muted', '💎')),
-        h('div.row', h('span.muted', t('admin_referral_invitee')), inviteeIn, h('span.muted', '💎')),
-        h('p.muted', t('admin_referral_sub')),
-        h('div.label', t('shop_packs')), packsBox,
-        h('button.btn.ghost.sm', {
-          onclick: () => {
-            if (!Array.isArray(shop.diamondPacks)) shop.diamondPacks = [];
-            shop.diamondPacks.push({ diamonds: 100, sum: 100000 });
-            redrawPacks();
-          },
-        }, icon('plus', 16), t('admin_add_pack')),
-        h('button.btn', {
-          onclick: async () => {
-            try {
-              const packs = (shop.diamondPacks || []).map((p) => ({
-                diamonds: Math.floor(Number(p.diamonds) || 0),
-                sum: Math.floor(Number(p.sum) || 0),
-              }));
-              if (!packs.length) { toast(t('admin_pack_need'), true); return; }
-              for (const p of packs) {
-                if (!(p.diamonds >= 1 && p.diamonds <= 1000000)) { toast(t('admin_pack_diamonds'), true); return; }
-                if (!(p.sum >= 1000 && p.sum <= 1000000000)) { toast(t('admin_pack_sum'), true); return; }
-              }
-              const puzzleDailyReward = Math.floor(Number(shop.puzzleDailyReward) || 0);
-              if (!(puzzleDailyReward >= 0 && puzzleDailyReward <= 1000000)) {
-                toast(t('admin_puzzle_reward_bad'), true); return;
-              }
-              const referralReward = Math.floor(Number(shop.referralReward) || 0);
-              const referralInviteeReward = Math.floor(Number(shop.referralInviteeReward) || 0);
-              const analysisDailyFree = Math.floor(Number(shop.analysisDailyFree) || 0);
-              if (!(referralReward >= 0 && referralReward <= 1000000)
-                || !(referralInviteeReward >= 0 && referralInviteeReward <= 1000000)) {
-                toast(t('admin_referral_bad'), true); return;
-              }
-              if (!(analysisDailyFree >= 0 && analysisDailyFree <= 100)) {
-                toast(t('admin_analysis_bad'), true); return;
-              }
-              shop.diamondPacks = packs;
-              shop.puzzleDailyReward = puzzleDailyReward;
-              shop.referralReward = referralReward;
-              shop.referralInviteeReward = referralInviteeReward;
-              shop.analysisDailyFree = analysisDailyFree;
-              const r = await api('PATCH', '/admin/shop', {
-                premiumPlans: shop.premiumPlans,
-                diamondPacks: packs,
-                payUsername: shop.payUsername,
-                puzzleDailyReward,
-                referralReward,
-                referralInviteeReward,
-                analysisDailyFree,
-              });
-              shop = r.shop;
-              toast(t('admin_shop_saved')); haptic('success');
-              drawShop();
-            } catch (e) { fail(e); }
-          },
-        }, icon('check', 18), t('save'))),
+      h('p.muted.adm-lead', t('admin_shop_sub')),
+      sectionHead(t('analyze_title')),
+      h('div.nx-card-list.admin-analysis-card',
+        numRow(t('admin_analysis_free'), num('analysisDailyFree', 3, 100), '/ day')),
+      h('p.muted.adm-hint', t('admin_analysis_free_sub')),
+      sectionHead(t('admin_premium_plans')),
+      plansBox,
+      sectionHead(t('shop_packs')),
+      packsBox,
+      h('button.nx-btn-o.sm.adm-add', {
+        type: 'button',
+        onclick: () => {
+          if (!Array.isArray(shop.diamondPacks)) shop.diamondPacks = [];
+          shop.diamondPacks.push({ diamonds: 100, sum: 100000 });
+          redrawPacks();
+        },
+      }, icon('plus', 16), t('admin_add_pack')),
+      sectionHead(t('admin_pay_user')),
+      payIn,
+      sectionHead(t('admin_sec_rewards')),
+      h('div.nx-card-list', numRow(t('admin_puzzle_reward'), num('puzzleDailyReward', 2, 1000000), '💎')),
+      h('p.muted.adm-hint', t('admin_puzzle_reward_sub')),
+      h('div.label', t('admin_referral_rewards')),
+      h('div.nx-card-list',
+        numRow(t('admin_referral_inviter'), num('referralReward', 20, 1000000), '💎'),
+        numRow(t('admin_referral_invitee'), num('referralInviteeReward', 10, 1000000), '💎')),
+      h('p.muted.adm-hint', t('admin_referral_sub')),
+      h('div.adm-save', primaryBtn('check', t('save'), save)),
     );
   }
 
@@ -693,13 +649,6 @@ export function openAdmin(onClose) {
       shop = r.shop;
       drawShop();
     } catch (e) { fail(e); drawShop(); }
-  }
-
-  function focusShopAnalysis() {
-    requestAnimationFrame(() => {
-      const el = shopHost.querySelector('.admin-analysis-card');
-      try { if (el) el.scrollIntoView({ block: 'start', behavior: 'auto' }); } catch { /* ignore */ }
-    });
   }
 
   // ----- medal generator -----
@@ -718,18 +667,13 @@ export function openAdmin(onClose) {
       }));
     const sizeIn = (key, label, min, max) => h('div.medal-size-row',
       h('span', label),
-      h('input.input', {
+      h('input.input.adm-num-in', {
         type: 'number', min: String(min), max: String(max), step: '1',
         value: String(cfg[key] ?? ''),
-        style: { maxWidth: '88px' },
         oninput: (e) => { cfg[key] = Math.floor(Number(e.target.value) || 0); },
       }));
-    const fontSeg = (key, label) => h('div',
-      h('div.label', label),
-      seg(fonts.map((f) => [f, f]), cfg[key] || fonts[0], (v) => { cfg[key] = v; }));
-    const pieceSeg = (key, label) => h('div',
-      h('div.label', label),
-      seg(pieces.map((p) => [p, p]), cfg[key] || pieces[0], (v) => { cfg[key] = v; }));
+    const fontSeg = (key, label) => field(label, chipSeg(fonts.map((f) => [f, f]), cfg[key] || fonts[0], (v) => { cfg[key] = v; }));
+    const pieceSeg = (key, label) => field(label, chipSeg(pieces.map((p) => [p, p]), cfg[key] || pieces[0], (v) => { cfg[key] = v; }));
     const botIn = h('input.input', {
       value: cfg.botHandle || '@Chess_uz_bot', maxlength: 64,
       oninput: (e) => { cfg.botHandle = e.target.value; },
@@ -742,107 +686,85 @@ export function openAdmin(onClose) {
     const year = medalState.previewYear || medalState.year || Number(String(curMonth).slice(0, 4)) || new Date().getFullYear();
     const months = medalState.months || [];
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const placeSeg = seg([['1', '#1'], ['2', '#2'], ['3', '#3']], String(medalState.previewPlace || 1), (v) => {
+    const placeSeg = chipSeg([['1', '#1'], ['2', '#2'], ['3', '#3']], String(medalState.previewPlace || 1), (v) => {
       medalState.previewPlace = Number(v);
     });
     const yearRow = h('div.medal-year-row',
-      h('button.mini', {
-        type: 'button',
-        onclick: () => { medalState.previewYear = year - 1; loadMedalsForYear(year - 1); },
-      }, '‹'),
+      icBtn('back', String(year - 1), () => { medalState.previewYear = year - 1; loadMedalsForYear(year - 1); }),
       h('b', String(year)),
-      h('button.mini', {
-        type: 'button',
-        onclick: () => { medalState.previewYear = year + 1; loadMedalsForYear(year + 1); },
-      }, '›'));
-    const monthChips = h('div.chips.medal-months',
+      icBtn('chevron', String(year + 1), () => { medalState.previewYear = year + 1; loadMedalsForYear(year + 1); }));
+    const monthChips = h('div.medal-months',
       (months.length ? months : Array.from({ length: 12 }, (_, i) => ({
         key: `${year}-${String(i + 1).padStart(2, '0')}`,
         short: String(i + 1).padStart(2, '0'),
-      }))).map((m, i) => h('button.chip' + (curMonth === m.key ? '.on' : ''), {
-        type: 'button',
-        onclick: () => {
-          medalState.previewMonth = m.key;
-          haptic('select');
-          loadMedals(m.key);
-        },
-      }, monthNames[i] || m.short)));
+      }))).map((m, i) => filterChip(m.key, monthNames[i] || m.short, curMonth === m.key, () => {
+        medalState.previewMonth = m.key;
+        loadMedals(m.key);
+      })));
     const preview = h('div');
     if (medalState.previewUrl) {
       preview.append(h('img.medal-admin-preview', { src: medalState.previewUrl, alt: 'preview' }));
     }
-    const list = (medalState.medals || []).length
-      ? h('div.list', medalState.medals.map((m) => h('div.row',
-        h('img', { src: m.url, alt: '', style: { width: '40px', height: '48px', borderRadius: '8px', objectFit: 'cover' } }),
-        h('div.grow', h('div.t', m.title), h('div.s', `${m.month} · #${m.place} · ${m.name || m.userId}`)))))
-      : h('div.muted', '—');
+    const list = cardList((medalState.medals || []).map((m) => h('div.adm-row',
+      h('img.adm-medal-thumb', { src: m.url, alt: '' }),
+      h('div.nx-row-tx', h('b', m.title), h('small', `${m.month} · #${m.place} · ${m.name || m.userId}`)))), '—');
     medalHost.replaceChildren(
-      h('div.card',
+      card(
         h('p.muted', t('admin_medals_sub')),
-        h('div.label', t('admin_medals_bot')), botIn,
-        h('div.label', t('admin_medals_title_tpl')), tplIn,
-        h('p.muted', t('admin_medals_tpl_hint')),
-        h('div.label', t('ann_colors')),
-        h('div.ann-colors',
+        field(t('admin_medals_bot'), botIn),
+        field(t('admin_medals_title_tpl'), tplIn, h('p.muted.adm-hint', t('admin_medals_tpl_hint'))),
+        field(t('ann_colors'), h('div.ann-colors',
           color('primary', 'Primary'), color('secondary', 'Secondary'),
-          color('accent', 'Accent'), color('text', 'Text'), color('muted', 'Muted')),
+          color('accent', 'Accent'), color('text', 'Text'), color('muted', 'Muted'))),
         h('div.label', t('admin_medals_pieces')),
         pieceSeg('pieceTop1', t('admin_medals_piece_1')),
         pieceSeg('pieceTop2', t('admin_medals_piece_2')),
         pieceSeg('pieceTop3', t('admin_medals_piece_3')),
         fontSeg('fontTitle', t('admin_medals_font_title')),
         fontSeg('fontFamily', t('admin_medals_font_body')),
-        h('div.label', t('admin_medals_sizes')),
-        h('div.medal-sizes',
+        field(t('admin_medals_sizes'), h('div.medal-sizes',
           sizeIn('sizePlace', t('admin_medals_sz_place'), 12, 40),
           sizeIn('sizeName', t('admin_medals_sz_name'), 14, 40),
           sizeIn('sizeTitle', t('admin_medals_sz_title'), 12, 28),
-          sizeIn('sizeBot', t('admin_medals_sz_bot'), 10, 24)),
-        h('p.muted', t('admin_medals_pattern_hint')),
-        h('div.label', t('admin_medals_pick_month')), yearRow, monthChips,
-        h('div.label', t('admin_medals_preview_place')), placeSeg,
-        h('button.btn.ghost.sm', {
-          onclick: async () => {
-            try {
-              const month = medalState.previewMonth || medalState.month;
-              const r = await api('POST', '/admin/medals/preview', {
-                config: cfg,
-                place: medalState.previewPlace || 1,
-                month,
-                name: (medalState.top[0] && medalState.top[0].name) || 'Player',
-                username: (medalState.top[0] && medalState.top[0].username) || '',
-                userId: (medalState.top[0] && medalState.top[0].id) || 0,
-              });
-              medalState.previewUrl = r.dataUrl;
-              drawMedals();
-            } catch (e) { fail(e); }
-          },
-        }, t('admin_medals_preview')),
+          sizeIn('sizeBot', t('admin_medals_sz_bot'), 10, 24))),
+        h('p.muted.adm-hint', t('admin_medals_pattern_hint')),
+        field(t('admin_medals_pick_month'), yearRow, monthChips),
+        field(t('admin_medals_preview_place'), placeSeg),
+        ghostBtn('eye', t('admin_medals_preview'), async () => {
+          try {
+            const month = medalState.previewMonth || medalState.month;
+            const r = await api('POST', '/admin/medals/preview', {
+              config: cfg,
+              place: medalState.previewPlace || 1,
+              month,
+              name: (medalState.top[0] && medalState.top[0].name) || 'Player',
+              username: (medalState.top[0] && medalState.top[0].username) || '',
+              userId: (medalState.top[0] && medalState.top[0].id) || 0,
+            });
+            medalState.previewUrl = r.dataUrl;
+            drawMedals();
+          } catch (e) { fail(e); }
+        }),
         preview,
-        h('button.btn', {
-          onclick: async () => {
-            try {
-              const r = await api('PATCH', '/admin/medals/config', cfg);
-              medalState.config = r.config;
-              toast(t('admin_medals_saved')); haptic('success');
-              drawMedals();
-            } catch (e) { fail(e); }
-          },
-        }, icon('check', 18), t('save')),
-        h('p.muted', t('admin_medals_auto_hint')),
+        h('div.adm-save', primaryBtn('check', t('save'), async () => {
+          try {
+            const r = await api('PATCH', '/admin/medals/config', cfg);
+            medalState.config = r.config;
+            toast(t('admin_medals_saved')); haptic('success');
+            drawMedals();
+          } catch (e) { fail(e); }
+        })),
+        h('p.muted.adm-hint', t('admin_medals_auto_hint')),
         curMonth
-          ? h('button.btn.ghost.sm', {
-            type: 'button',
-            onclick: async () => {
-              try {
-                await api('DELETE', `/admin/medals/${encodeURIComponent(curMonth)}`);
-                toast(t('admin_medals_cleared')); haptic('success');
-                loadMedals(curMonth);
-              } catch (e) { fail(e); }
-            },
-          }, t('admin_medals_clear_month'))
+          ? ghostBtn('trash', t('admin_medals_clear_month'), async () => {
+            try {
+              await api('DELETE', `/admin/medals/${encodeURIComponent(curMonth)}`);
+              toast(t('admin_medals_cleared')); haptic('success');
+              loadMedals(curMonth);
+            } catch (e) { fail(e); }
+          })
           : null),
-      h('div.h2', t('admin_medals')), list,
+      sectionHead(t('admin_medals')), list,
     );
   }
 
@@ -874,9 +796,9 @@ export function openAdmin(onClose) {
     clearInterval(timer); timer = setInterval(() => { if (!document.hidden) loadLive(); }, 10000);
     return [
       ...subTop(t('admin_sec_live'), close),
-      liveBox,
-      h('div.h2', t('stats')), kpis,
-      h('div.h2', t('signups')), h('div.card', bars),
+      liveHost,
+      sectionHead(t('stats')), kpis,
+      sectionHead(t('signups')), card(bars),
     ];
   }, { onClose: () => { clearInterval(timer); timer = null; } });
 
@@ -885,38 +807,37 @@ export function openAdmin(onClose) {
     return [
       ...subTop(t('ann_title_section'), close),
       annCard,
-      h('div.h2', t('ann_list')), annList,
+      sectionHead(t('ann_list')), annList,
     ];
   });
 
   const openUsers = () => openScreen((close) => {
-    loadUsers();
+    loadUsers(search.value);
     return [
       ...subTop(t('users_list'), close),
-      h('div.admin-users-page',
-        h('p.muted.admin-users-sub', t('admin_users_sub')),
-        search,
-        usersBox),
+      h('p.muted.adm-lead', t('admin_users_sub')),
+      h('label.adm-search', icon('search', 18), search),
+      usersBox,
     ];
   });
 
-  const openShop = (focusAnalysis) => openScreen((close) => {
-    loadShop().then(() => { if (focusAnalysis) focusShopAnalysis(); });
+  const openShop = () => openScreen((close) => {
+    loadShop();
     return [
-      ...subTop(focusAnalysis ? t('analyze_title') : t('admin_sec_shop'), close),
+      ...subTop(t('admin_sec_shop'), close),
       shopHost,
     ];
   });
 
   const openPromos = () => {
-    const list = h('div.list');
+    const list = h('div');
     const codeIn = h('input.input', { placeholder: t('promo_code_ph'), maxlength: 32, autocomplete: 'off' });
-    const amountIn = h('input.input', { type: 'number', min: '1', value: '100', placeholder: '100' });
-    const maxIn = h('input.input', { type: 'number', min: '1', placeholder: t('promo_max_ph') });
+    const amountIn = h('input.input', { type: 'number', inputmode: 'numeric', min: '1', value: '100', placeholder: '100' });
+    const maxIn = h('input.input', { type: 'number', inputmode: 'numeric', min: '1', placeholder: t('promo_max_ph') });
     const endsIn = h('input.input', { type: 'datetime-local' });
     const noteIn = h('input.input', { placeholder: t('promo_note_ph'), maxlength: 120 });
     let rewardType = 'diamonds';
-    const typeSeg = seg([
+    const typeSeg = chipSeg([
       ['diamonds', t('promo_reward_diamonds')],
       ['premium_days', t('promo_reward_days')],
       ['premium_months', t('promo_reward_months')],
@@ -931,81 +852,68 @@ export function openAdmin(onClose) {
     async function loadPromos() {
       try {
         const r = await api('GET', '/admin/promos');
-        if (!endsIn.value && r.nowTashkent) {
-          const base = r.nowTashkent.slice(0, 10);
-          const d = new Date(base + 'T12:00:00+05:00');
-          d.setDate(d.getDate() + 7);
-          const y = d.getFullYear();
-          const m = String(d.getMonth() + 1).padStart(2, '0');
-          const day = String(d.getDate()).padStart(2, '0');
-          endsIn.value = `${y}-${m}-${day}T23:59`;
-        }
+        if (!endsIn.value && r.nowTashkent) endsIn.value = tashkentDefault(r.nowTashkent, 7);
         const rows = r.promos || [];
-        list.replaceChildren(...rows.map((p) => h('div.row' + (p.active ? '' : '.off'),
-          h('div.grow',
-            h('div.t', p.code, p.active ? null : h('span.pill', ' ' + t('promo_inactive'))),
-            h('div.s', `${rewardLabel(p)} · ${p.usedCount}${p.maxUses != null ? '/' + p.maxUses : ''} · ${t('ann_until')} ${String(p.endsAtTashkent || '').replace('T', ' ')}`),
-            p.note ? h('div.s', p.note) : null),
-          h('button.mini', {
-            type: 'button',
-            onclick: async () => {
-              try {
-                await api('PATCH', `/admin/promos/${p.id}`, { active: !p.active });
-                loadPromos();
-              } catch (e) { fail(e); }
-            },
-          }, p.active ? t('promo_disable') : t('promo_enable')),
-          h('button.mini', {
-            type: 'button',
-            onclick: async () => {
+        list.replaceChildren(cardList(rows.map((p) => h('div.adm-row' + (p.active ? '' : '.off'),
+          h('div.nx-row-tx',
+            h('b', p.code, p.active ? null : h('span.nx-chip-s', t('promo_inactive'))),
+            h('small.wrap', `${rewardLabel(p)} · ${p.usedCount}${p.maxUses != null ? '/' + p.maxUses : ''} · ${t('ann_until')} ${String(p.endsAtTashkent || '').replace('T', ' ')}`),
+            p.note ? h('small.wrap', p.note) : null),
+          h('div.adm-row-act',
+            h('button.nx-btn-o.sm', {
+              type: 'button',
+              onclick: async () => {
+                try {
+                  await api('PATCH', `/admin/promos/${p.id}`, { active: !p.active });
+                  loadPromos();
+                } catch (e) { fail(e); }
+              },
+            }, p.active ? t('promo_disable') : t('promo_enable')),
+            icBtn('trash', t('remove'), async () => {
               if (!(await confirmSheet(t('promo_delete_confirm'), t('remove'), true))) return;
               try {
                 await api('DELETE', `/admin/promos/${p.id}`);
                 toast(t('promo_deleted'));
                 loadPromos();
               } catch (e) { fail(e); }
-            },
-          }, icon('trash', 16)))));
-        if (!rows.length) list.append(h('div.muted', t('promo_empty')));
+            }, 'danger')))), t('promo_empty')));
       } catch (e) { fail(e); }
     }
 
-    const createBtn = h('button.btn', {
-      type: 'button',
-      onclick: async () => {
-        try {
-          const payload = {
-            code: codeIn.value.trim() || undefined,
-            rewardType,
-            rewardAmount: Math.floor(Number(amountIn.value)),
-            maxUses: maxIn.value === '' ? null : Math.floor(Number(maxIn.value)),
-            endsAtTashkent: endsIn.value,
-            note: noteIn.value.trim(),
-          };
-          const r = await api('POST', '/admin/promos', payload);
-          toast(t('promo_created', { code: r.promo.code }));
-          haptic('success');
-          codeIn.value = '';
-          noteIn.value = '';
-          loadPromos();
-        } catch (e) { fail(e); }
-      },
-    }, icon('plus', 18), t('promo_create'));
+    const createBtn = primaryBtn('plus', t('promo_create'), async () => {
+      try {
+        const payload = {
+          code: codeIn.value.trim() || undefined,
+          rewardType,
+          rewardAmount: Math.floor(Number(amountIn.value)),
+          maxUses: maxIn.value === '' ? null : Math.floor(Number(maxIn.value)),
+          endsAtTashkent: endsIn.value,
+          note: noteIn.value.trim(),
+        };
+        const r = await api('POST', '/admin/promos', payload);
+        toast(t('promo_created', { code: r.promo.code }));
+        haptic('success');
+        codeIn.value = '';
+        noteIn.value = '';
+        loadPromos();
+      } catch (e) { fail(e); }
+    });
 
     openScreen((close) => {
       loadPromos();
       return [
         ...subTop(t('promo_admin_title'), close),
-        h('p.muted', t('promo_admin_hint')),
-        h('div.card',
-          h('div.label', t('promo_code')), codeIn,
-          h('div.label', t('promo_reward')), typeSeg,
-          h('div.label', t('promo_amount')), amountIn,
-          h('div.label', t('promo_max')), maxIn,
-          h('div.label', t('promo_ends') + ' · Tashkent (UTC+5)'), endsIn,
-          h('div.label', t('promo_note')), noteIn,
-          createBtn),
-        h('div.h2', t('promo_list')),
+        h('p.muted.adm-lead', t('promo_admin_hint')),
+        card(
+          field(t('promo_code'), codeIn),
+          field(t('promo_reward'), typeSeg),
+          h('div.adm-grid2',
+            field(t('promo_amount'), amountIn),
+            field(t('promo_max'), maxIn)),
+          field(t('promo_ends') + ' · Tashkent (UTC+5)', endsIn),
+          field(t('promo_note'), noteIn),
+          h('div.adm-save', createBtn)),
+        sectionHead(t('promo_list')),
         list,
       ];
     });
@@ -1015,8 +923,14 @@ export function openAdmin(onClose) {
     drawMedia(); drawButtons(); drawPreview(); loadHistory();
     return [
       ...subTop(t('composer'), close),
-      h('div.card', text, mediaBox, file, h('div.label', t('buttons') + ' · ' + t('up_to')), btnBox, h('div.label', t('audience')), audience, h('div.label', t('preview')), preview, sendTest, sendAll),
-      h('div.h2', t('history')), histBox,
+      card(
+        text,
+        mediaBox, file,
+        field(t('buttons') + ' · ' + t('up_to'), btnBox),
+        field(t('audience'), audience),
+        field(t('preview'), preview),
+        h('div.adm-actions', sendTest, sendAll)),
+      sectionHead(t('history')), histBox,
     ];
   });
 
@@ -1026,63 +940,40 @@ export function openAdmin(onClose) {
       const r = await api('GET', '/admin/message-stats');
       const tg = r.telegram || {};
       const app = r.inApp || {};
-      const kpi = (label, value) => h('div.kpi', h('small.muted', label), h('b', String(value ?? 0)));
+      const n = (v) => v ?? 0;
+      const period = (rows) => h('div.nx-card-list', ...rows.map(([label, value]) => h('div.adm-row', h('div.nx-row-tx', h('b', label), h('small.wrap', value)))));
       msgStatsHost.replaceChildren(
-        h('div.h2', t('msg_stats_tg')),
-        h('p.muted', t('msg_stats_tg_sub')),
-        h('div.kpis',
-          kpi(t('msg_stats_campaigns'), tg.campaigns),
-          kpi(t('msg_stats_sent'), tg.sent),
-          kpi(t('msg_stats_failed'), tg.failed),
-          kpi(t('msg_stats_targeted'), tg.targeted),
-        ),
-        h('div.card',
-          h('div.t', t('msg_stats_7d')),
-          h('div.s', t('msg_stats_period', {
-            c: tg.last7d?.campaigns || 0,
-            s: tg.last7d?.sent || 0,
-            f: tg.last7d?.failed || 0,
-          })),
-          h('div.t', { style: { marginTop: '8px' } }, t('msg_stats_30d')),
-          h('div.s', t('msg_stats_period', {
-            c: tg.last30d?.campaigns || 0,
-            s: tg.last30d?.sent || 0,
-            f: tg.last30d?.failed || 0,
-          })),
-        ),
-        h('div.h2', t('msg_stats_tg_recent')),
-        (tg.recent || []).length
-          ? h('div.list', ...(tg.recent || []).map((b) => h('div.card',
-            h('div.t', (b.text || '📎').slice(0, 80)),
-            h('div.s', `#${b.id} · ${b.lang} · ${b.sent}/${b.total}${b.failed ? ` · ✗${b.failed}` : ''} · ${t('status_' + b.status)}`),
-          )))
-          : h('div.empty', t('msg_stats_empty')),
-        h('div.h2', t('msg_stats_app')),
-        h('p.muted', t('msg_stats_app_sub')),
-        h('div.kpis',
-          kpi(t('msg_stats_campaigns'), app.campaigns),
-          kpi(t('msg_stats_sent'), app.sent),
-          kpi(t('msg_stats_read'), app.read),
-          kpi(t('msg_stats_unread'), app.unreadActive),
-        ),
-        h('div.card',
-          h('div.t', t('msg_stats_7d')),
-          h('div.s', t('msg_stats_app_period', { c: app.last7d?.campaigns || 0, s: app.last7d?.sent || 0 })),
-          h('div.t', { style: { marginTop: '8px' } }, t('msg_stats_30d')),
-          h('div.s', t('msg_stats_app_period', { c: app.last30d?.campaigns || 0, s: app.last30d?.sent || 0 })),
-        ),
-        h('div.h2', t('msg_stats_app_recent')),
-        (app.recent || []).length
-          ? h('div.list', ...(app.recent || []).map((c) => h('div.card',
-            h('div.t', c.title),
-            h('div.s', (c.body || '').slice(0, 80)),
-            h('div.s', t('msg_stats_app_row', {
-              n: c.sentCount || 0,
-              r: c.readCount || 0,
-              ttl: c.permanent ? t('admin_notif_ttl_permanent') : (c.expiresAt ? new Date(c.expiresAt).toLocaleString() : '—'),
-            })),
-          )))
-          : h('div.empty', t('msg_stats_empty')),
+        sectionHead(t('msg_stats_tg'), null, null, { sub: t('msg_stats_tg_sub') }),
+        h('div.nx-stats.adm-stats2',
+          statCard('send', t('msg_stats_campaigns'), n(tg.campaigns), 'blue'),
+          statCard('check', t('msg_stats_sent'), n(tg.sent), 'green'),
+          statCard('x', t('msg_stats_failed'), n(tg.failed), 'gold'),
+          statCard('users', t('msg_stats_targeted'), n(tg.targeted), 'blue')),
+        period([
+          [t('msg_stats_7d'), t('msg_stats_period', { c: tg.last7d?.campaigns || 0, s: tg.last7d?.sent || 0, f: tg.last7d?.failed || 0 })],
+          [t('msg_stats_30d'), t('msg_stats_period', { c: tg.last30d?.campaigns || 0, s: tg.last30d?.sent || 0, f: tg.last30d?.failed || 0 })],
+        ]),
+        sectionHead(t('msg_stats_tg_recent')),
+        cardList((tg.recent || []).map((b) => listRow((b.text || '📎').slice(0, 80), broadcastSub(b))), t('msg_stats_empty')),
+        sectionHead(t('msg_stats_app'), null, null, { sub: t('msg_stats_app_sub') }),
+        h('div.nx-stats.adm-stats2',
+          statCard('bell', t('msg_stats_campaigns'), n(app.campaigns), 'blue'),
+          statCard('send', t('msg_stats_sent'), n(app.sent), 'green'),
+          statCard('eye', t('msg_stats_read'), n(app.read), 'gold'),
+          statCard('mail', t('msg_stats_unread'), n(app.unreadActive), 'blue')),
+        period([
+          [t('msg_stats_7d'), t('msg_stats_app_period', { c: app.last7d?.campaigns || 0, s: app.last7d?.sent || 0 })],
+          [t('msg_stats_30d'), t('msg_stats_app_period', { c: app.last30d?.campaigns || 0, s: app.last30d?.sent || 0 })],
+        ]),
+        sectionHead(t('msg_stats_app_recent')),
+        cardList((app.recent || []).map((c) => listRow(c.title, [
+          (c.body || '').slice(0, 80),
+          t('msg_stats_app_row', {
+            n: c.sentCount || 0,
+            r: c.readCount || 0,
+            ttl: c.permanent ? t('admin_notif_ttl_permanent') : (c.expiresAt ? new Date(c.expiresAt).toLocaleString() : '—'),
+          }),
+        ])), t('msg_stats_empty')),
       );
     } catch (e) { fail(e); }
   };
@@ -1115,13 +1006,7 @@ export function openAdmin(onClose) {
       if (!f) return;
       toast(t('uploading'));
       try {
-        const res = await fetch('/api/admin/upload', {
-          method: 'POST',
-          headers: { 'X-Init-Data': getInitData(), 'Content-Type': 'application/octet-stream' },
-          body: f,
-        });
-        const d = await res.json();
-        if (!res.ok) throw Object.assign(new Error(d.error), { code: d.code });
+        const d = await uploadMedia(f);
         welcomeForm.mediaId = d.id;
         welcomeForm.mediaPreview = URL.createObjectURL(f);
         welcomeForm.mediaIsVideo = f.type.startsWith('video');
@@ -1138,54 +1023,21 @@ export function openAdmin(onClose) {
         : h('img', { src: welcomeForm.mediaPreview, alt: '' });
       welcomeMediaBox.append(
         m,
-        h('button.mini', {
+        h('button.nx-btn-o.sm', {
+          type: 'button',
           onclick: () => {
             welcomeForm.mediaId = null; welcomeForm.mediaPreview = null; welcomeForm.mediaIsVideo = false;
             drawWelcomeMedia(); drawWelcomePreview();
           },
-        }, icon('x', 16), t('remove')),
+        }, icon('x', 14), t('remove')),
       );
     } else {
-      welcomeMediaBox.append(h('button.btn.ghost.sm', { onclick: () => welcomeFile.click() }, icon('image', 18), t('add_media')));
+      welcomeMediaBox.append(h('button.nx-btn-o.sm', { type: 'button', onclick: () => welcomeFile.click() }, icon('image', 16), t('add_media')));
     }
   }
 
   function drawWelcomeButtons() {
-    welcomeBtnBox.replaceChildren(...welcomeForm.buttons.map((b, i) => h('div.beditor',
-      h('input.input', {
-        value: b.text, placeholder: t('btn_text'), maxlength: 64,
-        oninput: (e) => { b.text = e.target.value; drawWelcomePreview(); },
-      }),
-      seg(
-        [['app', t('btn_app')], ['invite', t('btn_invite')], ['url', t('btn_url')]],
-        b.type,
-        (v) => { b.type = v; drawWelcomeButtons(); drawWelcomePreview(); },
-      ),
-      b.type === 'url'
-        ? h('input.input', {
-          value: b.url || '', placeholder: t('btn_link'), inputmode: 'url',
-          oninput: (e) => { b.url = e.target.value; },
-        })
-        : b.type === 'invite'
-          ? h('p.muted', t('btn_invite_hint'))
-          : null,
-      h('div.swatches', COLOR_KEYS.map((c) => h('button.sw' + (b.color === c ? '.on' : ''), {
-        'aria-label': t('c_' + (c === 'default' ? 'default' : c)),
-        style: { background: swatch[c] },
-        onclick: () => { b.color = c; drawWelcomeButtons(); drawWelcomePreview(); },
-      }))),
-      h('button.mini', {
-        onclick: () => { welcomeForm.buttons.splice(i, 1); drawWelcomeButtons(); drawWelcomePreview(); },
-      }, icon('trash', 16), t('remove')),
-    )));
-    if (welcomeForm.buttons.length < 6) {
-      welcomeBtnBox.append(h('button.btn.ghost.sm', {
-        onclick: () => {
-          welcomeForm.buttons.push({ text: '', type: 'app', url: '', color: 'primary' });
-          drawWelcomeButtons(); drawWelcomePreview();
-        },
-      }, icon('plus', 18), t('add_button')));
-    }
+    buttonEditor(welcomeBtnBox, welcomeForm.buttons, (full) => { if (full) drawWelcomeButtons(); drawWelcomePreview(); });
   }
 
   function drawWelcomePreview() {
@@ -1234,41 +1086,38 @@ export function openAdmin(onClose) {
   }
 
   function renderWelcomeHost() {
-    const langSeg = seg(LANGS.map((l) => [l, LANG_NAMES[l].slice(0, 3)]), welcomeLang, (v) => { applyWelcomeLang(v); });
-    const saveBtn = h('button.btn', {
-      onclick: async () => {
-        try {
-          const r = await api('PATCH', '/admin/welcome', {
-            lang: welcomeLang,
-            text: welcomeForm.text,
-            mediaId: welcomeForm.mediaId,
-            buttons: welcomeForm.buttons.map((b) => ({
-              text: b.text, type: b.type, color: b.color,
-              url: b.type === 'url' ? b.url : undefined,
-            })),
-          });
-          if (!welcomeCfg) welcomeCfg = {};
-          welcomeCfg[welcomeLang] = r.entry;
-          toast(t('welcome_saved')); haptic('success');
-        } catch (e) { fail(e); }
-      },
-    }, icon('check', 18), t('save'));
-    const testBtn = h('button.btn.ghost', {
-      onclick: async () => {
-        try {
-          await api('POST', '/admin/welcome/test', { lang: welcomeLang });
-          toast(t('test_sent')); haptic('success');
-        } catch (e) { fail(e); }
-      },
-    }, icon('send', 18), t('send_test'));
+    const langSeg = chipSeg(LANGS.map((l) => [l, LANG_NAMES[l]]), welcomeLang, (v) => { applyWelcomeLang(v); });
+    const saveBtn = primaryBtn('check', t('save'), async () => {
+      try {
+        const r = await api('PATCH', '/admin/welcome', {
+          lang: welcomeLang,
+          text: welcomeForm.text,
+          mediaId: welcomeForm.mediaId,
+          buttons: welcomeForm.buttons.map((b) => ({
+            text: b.text, type: b.type, color: b.color,
+            url: b.type === 'url' ? b.url : undefined,
+          })),
+        });
+        if (!welcomeCfg) welcomeCfg = {};
+        welcomeCfg[welcomeLang] = r.entry;
+        toast(t('welcome_saved')); haptic('success');
+      } catch (e) { fail(e); }
+    });
+    const testBtn = ghostBtn('send', t('send_test'), async () => {
+      try {
+        await api('POST', '/admin/welcome/test', { lang: welcomeLang });
+        toast(t('test_sent')); haptic('success');
+      } catch (e) { fail(e); }
+    });
     welcomeHost.replaceChildren(
-      h('p.muted', t('welcome_sub')),
-      h('div.label', t('language')), langSeg,
-      h('div.label', t('welcome_text')), welcomeText,
-      h('div.label', t('ann_media')), welcomeMediaBox, welcomeFile,
-      h('div.label', t('buttons')), welcomeBtnBox,
-      h('div.label', t('preview')), welcomePreview,
-      saveBtn, testBtn,
+      h('p.muted.adm-lead', t('welcome_sub')),
+      card(
+        field(t('language'), langSeg),
+        field(t('welcome_text'), welcomeText),
+        field(t('ann_media'), welcomeMediaBox, welcomeFile),
+        field(t('buttons'), welcomeBtnBox),
+        field(t('preview'), welcomePreview),
+        h('div.adm-actions', testBtn, saveBtn)),
     );
   }
 
@@ -1330,38 +1179,37 @@ export function openAdmin(onClose) {
 
   function renderBootHost() {
     if (!bootCfg) bootCfg = { animation: 'orbit' };
-    const langSeg = seg(LANGS.map((l) => [l, LANG_NAMES[l].slice(0, 3)]), bootLang, (v) => { applyBootLang(v); });
-    const animSeg = seg(
+    const langSeg = chipSeg(LANGS.map((l) => [l, LANG_NAMES[l]]), bootLang, (v) => { applyBootLang(v); });
+    const animSeg = chipSeg(
       bootAnims.map((a) => [a, t('boot_anim_' + a)]),
       bootCfg.animation || 'orbit',
       (v) => { bootCfg.animation = v; drawBootPreview(); },
     );
-    const saveBtn = h('button.btn', {
-      onclick: async () => {
-        try {
-          if (!bootCfg[bootLang]) bootCfg[bootLang] = { title: '', subtitle: '' };
-          bootCfg[bootLang].title = bootTitle.value;
-          bootCfg[bootLang].subtitle = bootSub.value;
-          const r = await api('PATCH', '/admin/boot-splash', {
-            lang: bootLang,
-            title: bootTitle.value,
-            subtitle: bootSub.value,
-            animation: bootCfg.animation,
-          });
-          bootCfg = r.splash || bootCfg;
-          toast(t('boot_saved')); haptic('success');
-          drawBootPreview();
-        } catch (e) { fail(e); }
-      },
-    }, icon('check', 18), t('save'));
+    const saveBtn = primaryBtn('check', t('save'), async () => {
+      try {
+        if (!bootCfg[bootLang]) bootCfg[bootLang] = { title: '', subtitle: '' };
+        bootCfg[bootLang].title = bootTitle.value;
+        bootCfg[bootLang].subtitle = bootSub.value;
+        const r = await api('PATCH', '/admin/boot-splash', {
+          lang: bootLang,
+          title: bootTitle.value,
+          subtitle: bootSub.value,
+          animation: bootCfg.animation,
+        });
+        bootCfg = r.splash || bootCfg;
+        toast(t('boot_saved')); haptic('success');
+        drawBootPreview();
+      } catch (e) { fail(e); }
+    });
     bootHost.replaceChildren(
-      h('p.muted', t('boot_sub')),
-      h('div.label', t('language')), langSeg,
-      h('div.label', t('boot_title')), bootTitle,
-      h('div.label', t('boot_subtitle')), bootSub,
-      h('div.label', t('boot_animation')), animSeg,
-      h('div.label', t('preview')), bootPreview,
-      saveBtn,
+      h('p.muted.adm-lead', t('boot_sub')),
+      card(
+        field(t('language'), langSeg),
+        field(t('boot_title'), bootTitle),
+        field(t('boot_subtitle'), bootSub),
+        field(t('boot_animation'), animSeg),
+        field(t('preview'), bootPreview),
+        h('div.adm-save', saveBtn)),
     );
     drawBootPreview();
   }
@@ -1372,14 +1220,6 @@ export function openAdmin(onClose) {
     return [
       ...subTop(t('boot_title_section'), close),
       bootHost,
-    ];
-  });
-
-  const openStyle = () => openScreen((close) => {
-    drawStyle();
-    return [
-      ...subTop(t('admin_style'), close),
-      styleHost,
     ];
   });
 
@@ -1400,13 +1240,7 @@ export function openAdmin(onClose) {
       if (!f) return;
       toast(t('uploading'));
       try {
-        const res = await fetch('/api/admin/upload', {
-          method: 'POST',
-          headers: { 'X-Init-Data': getInitData(), 'Content-Type': 'application/octet-stream' },
-          body: f,
-        });
-        const d = await res.json();
-        if (!res.ok) throw Object.assign(new Error(d.error), { code: d.code });
+        const d = await uploadMedia(f);
         const saved = await api('PATCH', '/admin/profile-banner', { mediaId: d.id });
         toast(t('admin_banner_saved')); haptic('success');
         drawBanner(saved);
@@ -1418,20 +1252,18 @@ export function openAdmin(onClose) {
     const url = (info && info.url) || '/img/profile-banner.png';
     const custom = !!(info && info.mediaId);
     bannerHost.replaceChildren(
-      h('p.muted', t('admin_banner_sub')),
-      h('div.admin-banner-preview', { style: { backgroundImage: `url("${url}")` } }),
-      h('div.row', { style: { gap: '8px', marginTop: '12px' } },
-        h('button.btn.ghost.sm', { type: 'button', onclick: () => bannerFile.click() }, icon('image', 18), t('admin_banner_upload')),
-        custom ? h('button.btn.ghost.sm', {
-          type: 'button',
-          onclick: async () => {
+      h('p.muted.adm-lead', t('admin_banner_sub')),
+      card(
+        h('div.admin-banner-preview', { style: { backgroundImage: `url("${url}")` } }),
+        h('div.adm-actions',
+          custom ? ghostBtn(null, t('admin_banner_default'), async () => {
             try {
               const saved = await api('PATCH', '/admin/profile-banner', { mediaId: null });
               toast(t('admin_banner_reset')); haptic('success');
               drawBanner(saved);
             } catch (err) { fail(err); }
-          },
-        }, t('admin_banner_default')) : null),
+          }) : null,
+          primaryBtn('image', t('admin_banner_upload'), () => bannerFile.click()))),
       bannerFile,
     );
   }
@@ -1469,10 +1301,10 @@ export function openAdmin(onClose) {
       onchange: () => { ttl = ttlSelect.value; },
     }, ...TTL_OPTS.map(([v, label]) => h('option', { value: v }, label)));
     ttlSelect.value = ttl;
-    const listBox = h('div.list');
+    const listBox = h('div');
     const mediaBox = h('div.admin-notif-media');
-    const actionBtn = h('button.btn');
-    const cancelEditBtn = h('button.btn.ghost', {
+    const actionBtn = h('button.nx-btn-p.adm-btn', { type: 'button' });
+    const cancelEditBtn = h('button.nx-btn-o.adm-btn', {
       type: 'button',
       hidden: true,
       onclick: () => resetForm(),
@@ -1484,13 +1316,7 @@ export function openAdmin(onClose) {
         if (!f) return;
         toast(t('uploading'));
         try {
-          const res = await fetch('/api/admin/upload', {
-            method: 'POST',
-            headers: { 'X-Init-Data': getInitData(), 'Content-Type': 'application/octet-stream' },
-            body: f,
-          });
-          const d = await res.json();
-          if (!res.ok) throw Object.assign(new Error(d.error), { code: d.code });
+          const d = await uploadMedia(f);
           mediaId = d.id;
           drawMedia();
           haptic('success');
@@ -1503,16 +1329,12 @@ export function openAdmin(onClose) {
     const drawMedia = () => {
       mediaBox.replaceChildren(
         mediaId
-          ? h('div.row',
-            h('div.grow', h('div.t', t('admin_notif_media_ok')), h('div.s', mediaId.slice(0, 8) + '…')),
-            h('button.mini', {
-              type: 'button',
-              onclick: () => { mediaId = null; drawMedia(); },
-            }, icon('x', 16), t('remove')))
-          : h('button.btn.ghost.sm', {
+          ? h('div.nx-card-list', listRow(t('admin_notif_media_ok'), mediaId.slice(0, 8) + '…',
+            icBtn('x', t('remove'), () => { mediaId = null; drawMedia(); }, 'danger')))
+          : h('button.nx-btn-o.sm', {
             type: 'button',
             onclick: () => file.click(),
-          }, icon('image', 18), t('admin_notif_media')),
+          }, icon('image', 16), t('admin_notif_media')),
         file,
       );
     };
@@ -1567,58 +1389,45 @@ export function openAdmin(onClose) {
         return new Date(c.expiresAt).toLocaleString();
       } catch { return String(c.expiresAt); }
     };
+    const beginEdit = (c) => {
+      editingId = c.id;
+      title.value = c.title || '';
+      body.value = c.body || '';
+      mediaId = c.mediaId || null;
+      ttl = c.permanent ? 'permanent' : '24h';
+      if (!c.permanent && c.expiresAt) {
+        const ms = new Date(c.expiresAt).getTime() - Date.now();
+        if (ms > 20 * 24 * 3600 * 1000) ttl = '30d';
+        else if (ms > 5 * 24 * 3600 * 1000) ttl = '7d';
+        else if (ms > 2 * 24 * 3600 * 1000) ttl = '3d';
+        else if (ms > 12 * 3600 * 1000) ttl = '24h';
+        else if (ms > 3 * 3600 * 1000) ttl = '6h';
+        else ttl = '1h';
+      }
+      drawMedia();
+      drawTtl();
+      drawAction();
+      haptic('select');
+      title.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
     const loadList = async () => {
       try {
         const r = await api('GET', '/admin/notifications');
         const campaigns = r.campaigns || [];
-        if (!campaigns.length) {
-          listBox.replaceChildren(h('div.empty', t('admin_notif_list_empty')));
-          return;
-        }
-        listBox.replaceChildren(...campaigns.map((c) => h('div.card',
-          h('div.t', c.title),
-          h('div.s', c.body),
-          h('div.s', t('admin_notif_meta', { n: c.sentCount || 0, ttl: ttlLabel(c) })),
-          h('div.row',
-            h('button.mini', {
-              type: 'button',
-              onclick: () => {
-                editingId = c.id;
-                title.value = c.title || '';
-                body.value = c.body || '';
-                mediaId = c.mediaId || null;
-                ttl = c.permanent ? 'permanent' : '24h';
-                if (!c.permanent && c.expiresAt) {
-                  const ms = new Date(c.expiresAt).getTime() - Date.now();
-                  if (ms > 20 * 24 * 3600 * 1000) ttl = '30d';
-                  else if (ms > 5 * 24 * 3600 * 1000) ttl = '7d';
-                  else if (ms > 2 * 24 * 3600 * 1000) ttl = '3d';
-                  else if (ms > 12 * 3600 * 1000) ttl = '24h';
-                  else if (ms > 3 * 3600 * 1000) ttl = '6h';
-                  else ttl = '1h';
-                }
-                drawMedia();
-                drawTtl();
-                drawAction();
-                haptic('select');
-                title.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              },
-            }, icon('pencil', 16), t('ann_edit')),
-            h('button.mini', {
-              type: 'button',
-              onclick: async () => {
-                if (!(await confirmSheet(t('admin_notif_delete_confirm'), t('admin_notif_delete'), true))) return;
-                try {
-                  await api('DELETE', `/admin/notifications/${c.id}`);
-                  toast(t('admin_notif_deleted'));
-                  haptic('success');
-                  if (editingId === c.id) resetForm();
-                  loadList();
-                } catch (e) { fail(e); }
-              },
-            }, icon('trash', 16), t('remove')),
-          ),
-        )));
+        listBox.replaceChildren(cardList(campaigns.map((c) => listRow(
+          c.title,
+          [c.body, t('admin_notif_meta', { n: c.sentCount || 0, ttl: ttlLabel(c) })],
+          icBtn('pencil', t('ann_edit'), () => beginEdit(c)),
+          icBtn('trash', t('remove'), async () => {
+            if (!(await confirmSheet(t('admin_notif_delete_confirm'), t('admin_notif_delete'), true))) return;
+            try {
+              await api('DELETE', `/admin/notifications/${c.id}`);
+              toast(t('admin_notif_deleted'));
+              haptic('success');
+              if (editingId === c.id) resetForm();
+              loadList();
+            } catch (e) { fail(e); }
+          }, 'danger'))), t('admin_notif_list_empty')));
       } catch (e) { fail(e); }
     };
     drawMedia();
@@ -1627,45 +1436,71 @@ export function openAdmin(onClose) {
     loadList();
     return [
       ...subTop(t('admin_notif'), close),
-      h('p.muted', t('admin_notif_sub')),
-      h('div.field', h('label', t('admin_notif_title')), title),
-      h('div.field', h('label', t('admin_notif_body')), body),
-      h('div.field', h('label', t('admin_notif_ttl')), ttlSelect),
-      h('div.field', h('label', t('admin_notif_media')), mediaBox),
-      actionBtn,
-      cancelEditBtn,
-      h('div.h2', t('admin_notif_list')),
+      h('p.muted.adm-lead', t('admin_notif_sub')),
+      card(
+        field(t('admin_notif_title'), title),
+        field(t('admin_notif_body'), body),
+        field(t('admin_notif_ttl'), ttlSelect),
+        field(t('admin_notif_media'), mediaBox),
+        h('div.adm-actions', cancelEditBtn, actionBtn)),
+      sectionHead(t('admin_notif_list')),
       listBox,
     ];
   });
 
-  openScreen((close) => [
-    h('button.back', { type: 'button', onclick: () => close() }, icon('back', 20), t('back')),
-    h('div.top', h('h1', t('admin_title'))),
-    sec(t('admin_sec_overview')),
-    menuCard(
-      menuRow({ ic: 'live', title: t('admin_sec_live'), sub: t('admin_sec_live_sub'), onClick: openLive }),
-      menuRow({ ic: 'chart', title: t('ann_title_section'), sub: t('admin_sec_ann_sub'), onClick: openAnnouncements }),
-    ),
-    sec(t('admin_sec_economy')),
-    menuCard(
-      menuRow({ ic: 'friends', title: t('users_list'), sub: t('admin_users_sub'), onClick: openUsers }),
-      menuRow({ ic: 'gem', title: t('admin_sec_shop'), sub: t('admin_shop_sub'), onClick: () => openShop(false) }),
-      menuRow({ ic: 'sparkles', title: t('analyze_title'), sub: t('admin_analysis_menu_sub'), onClick: () => openShop(true) }),
-      menuRow({ ic: 'crown', title: t('promo_admin_title'), sub: t('promo_admin_sub'), onClick: openPromos }),
-    ),
-    sec(t('admin_sec_content')),
-    menuCard(
-      menuRow({ ic: 'send', title: t('composer'), sub: t('admin_sec_broadcast_sub'), onClick: openBroadcast }),
-      menuRow({ ic: 'chart', title: t('msg_stats_title'), sub: t('msg_stats_menu_sub'), onClick: openMessageStats }),
-      menuRow({ ic: 'play', title: t('welcome_title'), sub: t('welcome_menu_sub'), onClick: openWelcome }),
-      menuRow({ ic: 'cpu', title: t('boot_title_section'), sub: t('boot_menu_sub'), onClick: openBootSplash }),
-      menuRow({ ic: 'bell', title: t('admin_notif'), sub: t('admin_notif_menu_sub'), onClick: openInAppNotif }),
-      menuRow({ ic: 'image', title: t('admin_banner'), sub: t('admin_banner_menu_sub'), onClick: openBanner }),
-      menuRow({ ic: 'gear', title: t('admin_style'), sub: t('admin_style_sub'), onClick: openStyle }),
-      menuRow({ ic: 'rankings', title: t('admin_medals'), sub: t('admin_medals_sub'), onClick: openMedals }),
-    ),
-  ], {
+  // ----- hub -----
+  const hubStats = h('div.nx-stats.adm-hub-stats');
+  const drawHubStats = (st) => {
+    const v = (x) => (st ? (x ?? 0) : '—');
+    hubStats.replaceChildren(
+      statCard('users', t('k_users'), v(st && st.users), 'blue', openUsers),
+      statCard('live', t('stat_online'), v(st && st.live), 'green', openLive),
+      statCard('gamepad', t('k_games_live'), v(st && st.gamesLive), 'gold', openLive),
+      statCard('userPlus', t('k_new'), v(st && st.newToday), 'green', openLive),
+      statCard('chart', t('k_active'), v(st && st.active7d), 'blue', openLive),
+      statCard('trophy', t('k_games_played'), v(st && st.gamesPlayed), 'gold', openLive));
+  };
+  let hubCache = null;
+  const loadHubStats = async () => {
+    try {
+      hubCache = await api('GET', '/admin/stats');
+      drawHubStats(hubCache);
+    } catch (e) { if (e.code !== 'net') fail(e); }
+  };
+
+  openScreen((close) => {
+    drawHubStats(hubCache);
+    loadHubStats();
+    return [
+      ...subTop(t('admin_title'), close),
+      h('p.muted.adm-lead', t('admin_hub_sub')),
+      hubStats,
+      sectionHead(t('admin_sec_overview')),
+      menuCard(
+        menuRow({ ic: 'live', tone: 'ok', title: t('admin_sec_live'), sub: t('admin_sec_live_sub'), onClick: openLive }),
+        menuRow({ ic: 'chart', title: t('msg_stats_title'), sub: t('msg_stats_menu_sub'), onClick: openMessageStats }),
+      ),
+      sectionHead(t('admin_sec_economy')),
+      menuCard(
+        menuRow({ ic: 'users', title: t('users_list'), sub: t('admin_users_sub'), onClick: openUsers }),
+        menuRow({ ic: 'gem', title: t('admin_sec_shop'), sub: t('admin_shop_sub'), onClick: openShop }),
+        menuRow({ ic: 'sparkles', title: t('promo_admin_title'), sub: t('promo_admin_sub'), onClick: openPromos }),
+      ),
+      sectionHead(t('admin_sec_messages')),
+      menuCard(
+        menuRow({ ic: 'send', title: t('composer'), sub: t('admin_sec_broadcast_sub'), onClick: openBroadcast }),
+        menuRow({ ic: 'bell', title: t('admin_notif'), sub: t('admin_notif_menu_sub'), onClick: openInAppNotif }),
+        menuRow({ ic: 'chat', title: t('welcome_title'), sub: t('welcome_menu_sub'), onClick: openWelcome }),
+      ),
+      sectionHead(t('admin_sec_content')),
+      menuCard(
+        menuRow({ ic: 'image', title: t('ann_title_section'), sub: t('admin_sec_ann_sub'), onClick: openAnnouncements }),
+        menuRow({ ic: 'profile', title: t('admin_banner'), sub: t('admin_banner_menu_sub'), onClick: openBanner }),
+        menuRow({ ic: 'cpu', title: t('boot_title_section'), sub: t('boot_menu_sub'), onClick: openBootSplash }),
+        menuRow({ ic: 'trophy', title: t('admin_medals'), sub: t('admin_medals_sub'), onClick: openMedals }),
+      ),
+    ];
+  }, {
     onClose: () => {
       clearInterval(timer); timer = null;
       onClose && onClose();

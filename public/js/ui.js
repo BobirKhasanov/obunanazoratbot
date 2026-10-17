@@ -3,6 +3,36 @@ import { t, errText } from './i18n.js';
 
 export const tg = window.Telegram && window.Telegram.WebApp;
 
+function insetPx(n) {
+  const v = Number(n);
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+/**
+ * Copy Telegram.WebApp safeAreaInset + contentSafeAreaInset onto the CSS
+ * variables --safe-t already adds. When a phone reports 0 while the header
+ * still overlays the webview, fill only that gap — never stack on a real inset.
+ */
+export function syncTgSafeArea() {
+  const tw = tg || (window.Telegram && window.Telegram.WebApp);
+  if (!tw) return;
+  const root = document.documentElement;
+  const s = tw.safeAreaInset || {};
+  const c = tw.contentSafeAreaInset || {};
+  for (const side of ['top', 'bottom', 'left', 'right']) {
+    root.style.setProperty('--tg-safe-area-inset-' + side, insetPx(s[side]) + 'px');
+    root.style.setProperty('--tg-content-safe-area-inset-' + side, insetPx(c[side]) + 'px');
+  }
+  const reportedTop = insetPx(s.top) + insetPx(c.top);
+  if (reportedTop > 0) return;
+  const plat = String(tw.platform || '').toLowerCase();
+  if (plat === 'tdesktop' || plat === 'macos' || plat === 'web' || plat === 'weba' || plat === 'webk') return;
+  const ios = plat === 'ios' || root.dataset.ios === '1';
+  const android = plat === 'android' || root.dataset.android === '1';
+  if (!ios && !android) return;
+  root.style.setProperty('--tg-content-safe-area-inset-top', (ios ? 88 : 64) + 'px');
+}
+
 /** h('div.card#id', {onclick}, child, 'text') */
 export function h(sel, props, ...kids) {
   const m = /^([a-z0-9]+)?((?:[.#][\w-]+)*)$/i.exec(sel) || [];
@@ -252,6 +282,7 @@ const P = {
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   send: '<path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/>',
   undo: '<path d="M9 7L4 12l5 5M4 12h10a6 6 0 0 1 0 12"/>',
+  playTri: '<path d="M8 5.5v13l11-6.5z"/>',
   chevron: '<path d="M9 6l6 6-6 6"/>',
   chevronUp: '<path d="M6 14l6-6 6 6"/>',
   chevronDown: '<path d="M6 10l6 6 6-6"/>',

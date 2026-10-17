@@ -228,11 +228,11 @@ export function openNotifications() {
     };
     load();
     return [
-      h('div.inbox-shell',
-        inboxHead(t('xabarnoma'), close, '🔔'),
+      h('div.inbox-shell.notif-shell',
+        inboxHead(t('xabarnoma'), close),
         list),
     ];
-  }, { onClose: () => refreshInboxBadges() });
+  }, { onClose: () => refreshInboxBadges(), tgBack: false });
 }
 
 function openNotifDetail(n, onBack) {
@@ -312,7 +312,7 @@ function openNotifDetail(n, onBack) {
       replyBox,
       delHost,
     ].filter(Boolean);
-  });
+  }, { tgBack: false });
 }
 
 export function openMessages() {
@@ -400,6 +400,7 @@ export function openMessages() {
         h('div.inbox-scroll', body)),
     ];
   }, {
+    tgBack: false,
     onClose: () => {
       clearTimeout(searchTimer);
       refreshInboxBadges();
@@ -612,6 +613,7 @@ function openChatShell({ title, peer, loadUrl, sendUrl, wsMatch, pollMs, showNam
         h('div.chat-compose', input, sendBtn)),
     ];
   }, {
+    tgBack: false,
     onClose: () => {
       cleanupChat();
       try { onCloseExtra && onCloseExtra(); } catch { /* ignore */ }

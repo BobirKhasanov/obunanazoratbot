@@ -1,12 +1,15 @@
 // Light entry: /me + app.js in parallel; keep splash until home first paint.
 // Retries /me through Render cold-starts so users do not land on "No connection".
-import { api, setInitData, tg } from './ui.js';
+import { api, setInitData, tg, syncTgSafeArea } from './ui.js';
 import { errText, setLang, t } from './i18n.js';
 import { applyPerfMode } from './perf.js';
 
 function hideBoot() {
   const boot = document.getElementById('boot');
   if (!boot) return;
+  if (typeof window.__bootLeave === 'function') {
+    try { window.__bootLeave(); return; } catch (e) { /* fall through to hard remove */ }
+  }
   boot.hidden = true;
   boot.setAttribute('hidden', '');
   boot.style.setProperty('display', 'none', 'important');
@@ -54,6 +57,12 @@ function syncChrome() {
     try { tg.ready(); } catch (e) { /* ignore */ }
     try { tg.expand(); } catch (e) { /* ignore */ }
     try { if (tg.disableVerticalSwipes) tg.disableVerticalSwipes(); } catch (e) { /* ignore */ }
+    syncTgSafeArea();
+    try {
+      tg.onEvent('safeAreaChanged', syncTgSafeArea);
+      tg.onEvent('contentSafeAreaChanged', syncTgSafeArea);
+      tg.onEvent('viewportChanged', syncTgSafeArea);
+    } catch (e) { /* old client */ }
     const bg = '#111827';
     try { tg.setHeaderColor(bg); tg.setBackgroundColor(bg); } catch (e) { /* ignore */ }
   } catch (e) { /* ignore */ }
@@ -95,7 +104,10 @@ async function loadMe() {
   const attempts = [9000, 12000, 16000];
   let lastErr;
   for (let i = 0; i < attempts.length; i++) {
-    if (i > 0) wakeOrigin();
+    if (i > 0) {
+      wakeOrigin();
+      try { if (window.__bootStatus) window.__bootStatus('wake'); } catch (e) { /* ignore */ }
+    }
     try {
       return await loadMeOnce(attempts[i]);
     } catch (e) {
@@ -107,6 +119,15 @@ async function loadMe() {
     }
   }
   throw lastErr || Object.assign(new Error('timeout'), { code: 'net' });
+}
+
+/** Network-ish /me failure: keep the splash and switch it to its retry state. */
+function bootFailNet(e) {
+  const code = (e && e.code) || '';
+  if (code && code !== 'net' && code !== 'server' && code !== 'timeout') return false;
+  try {
+    return typeof window.__bootFail === 'function' && window.__bootFail('net') === true;
+  } catch (err) { return false; }
 }
 
 function isSyntaxLoadError(e) {
@@ -136,7 +157,7 @@ async function main() {
   try {
     me = await loadMe();
   } catch (e) {
-    showGate(errText(e));
+    if (!bootFailNet(e)) showGate(errText(e));
     return;
   }
 

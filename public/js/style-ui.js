@@ -1,7 +1,7 @@
 // Shared piece-set / board-theme picker UI (profile + admin).
 import { h } from './ui.js';
 import { t } from './i18n.js';
-import { PIECE_SETS, BOARD_THEMES, BOARD_SWATCH, pieceSvg } from './pieces.js';
+import { PIECE_SETS, BOARD_THEMES, BOARD_SWATCH, DEFAULT_PIECE_SET, pieceSvg } from './pieces.js';
 
 /** Checkerboard CSS baked into the style attribute (no child nodes / CSS vars). */
 export function boardSwatchCss(sw) {
@@ -60,7 +60,7 @@ export function boardSwatchButtons(selected, { locked, onPick }) {
 }
 
 export function stylePickerCard({ pieceSet, boardTheme, locked, onPiece, onBoard }) {
-  const piece = pieceSet || 'outline';
+  const piece = pieceSet || DEFAULT_PIECE_SET;
   const board = boardTheme || 'classic';
   return h('div.card.style-card' + (locked ? '.style-lock' : ''),
     stylePreview(piece, board),

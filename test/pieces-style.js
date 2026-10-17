@@ -3,7 +3,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
-const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio'];
+const PIECE_SETS = ['cartoon', 'outline', 'classic', 'neo', 'staunton', 'studio'];
 const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio'];
 
 const server = fs.readFileSync(path.join(__dirname, '../src/server.js'), 'utf8');
@@ -11,9 +11,9 @@ const pieces = fs.readFileSync(path.join(__dirname, '../public/js/pieces.js'), '
 const css = fs.readFileSync(path.join(__dirname, '../public/styles.css'), 'utf8');
 const perf = fs.readFileSync(path.join(__dirname, '../public/js/perf.js'), 'utf8');
 
-assert.ok(server.includes("const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio']"));
+assert.ok(server.includes("const PIECE_SETS = ['cartoon', 'outline', 'classic', 'neo', 'staunton', 'studio']"));
 assert.ok(server.includes("const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio']"));
-assert.ok(pieces.includes("export const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio']"));
+assert.ok(pieces.includes("export const PIECE_SETS = ['cartoon', 'outline', 'classic', 'neo', 'staunton', 'studio']"));
 assert.ok(pieces.includes('neoSvg') && pieces.includes('#f8f8f8') && pieces.includes('#565352') && pieces.includes('linearGradient') && pieces.includes('neo-'), 'Chess.com Neo palette + gradients');
 assert.ok(!pieces.includes('extruded3dSvg') && !pieces.includes('useExtruded3d'), 'no extruded 3D pieces (reverted)');
 assert.ok(css.includes('#eeeed2') && css.includes('#769656'), 'Chess.com green board colors');
@@ -38,9 +38,27 @@ assert.ok(css.includes('.style-preview'));
 assert.ok(pieces.includes('function pieceSvg'));
 assert.ok(pieces.includes('STAUNTON'));
 assert.ok(pieces.includes('clearPieceCache'));
-assert.ok(server.includes("DEFAULT_PIECE_SET = 'neo'") && server.includes("DEFAULT_BOARD_THEME = 'green'"));
+assert.ok(server.includes("DEFAULT_PIECE_SET = 'cartoon'") && server.includes("DEFAULT_BOARD_THEME = 'green'"));
 const appJs = fs.readFileSync(path.join(__dirname, '../public/js/app.js'), 'utf8');
-assert.ok(appJs.includes("applyChessStyle('neo', 'green')"), 'non-premium boot uses neo+green');
-assert.ok(pieces.includes(": 'neo'") || pieces.includes(': "neo"'), 'currentPieceSet defaults to neo');
+assert.ok(appJs.includes("applyChessStyle(DEFAULT_PIECE_SET, 'green')"), 'non-premium boot uses default set + green');
+assert.ok(pieces.includes("export const DEFAULT_PIECE_SET = 'cartoon'"), 'cartoon is the default piece set');
+assert.ok(pieces.includes(': DEFAULT_PIECE_SET'), 'currentPieceSet falls back to the default');
+const indexHtml = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+assert.ok(indexHtml.includes('data-pieces="cartoon"'), 'first paint uses cartoon pieces');
+const db = fs.readFileSync(path.join(__dirname, '../src/db.js'), 'utf8');
+assert.ok(db.includes("ALTER COLUMN piece_set SET DEFAULT 'cartoon'"), 'db default piece set');
+assert.ok(css.includes('img.pc-img'), 'raster pieces styled');
+
+// Raster set: all 12 pieces exist as small transparent WebPs
+const dir = path.join(__dirname, '../public/img/pieces/cartoon');
+for (const c of 'wb') for (const t of 'KQRBNP') {
+  const f = path.join(dir, `${c}${t}.webp`);
+  assert.ok(fs.existsSync(f), `missing ${c}${t}.webp`);
+  const buf = fs.readFileSync(f);
+  assert.ok(buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP', `${c}${t} is webp`);
+  assert.ok(buf.length < 20000, `${c}${t}.webp stays small for Lite mode`);
+}
+assert.ok(pieces.includes('preloadPieceSet') && appJs.includes('preloadPieceSet('), 'raster pieces are preloaded');
+assert.ok(pieces.includes('draggable="false"'), 'raster pieces never start a native image drag');
 
 console.log(`ok  pieces-style (${PIECE_SETS.length} sets, ${BOARD_THEMES.length} boards)`);

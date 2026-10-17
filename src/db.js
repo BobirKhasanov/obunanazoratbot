@@ -202,9 +202,15 @@ CREATE INDEX IF NOT EXISTS idx_announcements_ends ON announcements(ends_at);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS diamonds BIGINT NOT NULL DEFAULT 0;   -- in-app currency
 ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER NOT NULL DEFAULT 0;   -- 1 while premium_until is in the future (or legacy)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TIMESTAMPTZ;            -- monthly Premium expiry (UTC); null + premium=1 = legacy permanent
-ALTER TABLE users ADD COLUMN IF NOT EXISTS piece_set TEXT NOT NULL DEFAULT 'neo';   -- outline | classic | neo | staunton | studio (default neo until Premium changes)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS piece_set TEXT NOT NULL DEFAULT 'cartoon';   -- cartoon | outline | classic | neo | staunton | studio (default cartoon until Premium changes)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS board_theme TEXT NOT NULL DEFAULT 'green'; -- classic | green | wood | blue | brown | studio (default green until Premium changes)
-ALTER TABLE users ALTER COLUMN piece_set SET DEFAULT 'neo';
+-- One-shot switch of the old default to cartoon: runs only while the column default is still 'neo'
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'piece_set' AND column_default LIKE '''neo''%') THEN
+    UPDATE users SET piece_set = 'cartoon' WHERE piece_set = 'neo';
+  END IF;
+END $$;
+ALTER TABLE users ALTER COLUMN piece_set SET DEFAULT 'cartoon';
 ALTER TABLE users ALTER COLUMN board_theme SET DEFAULT 'green';
 ALTER TABLE games ADD COLUMN IF NOT EXISTS white_ms BIGINT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS black_ms BIGINT;
@@ -231,7 +237,18 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS region TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT ''; -- Premium profile quote
-ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key TEXT; -- null = letter; char:<id> = free cartoon; medal:<id> = monthly medal; img:<uuid> = Premium photo
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key TEXT; -- null = Telegram photo / letter; char:<id> = cartoon (Premium); medal:<id> = monthly medal (Premium); img:<uuid> = uploaded photo
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tg_photo TEXT;            -- version hash of the cached Telegram profile photo (tg_photos); null = none
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tg_photo_at TIMESTAMPTZ;  -- last Telegram photo check
+-- Cached Telegram profile photos (small JPEG/PNG), served from /api/tg-avatars/<user id>
+CREATE TABLE IF NOT EXISTS tg_photos (
+  user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  mime TEXT NOT NULL,
+  data BYTEA NOT NULL,
+  src TEXT NOT NULL DEFAULT '',             -- Bot API file_unique_id or initData photo_url (skip re-download when unchanged)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE tg_photos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_inviter_id BIGINT REFERENCES users(id) ON DELETE SET NULL; -- set on /start i<id>; claimed in Mini App
 ALTER TABLE announcements ADD COLUMN IF NOT EXISTS board TEXT NOT NULL DEFAULT 'home'; -- home | puzzle
 CREATE INDEX IF NOT EXISTS idx_announcements_board_ends ON announcements(board, ends_at);
@@ -491,6 +508,15 @@ db.ready = (async () => {
         text: '#ffffff',
         muted: '#94a3b8',
       })],
+    );
+    // One-time: the old default daily-puzzle reward (1) becomes 2; the marker row keeps a later admin choice of 1.
+    await c.query(
+      `WITH m AS (
+         INSERT INTO app_settings (key, value) VALUES ('migr_puzzle_daily_reward_2', '1')
+         ON CONFLICT (key) DO NOTHING RETURNING 1
+       )
+       UPDATE app_settings SET value = '2'
+       WHERE key = 'puzzle_daily_reward' AND trim(value) = '1' AND EXISTS (SELECT 1 FROM m)`,
     );
     await c.query('COMMIT');
   } catch (e) {

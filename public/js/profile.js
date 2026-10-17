@@ -8,7 +8,7 @@ import { openChatWithUser } from './inbox.js';
 export { openUserProfile };
 import { stylePickerCard } from './style-ui.js';
 import { sectionHead, statCard } from './neonui.js';
-import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
+import { PIECE_SETS, BOARD_THEMES, DEFAULT_PIECE_SET, preloadPieceSet } from './pieces.js';
 import { restyleBoards } from './board.js';
 import { restyleOpenGame } from './game.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
@@ -43,7 +43,8 @@ function menuRow({ ic, title, sub, onClick, trailing, danger, tag }) {
 
 function applyChessStyle(pieceSet, boardTheme) {
   const root = document.documentElement;
-  root.dataset.pieces = PIECE_SETS.includes(pieceSet) ? pieceSet : 'neo';
+  root.dataset.pieces = PIECE_SETS.includes(pieceSet) ? pieceSet : DEFAULT_PIECE_SET;
+  preloadPieceSet(root.dataset.pieces);
   root.dataset.board = BOARD_THEMES.includes(boardTheme) ? boardTheme : 'green';
   restyleBoards();
   try { restyleOpenGame(); } catch { /* no open game */ }
@@ -415,7 +416,7 @@ export function renderProfilePage(ctx) {
     const locked = !canStyleChess(u);
     const pickPiece = async (v) => {
       if (locked) return toast(t('style_premium_only'), true);
-      const prev = { pieceSet: u.pieceSet || 'neo', boardTheme: u.boardTheme || 'green' };
+      const prev = { pieceSet: u.pieceSet || DEFAULT_PIECE_SET, boardTheme: u.boardTheme || 'green' };
       applyChessStyle(v, prev.boardTheme);
       try {
         state.me = await save({ pieceSet: v });
@@ -428,7 +429,7 @@ export function renderProfilePage(ctx) {
     };
     const pickBoard = async (v) => {
       if (locked) return toast(t('style_premium_only'), true);
-      const prev = { pieceSet: u.pieceSet || 'neo', boardTheme: u.boardTheme || 'green' };
+      const prev = { pieceSet: u.pieceSet || DEFAULT_PIECE_SET, boardTheme: u.boardTheme || 'green' };
       applyChessStyle(prev.pieceSet, v);
       try {
         state.me = await save({ boardTheme: v });

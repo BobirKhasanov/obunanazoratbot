@@ -51,8 +51,8 @@ assert.ok(ann.includes('export const CAROUSEL_STAGGER_MS') || ann.includes('CARO
 assert.ok(ann.includes('bindSwipe') || ann.includes('pointermove'), 'swipe handlers');
 assert.ok(ann.includes('dragging'), 'live drag class');
 assert.ok(ann.includes('stopAuto'), 'swipe pauses auto-advance');
-assert.ok(i18n.includes("1- E'lonlar taxtasi") || i18n.includes('1- E\'lonlar taxtasi') || i18n.includes('ann_board_home: "1-'));
-assert.ok(i18n.includes("2- E'lonlar taxtasi") || i18n.includes('2- E\'lonlar taxtasi') || i18n.includes('ann_board_puzzle: "2-'));
+assert.ok(read('public/js/admin.js').includes("board: 'home'") && !read('public/js/admin.js').includes("board: 'puzzle'"), 'admin announcements only for home board');
+assert.ok(!read('public/js/app.js').includes('data-ann-board="puzzle"'), 'no second (puzzle) carousel on client');
 assert.ok(css.includes('0.72s') || css.includes('ann-track.dragging'));
 assert.ok(css.includes('.ann-carousel'));
 assert.ok(css.includes('.ann-track'));

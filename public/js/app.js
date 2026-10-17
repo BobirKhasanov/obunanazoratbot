@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, pillBar, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopSmooth, shareUrl, copyText } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, pillBar, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopSmooth, shareUrl, copyText, syncTgSafeArea } from './ui.js';
 import { homeTabRefreshMs, softPollMs, isLite, isAndroid } from './perf.js';
 import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat, openGlobalChat } from './inbox.js';
 import { t, setLang } from './i18n.js';
@@ -9,7 +9,7 @@ import { Board, restyleBoards } from './board.js';
 import { goodMoves, mateIn } from './puzzles.js';
 import { normalizeTimeControl, formatTashkentWhen } from './time.js';
 import { renderLivePage, liveBlocksAutoRefresh, openLiveTournaments, spectateGame, openBroadcast } from './live.js';
-import { PIECE_SETS, BOARD_THEMES } from './pieces.js';
+import { PIECE_SETS, BOARD_THEMES, DEFAULT_PIECE_SET, preloadPieceSet } from './pieces.js';
 import { restyleOpenGame } from './game.js';
 import { renderProfilePage, openUserProfile } from './profile.js';
 import { openScreen, closeScreen, screenOpen } from './screen.js';
@@ -164,6 +164,7 @@ function syncTgChrome(theme = document.documentElement.dataset.theme || 'dark') 
     tg.setBackgroundColor(bg);
     if (tg.setBottomBarColor) tg.setBottomBarColor(bg);
   } catch { /* old client */ }
+  syncTgSafeArea();
   // Radial shell like boot splash; Telegram bars use flat bg
   document.documentElement.style.background = shell;
   document.body.style.background = shell;
@@ -179,7 +180,8 @@ function applyTheme(theme) {
 
 function applyChessStyle(pieceSet, boardTheme) {
   const root = document.documentElement;
-  root.dataset.pieces = PIECE_SETS.includes(pieceSet) ? pieceSet : 'neo';
+  root.dataset.pieces = PIECE_SETS.includes(pieceSet) ? pieceSet : DEFAULT_PIECE_SET;
+  preloadPieceSet(root.dataset.pieces);
   root.dataset.board = BOARD_THEMES.includes(boardTheme) ? boardTheme : 'green';
   restyleBoards();
   try { restyleOpenGame(); } catch { /* no open game */ }
@@ -415,7 +417,6 @@ function resumeAi() {
   S.onStats = (st) => { state.stats = st; };
 }
 
-
 const playerRow = (u, close) => h('div.row',
   avBlock(u.name, u.id, { premium: !!u.premium, online: true, round: true, avatarKey: u.avatarKey || null }),
   h('div.grow',
@@ -531,12 +532,10 @@ refreshers.play = async function renderPlay() {
   // Reuse live carousel when announcement content is unchanged — avoids media flash on soft refresh / taps
   const annKey = announcementsKey(anns);
   const prevAnn = playEl?.querySelector('.ann-carousel[data-ann-board="home"]');
-  const prevPz = playEl?.querySelector('.ann-carousel[data-ann-board="puzzle"]');
   // Must still be "live" (blobs + timers state). Dead hosts after hard-stop must remount.
   const reuseAnn = !!(prevAnn && prevAnn.dataset.annKey === annKey && isAnnouncementsHostLive(prevAnn));
   if (reuseAnn) prevAnn.remove();
   else if (prevAnn) stopAnnouncementsHost(prevAnn);
-  if (prevPz) stopAnnouncementsHost(prevPz);
 
   // Prefetch carousel media BEFORE building home DOM — page + boards open together
   const onPage = (pageName) => {
@@ -576,7 +575,7 @@ refreshers.play = async function renderPlay() {
     onChallenge: (u) => challenge(u.id),
     refreshHome: () => { playSnap = ''; refresh('play'); },
   });
-  const pzReward = Math.floor(Number(state.meta && state.meta.puzzleDailyReward) || 10);
+  const pzReward = puzzleRewardN();
   const goPlayHub = (m) => { if (m) openPlayHubMode(m); go(TABS.indexOf('rankings'), true); };
   const watchLive = (g) => spectateGame(g, gameMeta(), () => refresh('play'));
   const hasAnn = !!(reuseAnn || (prepAnn && prepAnn.items.length));
@@ -682,7 +681,7 @@ refreshers.rankings = async function renderRankings() {
   });
 };
 
-// ---------- puzzles (daily 1–10 easy→hard; +1 💎 for all 10) ----------
+// ---------- puzzles (daily 1–10 easy→hard; meta.puzzleDailyReward 💎 for all 10) ----------
 const PZ_KEY = 'chess-puzzles-daily';
 function puzzleDayState() {
   const day = tashkentDayKey();
@@ -704,7 +703,7 @@ const markSolved = (id) => {
 };
 const puzzleRewardN = () => {
   const n = Math.floor(Number(state.meta && state.meta.puzzleDailyReward));
-  return n >= 0 ? n : 1;
+  return n >= 0 ? n : 2;
 };
 async function maybeClaimDailyReward() {
   const st = puzzleDayState();
@@ -1052,17 +1051,19 @@ async function handleDeepLink() {
 // ---------- start (entry keeps #boot until first home paint finishes) ----------
 function dismissBootRevealApp() {
   try {
+    const gate = document.getElementById('gate');
+    const app = document.getElementById('app');
+    if (gate) gate.hidden = true;
+    if (app) { app.hidden = false; app.removeAttribute('hidden'); }
     const boot = document.getElementById('boot');
-    if (boot) {
+    if (boot && typeof window.__bootLeave === 'function') {
+      window.__bootLeave();
+    } else if (boot) {
       boot.hidden = true;
       boot.setAttribute('hidden', '');
       boot.style.setProperty('display', 'none', 'important');
       try { boot.remove(); } catch { /* ignore */ }
     }
-    const gate = document.getElementById('gate');
-    const app = document.getElementById('app');
-    if (gate) gate.hidden = true;
-    if (app) { app.hidden = false; app.removeAttribute('hidden'); }
   } catch { /* ignore */ }
 }
 
@@ -1079,6 +1080,8 @@ export async function start(me) {
       try {
         tg.onEvent && tg.onEvent('viewportChanged', () => syncTgChrome());
         tg.onEvent && tg.onEvent('themeChanged', () => syncTgChrome());
+        tg.onEvent && tg.onEvent('safeAreaChanged', syncTgSafeArea);
+        tg.onEvent && tg.onEvent('contentSafeAreaChanged', syncTgSafeArea);
       } catch { /* ignore */ }
     }
   } catch { /* ignore */ }
@@ -1087,7 +1090,7 @@ export async function start(me) {
     state.me = me.user; state.stats = me.stats; state.meta = me.meta;
     setLang(me.user.lang); applyTheme(me.user.theme);
     if (canStyleChess(me.user)) applyChessStyle(me.user.pieceSet, me.user.boardTheme);
-    else applyChessStyle('neo', 'green');
+    else applyChessStyle(DEFAULT_PIECE_SET, 'green');
   } catch (e) {
     console.error('[boot] theme', e);
   }

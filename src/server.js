@@ -756,7 +756,7 @@ function normalizePremiumPlans(raw, fallbackMonthPrice) {
   ));
 }
 
-const PUZZLE_DAILY_REWARD_FALLBACK = 1;
+const PUZZLE_DAILY_REWARD_FALLBACK = 2;
 
 function normalizePuzzleDailyReward(raw) {
   const n = Math.floor(Number(raw));
