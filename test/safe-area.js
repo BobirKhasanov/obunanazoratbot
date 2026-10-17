@@ -54,7 +54,7 @@ assert.ok(read('public/js/app.js').includes("'fullscreenChanged'"), 'app.js re-s
 // ---------- 2. Home page scrolls (CSS contract) ----------
 const css = read('public/styles.css');
 const rule = (sel) => {
-  const i = css.indexOf(sel + ' {');
+  const i = css.indexOf('\n' + sel + ' {') + 1 || css.indexOf(sel + ' {');
   assert.ok(i >= 0, 'css rule exists: ' + sel);
   return css.slice(i, css.indexOf('}', i) + 1);
 };
@@ -68,5 +68,15 @@ assert.ok(/flex:\s*none/.test(row) && /max-height:\s*none/.test(row), 'mode row 
 const card = rule('.page[data-page="play"] .nx-mode.rich');
 assert.ok(/height:\s*auto/.test(card) && !/height:\s*100%/.test(card), 'mode cards keep natural height (CTA not clipped)');
 assert.ok(/#pager \{[^}]*touch-action:\s*pan-y/.test(css), 'pager allows vertical panning');
+
+// ---------- 3. Home mode cards: full-bleed art + glass panel (reference design) ----------
+const rich = rule('.nx-mode.rich');
+assert.ok(/min-height:\s*2\d\dpx/.test(rich) && /padding:\s*0/.test(rich), 'rich mode cards are tall with art bleeding to the edges');
+const art = rule('.nx-mode.rich .nx-mode-art');
+assert.ok(/position:\s*absolute/.test(art) && /cover/.test(art) && !/contain/.test(art), 'card art is full-bleed (cover), not a small contained image');
+const body = rule('.nx-mode-body');
+assert.ok(/backdrop-filter/.test(body) && /border-radius:\s*18px/.test(body), 'card text sits on a rounded glass panel');
+assert.ok(!/background-size:\s*contain/.test(css.slice(css.indexOf('.nx-mode.rich .nx-mode-art'))), 'no iOS/lite override shrinks the art back to contain');
+assert.ok(/@media \(max-width: 380px\)[^}]*\.nx-hdr/.test(css), 'header tightens on narrow phones');
 
 console.log('safe-area OK');
