@@ -61,7 +61,8 @@ const rule = (sel) => {
 const home = rule('.page[data-page="play"]');
 assert.ok(/overflow-y:\s*auto/.test(home), 'home page scrolls vertically');
 assert.ok(!/overflow(-y)?:\s*hidden/.test(home), 'home page is not overflow:hidden');
-assert.ok(!/padding-bottom/.test(home), 'home page keeps the default bottom padding above the nav');
+const pb = /padding-bottom:\s*calc\((\d+)px/.exec(home);
+assert.ok(pb && Number(pb[1]) >= 150, 'home page has extra bottom runway so it can always move down a bit');
 const row = rule('.page[data-page="play"] .nx-mode-row');
 assert.ok(/flex:\s*none/.test(row) && /max-height:\s*none/.test(row), 'mode row is not squeezed to fit one screen');
 const card = rule('.page[data-page="play"] .nx-mode.rich');

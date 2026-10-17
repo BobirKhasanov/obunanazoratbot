@@ -96,6 +96,8 @@ h1, h2, h3, p { margin: 0; }
    (cards keep their full height — never squeezed/clipped to fit one screen). */
 .page[data-page="play"] {
   display: flex; flex-direction: column;
+  /* Extra runway under the last card so the page always has a little room to move down, like the other tabs */
+  padding-bottom: calc(170px + var(--safe-b));
   overflow-y: auto; overflow-x: hidden; min-height: 0;
   -webkit-overflow-scrolling: touch; touch-action: pan-y;
 }
@@ -108,7 +110,7 @@ h1, h2, h3, p { margin: 0; }
 }
 .page[data-page="play"] .ann-carousel .ann-skel { min-height: 0; }
 .page[data-page="play"] .ann-carousel:not([hidden]) ~ .nx-hero { display: none; }
-.page[data-page="play"] .nx-hero { flex: 0 1 auto; min-height: 72px; max-height: 120px; margin-bottom: 0; }
+.page[data-page="play"] .nx-hero { flex: none; min-height: 96px; margin-bottom: 0; }
 .page[data-page="play"] .nx-hero-txt { padding: 12px 14px; gap: 4px; }
 .page[data-page="play"] .nx-hero h2 { font-size: 17px; }
 .page[data-page="play"] .nx-sec { margin: 10px 0 6px; }
