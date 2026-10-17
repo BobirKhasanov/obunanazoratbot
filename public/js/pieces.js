@@ -3,7 +3,7 @@
 export const PIECE_SETS = ['cartoon', 'outline', 'classic', 'neo', 'staunton', 'studio'];
 export const DEFAULT_PIECE_SET = 'cartoon';
 const IMAGE_SETS = { cartoon: '/img/pieces/cartoon' };
-const IMAGE_V = '2';
+const IMAGE_V = '3';
 export const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio'];
 export const BOARD_SWATCH = {
   classic: { lt: '#b9c4d6', dk: '#5f7391' },
