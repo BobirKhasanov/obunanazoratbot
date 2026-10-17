@@ -62,6 +62,7 @@ function syncChrome() {
       tg.onEvent('safeAreaChanged', syncTgSafeArea);
       tg.onEvent('contentSafeAreaChanged', syncTgSafeArea);
       tg.onEvent('viewportChanged', syncTgSafeArea);
+      tg.onEvent('fullscreenChanged', syncTgSafeArea);
     } catch (e) { /* old client */ }
     const bg = '#111827';
     try { tg.setHeaderColor(bg); tg.setBackgroundColor(bg); } catch (e) { /* ignore */ }

@@ -92,10 +92,12 @@ h1, h2, h3, p { margin: 0; }
   contain-intrinsic-size: auto 600px;
 }
 /* Extra room for dock + Play CTA stacked above the nav */
-/* Home: one screen, no scroll — flex column; hero + mode cards stretch on tall phones, shrink on short ones */
+/* Home: natural-height flex column that scrolls vertically when content is taller than the screen
+   (cards keep their full height — never squeezed/clipped to fit one screen). */
 .page[data-page="play"] {
-  padding-bottom: calc(86px + var(--safe-b));
   display: flex; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden; min-height: 0;
+  -webkit-overflow-scrolling: touch; touch-action: pan-y;
 }
 .page[data-page="play"] > * { flex: none; }
 .page[data-page="play"] .nx-hdr { margin-bottom: 10px; }
@@ -110,8 +112,9 @@ h1, h2, h3, p { margin: 0; }
 .page[data-page="play"] .nx-hero-txt { padding: 12px 14px; gap: 4px; }
 .page[data-page="play"] .nx-hero h2 { font-size: 17px; }
 .page[data-page="play"] .nx-sec { margin: 10px 0 6px; }
-.page[data-page="play"] .nx-mode-row { flex: 1 1 auto; min-height: 168px; max-height: 240px; gap: 8px; }
-.page[data-page="play"] .nx-mode.rich { min-height: 0; height: 100%; }
+.page[data-page="play"] .nx-mode-row { flex: none; height: auto; min-height: 0; max-height: none; gap: 8px; }
+.page[data-page="play"] .nx-mode.rich { height: auto; min-height: 210px; }
+.page[data-page="play"] .nx-mode.rich .nx-mode-art { min-height: 96px; }
 .page[data-page="play"] .nx-live-strip { padding-bottom: 4px; }
 .page[data-page="play"] .nx-lc { padding: 10px; }
 .page[data-page="play"] .nx-lc-p .avwrap, .page[data-page="play"] .nx-lc-p .avatar { width: 36px; height: 36px; font-size: 13px; }

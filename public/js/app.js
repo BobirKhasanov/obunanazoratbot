@@ -1082,6 +1082,7 @@ export async function start(me) {
         tg.onEvent && tg.onEvent('themeChanged', () => syncTgChrome());
         tg.onEvent && tg.onEvent('safeAreaChanged', syncTgSafeArea);
         tg.onEvent && tg.onEvent('contentSafeAreaChanged', syncTgSafeArea);
+        tg.onEvent && tg.onEvent('fullscreenChanged', syncTgSafeArea);
       } catch { /* ignore */ }
     }
   } catch { /* ignore */ }

@@ -25,6 +25,10 @@ export function syncTgSafeArea() {
   }
   const reportedTop = insetPx(s.top) + insetPx(c.top);
   if (reportedTop > 0) return;
+  // The Telegram header only overlays the webview in fullscreen mode. In the normal
+  // (bottom-sheet) mode the webview starts BELOW the header, so a 0 inset is correct —
+  // adding a fallback there is what produced the big empty gap at the top of every page.
+  if (!tw.isFullscreen) return;
   const plat = String(tw.platform || '').toLowerCase();
   if (plat === 'tdesktop' || plat === 'macos' || plat === 'web' || plat === 'weba' || plat === 'webk') return;
   const ios = plat === 'ios' || root.dataset.ios === '1';
