@@ -55,7 +55,7 @@ assert.ok(read('src/server.js').includes('MAX_AVATAR = 5') && read('src/server.j
 assert.ok(profile.includes('openChatWithUser') && profile.includes("from './inbox.js'"), 'friends list opens DM chat');
 assert.ok(app.includes("from './playhub.js'") && app.includes('renderPlayHub'), 'Play hub wired on rankings tab');
 assert.ok(app.includes("from './neonui.js'") && app.includes('appHeader') && app.includes('modeCard'), 'neon home shell');
-assert.ok(app.includes('nx-mode-row') && app.includes('dailyCard') && app.includes('liveMiniCard') && app.includes('/img/ui/mode-online.webp'), 'home neon sections');
+assert.ok(app.includes('nx-mode-row') && app.includes('dailyCard') && app.includes('liveMiniCard') && app.includes('/img/ui/mode-online-v2.webp'), 'home neon sections');
 assert.ok(read('public/js/neonui.js').includes("nx-mode-cta") && read('public/js/neonui.js').includes("t('start')") && read('public/js/neonui.js').includes('.rich'), 'home mode cards: Boshlash CTA design');
 assert.ok(read('public/js/inbox.js').includes('tgBack: false') && read('public/js/screen.js').includes("opts.tgBack === false"), 'inbox hides Telegram BackButton (no double back)');
 assert.ok(css.includes('.nx-mode.rich') && css.includes('.nx-mode-cta') && css.includes('.notif-day'), 'rich mode + notif day styles');
@@ -154,7 +154,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261017nx30"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261017nx30'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261017nx31"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261017nx31'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');

@@ -61,21 +61,24 @@ const rule = (sel) => {
 const home = rule('.page[data-page="play"]');
 assert.ok(/overflow-y:\s*auto/.test(home), 'home page scrolls vertically');
 assert.ok(!/overflow(-y)?:\s*hidden/.test(home), 'home page is not overflow:hidden');
-const pb = /padding-bottom:\s*calc\((\d+)px/.exec(home);
-assert.ok(pb && Number(pb[1]) >= 150, 'home page has extra bottom runway so it can always move down a bit');
+assert.ok(/padding-bottom:\s*0\b/.test(home), 'home page does not rely on padding-bottom for its scroll range (WebKit flex quirk)');
+const spacer = rule('.page[data-page="play"]::after');
+const sh = /height:\s*calc\((\d+)px/.exec(spacer);
+assert.ok(/flex:\s*none/.test(spacer) && sh && Number(sh[1]) >= 120, 'home page has a real spacer item so it can always scroll past the dock');
 const row = rule('.page[data-page="play"] .nx-mode-row');
 assert.ok(/flex:\s*none/.test(row) && /max-height:\s*none/.test(row), 'mode row is not squeezed to fit one screen');
 const card = rule('.page[data-page="play"] .nx-mode.rich');
-assert.ok(/height:\s*auto/.test(card) && !/height:\s*100%/.test(card), 'mode cards keep natural height (CTA not clipped)');
+assert.ok(/min-height:\s*1\d\dpx/.test(card) && !/height:\s*100%/.test(card), 'mode cards have a minimum height that fits art + panel + CTA (not squeezed)');
 assert.ok(/#pager \{[^}]*touch-action:\s*pan-y/.test(css), 'pager allows vertical panning');
 
 // ---------- 3. Home mode cards: full-bleed art + glass panel (reference design) ----------
 const rich = rule('.nx-mode.rich');
-assert.ok(/min-height:\s*2\d\dpx/.test(rich) && /padding:\s*0/.test(rich), 'rich mode cards are tall with art bleeding to the edges');
+assert.ok(/padding:\s*0/.test(rich), 'rich mode cards let the art bleed to the edges');
+assert.ok(/clamp\(\s*1\d\dpx,\s*\d+dvh/.test(rule('.page[data-page="play"] .nx-mode.rich')), 'home cards scale with screen height so Kunlik topshiriq stays above the dock');
 const art = rule('.nx-mode.rich .nx-mode-art');
 assert.ok(/position:\s*absolute/.test(art) && /cover/.test(art) && !/contain/.test(art), 'card art is full-bleed (cover), not a small contained image');
 const body = rule('.nx-mode-body');
-assert.ok(/backdrop-filter/.test(body) && /border-radius:\s*18px/.test(body), 'card text sits on a rounded glass panel');
+assert.ok(/backdrop-filter/.test(body) && /border-radius:\s*1\d px/.test(body.replace(/(\d)px/g, "$1 px")), 'card text sits on a rounded glass panel');
 assert.ok(!/background-size:\s*contain/.test(css.slice(css.indexOf('.nx-mode.rich .nx-mode-art'))), 'no iOS/lite override shrinks the art back to contain');
 assert.ok(/@media \(max-width: 380px\)[^}]*\.nx-hdr/.test(css), 'header tightens on narrow phones');
 

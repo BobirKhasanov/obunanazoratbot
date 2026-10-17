@@ -593,15 +593,15 @@ refreshers.play = async function renderPlay() {
     h('div.nx-mode-row',
       modeCard({
         title: t('hub_mode_online'), sub: t('mode_online_sub'), tone: 'blue', glyph: '🌐',
-        art: '/img/ui/mode-online.webp', onClick: () => goPlayHub('online'),
+        art: '/img/ui/mode-online-v2.webp', onClick: () => goPlayHub('online'),
       }),
       modeCard({
         title: t('hub_mode_friend'), sub: t('mode_friend_sub'), tone: 'gold', glyph: '👥',
-        art: '/img/ui/mode-friend.webp', onClick: () => goPlayHub('friend'),
+        art: '/img/ui/mode-friend-v2.webp', onClick: () => goPlayHub('friend'),
       }),
       modeCard({
         title: t('hub_mode_ai'), sub: t('mode_ai_sub'), tone: 'violet', glyph: '🤖',
-        art: '/img/ui/mode-ai.webp', onClick: () => goPlayHub('ai'),
+        art: '/img/ui/mode-ai-v2.webp', onClick: () => goPlayHub('ai'),
       })),
     l.games.invites.length ? [sectionHead(t('invites'), null, null, { dot: 'amber' }), h('div.nx-list', l.games.invites.map((g) => h('div.nx-pr',
       h('div.nx-row-main',

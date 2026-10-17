@@ -96,12 +96,15 @@ h1, h2, h3, p { margin: 0; }
    (cards keep their full height — never squeezed/clipped to fit one screen). */
 .page[data-page="play"] {
   display: flex; flex-direction: column;
-  /* Extra runway under the last card so the page always has a little room to move down, like the other tabs */
-  padding-bottom: calc(170px + var(--safe-b));
+  /* No bottom padding here: some WebKit builds drop padding-bottom from a flex container's scroll
+     range, so the page looked like it had nothing to scroll. The ::after spacer below is a real flex
+     item and always counts, giving the dock clearance plus a little room to move down. */
+  padding-bottom: 0;
   overflow-y: auto; overflow-x: hidden; min-height: 0;
   -webkit-overflow-scrolling: touch; touch-action: pan-y;
 }
 .page[data-page="play"] > * { flex: none; }
+.page[data-page="play"]::after { content: ''; flex: none; display: block; height: calc(220px + var(--safe-b)); }
 .page[data-page="play"] .nx-hdr { margin-bottom: 10px; }
 .page[data-page="play"] .ann-carousel[hidden] { display: none; margin: 0; }
 .page[data-page="play"] .ann-carousel:not([hidden]),
@@ -115,7 +118,7 @@ h1, h2, h3, p { margin: 0; }
 .page[data-page="play"] .nx-hero h2 { font-size: 17px; }
 .page[data-page="play"] .nx-sec { margin: 10px 0 6px; }
 .page[data-page="play"] .nx-mode-row { flex: none; height: auto; min-height: 0; max-height: none; gap: 8px; }
-.page[data-page="play"] .nx-mode.rich { height: auto; min-height: 250px; }
+.page[data-page="play"] .nx-mode.rich { height: clamp(170px, 26dvh, 215px); min-height: 170px; }
 .page[data-page="play"] .nx-live-strip { padding-bottom: 4px; }
 .page[data-page="play"] .nx-lc { padding: 10px; }
 .page[data-page="play"] .nx-lc-p .avwrap, .page[data-page="play"] .nx-lc-p .avatar { width: 36px; height: 36px; font-size: 13px; }
@@ -2369,7 +2372,7 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
 /* Home rich cards: full-bleed art on top, frosted glass panel (title + sub + Boshlash) at the bottom */
 .nx-mode.rich {
   --mode-glow: 46, 139, 255;
-  justify-content: flex-end; gap: 0; padding: 0; min-height: 250px; border-radius: 22px;
+  justify-content: flex-end; gap: 0; padding: 0; min-height: 150px; border-radius: 22px;
   background: linear-gradient(180deg, rgba(var(--mode-glow), 0.22) 0%, #0b1220 70%);
 }
 .nx-mode.rich.gold { --mode-glow: 245, 158, 11; }
@@ -2394,35 +2397,31 @@ h2 .prem-ic .ic svg { width: 19px; height: 19px; }
   background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.7);
 }
 .nx-mode.rich .nx-mode-art {
-  position: absolute; inset: 0 0 auto 0; height: 58%; width: 100%; margin: 0; flex: none;
-  background: center / cover no-repeat;
-  -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
+  position: absolute; inset: 0 0 auto 0; width: 100%; height: auto; aspect-ratio: 308 / 196; margin: 0; flex: none;
+  background: center top / cover no-repeat;
+  -webkit-mask-image: linear-gradient(180deg, #000 62%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 62%, transparent 100%);
 }
 .nx-mode.rich .nx-mode-art::after { display: none; }
-/* Narrow cards crop the wide photos — aim at each photo's subject */
-.nx-mode.blue .nx-mode-art { background-position: 38% center; }
-.nx-mode.gold .nx-mode-art { background-position: 52% center; }
-.nx-mode.violet .nx-mode-art { background-position: 78% center; }
 .nx-mode-body {
   position: relative; z-index: 1; display: grid; gap: 3px; width: auto;
-  margin: 0 6px 6px; padding: 10px 8px 8px; border-radius: 18px;
-  background: linear-gradient(180deg, rgba(var(--mode-glow, 46, 139, 255), 0.14), rgba(8, 13, 24, 0.82) 60%);
+  margin: 0 5px 5px; padding: 8px 7px 7px; border-radius: 17px;
+  background: linear-gradient(180deg, rgba(var(--mode-glow, 46, 139, 255), 0.16), rgba(8, 13, 24, 0.80) 55%);
   border: 1px solid rgba(255, 255, 255, 0.07);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
 .nx-mode.rich b {
-  font-size: 16px; font-weight: 800; letter-spacing: -0.02em; color: #fff;
+  font-size: 15px; font-weight: 800; letter-spacing: -0.02em; color: #fff;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .nx-mode.rich small {
-  font-size: 10.5px; line-height: 1.25; font-weight: 600; color: #a9b6d0;
+  font-size: 10px; line-height: 1.25; font-weight: 600; color: #a9b6d0;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   min-height: 2.5em;
 }
 .nx-mode-cta {
   display: flex; align-items: center; justify-content: center; gap: 5px;
-  margin-top: 6px; padding: 9px 8px; border-radius: 13px;
+  margin-top: 5px; padding: 7px 8px; border-radius: 12px;
   font-size: 12px; font-weight: 800; color: #fff; letter-spacing: -0.01em;
 }
 .nx-mode.blue .nx-mode-cta { background: linear-gradient(180deg, #3b9bff, #1d6fe0); }
