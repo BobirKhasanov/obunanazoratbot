@@ -9,6 +9,10 @@ const UA = 'ObunaNazoratBot/1.0 (Telegram Mini App; broadcast spectator)';
 
 const inflight = new Map(); // path -> Promise
 
+/** Live round snapshot / PGN shared-cache lifetimes (ms). Lower = closer to live. */
+const ROUND_CACHE_MS = 1_000;
+const PGN_CACHE_MS = 1_500;
+
 /** Lichess broadcast / game ids are exactly 8 URL-safe chars. */
 function lichessId(raw, label = 'id') {
   const id = String(raw || '').trim();
@@ -106,8 +110,8 @@ async function broadcastRound(roundId, { fresh = false, tourSlug, roundSlug, rou
   let lastErr;
   for (const path of paths) {
     try {
-      // Short cache so live boards feel near-real-time without hammering Lichess
-      return await lichessGet(path, { maxAge: fresh ? 0 : 2_500, fresh });
+      // ~1s shared cache (+ single-flight) keeps boards near-live while Lichess sees <=1 req/s per round
+      return await lichessGet(path, { maxAge: fresh ? 0 : ROUND_CACHE_MS, fresh });
     } catch (e) {
       lastErr = e;
       if (e.status === 400 || e.status === 429) throw e;
@@ -146,7 +150,7 @@ async function broadcastRoundPgn(roundId, { fresh = false } = {}) {
   const id = lichessId(roundId, 'round id');
   const text = await lichessGet(`/api/broadcast/round/${id}.pgn`, {
     accept: 'application/x-chess-pgn',
-    maxAge: 2_500,
+    maxAge: PGN_CACHE_MS,
     fresh,
   });
   const games = parseMultiPgn(text);

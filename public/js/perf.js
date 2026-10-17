@@ -85,20 +85,20 @@ export function isAndroid() { return detect().isAndroid; }
 export function isIOS() { return detect().isIOS; }
 export function getPerf() { return detect(); }
 
-/** Lichess round grid poll (ms). Slower on Android; even slower on lite. iOS unchanged. */
+/** Lichess round grid poll (ms). Slower on Android; even slower on lite. */
 export function liveRoundPollMs() {
   const p = detect();
-  if (p.lite) return 8000;
-  if (p.isAndroid) return 5000;
-  return 3000;
+  if (p.lite) return 5000;
+  if (p.isAndroid) return 3000;
+  return 2000;
 }
 
-/** Open live game poll (ms). */
+/** Open live game poll (ms) — kept short so the board stays close to live. */
 export function liveGamePollMs() {
   const p = detect();
-  if (p.lite) return 6000;
-  if (p.isAndroid) return 4000;
-  return 2000;
+  if (p.lite) return 3000;
+  if (p.isAndroid) return 2000;
+  return 1000;
 }
 
 /** Local clock UI tick (ms) — live boards + in-game clocks. */

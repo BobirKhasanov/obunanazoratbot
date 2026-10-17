@@ -647,8 +647,11 @@ async function renderRound(mount, onRefresh) {
   }, liveClockTickMs());
 
   // Soft poll: clocks + mini-board FEN in place (slower on Android / lite)
+  let roundBusy = false;
   pollTimer = setInterval(async () => {
     if (section !== 'intl' || nav.view !== 'round') return clearPoll();
+    if (roundBusy) return; // previous poll still in flight — don't stack requests
+    roundBusy = true;
     try {
       const next = await api('GET', roundApi('', { fresh: false }));
       for (const g of next.games || []) {
@@ -673,6 +676,7 @@ async function renderRound(mount, onRefresh) {
         }
       }
     } catch { /* ignore transient poll errors — keep last good UI */ }
+    finally { roundBusy = false; }
   }, liveRoundPollMs());
 }
 
@@ -885,9 +889,12 @@ async function renderGame(mount, onRefresh) {
 
   // Board/clock snapshots (Android / lite poll slower; iOS stays ~2s)
   let polls = 0;
+  let gameBusy = false;
   const gamePoll = liveGamePollMs();
   pollTimer = setInterval(async () => {
     if (section !== 'intl' || nav.view !== 'game' || gen !== renderGen) return clearPoll();
+    if (gameBusy) return; // previous poll still in flight — don't stack requests
+    gameBusy = true;
     polls += 1;
     try {
       const round = await api('GET', roundApi('', { fresh: false }));
@@ -896,6 +903,7 @@ async function renderGame(mount, onRefresh) {
       // PGN less often on slow devices
       if (polls % (isLite() ? 4 : 3) === 0) refreshPgn(false);
     } catch { /* ignore transient errors */ }
+    finally { gameBusy = false; }
   }, gamePoll);
 }
 
