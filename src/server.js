@@ -47,9 +47,9 @@ if (!BOT_TOKEN) {
 }
 
 const THEMES = ['dark', 'light'];
-const PIECE_SETS = ['outline', 'classic', 'neo', 'staunton', 'studio'];
+const PIECE_SETS = ['cartoon', 'outline', 'classic', 'neo', 'staunton', 'studio'];
 const BOARD_THEMES = ['classic', 'green', 'wood', 'blue', 'brown', 'studio'];
-const DEFAULT_PIECE_SET = 'neo';
+const DEFAULT_PIECE_SET = 'cartoon';
 const DEFAULT_BOARD_THEME = 'green';
 const PREMIUM_PRICE_FALLBACK = Number(process.env.PREMIUM_PRICE || 200); // diamonds / month (DB may override)
 const REFERRAL_REWARD = Number(process.env.REFERRAL_REWARD || 20); // diamonds for the inviter
