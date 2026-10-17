@@ -180,7 +180,7 @@ function applyTheme(theme) {
 
 function applyChessStyle(pieceSet, boardTheme) {
   const root = document.documentElement;
-  root.dataset.pieces = PIECE_SETS.includes(pieceSet) ? pieceSet : DEFAULT_PIECE_SET;
+  root.dataset.pieces = DEFAULT_PIECE_SET; // one piece art for every board (see pieces.js currentPieceSet)
   preloadPieceSet(root.dataset.pieces);
   root.dataset.board = BOARD_THEMES.includes(boardTheme) ? boardTheme : 'green';
   restyleBoards();

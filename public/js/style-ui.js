@@ -60,13 +60,11 @@ export function boardSwatchButtons(selected, { locked, onPick }) {
 }
 
 export function stylePickerCard({ pieceSet, boardTheme, locked, onPiece, onBoard }) {
-  const piece = pieceSet || DEFAULT_PIECE_SET;
+  const piece = DEFAULT_PIECE_SET; // boards always use the one piece set
   const board = boardTheme || 'classic';
   return h('div.card.style-card' + (locked ? '.style-lock' : ''),
     stylePreview(piece, board),
-    h('div.label', t('piece_set')),
     locked ? h('p.muted', t('style_premium_hint')) : null,
-    h('div.style-swatches', pieceSwatchButtons(piece, { locked, onPick: onPiece })),
     h('div.label', t('board_theme')),
     h('div.style-swatches', boardSwatchButtons(board, { locked, onPick: onBoard })));
 }

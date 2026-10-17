@@ -43,7 +43,7 @@ function menuRow({ ic, title, sub, onClick, trailing, danger, tag }) {
 
 function applyChessStyle(pieceSet, boardTheme) {
   const root = document.documentElement;
-  root.dataset.pieces = PIECE_SETS.includes(pieceSet) ? pieceSet : DEFAULT_PIECE_SET;
+  root.dataset.pieces = DEFAULT_PIECE_SET; // one piece art for every board (see pieces.js currentPieceSet)
   preloadPieceSet(root.dataset.pieces);
   root.dataset.board = BOARD_THEMES.includes(boardTheme) ? boardTheme : 'green';
   restyleBoards();
@@ -414,19 +414,6 @@ export function renderProfilePage(ctx) {
   const openSettings = () => openScreen((close) => {
     const u = state.me;
     const locked = !canStyleChess(u);
-    const pickPiece = async (v) => {
-      if (locked) return toast(t('style_premium_only'), true);
-      const prev = { pieceSet: u.pieceSet || DEFAULT_PIECE_SET, boardTheme: u.boardTheme || 'green' };
-      applyChessStyle(v, prev.boardTheme);
-      try {
-        state.me = await save({ pieceSet: v });
-        applyChessStyle(state.me.pieceSet, state.me.boardTheme);
-        openSettings();
-      } catch (e) {
-        applyChessStyle(prev.pieceSet, prev.boardTheme);
-        fail(e);
-      }
-    };
     const pickBoard = async (v) => {
       if (locked) return toast(t('style_premium_only'), true);
       const prev = { pieceSet: u.pieceSet || DEFAULT_PIECE_SET, boardTheme: u.boardTheme || 'green' };
@@ -452,7 +439,6 @@ export function renderProfilePage(ctx) {
         pieceSet: u.pieceSet,
         boardTheme: u.boardTheme,
         locked,
-        onPiece: pickPiece,
         onBoard: pickBoard,
       }),
     ];

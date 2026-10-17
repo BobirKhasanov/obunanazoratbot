@@ -42,7 +42,15 @@ assert.ok(server.includes("DEFAULT_PIECE_SET = 'cartoon'") && server.includes("D
 const appJs = fs.readFileSync(path.join(__dirname, '../public/js/app.js'), 'utf8');
 assert.ok(appJs.includes("applyChessStyle(DEFAULT_PIECE_SET, 'green')"), 'non-premium boot uses default set + green');
 assert.ok(pieces.includes("export const DEFAULT_PIECE_SET = 'cartoon'"), 'cartoon is the default piece set');
-assert.ok(pieces.includes(': DEFAULT_PIECE_SET'), 'currentPieceSet falls back to the default');
+assert.ok(/export function currentPieceSet\(\) \{\s*return DEFAULT_PIECE_SET;\s*\}/.test(pieces), 'every board uses the one (cartoon) piece art');
+{
+  const profileJs = fs.readFileSync(path.join(__dirname, '../public/js/profile.js'), 'utf8');
+  for (const [n, src] of [['app.js', appJs], ['profile.js', profileJs]]) {
+    assert.ok(src.includes('root.dataset.pieces = DEFAULT_PIECE_SET'), n + ' always applies the one piece set');
+  }
+  const styleUi = fs.readFileSync(path.join(__dirname, '../public/js/style-ui.js'), 'utf8');
+  assert.ok(!/pieceSwatchButtons\(piece,/.test(styleUi), 'no dead piece-set picker in settings');
+}
 const indexHtml = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
 assert.ok(indexHtml.includes('data-pieces="cartoon"'), 'first paint uses cartoon pieces');
 const db = fs.readFileSync(path.join(__dirname, '../src/db.js'), 'utf8');
@@ -60,5 +68,21 @@ for (const c of 'wb') for (const t of 'KQRBNP') {
 }
 assert.ok(pieces.includes('preloadPieceSet') && appJs.includes('preloadPieceSet('), 'raster pieces are preloaded');
 assert.ok(pieces.includes('draggable="false"'), 'raster pieces never start a native image drag');
+
+// Behaviour: even if an old account/dataset still says "neo", boards (live, tournaments, own games) draw the new raster pieces
+(async () => {
+  const os = require('os');
+  const tmp = path.join(os.tmpdir(), `pieces-test-${process.pid}.mjs`);
+  fs.writeFileSync(tmp, pieces);
+  global.document = { documentElement: { dataset: { pieces: 'neo' } } };
+  try {
+    const mod = await import(require('url').pathToFileURL(tmp));
+    assert.strictEqual(mod.currentPieceSet(), 'cartoon');
+    for (const c of 'wb') for (const t of 'kqrbnp') {
+      const html = mod.pieceSvg(c, t);
+      assert.ok(html.includes('pc-img') && html.includes(`/img/pieces/cartoon/${c}${t.toUpperCase()}.webp`), `${c}${t} renders the new image`);
+    }
+  } finally { fs.rmSync(tmp, { force: true }); delete global.document; }
+})().catch((e) => { console.error(e); process.exit(1); });
 
 console.log(`ok  pieces-style (${PIECE_SETS.length} sets, ${BOARD_THEMES.length} boards)`);

@@ -57,9 +57,13 @@ const STROKE = {
 
 const cache = Object.create(null);
 
+/**
+ * Every board in the app (own games, live spectate, live + international tournaments, mini boards,
+ * analysis…) draws the same piece art: the raster "cartoon" set. Old saved piece-set choices
+ * (outline / classic / neo / staunton / studio) are ignored for boards.
+ */
 export function currentPieceSet() {
-  const v = typeof document !== 'undefined' ? document.documentElement.dataset.pieces : '';
-  return PIECE_SETS.includes(v) ? v : DEFAULT_PIECE_SET;
+  return DEFAULT_PIECE_SET;
 }
 
 const pieceUrl = (set, colour, type) => `${IMAGE_SETS[set]}/${colour}${type.toUpperCase()}.webp?v=${IMAGE_V}`;
