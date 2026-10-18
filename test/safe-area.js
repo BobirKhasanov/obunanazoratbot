@@ -84,3 +84,11 @@ assert.ok(!/background-size:\s*contain/.test(css.slice(css.indexOf('.nx-mode.ric
 assert.ok(/@media \(max-width: 380px\)[^}]*\.nx-hdr/.test(css), 'header tightens on narrow phones');
 
 console.log('safe-area OK');
+
+// "Havola orqali o'ynash": compact bottom sheet, not a full page
+{
+  const app = read('public/js/app.js');
+  const fn = app.slice(app.indexOf('function openFriendWait'), app.indexOf('function openFriendWait') + 4200);
+  assert.ok(/\n\s*sheet\(\(close\) =>/.test(fn) && !/openScreen\(/.test(fn), 'friend-wait opens as a bottom sheet');
+  assert.ok(css.includes('.friend-wait.in-sheet'), 'compact friend-wait sheet styles exist');
+}

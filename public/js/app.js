@@ -258,7 +258,8 @@ function openFriendWait(game) {
     // Referral startapp=i… pays diamonds; friend can then join your open board from the lobby
     return `https://t.me/${bot}?startapp=i${meId}`;
   };
-  openScreen((close) => {
+  // Small bottom sheet (not a full page): the board list stays visible behind it
+  sheet((close) => {
     const finish = (nextGame) => {
       if (joined) return;
       joined = true;
@@ -293,15 +294,9 @@ function openFriendWait(game) {
     };
     const tc = game.timeControl && game.timeControl !== 'classic' ? game.timeControl : '';
     return [
-      h('div.top',
-        h('button.round.back', {
-          type: 'button', 'aria-label': t('back'),
-          onclick: () => { haptic('light'); cancel(); },
-        }, icon('back', 22)),
-        h('h1', t('wait_friend'))),
-      h('div.card.friend-wait',
+      h('div.friend-wait.in-sheet',
         h('div.empty-ic', '🤝'),
-        h('b', t('wait_friend')),
+        h('h2', t('wait_friend')),
         h('p.muted', t('wait_friend_sub') + (tc ? ` · ${tc}` : '')),
         h('button.btn', {
           type: 'button',

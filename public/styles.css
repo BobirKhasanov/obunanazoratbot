@@ -2794,3 +2794,10 @@ html[data-ios="1"] .sheet,
 html[data-ios="1"] .card { box-shadow: none !important; }
 html[data-ios="1"] * { will-change: auto !important; }
 html[data-ios="1"] .nx-mode:active { transform: none; }
+
+/* "Havola orqali o'ynash" waiting panel: compact bottom sheet */
+.friend-wait.in-sheet { display: grid; gap: 10px; justify-items: center; text-align: center; padding: 2px 0 4px; margin-top: 0; }
+.friend-wait.in-sheet .empty-ic { font-size: 34px; margin: 0; }
+.friend-wait.in-sheet h2 { font-size: 19px; margin: 0; }
+.friend-wait.in-sheet .muted { margin: 0 0 4px; font-size: 13px; }
+.friend-wait.in-sheet .btn { width: 100%; margin: 0; }
