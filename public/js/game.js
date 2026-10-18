@@ -5,7 +5,7 @@ import { t, getLang } from './i18n.js';
 import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
 import { formatClock, remainingMs, isTimed, formatTashkentWhen, categoryOf, presetOf, normalizeTimeControl } from './time.js';
-import { liveGamePollMs, gameClockTickMs, boardAnimateDefault } from './perf.js';
+import { liveGamePollMs, boardAnimateDefault } from './perf.js';
 import { openGameAnalysis } from './analyze.js';
 
 const AI_KEY = 'chess-ai-game';
@@ -282,12 +282,14 @@ export function openGame(opts, onClose) {
     const cat = categoryOf(cg.timeControl || 'classic');
     const low = ms != null && ms <= 20000;
     let span = el.querySelector('.pclk');
+    const cls = 'pclk ' + cat + (low ? ' low' : '');
     if (!span) {
       span = h('span.pclk.' + cat + (low ? '.low' : ''), text);
       el.replaceChildren(span);
     } else {
-      span.textContent = text;
-      span.className = 'pclk ' + cat + (low ? ' low' : '');
+      // Touch the DOM only when something changed (no style recalcs for identical frames)
+      if (span.textContent !== text) span.textContent = text;
+      if (span.className !== cls) span.className = cls;
     }
   }
 
@@ -319,13 +321,35 @@ export function openGame(opts, onClose) {
     }
   }
 
+  /**
+   * Clocks show whole seconds, so the screen can only change once per second. Instead of a fixed
+   * 200-250ms interval (4-5 wake-ups per visible change = battery + heat on long games) we sleep
+   * exactly until the next displayed second flips.
+   */
+  function nextClockDelay() {
+    const cg = clockGame();
+    if (!cg || !cg.clock || cg.status !== 'active') return 1000;
+    const ms = remainingMs(cg.clock, cg.turn, cg.turn, cg.status);
+    if (ms == null) return 1000;
+    if (ms <= 1000) return Math.max(40, ms + 20); // flag detection stays prompt
+    return (ms % 1000 || 1000) + 20;
+  }
+
   function armClock() {
-    clearInterval(S.clockTimer);
+    clearTimeout(S.clockTimer);
     S.clockTimer = null;
     const cg = clockGame();
     if (!cg || !cg.clock || cg.status !== 'active' || S.over) return;
-    S.clockTimer = setInterval(syncClocks, gameClockTickMs());
+    const tick = () => {
+      S.clockTimer = null;
+      if (!ctx || ctx !== S || S.over) return;
+      if (!document.hidden) syncClocks(); // backgrounded: nothing to paint, catch up on return
+      const c2 = clockGame();
+      if (!c2 || !c2.clock || c2.status !== 'active' || S.over) return;
+      S.clockTimer = setTimeout(tick, document.hidden ? 1000 : nextClockDelay());
+    };
     syncClocks();
+    S.clockTimer = setTimeout(tick, nextClockDelay());
   }
 
   function render(animate = boardAnimateDefault()) {
@@ -766,7 +790,7 @@ export function openGame(opts, onClose) {
 function closeNow() {
   if (!ctx) return;
   if (ctx.unsub) ctx.unsub();
-  clearInterval(ctx.clockTimer);
+  clearTimeout(ctx.clockTimer);
   clearInterval(ctx.poll);
   ctx.token = null; clearTimeout(ctx.emoteT);
   ctx.chat = []; ctx.chatOpen = false;

@@ -57,3 +57,11 @@ assert.ok(/liveClockTickMs[\s\S]*?isIOS \? 500/.test(perf), 'iOS clock repaint h
 const liveSrc = read('public/js/live.js');
 assert.strictEqual((liveSrc.match(/if \(document\.hidden\) return;/g) || []).length >= 2, true, 'live pollers skip while hidden');
 console.log('live-latency eco OK');
+
+// ---- in-game clock: wakes once per displayed second, not 4-5x ----
+const gameSrc = read('public/js/game.js');
+assert.ok(/function nextClockDelay\(\)/.test(gameSrc) && /setTimeout\(tick, /.test(gameSrc), 'game clock sleeps until the next displayed second');
+assert.ok(!/setInterval\(syncClocks/.test(gameSrc), 'no fixed-rate clock interval in games');
+assert.ok(/span\.textContent !== text/.test(gameSrc), 'clock DOM only written when it changed');
+assert.ok(/#game\.show/.test(read('public/js/announcements.js')), 'home carousel pauses while a game is open');
+console.log('game-clock eco OK');
