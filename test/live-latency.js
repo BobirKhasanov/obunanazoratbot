@@ -52,6 +52,7 @@ const css = read('public/styles.css');
 assert.ok(/html\[data-ios="1"\] #bg::before \{[^}]*animation:\s*none/.test(css), 'iOS: 3D background no longer animates');
 assert.ok(/html\[data-ios="1"\] #dock,[\s\S]*?backdrop-filter:\s*none/.test(css), 'iOS: no backdrop blur layers');
 assert.ok(/html\[data-hidden="1"\] \*[\s\S]*?animation-play-state:\s*paused/.test(css), 'animations pause when app is hidden');
+assert.ok(/html\[data-ios="1"\] \.pc,[\s\S]*?filter:\s*none/.test(css), 'iOS: no per-piece filters');
 assert.ok(/liveClockTickMs[\s\S]*?isIOS \? 500/.test(perf), 'iOS clock repaint halved');
 const liveSrc = read('public/js/live.js');
 assert.strictEqual((liveSrc.match(/if \(document\.hidden\) return;/g) || []).length >= 2, true, 'live pollers skip while hidden');

@@ -2773,3 +2773,24 @@ html[data-ios="1"] .rain { display: none !important; }
 html[data-ios="1"] .piece { will-change: auto; }
 /* no endless animation while the app is in the background / covered */
 html[data-hidden="1"] *, html[data-hidden="1"] *::before, html[data-hidden="1"] *::after { animation-play-state: paused !important; }
+
+/* iOS eco, stage 2: no per-element filters / soft shadows, no extra compositing layers */
+html[data-ios="1"] .pc,
+html[data-ios="1"] .piece,
+html[data-ios="1"] .piece img,
+html[data-ios="1"] .home-banner-art,
+html[data-ios="1"] .pf-hero,
+html[data-ios="1"] .prem-ring { filter: none !important; }
+html[data-ios="1"] .nx-mode,
+html[data-ios="1"] .nx-mode.on,
+html[data-ios="1"] .nx-tour,
+html[data-ios="1"] .nx-daily,
+html[data-ios="1"] .nx-hero,
+html[data-ios="1"] .nx-cta,
+html[data-ios="1"] .nx-seg button.on,
+html[data-ios="1"] .nx-rank.you,
+html[data-ios="1"] .nx-dot,
+html[data-ios="1"] .sheet,
+html[data-ios="1"] .card { box-shadow: none !important; }
+html[data-ios="1"] * { will-change: auto !important; }
+html[data-ios="1"] .nx-mode:active { transform: none; }

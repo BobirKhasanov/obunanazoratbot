@@ -332,7 +332,7 @@ export function paintAnnouncementsCarousel(host, prepared, { onPage, botUsername
     stopAuto();
     const start = () => {
       armed = true;
-      timer = setInterval(() => go(go.idx + 1), dwell);
+      timer = setInterval(() => { if (!document.hidden) go(go.idx + 1); }, dwell);
     };
     // First mount: optional phase offset so two carousels don't flip together.
     if (!armed && delayMs > 0) timer = setTimeout(start, delayMs);

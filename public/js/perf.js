@@ -130,6 +130,7 @@ export function homeTabRefreshMs() {
   const p = detect();
   if (p.lite) return 24000;
   if (p.isAndroid) return 16000;
+  if (p.isIOS) return 22000;
   return 14000;
 }
 
@@ -138,12 +139,14 @@ export function softPollMs() {
   const p = detect();
   if (p.lite) return 10000;
   if (p.isAndroid) return 6000;
+  if (p.isIOS) return 8000;
   return 5000;
 }
 
 /** Announcement carousel auto-advance dwell (ms). */
 export function carouselDwellMs() {
-  return detect().lite ? 10000 : 6000;
+  const p = detect();
+  return p.lite ? 10000 : p.isIOS ? 9000 : 6000;
 }
 
 /** Cap carousel slides (and media fetches) on weak Android. */
