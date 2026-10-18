@@ -2748,3 +2748,28 @@ html[data-perf="lite"] .nx-hscroll { scroll-snap-type: none; }
   .nx-lvl-d { display: none; }
   .nx-hdr-name b { max-width: 26vw; }
 }
+
+/* ---- iOS eco: same look, but no always-on GPU work (blur layers, endless animations) so the phone stays cool ---- */
+html[data-ios="1"] #bg::before { animation: none; filter: none; will-change: auto; opacity: 0.22; }
+html[data-ios="1"] #dock,
+html[data-ios="1"] #nav,
+html[data-ios="1"] .sheet,
+html[data-ios="1"] .prof-banner,
+html[data-ios="1"] .nx-mode-body {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html[data-ios="1"] #dock, html[data-ios="1"] #nav { background: rgba(10, 16, 30, 0.94); }
+html[data-ios="1"] .nx-mode-body { background: linear-gradient(180deg, rgba(var(--mode-glow, 46, 139, 255), 0.16), rgba(8, 13, 24, 0.9) 55%); }
+html[data-ios="1"] .skeleton,
+html[data-ios="1"] .dot,
+html[data-ios="1"] .prem-ring,
+html[data-ios="1"] .prem-spark,
+html[data-ios="1"] .prem-sparkle,
+html[data-ios="1"] .page > *,
+html[data-ios="1"] #boot .boot-glow,
+html[data-ios="1"] #boot .boot-orbit { animation: none !important; }
+html[data-ios="1"] .rain { display: none !important; }
+html[data-ios="1"] .piece { will-change: auto; }
+/* no endless animation while the app is in the background / covered */
+html[data-hidden="1"] *, html[data-hidden="1"] *::before, html[data-hidden="1"] *::after { animation-play-state: paused !important; }

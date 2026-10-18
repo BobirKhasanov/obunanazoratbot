@@ -1,7 +1,7 @@
 // Online tab: bot live spectate + Lichess international broadcasts + game analysis.
 import { Chess } from '/vendor/chess.js';
 import { h, icon, haptic, api, fail, avatar, avBlock, tg, pillBar } from './ui.js';
-import { t } from './i18n.js';
+import { t, errText } from './i18n.js';
 import { Board } from './board.js';
 import { openGame } from './game.js';
 import { openGameAnalysis } from './analyze.js';
@@ -422,10 +422,36 @@ async function renderIntlList(mount, onRefresh) {
   ]);
 }
 
+let retryTimer = null;
+/** Lichess throttled us / is down for a moment: retry once on our own while the user is still here. */
+function autoRetry(e, view, onRefresh) {
+  clearTimeout(retryTimer);
+  const code = e && e.code;
+  if (code !== 'lichess_busy' && code !== 'upstream' && code !== 'net') return;
+  const at = renderGen;
+  retryTimer = setTimeout(() => {
+    if (at === renderGen && section === 'intl' && nav.view === view) onRefresh();
+  }, 8000);
+}
+
 async function renderTour(mount, onRefresh) {
   let data;
+  const myGen = renderGen;
   try { data = await api('GET', `/lichess/broadcasts/${nav.tourId}`); }
-  catch (e) { fail(e); nav = { view: 'list' }; return onRefresh(); }
+  catch (e) {
+    if (myGen !== renderGen || section !== 'intl' || nav.view !== 'tour') return;
+    // Stay here with a retry (and retry by itself when Lichess is only throttling us)
+    // instead of silently throwing the user back to the list.
+    fail(e);
+    autoRetry(e, 'tour', onRefresh);
+    return mount([
+      h('div.top',
+        backBtn(() => { backIntl(); onRefresh(); }),
+        h('h1', nav.tourName || t('live_tab_intl'))),
+      empty(errText(e) || t('live_load_fail'), '🌐'),
+      h('button.btn', { type: 'button', onclick: () => onRefresh() }, t('retry_live')),
+    ]);
+  }
   const tour = data.tour || {};
   const rounds = data.rounds || [];
   const ongoing = rounds.find((r) => r.ongoing) || rounds.filter((r) => !r.finished).slice(-1)[0] || rounds[rounds.length - 1];
@@ -552,6 +578,7 @@ async function renderRound(mount, onRefresh) {
   catch (e) {
     if (gen !== renderGen || nav.view !== 'round') return;
     fail(e);
+    autoRetry(e, 'round', onRefresh);
     // Stay on this screen with retry — don't silently bounce to list
     return mount([
       h('div.top',
@@ -650,6 +677,7 @@ async function renderRound(mount, onRefresh) {
   let roundBusy = false;
   pollTimer = setInterval(async () => {
     if (section !== 'intl' || nav.view !== 'round') return clearPoll();
+    if (document.hidden) return; // backgrounded: no network, no repaint
     if (roundBusy) return; // previous poll still in flight — don't stack requests
     roundBusy = true;
     try {
@@ -893,6 +921,7 @@ async function renderGame(mount, onRefresh) {
   const gamePoll = liveGamePollMs();
   pollTimer = setInterval(async () => {
     if (section !== 'intl' || nav.view !== 'game' || gen !== renderGen) return clearPoll();
+    if (document.hidden) return;
     if (gameBusy) return; // previous poll still in flight — don't stack requests
     gameBusy = true;
     polls += 1;

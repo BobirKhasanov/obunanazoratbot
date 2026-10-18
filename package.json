@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node test/elo-expand.js && node test/client-syntax.js && node test/pieces-style.js && node test/profile-ui.js && node test/boot-splash.js && node test/safe-area.js && node test/live-latency.js && node test/announcements.js && node test/promo.js && node test/worker-proxy.js && node test/smoke.js && node test/bot-test.js",
+    "test": "node test/elo-expand.js && node test/client-syntax.js && node test/pieces-style.js && node test/profile-ui.js && node test/boot-splash.js && node test/safe-area.js && node test/live-latency.js && node test/lichess-resilience.js && node test/announcements.js && node test/promo.js && node test/worker-proxy.js && node test/smoke.js && node test/bot-test.js",
     "test:engine": "node test/ai-test.mjs"
   },
   "engines": {

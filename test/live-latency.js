@@ -13,6 +13,7 @@ const ms = (fn, branch) => {
   return Number(m && m[1]);
 };
 assert.ok(/liveGamePollMs[\s\S]*?return 1000;/.test(perf), 'open live game polls every 1s on iOS/desktop');
+assert.ok(ms('liveGamePollMs', 'p.isIOS') <= 1500, 'iOS eco live game poll <= 1.5s');
 assert.ok(ms('liveGamePollMs', 'p.isAndroid') <= 2000, 'Android live game poll <= 2s');
 assert.ok(ms('liveGamePollMs', 'p.lite') <= 3000, 'lite live game poll <= 3s');
 assert.ok(/liveRoundPollMs[\s\S]*?return 2000;/.test(perf), 'round grid polls every 2s on iOS/desktop');
@@ -45,3 +46,13 @@ const lichess = require('../src/lichess');
 
   console.log('ok  live-latency (cache <= ~1s, polls 1-2s, no stacked polls)');
 })().catch((e) => { console.error(e); process.exit(1); });
+
+// ---- iOS eco: no always-on GPU work, pollers pause in background ----
+const css = read('public/styles.css');
+assert.ok(/html\[data-ios="1"\] #bg::before \{[^}]*animation:\s*none/.test(css), 'iOS: 3D background no longer animates');
+assert.ok(/html\[data-ios="1"\] #dock,[\s\S]*?backdrop-filter:\s*none/.test(css), 'iOS: no backdrop blur layers');
+assert.ok(/html\[data-hidden="1"\] \*[\s\S]*?animation-play-state:\s*paused/.test(css), 'animations pause when app is hidden');
+assert.ok(/liveClockTickMs[\s\S]*?isIOS \? 500/.test(perf), 'iOS clock repaint halved');
+const liveSrc = read('public/js/live.js');
+assert.strictEqual((liveSrc.match(/if \(document\.hidden\) return;/g) || []).length >= 2, true, 'live pollers skip while hidden');
+console.log('live-latency eco OK');

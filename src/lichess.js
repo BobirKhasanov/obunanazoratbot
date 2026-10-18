@@ -9,6 +9,29 @@ const UA = 'ObunaNazoratBot/1.0 (Telegram Mini App; broadcast spectator)';
 
 const inflight = new Map(); // path -> Promise
 
+/**
+ * Lichess rate-limits per IP, and every user of this bot shares one server IP. After a 429 Lichess
+ * asks for ~1 minute of silence: hammering it again only extends the ban. So after a 429 we stop
+ * calling upstream (cooldown) and keep answering from the last good copy instead of showing errors.
+ */
+const COOLDOWN_MS = 60_000;
+const STALE_MAX_MS = 10 * 60_000; // an old snapshot is still better than "failed to load"
+const STALE_KEEP = 400;
+const lastGood = new Map(); // key -> { at, data }
+let blockedUntil = 0;
+
+function remember(key, data) {
+  if (lastGood.size >= STALE_KEEP) lastGood.delete(lastGood.keys().next().value);
+  lastGood.delete(key);
+  lastGood.set(key, { at: Date.now(), data });
+}
+function stale(key) {
+  const hit = lastGood.get(key);
+  return hit && Date.now() - hit.at <= STALE_MAX_MS ? hit.data : null;
+}
+function coolingDown() { return Date.now() < blockedUntil; }
+function retryAfterSec() { return Math.max(1, Math.ceil((blockedUntil - Date.now()) / 1000)); }
+
 /** Live round snapshot / PGN shared-cache lifetimes (ms). Lower = closer to live. */
 const ROUND_CACHE_MS = 1_000;
 const PGN_CACHE_MS = 1_500;
@@ -47,6 +70,10 @@ async function fetchOnce(path, accept) {
     try { detail = (await r.json()).error || ''; } catch { /* ignore */ }
     const err = new Error(detail || `Lichess ${r.status}`);
     err.status = r.status;
+    if (r.status === 429) {
+      const ra = Number(r.headers.get('retry-after'));
+      err.retryAfterMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 5 * 60_000) : COOLDOWN_MS;
+    }
     throw err;
   }
   if (accept.includes('json')) return r.json();
@@ -62,19 +89,38 @@ async function lichessGet(path, { accept = 'application/json', maxAge = 8_000, f
   if (inflight.has(key)) return inflight.get(key);
 
   const job = (async () => {
+    // Upstream asked us to back off: answer from the last good copy, never call it again yet.
+    if (coolingDown()) {
+      const old = stale(key);
+      if (old != null) return old;
+      const err = new Error('Lichess is busy');
+      err.status = 429;
+      err.retryAfter = retryAfterSec();
+      throw err;
+    }
     let lastErr;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const data = await fetchOnce(path, accept);
+        remember(key, data);
         if (maxAge > 0) await cacheSet(key, data, maxAge);
         return data;
       } catch (e) {
         lastErr = e;
-        // Never retry 429 — retries make Lichess throttle harder and surface as "Too many requests"
-        if (e.status === 400 || e.status === 404 || e.status === 429) throw e;
+        if (e.status === 429) {
+          blockedUntil = Date.now() + (e.retryAfterMs || COOLDOWN_MS);
+          e.retryAfter = retryAfterSec();
+          const old = stale(key);
+          if (old != null) return old;
+          throw e;
+        }
+        if (e.status === 400 || e.status === 404) throw e;
         if (attempt < 2) await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
       }
     }
+    // Lichess down / timing out: serve the last snapshot rather than an error screen.
+    const old = stale(key);
+    if (old != null) return old;
     throw lastErr;
   })().finally(() => inflight.delete(key));
 
@@ -160,4 +206,5 @@ async function broadcastRoundPgn(roundId, { fresh = false } = {}) {
 module.exports = {
   topBroadcasts, broadcastTour, broadcastRound, broadcastRoundPgn,
   parseMultiPgn, bustPgn, lichessId, slugsFromUrl,
+  _resetForTests() { lastGood.clear(); inflight.clear(); blockedUntil = 0; },
 };

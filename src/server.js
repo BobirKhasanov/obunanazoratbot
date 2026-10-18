@@ -948,14 +948,19 @@ async function auth(req, res, next) {
   const tg = validateInitData(req.get('X-Init-Data'), BOT_TOKEN);
   if (!tg) return res.status(401).json({ error: 'Open this app from Telegram', code: 'auth' });
 
+  // Live Lichess boards poll every 1-2s and are served from a shared server cache, so they get
+  // their own bucket: watching a tournament must never use up the budget for normal actions.
+  const liveRead = req.method === 'GET' && String(req.path || '').startsWith('/lichess/');
+  const bucket = liveRead ? `l${tg.id}` : tg.id;
+  const limit = liveRead ? RATE_LIMIT_PER_MIN * 3 : RATE_LIMIT_PER_MIN;
   let n;
   if (cacheEnabled()) {
-    n = await incr(`rl:${tg.id}:${Math.floor(Date.now() / 60_000)}`, 70);
+    n = await incr(`rl:${bucket}:${Math.floor(Date.now() / 60_000)}`, 70);
   } else {
-    n = (hits.get(tg.id) || 0) + 1;
-    hits.set(tg.id, n);
+    n = (hits.get(bucket) || 0) + 1;
+    hits.set(bucket, n);
   }
-  if (n > RATE_LIMIT_PER_MIN) return res.status(429).json({ error: 'Too many requests', code: 'limit' });
+  if (n > limit) return res.status(429).json({ error: 'Too many requests', code: 'limit' });
 
   let user = await ensureAuthedUser(tg);
   if (user.blocked) return res.status(403).json({ error: 'Your access has been disabled', code: 'blocked' });
@@ -2269,7 +2274,8 @@ api.get('/live/games/:id', wrap(async (req, res) => {
 const lichessFail = (e, notFoundMsg) => {
   if (e.status === 400 || e.code === 'bad_request') throw bad(e.message || 'Invalid id', 'bad_request');
   if (e.status === 404) throw new HttpError(404, notFoundMsg, 'notfound');
-  if (e.status === 429) throw new HttpError(429, 'Too many requests', 'limit');
+  // Lichess (not this bot) is throttling us: different code so the app can say so and retry by itself.
+  if (e.status === 429) throw new HttpError(429, 'Lichess is busy, try again shortly', 'lichess_busy');
   throw new HttpError(502, 'Lichess is unavailable', 'upstream');
 };
 

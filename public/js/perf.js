@@ -74,8 +74,18 @@ export function applyPerfMode() {
   // CSS/SVG "studio 3D" depth — on for iOS + normal Android; off on weak Android lite
   if (p.lite) delete root.dataset.view3d;
   else root.dataset.view3d = '1';
+  // Backgrounded / covered: pause every endless CSS animation (html[data-hidden] in styles.css)
+  if (!root.__hiddenSync) {
+    root.__hiddenSync = true;
+    const sync = () => { if (document.hidden) root.dataset.hidden = '1'; else delete root.dataset.hidden; };
+    document.addEventListener('visibilitychange', sync);
+    sync();
+  }
   return p;
 }
+
+/** iOS "eco": keeps the full look but drops always-on GPU work (see html[data-ios] in styles.css). */
+export function isEco() { return detect().isIOS || detect().lite; }
 
 /** Whether the CSS/SVG 3D board presentation is active. */
 export function isView3d() { return !detect().lite; }
@@ -90,6 +100,7 @@ export function liveRoundPollMs() {
   const p = detect();
   if (p.lite) return 5000;
   if (p.isAndroid) return 3000;
+  if (p.isIOS) return 2500; // eco: fewer wake-ups = cooler phone (server cache is 1s anyway)
   return 2000;
 }
 
@@ -98,17 +109,20 @@ export function liveGamePollMs() {
   const p = detect();
   if (p.lite) return 3000;
   if (p.isAndroid) return 2000;
+  if (p.isIOS) return 1500;
   return 1000;
 }
 
 /** Local clock UI tick (ms) — live boards + in-game clocks. */
 export function liveClockTickMs() {
-  return detect().lite ? 500 : 250;
+  const p = detect();
+  return p.lite || p.isIOS ? 500 : 250; // clocks show whole seconds, 2 paints/s is plenty
 }
 
 /** In-game chess clock drain tick (ms). */
 export function gameClockTickMs() {
-  return detect().lite ? 400 : 200;
+  const p = detect();
+  return p.lite ? 400 : p.isIOS ? 250 : 200;
 }
 
 /** Home / lobby soft refresh when WS is connected (ms). */
