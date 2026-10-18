@@ -2809,3 +2809,73 @@ html[data-ios="1"] .nx-mode:active { transform: none; }
 .pf-search.in-sheet .pf-stats { gap: 4px; font-size: 13px; margin: 0; }
 .pf-search.in-sheet .btn { width: 100%; margin: 6px 0 0; }
 html[data-ios="1"] .pf-search-art { animation: none; }
+
+/* review overlay on the board (arrows + move-quality badges) */
+.board .ov { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+.board .ov .ov-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+/* ===== Game review (Chess.com-style) ===== */
+.analyze-screen.rv { display: flex; flex-direction: column; gap: 10px; padding: 6px 0 calc(24px + var(--safe-b)); }
+.rv-load { display: grid; justify-items: center; gap: 10px; text-align: center; padding: 48px 12px; }
+.rv-load-art { width: 76px; height: 76px; border-radius: 22px; display: grid; place-items: center; font-size: 42px; background: rgba(74,140,255,.16); }
+.rv-load b { font-size: 18px; }
+.rv-load-bar { width: min(260px, 70%); height: 6px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
+.rv-load-bar i { display: block; height: 100%; background: #81b64c; border-radius: 99px; transition: width .25s linear; }
+
+.rv-sum { display: grid; gap: 12px; }
+.rv-sum-title { font-size: 20px; font-weight: 800; }
+.rv-acc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rv-acc { display: grid; justify-items: center; gap: 2px; padding: 12px 8px; border-radius: 16px; background: rgba(0,0,0,.2); min-width: 0; }
+.rv-acc.w .rv-acc-num { color: #f2f2f2; }
+.rv-acc.b .rv-acc-num { color: #9aa3b2; }
+.rv-acc-name { font-size: 13px; font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-acc-num { font-size: 30px; font-weight: 900; letter-spacing: -.02em; }
+.rv-acc-lbl { font-size: 11px; color: var(--muted); }
+.rv-graph { border-radius: 12px; overflow: hidden; height: 64px; cursor: pointer; }
+.rv-graph svg { width: 100%; height: 100%; display: block; }
+.rv-cnts { display: grid; gap: 2px; }
+.rv-cnt { display: grid; grid-template-columns: 1fr 44px 44px; align-items: center; gap: 6px; padding: 6px 2px; font-size: 14px; border-top: 1px solid rgba(255,255,255,.05); }
+.rv-cnt b { text-align: center; font-weight: 800; }
+.rv-cnt-l { display: inline-flex; align-items: center; gap: 8px; }
+.rv-dot { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; color: #fff; font-style: normal; font-size: 10px; font-weight: 900; }
+
+.rv-coach { display: flex; align-items: flex-start; gap: 10px; }
+.rv-av { width: 46px; height: 46px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 26px; background: linear-gradient(160deg, #3b5bdb, #1e3a8a); margin-top: 6px; }
+.rv-bubble { position: relative; flex: 1; min-width: 0; padding: 10px 12px 11px; border-radius: 14px; background: #f4f5f7; color: #1b1f27; }
+.rv-bubble::before { content: ''; position: absolute; left: -6px; top: 16px; width: 12px; height: 12px; background: inherit; transform: rotate(45deg); border-radius: 2px; }
+.rv-bh { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+.rv-bh b { flex: 1; min-width: 0; font-size: 17px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-sym { width: 24px; height: 24px; border-radius: 50%; display: inline-grid; place-items: center; color: #fff; font-style: normal; font-size: 12px; font-weight: 900; flex: none; }
+.rv-eval { font-size: 13px; font-weight: 800; padding: 3px 8px; border-radius: 6px; flex: none; }
+.rv-eval.pos { background: #fff; color: #1b1f27; box-shadow: inset 0 0 0 1px #d6d9df; }
+.rv-eval.neg { background: #403d39; color: #fff; }
+.rv-text { margin: 4px 0 0; font-size: 14px; line-height: 1.38; }
+
+.rv-boardrow { display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 6px; align-items: stretch; width: min(100%, 60dvh); margin: 0 auto; }
+.rv-bar { position: relative; border-radius: 4px; background: #403d39; overflow: hidden; }
+.rv-bar i { position: absolute; left: 0; right: 0; bottom: 0; background: #f2f2f2; transition: height .3s ease; }
+.rv-bar.flip i { bottom: auto; top: 0; }
+.rv-board { width: 100%; aspect-ratio: 1; }
+.rv-board .board { width: 100%; height: 100%; }
+
+.rv-strip { display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; align-items: center; gap: 4px; }
+.rv-step { height: 40px; border-radius: 10px; background: rgba(255,255,255,.06); color: var(--text); font-size: 22px; font-weight: 800; }
+.rv-moves { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; padding: 4px 0; }
+.rv-moves::-webkit-scrollbar { display: none; }
+.rv-mv { flex: none; display: inline-flex; align-items: center; gap: 3px; padding: 7px 8px; border-radius: 8px; font-size: 16px; font-weight: 700; color: var(--muted); }
+.rv-mv small { font-size: 13px; opacity: .8; }
+.rv-mv.on { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); background: rgba(255,255,255,.06); }
+.rv-mv.brilliant span, .rv-mv.great span { color: #26c2a3; }
+.rv-mv.inaccuracy span { color: #f7c631; }
+.rv-mv.mistake span { color: #e58f2a; }
+.rv-mv.miss span, .rv-mv.blunder span { color: #ff7769; }
+
+.rv-actions { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: stretch; position: sticky; bottom: calc(10px + var(--safe-b)); }
+.rv-small { display: flex; gap: 6px; }
+.rv-act { display: grid; justify-items: center; align-content: center; gap: 2px; width: 62px; padding: 8px 4px; border-radius: 12px; background: rgba(255,255,255,.07); color: var(--muted); font-size: 12px; font-weight: 700; }
+.rv-act.on { color: #fff; background: rgba(129,182,76,.28); }
+.rv-act:disabled { opacity: .35; }
+.rv-next { min-height: 54px; border-radius: 14px; background: #81b64c; color: #fff; font-size: 20px; font-weight: 900; box-shadow: 0 4px 0 #5d8a35; }
+.rv-next:active { transform: translateY(2px); box-shadow: 0 2px 0 #5d8a35; }
+.rv-sumlink { align-self: center; color: var(--muted); font-size: 13px; font-weight: 700; padding: 6px 12px; }
+html[data-ios="1"] .rv-bar i, html[data-perf="lite"] .rv-bar i { transition: none; }

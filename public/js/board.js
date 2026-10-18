@@ -25,7 +25,8 @@ export class Board {
     this.pieces = new Map(); // square -> {el, c, t}
     this.selected = null; this.legal = [];
     this.squares = h('div.squares'); this.hl = h('div.hl'); this.layer = h('div.pieces'); this.coords = h('div.coords');
-    this.el = h('div.board', this.squares, this.hl, this.layer, this.coords);
+    this.ov = h('div.ov'); // optional arrows / move-quality badges (game review)
+    this.el = h('div.board', this.squares, this.hl, this.layer, this.coords, this.ov);
     this.setBoardTouchAction('pan-y');
     root.append(this.el);
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) this.squares.append(h('i' + ((r + c) % 2 ? '.dk' : '.lt')));
@@ -91,6 +92,7 @@ export class Board {
     this.chess = chess; this.lastMove = lastMove; this.mine = mine; this.orientation = orientation;
     this.premoveEnabled = !!premoveEnabled;
     this.deselect();
+    if (this.ovOn) this.setOverlay(null);
     // Weak Android (data-perf=lite): skip piece glides. iOS stays animated.
     const lite = document.documentElement.dataset.perf === 'lite';
     if (lite) animate = false;
@@ -153,6 +155,43 @@ export class Board {
       const f = this.orientation === 'w' ? FILES[i] : FILES[7 - i], r = this.orientation === 'w' ? 8 - i : i + 1;
       this.coords.append(h('b.cf', { style: { left: `${i * 12.5}%` } }, f), h('b.cr', { style: { top: `${i * 12.5}%` } }, String(r)));
     }
+  }
+
+  /**
+   * Draw review marks on top of the pieces: arrows [{from,to,color}] and badges [{sq,text,color}].
+   * Pass null to clear. Coordinates follow the current orientation.
+   */
+  setOverlay(o) {
+    this.ov.replaceChildren();
+    this.ovOn = !!(o && ((o.arrows && o.arrows.length) || (o.badges && o.badges.length)));
+    if (!this.ovOn) return;
+    const NS = 'http://www.w3.org/2000/svg';
+    const el = (tag, attrs, text) => {
+      const n = document.createElementNS(NS, tag);
+      for (const k in attrs) n.setAttribute(k, attrs[k]);
+      if (text != null) n.textContent = text;
+      return n;
+    };
+    const svg = el('svg', { viewBox: '0 0 8 8', class: 'ov-svg', 'aria-hidden': 'true' });
+    for (const a of o.arrows || []) {
+      const f = this.xy(a.from); const t = this.xy(a.to);
+      const x1 = f.x + 0.5; const y1 = f.y + 0.5; const x2 = t.x + 0.5; const y2 = t.y + 0.5;
+      const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+      const ux = (x2 - x1) / len; const uy = (y2 - y1) / len;
+      const head = 0.34; const w = 0.15;
+      const bx = x2 - ux * head; const by = y2 - uy * head; // where the shaft meets the head
+      const g = el('g', { fill: a.color || '#81b64c', opacity: '0.86' });
+      g.append(el('line', { x1: x1 + ux * 0.18, y1: y1 + uy * 0.18, x2: bx, y2: by, stroke: a.color || '#81b64c', 'stroke-width': w, 'stroke-linecap': 'round' }));
+      g.append(el('polygon', { points: `${x2},${y2} ${bx - uy * 0.2},${by + ux * 0.2} ${bx + uy * 0.2},${by - ux * 0.2}` }));
+      svg.append(g);
+    }
+    for (const b of o.badges || []) {
+      const p = this.xy(b.sq);
+      const cx = Math.min(p.x + 0.86, 7.84); const cy = Math.max(p.y + 0.14, 0.16);
+      svg.append(el('circle', { cx, cy, r: 0.27, fill: b.color || '#81b64c', stroke: 'rgba(0,0,0,.35)', 'stroke-width': 0.03 }));
+      svg.append(el('text', { x: cx, y: cy + 0.095, 'text-anchor': 'middle', 'font-size': String(b.text.length > 1 ? 0.27 : 0.34), 'font-weight': '900', fill: '#fff', 'font-family': 'system-ui, sans-serif' }, b.text));
+    }
+    this.ov.append(svg);
   }
 
   mark(sq, cls) { const { x, y } = this.xy(sq); const el = h('u.' + cls); el.style.transform = `translate3d(${x * 100}%, ${y * 100}%, 0)`; this.hl.append(el); return el; }
