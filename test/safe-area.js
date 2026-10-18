@@ -103,3 +103,10 @@ console.log('safe-area OK');
   assert.ok(/\n\s*sheet\(\(close\) =>/.test(flow.slice(i)) && !/openScreen\(/.test(flow.slice(i)), 'searching opens as a bottom sheet');
 }
 assert.ok(/waitSheet[\s\S]{0,400}screenOpen\(\) \|\| waitSheet/.test(read('public/js/app.js')) || /screenOpen\(\) \|\| waitSheet/.test(read('public/js/app.js')), 'WS "game active" also opens the board while a wait/search sheet is up');
+
+// Nav: no rectangle behind the floating pill, on any platform/theme
+{
+  const dock = css.slice(css.lastIndexOf('#dock { background: none'));
+  assert.ok(/#dock \{ background: none !important/.test(dock), '#dock never paints a background');
+  assert.ok(!/html\[data-ios="1"\] #dock,\s*html\[data-ios="1"\] #nav \{ background/.test(css), 'no iOS-only dark dock background (broke light theme)');
+}

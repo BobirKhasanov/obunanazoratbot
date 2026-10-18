@@ -2759,7 +2759,6 @@ html[data-ios="1"] .nx-mode-body {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
-html[data-ios="1"] #dock, html[data-ios="1"] #nav { background: rgba(10, 16, 30, 0.94); }
 html[data-ios="1"] .nx-mode-body { background: linear-gradient(180deg, rgba(var(--mode-glow, 46, 139, 255), 0.16), rgba(8, 13, 24, 0.9) 55%); }
 html[data-ios="1"] .skeleton,
 html[data-ios="1"] .dot,
@@ -2879,3 +2878,8 @@ html[data-ios="1"] .pf-search-art { animation: none; }
 .rv-next:active { transform: translateY(2px); box-shadow: 0 2px 0 #5d8a35; }
 .rv-sumlink { align-self: center; color: var(--muted); font-size: 13px; font-weight: 700; padding: 6px 12px; }
 html[data-ios="1"] .rv-bar i, html[data-perf="lite"] .rv-bar i { transition: none; }
+
+/* The dock is only a positioning wrapper: it must never paint a box behind the floating nav pill
+   (any platform, light or dark). The nav keeps its own themed --nav-bg. */
+#dock { background: none !important; box-shadow: none !important; border: 0 !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
