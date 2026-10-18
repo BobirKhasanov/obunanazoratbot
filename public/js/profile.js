@@ -635,7 +635,8 @@ export function renderProfilePage(ctx) {
       } catch (e) { fail(e); }
       const meNow = state.me;
       const cur = meNow.avatarKey || null;
-      const canPhoto = !!(meNow.premium || meNow.isAdmin);
+      const canPhoto = true; // photo upload is open to everyone
+      const canChars = !!(meNow.premium || meNow.isAdmin);
       const isPhoto = !!(cur && /^img:/i.test(cur));
       const isChar = !!(cur && /^char:/i.test(cur));
       const selectedChar = isChar ? chars.find((c) => c.key === cur) : null;
@@ -685,15 +686,23 @@ export function renderProfilePage(ctx) {
             ),
           ),
         ),
-        h('div.h2', t('avatar_chars')),
+        h('div.h2', t('avatar_chars'), canChars ? null : h('span.prem-tag', '👑 Premium')),
         chars.length
           ? (() => {
             const boys = chars.filter((c) => c.group !== 'f');
             const girls = chars.filter((c) => c.group === 'f');
-            const tile = (c) => h('button.char-tile' + (cur === c.key ? '.on' : ''), {
+            const tile = (c) => h('button.char-tile' + (cur === c.key ? '.on' : '') + (canChars || cur === c.key ? '' : '.locked'), {
               type: 'button',
               title: c.name,
-              onclick: () => { haptic('select'); pick(c.key); },
+              onclick: () => {
+                haptic('select');
+                if (!canChars && cur !== c.key) {
+                  toast(t('avatar_char_premium'), true);
+                  document.dispatchEvent(new CustomEvent('open-premium'));
+                  return;
+                }
+                pick(c.key);
+              },
             }, h('img', { src: c.url, alt: c.name, draggable: 'false', loading: 'lazy' }));
             return h('div.char-sets',
               boys.length ? h('div.char-grid', boys.map(tile)) : null,

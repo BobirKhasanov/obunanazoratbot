@@ -2915,3 +2915,5 @@ html[data-ios="1"] .rv-bar i, html[data-perf="lite"] .rv-bar i { transition: non
 .result-rating.up em { color: #3a9d5d; }
 .result-rating.down em { color: #e5534b; }
 .result-tools { margin: 6px 0; }
+.char-tile.locked { opacity: 0.55; }
+.prem-tag { margin-left: 8px; font-size: 12px; font-weight: 800; color: #e0a81e; }

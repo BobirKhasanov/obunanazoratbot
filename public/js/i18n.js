@@ -505,6 +505,10 @@ Object.assign(en, {"mv_first": "First move", "mv_prev": "Previous move", "mv_nex
 Object.assign(ru, {"mv_first": "Первый ход", "mv_prev": "Предыдущий ход", "mv_next": "Следующий ход", "mv_last": "Текущая позиция", "game_settings": "Настройки партии", "premove": "Премув", "premove_sub": "Ход заранее, пока думает соперник", "pm_off": "Выкл", "pm_fast": "Быстрые", "pm_all": "Все партии", "auto_queen": "Авто-ферзь", "auto_queen_sub": "Превращать в ферзя без вопроса", "confirm_move": "Подтверждать ход", "confirm_move_sub": "Нажмите ✓ перед отправкой хода", "abort": "Прервать", "abort_confirm": "Прервать партию? Рейтинг не изменится.", "game_aborted": "Партия прервана", "takeback": "Вернуть ход", "takeback_sent": "Запрос на возврат хода", "takeback_sent_sub": "Ждём ответа соперника…", "takeback_received": "{name} просит вернуть ход", "takeback_received_sub": "Согласитесь, чтобы отменить его последний ход.", "takeback_declined": "Возврат хода отклонён", "g_rating": "Рейтинг", "copy_pgn": "Копировать PGN", "pgn_copied": "PGN скопирован", "g_share": "Поделиться"});
 Object.assign(uz, {"mv_first": "Birinchi yurish", "mv_prev": "Oldingi yurish", "mv_next": "Keyingi yurish", "mv_last": "Hozirgi holat", "game_settings": "O'yin sozlamalari", "premove": "Premove", "premove_sub": "Raqib o'ylayotganda oldindan yurish", "pm_off": "O'chiq", "pm_fast": "Tezkor", "pm_all": "Barcha o'yinlar", "auto_queen": "Avto-farzin", "auto_queen_sub": "So'ramasdan farzinga aylantirish", "confirm_move": "Yurishni tasdiqlash", "confirm_move_sub": "Yurish yuborilishidan oldin ✓ bosing", "abort": "Bekor qilish", "abort_confirm": "O'yin bekor qilinsinmi? Reyting o'zgarmaydi.", "game_aborted": "O'yin bekor qilindi", "takeback": "Yurishni qaytarish", "takeback_sent": "Qaytarish so'raldi", "takeback_sent_sub": "Raqib javobi kutilmoqda…", "takeback_received": "{name} yurishni qaytarishni so'ramoqda", "takeback_received_sub": "Qabul qilsangiz, uning oxirgi yurishi bekor bo'ladi.", "takeback_declined": "Qaytarish rad etildi", "g_rating": "Reyting", "copy_pgn": "PGN nusxalash", "pgn_copied": "PGN nusxalandi", "g_share": "Ulashish"});
 Object.assign(uzc, {"mv_first": "Биринчи юриш", "mv_prev": "Олдинги юриш", "mv_next": "Кейинги юриш", "mv_last": "Ҳозирги ҳолат", "game_settings": "Ўйин созламалари", "premove": "Premove", "premove_sub": "Рақиб ўйлаётганда олдиндан юриш", "pm_off": "Ўчиқ", "pm_fast": "Тезкор", "pm_all": "Барча ўйинлар", "auto_queen": "Авто-фарзин", "auto_queen_sub": "Сўрамасдан фарзинга айлантириш", "confirm_move": "Юришни тасдиқлаш", "confirm_move_sub": "Юриш юборилишидан олдин ✓ босинг", "abort": "Бекор қилиш", "abort_confirm": "Ўйин бекор қилинсинми? Рейтинг ўзгармайди.", "game_aborted": "Ўйин бекор қилинди", "takeback": "Юришни қайтариш", "takeback_sent": "Қайтариш сўралди", "takeback_sent_sub": "Рақиб жавоби кутилмоқда…", "takeback_received": "{name} юришни қайтаришни сўраяпти", "takeback_received_sub": "Қабул қилсангиз, унинг охирги юриши бекор бўлади.", "takeback_declined": "Қайтариш рад этилди", "g_rating": "Рейтинг", "copy_pgn": "PGN нусхалаш", "pgn_copied": "PGN нусхаланди", "g_share": "Улашиш"});
+Object.assign(en, { avatar_char_premium: "Character avatars are for Premium" });
+Object.assign(ru, { avatar_char_premium: "Аватары-персонажи — для Premium" });
+Object.assign(uz, { avatar_char_premium: "Qahramon avatarlari faqat Premium uchun" });
+Object.assign(uzc, { avatar_char_premium: "Қаҳрамон аватарлари фақат Premium учун" });
 
 const DICT = { en, ru, uz, uzc };
 let current = 'en';
@@ -645,7 +649,7 @@ Object.assign(en, {
   premium_buy_short: 'Buy', premium_need_short: 'Need {n} 💎',
   premium_wait_expiry: 'Premium is active. You can buy again after it ends.',
   premium_unlocks: 'What Premium unlocks',
-  premium_feat_avatar: 'Custom avatar photo of your choice',
+  premium_feat_avatar: 'Character avatars',
   premium_feat_style: 'Piece styles and board colours',
   premium_feat_bio: 'Profile bio on your page',
   premium_feat_badge: 'Gold Premium badge and avatar ring',
@@ -682,7 +686,7 @@ Object.assign(ru, {
   premium_buy_short: 'Купить', premium_need_short: 'Нужно {n} 💎',
   premium_wait_expiry: 'Премиум активен. Купить снова можно после окончания.',
   premium_unlocks: 'Что открывает Премиум',
-  premium_feat_avatar: 'Своё фото на аватаре',
+  premium_feat_avatar: 'Аватары-персонажи',
   premium_feat_style: 'Стили фигур и цвет доски',
   premium_feat_bio: 'Био в профиле',
   premium_feat_badge: 'Золотой значок Премиум и кольцо аватара',
@@ -719,7 +723,7 @@ Object.assign(uz, {
   premium_buy_short: 'Olish', premium_need_short: '{n} 💎 kerak',
   premium_wait_expiry: 'Premium faol. Tugagach qayta sotib olishingiz mumkin.',
   premium_unlocks: 'Premium nimalarni ochadi',
-  premium_feat_avatar: 'Avatar uchun ixtiyoriy rasm',
+  premium_feat_avatar: 'Qahramon avatarlari',
   premium_feat_style: 'Donacha stillari va doska ranglari',
   premium_feat_bio: 'Profil bio yozuvi',
   premium_feat_badge: 'Oltin Premium nishoni va avatar halqasi',
@@ -756,7 +760,7 @@ Object.assign(uzc, {
   premium_buy_short: 'Олиш', premium_need_short: '{n} 💎 керак',
   premium_wait_expiry: 'Премиум фаол. Тугагач қайта сотиб олишингиз мумкин.',
   premium_unlocks: 'Премиум нималарни очади',
-  premium_feat_avatar: 'Аватар учун ихтиёрий расм',
+  premium_feat_avatar: 'Қаҳрамон аватарлари',
   premium_feat_style: 'Донача стиллари ва доска ранглари',
   premium_feat_bio: 'Профил био ёзуви',
   premium_feat_badge: 'Олтин Премиум нишони ва аватар ҳалқаси',

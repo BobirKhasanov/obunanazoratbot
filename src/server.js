@@ -1121,13 +1121,14 @@ api.patch('/me', wrap(async (req, res) => {
       const medalM = /^medal:(.+)$/.exec(key);
       const imgM = /^img:([0-9a-f-]{36})$/i.exec(key);
       if (charId) {
+        // Character avatars are a Premium perk (an already-chosen one stays usable)
+        if (`char:${charId}` !== prevAvatarKey && !isPremiumActive(u) && !req.isAdmin) throw new HttpError(403, 'Premium required', 'premium_required');
         avatarKey = `char:${charId}`;
       } else if (medalM) {
         const medal = await db.prepare('SELECT id FROM medals WHERE id = ? AND user_id = ?').get(medalM[1], u.id);
         if (!medal) throw bad('Medal not owned', 'forbidden');
         avatarKey = `medal:${medal.id}`;
       } else if (imgM) {
-        if (!isPremiumActive(u) && !req.isAdmin) throw new HttpError(403, 'Premium required', 'premium_required');
         const media = await db.prepare('SELECT id, kind FROM media WHERE id = ? AND admin_id = ?').get(imgM[1], u.id);
         if (!media || media.kind === 'video') throw bad('Invalid avatar', 'bad_request');
         avatarKey = `img:${media.id}`;
@@ -1175,10 +1176,9 @@ async function releaseAvatarMedia(prevKey, nextKey) {
   await db.prepare('DELETE FROM media WHERE id = ?').run(id).catch(() => {});
 }
 
-/** Premium (or admin): upload a custom avatar photo (JPG/PNG/GIF ≤ 5 MB). */
+/** Everyone: upload a custom avatar photo (JPG/PNG/GIF ≤ 5 MB). Picking a character avatar is the Premium perk. */
 api.post('/me/avatar', express.raw({ type: () => true, limit: '6mb' }), wrap(async (req, res) => {
   const u = req.user;
-  if (!isPremiumActive(u) && !req.isAdmin) throw new HttpError(403, 'Premium required', 'premium_required');
   const buf = req.body;
   if (!Buffer.isBuffer(buf) || !buf.length) throw bad('No file received', 'media');
   const mime = sniffImage(buf);
