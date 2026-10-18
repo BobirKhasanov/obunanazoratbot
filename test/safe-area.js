@@ -74,8 +74,9 @@ assert.ok(/#pager \{[^}]*touch-action:\s*pan-y/.test(css), 'pager allows vertica
 // ---------- 3. Home mode cards: full-bleed art + glass panel (reference design) ----------
 const rich = rule('.nx-mode.rich');
 assert.ok(/padding:\s*0/.test(rich), 'rich mode cards let the art bleed to the edges');
-assert.ok(/clamp\(\s*1\d\dpx,\s*\d+dvh/.test(rule('.page[data-page="play"] .nx-mode.rich')), 'home cards scale with screen height so Kunlik topshiriq stays above the dock');
+assert.ok(/height:\s*auto/.test(rule('.page[data-page="play"] .nx-mode.rich')), 'home cards size to their content: art fills the top, no empty gap above the panel');
 const art = rule('.nx-mode.rich .nx-mode-art');
+assert.ok(/height:\s*1\d\dpx/.test(art) && !/aspect-ratio/.test(art), 'art has a fixed height so it meets the panel (no gap)');
 assert.ok(/position:\s*absolute/.test(art) && /cover/.test(art) && !/contain/.test(art), 'card art is full-bleed (cover), not a small contained image');
 const body = rule('.nx-mode-body');
 assert.ok(/backdrop-filter/.test(body) && /border-radius:\s*1\d px/.test(body.replace(/(\d)px/g, "$1 px")), 'card text sits on a rounded glass panel');
