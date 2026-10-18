@@ -99,7 +99,7 @@ async function paintOnlinePlayers(ctx, lobby) {
   const tc = cur === 'any' ? t('any_time') : cur;
   const quick = h('button.nx-cta', {
     type: 'button',
-    onclick: () => { haptic('medium'); ctx.ensurePlayFlow().open(); },
+    onclick: () => { haptic('medium'); ctx.ensurePlayFlow().quick(); },
   }, icon('bolt', 18), t('quick_match_btn'));
 
   if (onlineSub === 'live') {

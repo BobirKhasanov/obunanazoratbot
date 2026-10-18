@@ -1139,11 +1139,15 @@ export async function start(me) {
     }
     else if (m.t === 'game') {
       if (m.game.status === 'active' && m.game.id !== openGameId()) {
-        const waiting = screenOpen() || !!$('.invite-pop');
+        // "Waiting for a friend" / "searching" panels are bottom sheets now, not screens
+        const waitSheet = !!$('#sheet-root .friend-wait, #sheet-root .pf-search');
+        const waiting = screenOpen() || waitSheet || !!$('.invite-pop');
         clearInvitePop();
         if (waiting) {
           window.dispatchEvent(new CustomEvent('chess-game-active', { detail: m.game }));
           closeScreen(true);
+          // Their onClose handlers see joined/cancelled (set by the event above), so nothing is deleted
+          if (waitSheet) $$('#sheet-root .backdrop').forEach((el) => el.click());
           openOnline(m.game);
         } else {
           refresh();

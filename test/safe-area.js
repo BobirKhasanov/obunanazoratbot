@@ -92,3 +92,14 @@ console.log('safe-area OK');
   assert.ok(/\n\s*sheet\(\(close\) =>/.test(fn) && !/openScreen\(/.test(fn), 'friend-wait opens as a bottom sheet');
   assert.ok(css.includes('.friend-wait.in-sheet'), 'compact friend-wait sheet styles exist');
 }
+
+// Quick match: straight to searching (no mode hub), searching is a compact bottom sheet
+{
+  const hub = read('public/js/playhub.js');
+  const flow = read('public/js/playflow.js');
+  assert.ok(/ensurePlayFlow\(\)\.quick\(\)/.test(hub) && !/ensurePlayFlow\(\)\.open\(\)[\s\S]{0,80}quick_match_btn/.test(hub), 'Tezkor o\'yin skips the mode hub');
+  assert.ok(/function quick\(\)/.test(flow) && /\n\s*quick,/.test(flow), 'playflow exposes quick()');
+  const i = flow.indexOf('function openSearching');
+  assert.ok(/\n\s*sheet\(\(close\) =>/.test(flow.slice(i)) && !/openScreen\(/.test(flow.slice(i)), 'searching opens as a bottom sheet');
+}
+assert.ok(/waitSheet[\s\S]{0,400}screenOpen\(\) \|\| waitSheet/.test(read('public/js/app.js')) || /screenOpen\(\) \|\| waitSheet/.test(read('public/js/app.js')), 'WS "game active" also opens the board while a wait/search sheet is up');

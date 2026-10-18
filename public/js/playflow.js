@@ -1,5 +1,5 @@
 // Play hub → time/color setup → searching, matching UzChess-style steps with our UI.
-import { h, icon, haptic, api, fail, onWs } from './ui.js';
+import { h, icon, haptic, api, fail, onWs, sheet } from './ui.js';
 import { t } from './i18n.js';
 import { openScreen, closeScreen } from './screen.js';
 import { PRESETS, normalizeTimeControl } from './time.js';
@@ -138,6 +138,13 @@ export function createPlayFlow(deps) {
     });
   }
 
+  /** "Tezkor o'yin": go straight to searching with the time already chosen on the Play page. */
+  function quick() {
+    const sel = deps.getSelectedTime();
+    flowTime = sel || flowTime || '1+0'; // 'any' falls back to the classic preset via normalizeTimeControl
+    return startMatch();
+  }
+
   async function startMatch() {
     if (matching) return;
     matching = true;
@@ -147,7 +154,7 @@ export function createPlayFlow(deps) {
     try {
       const r = await api('POST', '/games/quick', { timeControl: tc, preferredColor });
       const game = r.game;
-      closeScreen(true);
+      closeScreen(true); // no-op when nothing is open (quick search from the Play page)
       if (game.status === 'active') deps.openOnline(game);
       else openSearching(game);
     } catch (e) { fail(e); }
@@ -196,7 +203,8 @@ export function createPlayFlow(deps) {
       await deleteSearchIds(null);
     };
 
-    openScreen((close) => {
+    // Compact bottom sheet: the Play page stays visible behind the search
+    sheet((close) => {
       const stats = h('div.pf-stats');
       let entering = false;
       const enterGame = async (g) => {
@@ -273,22 +281,14 @@ export function createPlayFlow(deps) {
       });
 
       return [
-        h('div.top',
-          h('button.round.back', {
-            type: 'button',
-            'aria-label': t('back'),
-            onclick: async () => { haptic('light'); await cancelGame(); close(); },
-          }, icon('back', 22)),
-          h('h1', t('searching'))),
-        h('div.pf-search',
+        h('div.pf-search.in-sheet',
           h('div.pf-search-art', '♟️'),
           h('h2', t('searching')),
           stats,
-          h('div.pf-foot',
-            h('button.cta', {
-              type: 'button',
-              onclick: async () => { haptic('light'); await cancelGame(); close(); },
-            }, t('go_back')))),
+          h('button.btn.ghost', {
+            type: 'button',
+            onclick: async () => { haptic('light'); await cancelGame(); close(); },
+          }, t('cancel'))),
       ];
     }, {
       onClose: () => {
@@ -300,6 +300,7 @@ export function createPlayFlow(deps) {
 
   return {
     open: () => { haptic('medium'); openHub(); },
+    quick,
     openTimeSetup: () => { syncFromHome(); openTimeSetup(); },
   };
 }
