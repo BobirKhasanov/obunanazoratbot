@@ -419,6 +419,8 @@ async function applyRatingFinish(row, result) {
   await db.prepare(`UPDATE users SET ${col} = ?, elo = ? WHERE id = ?`).run(updCat.b, updAll.b, black.id);
   invalidateUserCache(white.id);
   invalidateUserCache(black.id);
+  await db.prepare('UPDATE games SET elo_w_before = ?, elo_w_after = ?, elo_b_before = ?, elo_b_after = ? WHERE id = ?')
+    .run(wCat, updCat.a, bCat, updCat.b, row.id);
 
   const month = monthKey();
   const bump = async (uid, pts, w, d, l) => {
@@ -1287,7 +1289,11 @@ async function gameFor(row, uid, full = true) {
     ply: moves.length, turn: turnOf(moves), result: row.result, reason: row.reason,
     drawBy: row.draw_by, updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
     clock: clockPayload(row),
+    takebackBy: row.takeback_by || null,
   };
+  if (row.status === 'finished' && row.elo_w_before != null && row.elo_b_before != null) {
+    g.rating = { w: { before: row.elo_w_before, after: row.elo_w_after }, b: { before: row.elo_b_before, after: row.elo_b_after } };
+  }
   if (row.status === 'invited' && row.creator_id === uid) g.invitees = await Promise.all((await invitesOf(row.id)).map(person));
   if (full) g.moves = moves;
   g.spectators = spectatorCount(row.id);
@@ -1738,7 +1744,7 @@ api.delete('/games/:id', wrap(async (req, res) => {
 }));
 
 async function finish(row, result, reason) {
-  await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = ?, draw_by = NULL, updated_at = now() WHERE id = ?")
+  await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = ?, draw_by = NULL, takeback_by = NULL, updated_at = now() WHERE id = ?")
     .run(result, reason, row.id);
   try { await applyRatingFinish(row, result); } catch (e) { console.error('[rating]', e.message || e); }
   // Rankings / busy-set caches must not serve pre-finish data
@@ -1770,12 +1776,12 @@ async function activeGame(id, uid) {
 /** Persist a move. Compare moves as jsonb (NOT ::text) — PG text form has spaces and breaks turn checks. */
 async function saveMove(row, nextMovesJson, clocks) {
   if (clocks) {
-    return db.prepare(`UPDATE games SET moves = ?::jsonb, draw_by = NULL, white_ms = ?, black_ms = ?, turn_started_at = now(),
+    return db.prepare(`UPDATE games SET moves = ?::jsonb, draw_by = NULL, takeback_by = NULL, white_ms = ?, black_ms = ?, turn_started_at = now(),
         updated_at = now(), last_move_at = now()
       WHERE id = ? AND status = 'active' AND moves = ?::jsonb`)
       .run(nextMovesJson, clocks.whiteMs, clocks.blackMs, row.id, movesJson(row.moves));
   }
-  return db.prepare(`UPDATE games SET moves = ?::jsonb, draw_by = NULL, updated_at = now(), last_move_at = now()
+  return db.prepare(`UPDATE games SET moves = ?::jsonb, draw_by = NULL, takeback_by = NULL, updated_at = now(), last_move_at = now()
     WHERE id = ? AND status = 'active' AND moves = ?::jsonb`)
     .run(nextMovesJson, row.id, movesJson(row.moves));
 }
@@ -1910,6 +1916,49 @@ api.post('/games/:id/draw', wrap(async (req, res) => {
     throw bad('No draw offer', 'bad_request');
   } else if (action === 'decline') {
     await db.prepare("UPDATE games SET draw_by = NULL, updated_at = now() WHERE id = ?").run(row.id);
+    await pushGame(await getGame.get(row.id));
+  } else throw bad('Unknown action', 'bad_request');
+  res.json({ game: await gameFor(await getGame.get(row.id), uid) });
+}));
+
+
+/** Abort: allowed until both sides have moved. Nobody's rating changes. */
+api.post('/games/:id/abort', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const { row } = await activeGame(req.params.id, uid);
+  if (parseMoves(row.moves).length >= 2) throw bad('Too late to abort', 'bad_request');
+  await db.prepare("UPDATE games SET status = 'cancelled', reason = 'aborted', draw_by = NULL, takeback_by = NULL, updated_at = now() WHERE id = ? AND status = 'active'").run(row.id);
+  await cacheDel('lobby:busy');
+  const next = await getGame.get(row.id);
+  await pushGame(next);
+  res.json({ game: await gameFor(next, uid) });
+}));
+
+/** Takeback: the player who just moved asks; the opponent accepts or declines. */
+api.post('/games/:id/takeback', wrap(async (req, res) => {
+  const uid = req.user.id;
+  const { row, colour } = await activeGame(req.params.id, uid);
+  const action = req.body && req.body.action;
+  const moves = parseMoves(row.moves);
+  if (action === 'offer') {
+    if (!moves.length || turnOf(moves) === colour) throw bad('Nothing to take back', 'bad_request');
+    if (row.takeback_by === colour) return res.json({ game: await gameFor(row, uid) });
+    await db.prepare('UPDATE games SET takeback_by = ?, updated_at = now() WHERE id = ?').run(colour, row.id);
+    await pushGame(await getGame.get(row.id));
+  } else if (action === 'accept') {
+    if (!row.takeback_by || row.takeback_by === colour || turnOf(moves) === row.takeback_by) throw bad('No takeback request', 'bad_request');
+    const settled = settleClocks(row);
+    const timed = settled.timed;
+    const nextMoves = moves.slice(0, -1);
+    const upd = timed
+      ? await db.prepare(`UPDATE games SET moves = ?::jsonb, takeback_by = NULL, draw_by = NULL, white_ms = ?, black_ms = ?, turn_started_at = now(), updated_at = now()
+          WHERE id = ? AND status = 'active' AND moves = ?::jsonb`).run(movesJson(nextMoves), Math.max(1, settled.whiteMs), Math.max(1, settled.blackMs), row.id, movesJson(row.moves))
+      : await db.prepare(`UPDATE games SET moves = ?::jsonb, takeback_by = NULL, draw_by = NULL, updated_at = now()
+          WHERE id = ? AND status = 'active' AND moves = ?::jsonb`).run(movesJson(nextMoves), row.id, movesJson(row.moves));
+    if (!upd.changes) throw bad('Position changed', 'not_your_turn');
+    await pushGame(await getGame.get(row.id));
+  } else if (action === 'decline') {
+    await db.prepare('UPDATE games SET takeback_by = NULL, updated_at = now() WHERE id = ?').run(row.id);
     await pushGame(await getGame.get(row.id));
   } else throw bad('Unknown action', 'bad_request');
   res.json({ game: await gameFor(await getGame.get(row.id), uid) });

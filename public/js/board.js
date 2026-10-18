@@ -333,13 +333,19 @@ export class Board {
     if (!myTurn && this.premoveEnabled) {
       const cand = this.premoveDests(from).filter((m) => m.to === to);
       if (!cand.length) { const p = this.pieces.get(from); if (p) this.place(p.el, from); return; }
-      if (cand[0].promotion) { this.askPromotion(from, to, cand[0].color, true); return; }
+      if (cand[0].promotion) {
+        if (this.opts.autoQueen && this.opts.autoQueen()) { this.commitPremove(from, to, 'q'); return; }
+        this.askPromotion(from, to, cand[0].color, true); return;
+      }
       this.commitPremove(from, to);
       return;
     }
     const cand = this.chess.moves({ square: from, verbose: true }).filter((m) => m.to === to);
     if (!cand.length) { const p = this.pieces.get(from); if (p) this.place(p.el, from); return; }
-    if (cand[0].promotion) { this.askPromotion(from, to, cand[0].color, false); return; }
+    if (cand[0].promotion) {
+      if (this.opts.autoQueen && this.opts.autoQueen()) { this.commit(from, to, 'q'); return; }
+      this.askPromotion(from, to, cand[0].color, false); return;
+    }
     this.commit(from, to);
   }
   commitPremove(from, to, promotion) {

@@ -367,6 +367,11 @@ ALTER TABLE dm_threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dm_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE global_chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE global_chat_reads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS takeback_by TEXT; -- colour that asked to take back its last move
+ALTER TABLE games ADD COLUMN IF NOT EXISTS elo_w_before INTEGER;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS elo_w_after INTEGER;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS elo_b_before INTEGER;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS elo_b_after INTEGER;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS preferred_color TEXT; -- w | b | null (random) — creator preference while waiting
 CREATE INDEX IF NOT EXISTS idx_games_matchmaking ON games(status, mode, time_control, created_at);
 -- Allow home-screen presets (and keep legacy category values already stored)

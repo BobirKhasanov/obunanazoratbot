@@ -7,6 +7,7 @@ import { pieceSvg, PIECE_VALUE } from './pieces.js';
 import { formatClock, remainingMs, isTimed, formatTashkentWhen, categoryOf, presetOf, normalizeTimeControl } from './time.js';
 import { liveGamePollMs, boardAnimateDefault } from './perf.js';
 import { openGameAnalysis } from './analyze.js';
+import { getPrefs, setPref, premoveAllowed } from './gameprefs.js';
 
 const AI_KEY = 'chess-ai-game';
 const EMOTES = ['🤔', '😎', '😮', '👏', '🙈', '😀'];
@@ -82,7 +83,7 @@ export function openGame(opts, onClose) {
   const S = ctx = {
     kind: opts.kind, onClose, level: opts.level || 3, colour: opts.colour || 'w', id: opts.game ? opts.game.id : null,
     moves: [], chess: new Chess(), over: false, busy: false, game: opts.game || null, flipped: false, meta: opts.meta || {}, thinking: false,
-    clockTimer: null, flagClaimed: false, chat: [], chatOpen: false,
+    clockTimer: null, flagClaimed: false, chat: [], chatOpen: false, view: null, pend: null,
     allowUndo: opts.allowUndo !== false,
     timeControl: opts.kind === 'ai' ? normalizeTimeControl(opts.timeControl || (opts.resume && opts.resume.timeControl)) : null, aiClock: null,
   };
@@ -119,6 +120,13 @@ export function openGame(opts, onClose) {
   for (const b of [top, bot]) b.el.append(b.av, h('div.pinfo', b.name, b.sub), h('div.capwrap', b.cap, b.mat));
   const status = h('div.status');
   const moveStrip = h('div.moves');
+  const navBtn = (ic, label, fn, dbl) => h('button.mnav-btn', { type: 'button', 'aria-label': label, onclick: fn }, icon(ic, 16), dbl ? icon(ic, 16) : null);
+  const nFirst = navBtn('chevronDown', t('mv_first'), () => goView(0), true);
+  const nPrev = navBtn('chevronDown', t('mv_prev'), () => goView((S.view == null ? S.moves.length : S.view) - 1));
+  const nNext = navBtn('chevronDown', t('mv_next'), () => goView((S.view == null ? S.moves.length : S.view) + 1));
+  const nLast = navBtn('chevronDown', t('mv_last'), () => goView(null), true);
+  for (const [b, cls] of [[nFirst, 'first'], [nPrev, 'prev'], [nNext, 'next'], [nLast, 'last']]) b.classList.add(cls);
+  const movebar = h('div.movebar', nFirst, nPrev, moveStrip, nNext, nLast);
   const boardHost = h('div.board-host');
   const banner = h('div.gbanner'); banner.hidden = true;
   const back = h('button.round.back', { 'aria-label': t('back'), onclick: () => closeGame() }, icon('back', 22));
@@ -162,11 +170,13 @@ export function openGame(opts, onClose) {
     h('div.ghead', back, title,
       h('div.ghead-tools',
         soundBtn,
+        h('button.round', { 'aria-label': t('game_settings'), onclick: () => openPrefs() }, icon('gear', 22)),
         h('button.round', { 'aria-label': t('flip'), onclick: () => { S.flipped = !S.flipped; render(false); haptic('light'); } }, icon('flip', 22)))),
-    status, top.el, boardHost, bot.el, moveStrip, banner, reactBar, chatPanel, actions,
+    status, top.el, boardHost, bot.el, movebar, banner, reactBar, chatPanel, actions,
   );
   const board = S.board = new Board(boardHost, {
     onMove: (f, to, p) => humanMove(f, to, p),
+    autoQueen: () => !!getPrefs().autoQueen,
     onPremove: () => { /* highlight only — executed in applyServer */ },
   });
   S.spectators = (opts.game && opts.game.spectators) || 0;
@@ -354,18 +364,22 @@ export function openGame(opts, onClose) {
 
   function render(animate = boardAnimateDefault()) {
     const { me, opp } = names();
-    const c = S.chess; const cap = captured(c);
+    const c = S.chess;
+    if (S.view != null && S.view >= S.moves.length) S.view = null;
+    // Looking back through the move list shows an older position (read-only); the game itself is untouched
+    const vc = S.view == null ? c : build(S.moves.slice(0, S.view));
+    const cap = captured(vc);
     const ori = orientation();
-    const lastMoves = c.history({ verbose: true }); const lm = lastMoves[lastMoves.length - 1];
+    const lastMoves = vc.history({ verbose: true }); const lm = lastMoves[lastMoves.length - 1];
     const myTurn = S.kind === 'ai' ? (!S.over && !S.thinking && c.turn() === S.colour)
       : S.kind === 'spectate' ? false
-      : (!S.busy && S.game.status === 'active' && S.game.you && c.turn() === S.game.you);
+      : (!S.busy && !S.pend && S.game.status === 'active' && S.game.you && c.turn() === S.game.you);
     // Bullet 1+0: Chess.com premoves while waiting for opponent
     const premoveOk = S.kind === 'online' && !S.over && S.game && S.game.status === 'active'
-      && S.game.timeControl === '1+0' && !!S.colour;
-    const mine = S.kind === 'spectate' ? null
+      && !!S.colour && S.view == null && !S.pend && premoveAllowed(S.game.timeControl, presetOf(S.game.timeControl).baseMs);
+    const mine = S.kind === 'spectate' || S.view != null ? null
       : (S.over ? null : (myTurn || premoveOk ? S.colour : null));
-    board.set(c, {
+    board.set(vc, {
       lastMove: lm ? { from: lm.from, to: lm.to } : null,
       orientation: ori,
       mine,
@@ -393,10 +407,49 @@ export function openGame(opts, onClose) {
     else st = t('opp_move', { name: opp.name });
     status.textContent = st; status.classList.toggle('alert', c.inCheck() && !S.over);
 
-    const san = c.history(); moveStrip.replaceChildren(...san.map((m, i) => h('span' + (i === san.length - 1 ? '.cur' : ''), i % 2 === 0 ? `${i / 2 + 1}. ${m}` : m)));
-    moveStrip.scrollLeft = moveStrip.scrollWidth;
+    const san = c.history(); const shown = S.view == null ? san.length : S.view;
+    moveStrip.replaceChildren(...san.map((m, i) => h('span' + (i === shown - 1 ? '.cur' : ''), { onclick: () => goView(i + 1) }, i % 2 === 0 ? `${i / 2 + 1}. ${m}` : m)));
+    const curEl = moveStrip.children[shown - 1];
+    moveStrip.scrollLeft = S.view == null ? moveStrip.scrollWidth : (curEl ? Math.max(0, curEl.offsetLeft - moveStrip.clientWidth / 2) : 0);
+    nFirst.disabled = nPrev.disabled = shown <= 0;
+    nNext.disabled = nLast.disabled = S.view == null;
+    movebar.classList.toggle('viewing', S.view != null);
     renderActions(); renderBanner();
     armClock();
+  }
+
+  function goView(n) {
+    const len = S.moves.length;
+    S.view = (n == null || n >= len) ? null : Math.max(0, n);
+    haptic('select');
+    render(false);
+  }
+
+  function openPrefs() {
+    sheet((close) => {
+      const box = h('div.gprefs', h('h3', t('game_settings')));
+      const paint = () => {
+        const p = getPrefs();
+        const sw = (key, label, sub) => h('button.pref-row', {
+          type: 'button', role: 'switch', 'aria-checked': p[key] ? 'true' : 'false',
+          onclick: () => { setPref(key, !p[key]); haptic('select'); paint(); },
+        }, h('span.pref-txt', h('b', label), h('small', sub)), h('i.pref-sw' + (p[key] ? '.on' : '')));
+        const seg = h('div.pref-seg');
+        for (const [v, label] of [['off', t('pm_off')], ['fast', t('pm_fast')], ['all', t('pm_all')]]) {
+          seg.append(h('button' + (p.premove === v ? '.on' : ''), { type: 'button', onclick: () => {
+            setPref('premove', v); if (v === 'off') board.clearPremove(); haptic('select'); paint(); render(false);
+          } }, label));
+        }
+        box.replaceChildren(
+          h('h3', t('game_settings')),
+          h('div.pref-block', h('span.pref-txt', h('b', t('premove')), h('small', t('premove_sub'))), seg),
+          sw('autoQueen', t('auto_queen'), t('auto_queen_sub')),
+          sw('confirmMove', t('confirm_move'), t('confirm_move_sub')),
+        );
+      };
+      paint();
+      return [box, h('button.btn.ghost', { onclick: close }, t('close'))];
+    });
   }
 
   function renderBanner() {
@@ -457,6 +510,12 @@ export function openGame(opts, onClose) {
       } else if (g.status === 'active' && g.drawBy === g.you) {
         banner.classList.remove('wait'); banner.classList.remove('draw'); banner.hidden = false;
         banner.append(h('b', t('draw_sent')), h('small', t('draw_sent_sub')));
+      } else if (g.status === 'active' && g.takebackBy && g.takebackBy !== g.you) {
+        banner.classList.add('draw'); banner.hidden = false;
+        banner.append(h('b', t('takeback_received', { name: (g.opponent || {}).name || '' })), h('small', t('takeback_received_sub')));
+      } else if (g.status === 'active' && g.takebackBy === g.you) {
+        banner.hidden = false;
+        banner.append(h('b', t('takeback_sent')), h('small', t('takeback_sent_sub')));
       }
     }
   }
@@ -481,6 +540,14 @@ export function openGame(opts, onClose) {
         act('x', t('decline'), () => drawAction('decline')),
         act('flag', t('resign'), resign),
       );
+    } else if (S.pend) {
+      actions.append(act('check', t('confirm_move'), confirmPend), act('x', t('cancel'), cancelPend));
+    } else if (S.kind === 'online' && live && S.game.takebackBy && S.game.takebackBy !== S.game.you) {
+      actions.append(
+        act('check', t('accept'), () => takebackAction('accept')),
+        act('x', t('decline'), () => takebackAction('decline')),
+        act('flag', t('resign'), resign),
+      );
     } else if (S.kind === 'ai' && live) {
       if (S.allowUndo) actions.append(act('undo', t('undo'), undo));
       actions.append(
@@ -490,7 +557,8 @@ export function openGame(opts, onClose) {
       );
     } else if (S.kind === 'online' && live) {
       if (!drawOut) actions.append(act('handshake', t('offer_draw'), () => drawAction('offer')));
-      actions.append(act('flag', t('resign'), resign), act('chat', t('game_chat'), toggleChat), act('smile', '', toggleReact));
+      if (S.moves.length >= 1 && S.chess.turn() !== S.colour && S.game.takebackBy !== S.game.you) actions.append(act('undo', t('takeback'), () => takebackAction('offer')));
+      actions.append(S.moves.length < 2 ? act('x', t('abort'), abort) : act('flag', t('resign'), resign), act('chat', t('game_chat'), toggleChat), act('smile', '', toggleReact));
     } else if (S.kind === 'spectate') {
       // view-only: no actions
     } else if (S.over || (S.game && S.game.status === 'finished')) {
@@ -515,8 +583,15 @@ export function openGame(opts, onClose) {
   }
 
   // ----- moves -----
-  async function humanMove(from, to, promotion) {
-    if (S.over || S.kind === 'spectate' || S.busy || S.thinking) return;
+  async function humanMove(from, to, promotion, skipConfirm) {
+    if (S.over || S.kind === 'spectate' || S.busy || S.thinking || S.pend) return;
+    if (!skipConfirm && getPrefs().confirmMove) {
+      // Preview only: nothing is sent until the player confirms (no timers, no polling)
+      try { S.chess.move({ from, to, promotion }); } catch { return render(); }
+      S.pend = { from, to, promotion }; S.view = null;
+      render(false);
+      return;
+    }
     if (isMoveSoundOn()) unlockAudio(); // ensure Telegram WebView allows sound on this gesture
     if (S.kind === 'ai') {
       try { S.chess.move({ from, to, promotion }); } catch { return render(); }
@@ -540,6 +615,16 @@ export function openGame(opts, onClose) {
         catch { S.chess = new Chess(before); render(false); }
       }
     }
+  }
+
+  function confirmPend() {
+    const p = S.pend; if (!p) return;
+    S.pend = null; S.chess.undo();
+    humanMove(p.from, p.to, p.promotion, true);
+  }
+  function cancelPend() {
+    if (!S.pend) return;
+    S.pend = null; S.chess.undo(); haptic('light'); render(false);
   }
 
   function afterMove(human) {
@@ -595,6 +680,7 @@ export function openGame(opts, onClose) {
 
   function undo() {
     if (!S.allowUndo || S.thinking || S.over || S.moves.length === 0) return;
+    if (S.pend) { S.pend = null; S.chess.undo(); }
     const n = S.chess.turn() === S.colour ? 2 : 1;
     for (let i = 0; i < n && S.moves.length; i++) { S.moves.pop(); }
     S.chess = build(S.moves); S.token = null; haptic('select');
@@ -611,6 +697,16 @@ export function openGame(opts, onClose) {
     if (!(await confirmSheet(t('resign_confirm'), t('resign'), true))) return;
     if (S.kind === 'ai') { S.over = true; S.token = null; saveAi(null); render(); showResult('loss', 'resign'); }
     else try { applyServer((await api('POST', `/games/${S.id}/resign`)).game); } catch (e) { fail(e); }
+  }
+  async function abort() {
+    if (!(await confirmSheet(t('abort_confirm'), t('abort'), true))) return;
+    try { applyServer((await api('POST', `/games/${S.id}/abort`)).game); } catch (e) { fail(e); }
+  }
+  async function takebackAction(action) {
+    try {
+      applyServer((await api('POST', `/games/${S.id}/takeback`, { action })).game);
+      if (action === 'offer') toast(t('takeback_sent'));
+    } catch (e) { fail(e); }
   }
   async function drawAction(action) {
     try { applyServer((await api('POST', `/games/${S.id}/draw`, { action })).game); if (action === 'offer') toast(t('draw_sent')); } catch (e) { fail(e); }
@@ -643,6 +739,41 @@ export function openGame(opts, onClose) {
     } else if (el) el.remove();
   }
 
+  const resultCode = (outcome) => {
+    const g = S.game || {};
+    if (g.result) return g.result;
+    return outcome === 'win' ? (S.colour === 'w' ? '1-0' : '0-1') : outcome === 'loss' ? (S.colour === 'w' ? '0-1' : '1-0') : '1/2-1/2';
+  };
+  function pgnText(res) {
+    const g = S.game || {};
+    const clean = (x) => String(x || '?').replace(/["\\\n]/g, '');
+    const w = S.kind === 'ai' ? (S.colour === 'w' ? meName() : t('ai')) : (g.white && g.white.name);
+    const b = S.kind === 'ai' ? (S.colour === 'b' ? meName() : t('ai')) : (g.black && g.black.name);
+    const d = new Date(); const p2 = (n) => String(n).padStart(2, '0');
+    const san = S.chess.history(); let body = '';
+    san.forEach((m, i) => { if (i % 2 === 0) body += `${i / 2 + 1}. `; body += `${m} `; });
+    const tc = g.timeControl && g.timeControl !== 'classic' ? `[TimeControl "${g.timeControl}"]\n` : '';
+    return `[Event "ChessUzbot"]\n[Site "${S.meta.botUsername ? 'https://t.me/' + S.meta.botUsername : 'ChessUzbot'}"]\n[Date "${d.getFullYear()}.${p2(d.getMonth() + 1)}.${p2(d.getDate())}"]\n[White "${clean(w)}"]\n[Black "${clean(b)}"]\n[Result "${res}"]\n${tc}\n${body}${res}\n`;
+  }
+  function ratingLine() {
+    const g = S.game;
+    const r = S.kind === 'online' && g && g.rating && g.you ? g.rating[g.you] : null;
+    if (!r) return null;
+    const d = r.after - r.before;
+    return h('p.result-rating' + (d > 0 ? '.up' : d < 0 ? '.down' : ''), h('span', t('g_rating')), h('b', `${r.before} → ${r.after}`), h('em', `${d > 0 ? '+' : ''}${d}`));
+  }
+  function shareRow(outcome) {
+    const res = resultCode(outcome);
+    const bot = S.meta.botUsername;
+    return h('div.row2.result-tools',
+      h('button.btn.sm.ghost', { onclick: async () => { if (await copyText(pgnText(res))) toast(t('pgn_copied')); } }, icon('docs', 18), t('copy_pgn')),
+      bot ? h('button.btn.sm.ghost', { onclick: () => {
+        const g = S.game || {};
+        const w = (g.white && g.white.name) || meName(), b = (g.black && g.black.name) || t('ai');
+        shareUrl(`https://t.me/${bot}`, `♟ ${w} ${res} ${b}`);
+      } }, icon('share', 18), t('g_share')) : null);
+  }
+
   function showResult(outcome, reason) {
     const when = formatTashkentWhen((S.game && S.game.updatedAt) || new Date().toISOString());
     const whenEl = when ? h('p.result-when', when) : null;
@@ -664,7 +795,8 @@ export function openGame(opts, onClose) {
     const ttl = winnerHeadline(outcome);
     const emo = outcome === 'win' ? '🏆' : outcome === 'loss' ? '🤝' : '🤝';
     sheet((close) => [
-      h('div.result', h('div.result-emoji', emo), h('h2', ttl), h('p.muted', t(reasonKey(reason))), whenEl),
+      h('div.result', h('div.result-emoji', emo), h('h2', ttl), h('p.muted', t(reasonKey(reason))), ratingLine(), whenEl),
+      shareRow(outcome),
       S.kind === 'online' && S.id
         ? h('button.btn', {
           onclick: () => {
@@ -707,6 +839,9 @@ export function openGame(opts, onClose) {
     const moves = g.moves || [];
     if (S.kind !== 'spectate') S.colour = g.you || S.colour;
     const prevLen = S.moves.length;
+    if (S.pend && (moves.length !== prevLen || g.status !== 'active')) S.pend = null;
+    if (moves.length < prevLen) board.clearPremove();
+    if (prev && prev.takebackBy === g.you && !g.takebackBy && moves.length === prevLen && g.status === 'active' && g.you) toast(t('takeback_declined'), true);
     const grew = moves.length !== prevLen || force;
     const oppMoved = moves.length > prevLen && S.kind !== 'spectate' && prev && prev.status === 'active';
     S.moves = moves;
@@ -723,7 +858,7 @@ export function openGame(opts, onClose) {
     }
     if (g.status === 'cancelled' && was !== 'cancelled') {
       if (S.kind === 'spectate') { toast(t('game_ended'), true); closeGame(); return; }
-      toast(was === 'invited' ? t('challenge_expired') : t('opponent_left'), true); closeGame(); return;
+      toast(g.reason === 'aborted' ? t('game_aborted') : was === 'invited' ? t('challenge_expired') : t('opponent_left'), true); closeGame(); return;
     }
     if (S.kind !== 'spectate' && g.status === 'active' && was !== 'active') {
       const tc = isTimed(g.timeControl) ? ` · ${g.timeControl}` : '';
@@ -740,7 +875,7 @@ export function openGame(opts, onClose) {
         try {
           S.chess.move({ from: pm.from, to: pm.to, promotion: pm.promotion });
           S.chess.undo();
-          setTimeout(() => { if (ctx === S) humanMove(pm.from, pm.to, pm.promotion); }, 30);
+          setTimeout(() => { if (ctx === S) humanMove(pm.from, pm.to, pm.promotion, true); }, 30);
         } catch { board.clearPremove(); }
       }
     }

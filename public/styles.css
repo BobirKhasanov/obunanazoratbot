@@ -2883,3 +2883,35 @@ html[data-ios="1"] .rv-bar i, html[data-perf="lite"] .rv-bar i { transition: non
    (any platform, light or dark). The nav keeps its own themed --nav-bg. */
 #dock { background: none !important; box-shadow: none !important; border: 0 !important;
   -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+
+/* ---- game: move navigation, settings, result extras (static; no animation / timers) ---- */
+#game .movebar { margin-top: 4px; display: flex; align-items: center; gap: 4px; min-width: 0; flex-shrink: 0; }
+#game .movebar .moves { flex: 1; min-width: 0; cursor: pointer; }
+#game .movebar .moves span { padding: 2px 3px; border-radius: 6px; }
+#game .movebar.viewing .moves .cur { background: rgba(84, 164, 247, 0.22); }
+.mnav-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; border: 0; border-radius: 9px; background: var(--card); color: var(--text); padding: 0; }
+.mnav-btn:disabled { opacity: 0.3; }
+.mnav-btn svg { transform: rotate(90deg); }
+.mnav-btn.next svg, .mnav-btn.last svg { transform: rotate(-90deg); }
+.mnav-btn.first svg + svg, .mnav-btn.last svg + svg { margin-left: -9px; }
+.gprefs { display: grid; gap: 10px; padding: 4px 0 8px; }
+.gprefs h3 { margin: 0 0 2px; font-size: 18px; }
+.pref-row, .pref-block { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 14px; border: 0; border-radius: 16px; background: var(--card); color: var(--text); text-align: left; }
+.pref-block { flex-direction: column; align-items: stretch; }
+.pref-txt { display: grid; gap: 2px; min-width: 0; }
+.pref-txt b { font-size: 15px; font-weight: 800; }
+.pref-txt small { color: var(--muted); font-size: 12.5px; }
+.pref-sw { flex: none; width: 46px; height: 28px; border-radius: 14px; background: rgba(128, 128, 128, 0.35); position: relative; }
+.pref-sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; }
+.pref-sw.on { background: #3a9d5d; }
+.pref-sw.on::after { left: 21px; }
+.pref-seg { display: flex; gap: 6px; margin-top: 8px; }
+.pref-seg button { flex: 1; padding: 9px 6px; border: 0; border-radius: 12px; background: rgba(128, 128, 128, 0.16); color: var(--text); font-weight: 700; }
+.pref-seg button.on { background: #3a9d5d; color: #fff; }
+.result-rating { display: flex; justify-content: center; align-items: baseline; gap: 8px; margin: 6px 0 0; }
+.result-rating span { color: var(--muted); font-size: 13px; }
+.result-rating b { font-size: 18px; }
+.result-rating em { font-style: normal; font-weight: 800; }
+.result-rating.up em { color: #3a9d5d; }
+.result-rating.down em { color: #e5534b; }
+.result-tools { margin: 6px 0; }
