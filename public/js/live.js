@@ -256,8 +256,6 @@ export function openBroadcast(it) {
 }
 
 let showAllLive = false;
-let showAllUsers = false;
-let showAllFriends = false;
 
 /** Finished games ready for engine analysis (opened from the Tahlil stat card). */
 function openAnalysisList(recent) {
@@ -285,17 +283,15 @@ function openAnalysisList(recent) {
 
 async function renderBot(mount, meta, onClose, onRefresh) {
   hideTgBack();
-  const [live, lobby, fr, tours] = await Promise.all([
+  const [live, lobby, tours] = await Promise.all([
     api('GET', '/live/games').catch((e) => { fail(e); return { games: [] }; }),
     api('GET', '/lobby').catch(() => ({ online: [], onlineCount: 0, games: {} })),
-    api('GET', '/friends').catch(() => ({ friends: [] })),
     api('GET', '/lichess/broadcasts').catch(() => ({ active: [], upcoming: [] })),
   ]);
   const games = live.games || [];
   const recent = (lobby.games && lobby.games.recent) || [];
   const onlineUsers = lobby.online || [];
   const onlineCount = lobby.onlineCount != null ? lobby.onlineCount : onlineUsers.length;
-  const onlineFriends = (fr.friends || []).filter((f) => f.online);
   const activeTours = tours.active || [];
   const ongoing = (it) => !!(it.round && it.round.ongoing);
   const tourCards = [
@@ -342,18 +338,6 @@ async function renderBot(mount, meta, onClose, onRefresh) {
         h('button.nx-lc-more', { type: 'button', onclick: () => openTour(null) },
           h('span', icon('chevron', 18)), t('see_all')))
       : emptyNote(t('live_no_tours')),
-    sectionHead(t('online_users_sec'), more(showAllUsers || onlineUsers.length <= 6, () => { showAllUsers = true; }), t('see_all')),
-    onlineUsers.length
-      ? h('div.nx-hscroll' + (showAllUsers ? '.wrap' : ''), { 'data-noswipe': '' }, ...onlineUsers.map((u) => onlineBubble(u, openProfile)))
-      : emptyNote(t('nobody')),
-    sectionHead(t('online_friends_sec'), more(showAllFriends || onlineFriends.length <= 3, () => { showAllFriends = true; }), t('see_all')),
-    onlineFriends.length
-      ? h('div.nx-card-list', ...(showAllFriends ? onlineFriends : onlineFriends.slice(0, 3)).map((f) => friendRow(f, {
-        onProfile: openProfile,
-        onMsg: (x) => openChatWithUser(x.id, { id: x.id, name: x.name, premium: !!x.premium }),
-        onInvite: (x) => challenge(x.id),
-      })))
-      : emptyNote(t('no_friends')),
   ];
   mount(nodes);
   if (tourScroll) {
