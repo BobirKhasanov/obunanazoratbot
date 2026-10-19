@@ -53,13 +53,13 @@ assert.ok(profile.includes('/me/avatar') && profile.includes('avatar_photo') && 
 assert.ok(profile.includes('5 * 1024 * 1024') || profile.includes('5*1024*1024'), 'avatar client limit 5MB');
 assert.ok(read('src/server.js').includes('MAX_AVATAR = 5') && read('src/server.js').includes('/api/avatars/'), 'avatar 5MB + public serve');
 assert.ok(profile.includes('openChatWithUser') && profile.includes("from './inbox.js'"), 'friends list opens DM chat');
-assert.ok(app.includes("from './playhub.js'") && app.includes('renderPlayHub'), 'Play hub wired on rankings tab');
+assert.ok(app.includes("from './playhub.js'") && app.includes('paintPlayBody') && app.includes('renderRatingPage'), 'Play body on O\'ynash tab, Rating on its own tab');
 assert.ok(app.includes("from './neonui.js'") && app.includes('appHeader') && app.includes('modeCard'), 'neon home shell');
-assert.ok(app.includes('nx-mode-row') && app.includes('dailyCard') && app.includes('liveMiniCard') && app.includes('/img/ui/mode-online-v2.webp'), 'home neon sections');
+assert.ok(app.includes('dailyCard') && app.includes('paintPlayBody') && read('public/js/playhub.js').includes('nx-mode-row'), 'O\'ynash sections: carousel, daily task, mode picker');
 assert.ok(read('public/js/neonui.js').includes("nx-mode-cta") && read('public/js/neonui.js').includes("t('start')") && read('public/js/neonui.js').includes('.rich'), 'home mode cards: Boshlash CTA design');
 assert.ok(read('public/js/inbox.js').includes('tgBack: false') && read('public/js/screen.js').includes("opts.tgBack === false"), 'inbox hides Telegram BackButton (no double back)');
 assert.ok(css.includes('.nx-mode.rich') && css.includes('.nx-mode-cta') && css.includes('.notif-day'), 'rich mode + notif day styles');
-assert.ok(app.includes("rankings: 'gamepad'") && app.includes("'data-tab': k"), 'nav icons map Oynash to gamepad');
+assert.ok(app.includes("play: 'gamepad'") && app.includes("'data-tab': k"), 'nav icons map Oynash to gamepad');
 assert.ok(app.includes('r.already') && app.includes('game_ended'), 'stale invite/game deep links do not reopen boards');
 assert.ok(read('src/welcome.js').includes('startapp=i'), 'invite share uses startapp for Mini App claim');
 assert.ok(!app.includes("t('puzzle_hint')"), 'puzzle hint/maslahat removed');
@@ -143,7 +143,7 @@ assert.ok(/\.screen\s*\{[^}]*z-index:\s*50/.test(css) && css.includes('#app:has(
 assert.ok(app.includes('createPlayFlow') && app.includes('setPlaySticky'), 'home wires play flow + sticky Play');
 assert.ok(read('public/js/playflow.js').includes("h1', t('nav_game')") && !read('public/js/playflow.js').includes('pf-title'), 'Game hub has one title (top bar only)');
 assert.ok(!app.includes("t('home_rank')"), 'live ranking banner removed from home');
-assert.ok(app.includes("t('home_modes')") && app.includes("t('home_live_now')") && app.includes('dailyCard('), 'neon home section titles');
+assert.ok(app.includes('dailyCard(') && app.includes('paintPlayBody('), 'O\'ynash sections: daily task + play body');
 const playflow = read('public/js/playflow.js');
 assert.ok(playflow.includes('openSearching') && playflow.includes('/games/quick'), 'play flow searching + quick match');
 assert.ok(playflow.includes('preferredColor') && playflow.includes('TIME_GROUPS'), 'time/color setup in play flow');
@@ -154,7 +154,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261018nx41"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261018nx41'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261018nx42"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261018nx42'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -221,7 +221,7 @@ assert.ok(read('public/js/neonui.js').includes('avBlock(p.name'), 'rankings show
   assert.ok(fnBody('paintFriends').includes('timeChips(ctx)') && fnBody('paintAi').includes('timeChips(ctx)'), 'friend + AI modes render shared time chips');
   assert.ok(/timeControl:\s*opts\.timeControl \|\| selectedPreset\(\)/.test(app) && read('public/js/game.js').includes('punchAiClock'), 'AI games use selected time control (local clock)');
 }
-assert.ok(playhub.includes('hub_tab_online') && playhub.includes('hub_tab_rating') && playhub.includes('hub_tab_history'), 'Play hub Online/Reyting/Tarix');
+assert.ok(playhub.includes('hub_tab_online') && playhub.includes('hub_tab_history') && !playhub.includes('hub_tab_rating'), 'Play body Online/Tarix (Reyting is its own tab)');
 assert.ok(read('public/js/neonui.js').includes('!!p.premium'), 'rankings premium from API');
 assert.ok(read('public/js/userprofile.js').includes('filter(Boolean)'), 'user profile does not append null text nodes');
 assert.ok(profile.includes('.filter(Boolean)') && profile.includes('host.replaceChildren'), 'my info does not append null text nodes');
@@ -319,7 +319,7 @@ assert.ok(html.includes('id="play-sticky"') && html.includes('id="dock"'), 'Play
 assert.ok(html.includes('id="boot"'), 'boot splash in HTML');
 assert.ok(html.includes('var(--text') && (html.includes('var(--bg') || html.includes('radial-gradient')), 'boot splash uses theme vars / radial (light text not stuck white)');
 assert.ok(css.includes('pill-thumb') && ui.includes('pillBar'), 'sliding pill bars for section selection');
-assert.ok(read('public/js/playhub.js').includes('segTabs(') && read('public/js/playhub.js').includes('underTabs('), 'Play hub uses segmented + underline tabs');
+assert.ok(read('public/js/playhub.js').includes('segTabs('), 'Play hub uses segmented tabs');
 assert.ok(app.includes('appHeader') && app.includes('headerInboxBtns') && css.includes('.nx-gem'), 'neon header has inbox + gems');
 {
   const i = app.indexOf('async function openGemsPage(');

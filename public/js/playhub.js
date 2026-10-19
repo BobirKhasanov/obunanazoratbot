@@ -1,15 +1,14 @@
-// O'ynash hub: Online · Reyting · Tarix (neon screenshot design).
+// O'ynash body (Online · Tarix) and the separate Reyting page (neon screenshot design).
 import { h, icon, haptic, api, fail } from './ui.js';
 import { t } from './i18n.js';
 import { openGameAnalysis } from './analyze.js';
 import {
-  appHeader, pageTitle, segTabs, underTabs, modeCard, sectionHead, playerRow, filterChip,
-  rankRow, historyRow, analysisCard, gameOutcome, levelRow, liveMatchRow, emptyNote,
+  appHeader, pageTitle, segTabs, modeCard, sectionHead, playerRow, filterChip,
+  rankRow, historyRow, analysisCard, gameOutcome, levelRow, emptyNote,
 } from './neonui.js';
 
-let hubTab = 'online'; // online | rating | history
+let hubTab = 'online'; // online | history
 let mode = 'online'; // online | friend | ai
-let onlineSub = 'players'; // players | live | tours
 let ratingPeriod = 'all'; // all | month
 let histFilter = 'all';
 let friendQuery = '';
@@ -26,7 +25,7 @@ function setAiColour(v) {
 const TIMES = ['1+0', '3+2', '5+0', '10+0', '15+10'];
 
 export function openPlayHubTab(tab) {
-  if (['online', 'rating', 'history'].includes(tab)) hubTab = tab;
+  if (['online', 'history'].includes(tab)) hubTab = tab;
 }
 
 /** Home mode card → O'ynash › Online with that mode preselected. */
@@ -34,29 +33,31 @@ export function openPlayHubMode(m) {
   if (['online', 'friend', 'ai'].includes(m)) { hubTab = 'online'; mode = m; }
 }
 
-export async function renderPlayHub(mount, deps) {
-  const remount = () => renderPlayHub(mount, deps);
+/** O'ynash page body: mode picker + (online | history). The page itself (carousel, daily task…) is built in app.js. */
+export async function paintPlayBody(ctx, lobby) {
+  const body = hubTab === 'history' ? await paintHistory(ctx) : await paintOnline(ctx, lobby);
+  return [
+    segTabs([
+      ['online', t('hub_tab_online'), 'users'],
+      ['history', t('hub_tab_history'), 'history'],
+    ], hubTab, (v) => { hubTab = v; ctx.remount(); }, 'hub'),
+    ...body,
+  ];
+}
+
+/** Reyting: its own page in the bottom bar. */
+export async function renderRatingPage(mount, deps) {
+  const remount = () => renderRatingPage(mount, deps);
   const ctx = { ...deps, remount };
   const lobby = await deps.loadLobby();
   const elo = (lobby.stats && lobby.stats.elo) || deps.me.elo || 1200;
-
-  const subs = { online: t('hub_sub_online'), rating: t('hub_sub_rating'), history: t('hub_sub_history') };
-  let body;
-  if (hubTab === 'rating') body = await paintRating(ctx);
-  else if (hubTab === 'history') body = await paintHistory(ctx);
-  else body = await paintOnline(ctx, lobby);
-
+  const body = await paintRating(ctx);
   mount([
     appHeader({
       me: deps.me, elo, inboxBtns: deps.headerInboxBtns(),
       onProfile: () => deps.goTab('profile'), onGems: () => deps.openGems(),
     }),
-    pageTitle(t('hub_title'), subs[hubTab]),
-    segTabs([
-      ['online', t('hub_tab_online'), 'users'],
-      ['rating', t('hub_tab_rating'), 'trophy'],
-      ['history', t('hub_tab_history'), 'history'],
-    ], hubTab, (v) => { hubTab = v; remount(); }, 'hub'),
+    pageTitle(t('nav_rankings'), t('hub_sub_rating')),
     ...body,
   ]);
 }
@@ -90,48 +91,14 @@ function timeChips(ctx) {
 }
 
 async function paintOnlinePlayers(ctx, lobby) {
-  const tabs = underTabs([
-    ['players', t('hub_sub_players')],
-    ['live', t('hub_sub_live')],
-    ['tours', t('hub_sub_tours')],
-  ], onlineSub, (v) => { onlineSub = v; ctx.remount(); });
   const cur = ctx.getSelectedTime();
   const tc = cur === 'any' ? t('any_time') : cur;
   const quick = h('button.nx-cta', {
     type: 'button',
     onclick: () => { haptic('medium'); ctx.ensurePlayFlow().quick(); },
   }, icon('bolt', 18), t('quick_match_btn'));
-
-  if (onlineSub === 'live') {
-    let games = [];
-    try { games = (await api('GET', '/live/games')).games || []; } catch (e) { fail(e); }
-    return [tabs,
-      sectionHead(t('live_now_sec'), null, null, { dot: 'red', sub: t('live_games_n', { n: games.length }) }),
-      games.length
-        ? h('div.nx-list', ...games.map((g) => liveMatchRow(g, { onWatch: (x) => ctx.spectate(x), onProfile: ctx.openProfile })))
-        : emptyNote(t('live_no_bot_games'))];
-  }
-  if (onlineSub === 'tours') {
-    let data = { active: [], upcoming: [] };
-    try { data = await api('GET', '/lichess/broadcasts'); } catch (e) { fail(e); }
-    const all = [...(data.active || []), ...(data.upcoming || [])].slice(0, 12);
-    return [tabs,
-      sectionHead(t('live_tourneys_sec'), () => ctx.openTournaments(), t('see_all_short'),
-        { dot: 'red', sub: t('tours_running', { n: (data.active || []).length }) }),
-      all.length
-        ? h('div.nx-list', ...all.map((it) => h('button.nx-tour-row', {
-          type: 'button', onclick: () => { haptic('light'); ctx.openTournaments(it); },
-        },
-          h('span.nx-tour-row-ic' + (it.round && it.round.ongoing ? '.live' : ''), icon('trophy', 20)),
-          h('div.nx-row-tx',
-            h('b', (it.tour && it.tour.name ? it.tour.name : '').replace(/\s*\|.*$/, '') || t('tournaments')),
-            h('small', [(it.round && it.round.name) || '', it.tour && it.tour.info && it.tour.info.tc ? it.tour.info.tc : ''].filter(Boolean).join(' · '))),
-          it.round && it.round.ongoing ? h('span.nx-live', h('i'), 'LIVE') : null,
-          icon('chevron', 16))))
-        : emptyNote(t('live_no_tours'))];
-  }
   const online = lobby.online || [];
-  return [tabs,
+  return [
     timeChips(ctx),
     quick,
     sectionHead(t('hub_now_playing'), null, null, { dot: 'green', sub: t('online_people', { n: lobby.onlineCount || online.length }) }),

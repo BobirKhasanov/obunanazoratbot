@@ -509,6 +509,10 @@ Object.assign(en, { avatar_char_premium: "Character avatars are for Premium" });
 Object.assign(ru, { avatar_char_premium: "Аватары-персонажи — для Premium" });
 Object.assign(uz, { avatar_char_premium: "Qahramon avatarlari faqat Premium uchun" });
 Object.assign(uzc, { avatar_char_premium: "Қаҳрамон аватарлари фақат Premium учун" });
+Object.assign(en, {"nav_puzzles": "Puzzles", "nav_rankings": "Rating", "nav_play": "Play", "nav_live": "Tournaments", "nav_profile": "Profile"});
+Object.assign(ru, {"nav_puzzles": "Задачи", "nav_rankings": "Рейтинг", "nav_play": "Играть", "nav_live": "Турниры", "nav_profile": "Профиль"});
+Object.assign(uz, {"nav_puzzles": "Masalalar", "nav_rankings": "Reyting", "nav_play": "O'ynash", "nav_live": "Turnirlar", "nav_profile": "Profil"});
+Object.assign(uzc, {"nav_puzzles": "Масалалар", "nav_rankings": "Рейтинг", "nav_play": "Ўйнаш", "nav_live": "Турнирлар", "nav_profile": "Профил"});
 
 const DICT = { en, ru, uz, uzc };
 let current = 'en';
@@ -549,7 +553,7 @@ Object.assign(en, {
   home_modes: 'Game modes', home_live_now: 'Playing online now', home_daily: 'Daily challenge',
   home_daily_sub: 'Solve the puzzle and earn a reward', online_realtime: 'Real-time activity',
   stat_online: 'Online', stat_games: 'Games', stat_tourneys: 'Tournaments', stat_analysis: 'Analysis',
-  nav_play: 'Home', nav_puzzles: 'Puzzles', nav_rankings: 'Play', nav_live: 'Online', nav_profile: 'Profile',
+  nav_play: 'Play', nav_puzzles: 'Puzzles', nav_rankings: 'Rating', nav_live: 'Tournaments', nav_profile: 'Profile',
   puzzles_title: 'Puzzles', puzzles_sub: 'Find the checkmate', mate_in: 'Mate in {n}', puzzle_n: 'Puzzle {n}', puzzle_solved_count: '{a} of {b} solved',
   puzzle_wrong: 'Not this move, try again', puzzle_done: 'Checkmate! Solved', puzzle_next: 'Next puzzle', puzzle_retry: 'Restart', puzzle_hint: 'Hint',
   puzzle_white: 'White to move', puzzle_black: 'Black to move', puzzle_back: 'All puzzles', puzzle_continue: 'Keep going, mate follows' });
@@ -565,7 +569,7 @@ Object.assign(ru, {
   home_modes: 'Режимы игры', home_live_now: 'Сейчас играют онлайн', home_daily: 'Ежедневное задание',
   home_daily_sub: 'Решите задачу и получите награду', online_realtime: 'Активность в реальном времени',
   stat_online: 'Онлайн', stat_games: 'Партии', stat_tourneys: 'Турниры', stat_analysis: 'Анализ',
-  nav_play: 'Главная', nav_puzzles: 'Задачи', nav_rankings: 'Играть', nav_live: 'Онлайн', nav_profile: 'Профиль',
+  nav_play: 'Играть', nav_puzzles: 'Задачи', nav_rankings: 'Рейтинг', nav_live: 'Турниры', nav_profile: 'Профиль',
   puzzles_title: 'Задачи', puzzles_sub: 'Найдите мат', mate_in: 'Мат в {n}', puzzle_n: 'Задача {n}', puzzle_solved_count: 'Решено {a} из {b}',
   puzzle_wrong: 'Не этот ход, попробуйте ещё', puzzle_done: 'Мат! Решено', puzzle_next: 'Следующая задача', puzzle_retry: 'Заново', puzzle_hint: 'Подсказка',
   puzzle_white: 'Ход белых', puzzle_black: 'Ход чёрных', puzzle_back: 'Все задачи', puzzle_continue: 'Верно, дальше будет мат' });
@@ -581,7 +585,7 @@ Object.assign(uz, {
   home_modes: "O'yin rejimlari", home_live_now: "Hozir online o'ynayotganlar", home_daily: 'Kunlik topshiriq',
   home_daily_sub: 'Aqlingizni sinang va mukofot oling', online_realtime: 'Real vaqt faolligi',
   stat_online: 'Onlayn', stat_games: 'Partiyalar', stat_tourneys: 'Turnirlar', stat_analysis: 'Tahlil',
-  nav_play: 'Asosiy', nav_puzzles: 'Boshqotirma', nav_rankings: "O'ynash", nav_live: 'Online', nav_profile: 'Profil',
+  nav_play: "O'ynash", nav_puzzles: 'Masalalar', nav_rankings: 'Reyting', nav_live: 'Turnirlar', nav_profile: 'Profil',
   puzzles_title: 'Boshqotirmalar', puzzles_sub: 'Matni toping', mate_in: '{n} yurishda mat', puzzle_n: '{n}-boshqotirma', puzzle_solved_count: '{b} tadan {a} tasi yechildi',
   puzzle_wrong: 'Bu yurish emas, qayta urinib ko‘ring', puzzle_done: 'Mat! Yechildi', puzzle_next: 'Keyingi boshqotirma', puzzle_retry: 'Qaytadan', puzzle_hint: 'Maslahat',
   puzzle_white: 'Oqlar yuradi', puzzle_black: 'Qoralar yuradi', puzzle_back: 'Barcha boshqotirmalar', puzzle_continue: 'To‘g‘ri, endi mat keladi' });
@@ -597,7 +601,7 @@ Object.assign(uzc, {
   home_modes: 'Ўйин режимлари', home_live_now: 'Ҳозир онлайн ўйнайотганлар', home_daily: 'Кунлик топшириқ',
   home_daily_sub: 'Ақлингизни синанг ва мукофот олинг', online_realtime: 'Реал вақт фаоллиги',
   stat_online: 'Онлайн', stat_games: 'Партиялар', stat_tourneys: 'Турнирлар', stat_analysis: 'Таҳлил',
-  nav_play: 'Асосий', nav_puzzles: 'Бошқотирма', nav_rankings: 'Ўйнаш', nav_live: 'Онлайн', nav_profile: 'Профил',
+  nav_play: 'Ўйнаш', nav_puzzles: 'Масалалар', nav_rankings: 'Рейтинг', nav_live: 'Турнирлар', nav_profile: 'Профил',
   puzzles_title: 'Бошқотирмалар', puzzles_sub: 'Матни топинг', mate_in: '{n} юришда мат', puzzle_n: '{n}-бошқотирма', puzzle_solved_count: '{b} тадан {a} таси ечилди',
   puzzle_wrong: 'Бу юриш эмас, қайта уриниб кўринг', puzzle_done: 'Мат! Ечилди', puzzle_next: 'Кейинги бошқотирма', puzzle_retry: 'Қайтадан', puzzle_hint: 'Маслаҳат',
   puzzle_white: 'Оқлар юради', puzzle_black: 'Қоралар юради', puzzle_back: 'Барча бошқотирмалар', puzzle_continue: 'Тўғри, энди мат келади' });

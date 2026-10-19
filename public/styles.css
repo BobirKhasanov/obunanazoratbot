@@ -2917,3 +2917,7 @@ html[data-ios="1"] .rv-bar i, html[data-perf="lite"] .rv-bar i { transition: non
 .result-tools { margin: 6px 0; }
 .char-tile.locked { opacity: 0.55; }
 .prem-tag { margin-left: 8px; font-size: 12px; font-weight: 800; color: #e0a81e; }
+
+/* O'ynash: compact mode picker (titles only) keeps the page short */
+.page[data-page="play"] .nx-mode.compact small { display: none; }
+.page[data-page="play"] .nx-mode.compact { min-height: 0; padding-bottom: 12px; }

@@ -26,12 +26,13 @@ import {
 } from './announcements.js';
 import { createPlayFlow } from './playflow.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
-import { renderPlayHub, openPlayHubMode, openPlayHubTab } from './playhub.js';
+import { paintPlayBody, renderRatingPage, openPlayHubMode, openPlayHubTab } from './playhub.js';
 import { appHeader, sectionHead, modeCard, liveMiniCard, heroBanner, dailyCard, emptyNote } from './neonui.js';
 
-const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 0, tab: 'play' };
+const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 2, tab: 'play' };
 let selectedTime = 'any';
-const TABS = ['play', 'puzzles', 'rankings', 'live', 'profile'];
+// Bottom bar, left → right. O'ynash (centre) is the page the app opens on.
+const TABS = ['puzzles', 'rankings', 'play', 'live', 'profile'];
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const gameMeta = () => ({
   me: {
@@ -55,8 +56,8 @@ function ensurePlayFlow() {
     startFriendGame,
     openAiHub: () => {
       openPlayHubMode('ai');
-      if (state.tab === 'rankings') refresh('rankings');
-      else go(TABS.indexOf('rankings'), true);
+      if (state.tab === 'play') { playSnap = ''; refresh('play'); }
+      else go(TABS.indexOf('play'), true);
     },
     goTab: (name) => go(TABS.indexOf(name), true),
     openLiveTournaments: () => {
@@ -479,13 +480,12 @@ refreshers.play = async function renderPlay() {
   const playElEarly = page('play');
   // First home paint (under splash): skip friends wait — biggest Android open win
   const firstPaint = !(playElEarly && playElEarly.classList.contains('seen') && playElEarly.childElementCount);
-  const [l, , anns, liveStrip] = await Promise.all([
+  const [l, , anns] = await Promise.all([
     loadLobby(),
     firstPaint
       ? Promise.resolve(state.friends || [])
       : loadFriends().catch(() => { state.friends = state.friends || []; }),
     loadAnnouncements(api, 'home'),
-    api('GET', '/live/games').then((lg) => (lg.games || []).slice(0, 30)).catch(() => []),
   ]);
   if (firstPaint) {
     // Hydrate friends after splash dismisses (does not block "O'yin yuklanmoqda")
@@ -509,7 +509,6 @@ refreshers.play = async function renderPlay() {
     fr: friends.map((f) => [f.id, !!f.online, !!f.inGame, !!f.invited, !!f.premium, f.avatarKey || '']),
     sav: saved ? [saved.level, saved.fen] : null,
     ann: (anns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
-    live: liveStrip.map((g) => g.id),
   });
   const playEl = playElEarly || page('play');
   if (snap === playSnap && playEl && playEl.classList.contains('seen') && playEl.childElementCount) {
@@ -571,9 +570,20 @@ refreshers.play = async function renderPlay() {
     refreshHome: () => { playSnap = ''; refresh('play'); },
   });
   const pzReward = puzzleRewardN();
-  const goPlayHub = (m) => { if (m) openPlayHubMode(m); go(TABS.indexOf('rankings'), true); };
-  const watchLive = (g) => spectateGame(g, gameMeta(), () => refresh('play'));
   const hasAnn = !!(reuseAnn || (prepAnn && prepAnn.items.length));
+  const hubCtx = {
+    me: state.me,
+    remount: () => { playSnap = ''; refresh('play'); },
+    loadFriends,
+    ensurePlayFlow,
+    startFriendGame,
+    startAi,
+    challenge,
+    getSelectedTime: () => selectedTime,
+    setSelectedTime: (id) => { selectedTime = id; playSnap = ''; },
+    openFriends: () => openProfilePage('friends'),
+    openProfile,
+  };
   const nodes = [
     appHeader({
       me: state.me,
@@ -584,20 +594,7 @@ refreshers.play = async function renderPlay() {
     }),
     annHost,
     hasAnn ? null : heroBanner(),
-    sectionHead(t('home_modes'), () => goPlayHub(), t('see_all')),
-    h('div.nx-mode-row',
-      modeCard({
-        title: t('hub_mode_online'), sub: t('mode_online_sub'), tone: 'blue', glyph: '🌐',
-        art: '/img/ui/mode-online-v2.webp', onClick: () => goPlayHub('online'),
-      }),
-      modeCard({
-        title: t('hub_mode_friend'), sub: t('mode_friend_sub'), tone: 'gold', glyph: '👥',
-        art: '/img/ui/mode-friend-v2.webp', onClick: () => goPlayHub('friend'),
-      }),
-      modeCard({
-        title: t('hub_mode_ai'), sub: t('mode_ai_sub'), tone: 'violet', glyph: '🤖',
-        art: '/img/ui/mode-ai-v2.webp', onClick: () => goPlayHub('ai'),
-      })),
+    dailyCard({ reward: pzReward, onClick: () => go(TABS.indexOf('puzzles'), true) }),
     l.games.invites.length ? [sectionHead(t('invites'), null, null, { dot: 'amber' }), h('div.nx-list', l.games.invites.map((g) => h('div.nx-pr',
       h('div.nx-row-main',
         avBlock(g.opponent.name, g.opponent.id, { premium: !!g.opponent.premium, round: true, avatarKey: g.opponent.avatarKey || null }),
@@ -607,18 +604,9 @@ refreshers.play = async function renderPlay() {
     saved || l.games.active.length || l.games.waiting.length ? [sectionHead(t('continue')), h('div.list.nx-continue',
       saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('ai', 22)), h('div.grow', h('div.t', t('ai') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,
-    sectionHead(t('home_live_now'), () => go(TABS.indexOf('live'), true), t('see_all_short'), { dot: 'red' }),
-    liveStrip.length
-      ? h('div.nx-hscroll.nx-live-strip', { 'data-noswipe': '' },
-        ...liveStrip.map((g) => liveMiniCard(g, watchLive)),
-        h('button.nx-lc-more', { type: 'button', onclick: () => { haptic('light'); go(TABS.indexOf('live'), true); } },
-          h('span', icon('chevron', 20)), t('see_all_short')))
-      : emptyNote(t('live_no_bot_games')),
-    dailyCard({ reward: pzReward, onClick: () => go(TABS.indexOf('puzzles'), true) }),
+    ...(await paintPlayBody(hubCtx, l)),
   ];
-  const stripX = playEl?.querySelector('.nx-live-strip')?.scrollLeft || 0;
   mount('play', nodes);
-  if (stripX) { const s = page('play')?.querySelector('.nx-live-strip'); if (s) s.scrollLeft = stripX; }
   setPlaySticky(false);
   if (state.tab === 'play' && reuseAnn) resumeAnnouncementsHost(annHost);
 };
@@ -649,24 +637,10 @@ refreshers.live = async function renderLive() {
 };
 
 refreshers.rankings = async function renderRankings() {
-  await renderPlayHub((nodes) => mount('rankings', nodes), {
+  await renderRatingPage((nodes) => mount('rankings', nodes), {
     me: state.me,
     loadLobby,
-    loadFriends,
     headerInboxBtns,
-    ensurePlayFlow,
-    startFriendGame,
-    startAi,
-    challenge,
-    getSelectedTime: () => selectedTime,
-    setSelectedTime: (id) => { selectedTime = id; playSnap = ''; },
-    spectate: (g) => spectateGame(g, gameMeta(), () => refresh('rankings')),
-    openTournaments: (it) => {
-      if (it) openBroadcast(it);
-      else openLiveTournaments();
-      go(TABS.indexOf('live'), true);
-    },
-    openFriends: () => openProfilePage('friends'),
     goTab: (name) => go(TABS.indexOf(name), true),
     openGems: openGemsPage,
     openProfile: (id) => openUserProfile(id, {
@@ -818,7 +792,11 @@ refreshers.profile = async function renderProfile() {
     elo: (rankMe && rankMe.elo) || (st && st.elo) || state.me.elo || 1200,
     rank: rankMe ? rankMe.rank : null,
     goTab: (name) => { closeScreen(true); go(TABS.indexOf(name), true); },
-    openHub: (tab) => { closeScreen(true); openPlayHubTab(tab); go(TABS.indexOf('rankings'), true); },
+    openHub: (tab) => {
+      closeScreen(true);
+      if (tab === 'rating') { go(TABS.indexOf('rankings'), true); return; }
+      openPlayHubTab(tab); playSnap = ''; go(TABS.indexOf('play'), true);
+    },
     rebuildAll,
     refresh: () => refresh('profile'),
   }));
@@ -866,7 +844,7 @@ let go = () => {};
 function initPager() {
   const pager = $('#pager'), track = $('#track'), ind = $('#nav-ind'), nav = $('#nav');
   ind.style.width = `calc((100% - 12px) / ${TABS.length})`;
-  const NAV_ICONS = { play: 'play', puzzles: 'puzzles', rankings: 'gamepad', live: 'live', profile: 'profile' };
+  const NAV_ICONS = { puzzles: 'puzzles', rankings: 'rankings', play: 'gamepad', live: 'trophy', profile: 'profile' };
   const btns = TABS.map((k, i) => {
     const b = h('button.nav-btn', {
       'aria-label': t('nav_' + k),
@@ -969,7 +947,7 @@ function initPager() {
     go(next, true);
   };
   pager.addEventListener('pointerup', finish); pager.addEventListener('pointercancel', finish);
-  go(0, false);
+  go(TABS.indexOf('play'), false);
   try { initScrollTop(); } catch (e) { console.error('[boot] scroll-top', e); }
 }
 
@@ -1159,7 +1137,7 @@ export async function start(me) {
     if (document.hidden || openGameId()) return;
     if (state.tab === 'live' && liveBlocksAutoRefresh()) return;
     if (state.tab === 'profile') return;
-    if (['live', 'play', 'rankings'].includes(state.tab)) refresh();
+    if (['live', 'play'].includes(state.tab)) refresh();
   }, homeTabRefreshMs());
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) sendBye();
