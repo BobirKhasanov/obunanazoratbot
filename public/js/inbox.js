@@ -1,4 +1,4 @@
-// In-app messages (global chat + DM) and notifications (admin → users; feedback → admins).
+// In-app messages (DM) and notifications (admin → users; feedback → admins).
 import { h, icon, haptic, toast, api, fail, avBlock, premIc, getInitData, onWs, confirmSheet } from './ui.js';
 import { t } from './i18n.js';
 import { openScreen } from './screen.js';
@@ -7,8 +7,6 @@ import { openUserProfile } from './userprofile.js';
 
 /** Thread currently open in the chat UI (suppresses toast spam for that chat). */
 let activeThreadId = null;
-/** True while the global lobby chat screen is open. */
-let viewingGlobal = false;
 
 function openPeerProfile(peer) {
   const id = peer && Number(peer.id);
@@ -140,7 +138,7 @@ export async function refreshInboxBadges(root) {
     const mailSlot = host.querySelector?.('.hdr-ic[aria-label="' + t('messages') + '"] .hdr-badge-slot')
       || host.querySelectorAll?.('.hdr-ic .hdr-badge-slot')?.[0];
     const bellSlot = host.querySelectorAll?.('.hdr-ic .hdr-badge-slot')?.[1];
-    // Mail = DMs + global replies-to-you. Bell = non-chat notifications only.
+    // Mail = DMs. Bell = non-chat notifications only.
     if (mailSlot) mailSlot.replaceChildren(badgeEl(m.count) || '');
     if (bellSlot) bellSlot.replaceChildren(badgeEl(n.count) || '');
   } catch { /* ignore badge errors */ }
@@ -149,10 +147,6 @@ export async function refreshInboxBadges(root) {
 /** True when the open chat matches this thread (used by app.js to skip toast). */
 export function isViewingDmThread(threadId) {
   return activeThreadId != null && Number(activeThreadId) === Number(threadId);
-}
-
-export function isViewingGlobalChat() {
-  return viewingGlobal;
 }
 
 export function openNotifications() {
@@ -385,9 +379,9 @@ export function openMessages() {
       }, 280);
     });
 
-    // Global lobby chat lives on Home → Live/Friends bar (openGlobalChat)
     body.replaceChildren(
       h('p.muted.msg-sub', t('msg_sub')),
+      h('p.muted.msg-sub', t('msg_ttl')),
       h('div.field.msg-search-field', searchInput),
       searchResults,
       h('div.h2', t('msg_chats')),
@@ -619,19 +613,6 @@ function openChatShell({ title, peer, loadUrl, sendUrl, wsMatch, pollMs, showNam
       try { onCloseExtra && onCloseExtra(); } catch { /* ignore */ }
       refreshInboxBadges();
     },
-  });
-}
-
-export function openGlobalChat() {
-  viewingGlobal = true;
-  openChatShell({
-    title: t('gchat_title'),
-    loadUrl: '/chat/global',
-    sendUrl: '/chat/global',
-    wsMatch: (m) => m.t === 'gchat',
-    pollMs: softPollMs(),
-    showNames: true,
-    onCloseExtra: () => { viewingGlobal = false; },
   });
 }
 

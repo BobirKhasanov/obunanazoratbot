@@ -513,6 +513,10 @@ Object.assign(en, {"nav_puzzles": "Puzzles", "nav_rankings": "Rating", "nav_play
 Object.assign(ru, {"nav_puzzles": "Задачи", "nav_rankings": "Рейтинг", "nav_play": "Играть", "nav_live": "Турниры", "nav_profile": "Профиль"});
 Object.assign(uz, {"nav_puzzles": "Masalalar", "nav_rankings": "Reyting", "nav_play": "O'ynash", "nav_live": "Turnirlar", "nav_profile": "Profil"});
 Object.assign(uzc, {"nav_puzzles": "Масалалар", "nav_rankings": "Рейтинг", "nav_play": "Ўйнаш", "nav_live": "Турнирлар", "nav_profile": "Профил"});
+Object.assign(en, { msg_ttl: "Messages are deleted automatically after 2 months." });
+Object.assign(ru, { msg_ttl: "Сообщения автоматически удаляются через 2 месяца." });
+Object.assign(uz, { msg_ttl: "Xabarlar 2 oydan keyin avtomatik o'chiriladi." });
+Object.assign(uzc, { msg_ttl: "Хабарлар 2 ойдан кейин автоматик ўчирилади." });
 
 const DICT = { en, ru, uz, uzc };
 let current = 'en';

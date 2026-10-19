@@ -69,26 +69,15 @@ function modeTag(tone) {
  * Big mode card with illustration (Home) or compact selectable card (O'ynash).
  * Home cards: tag pill + art + title/sub + Boshlash CTA (screenshot design).
  */
-export function modeCard({ title, sub, art, glyph, tone, selected, compact, onClick }) {
+export function modeCard({ title, sub, glyph, tone, selected, onClick }) {
   const tOne = tone || 'blue';
-  if (compact) {
-    return h('button.nx-mode.' + tOne + '.compact' + (selected ? '.on' : ''), {
-      type: 'button', 'data-noswipe': '', onclick: tap(onClick),
-    },
-      selected ? h('span.nx-mode-check', icon('check', 12, 3)) : null,
-      h('span.nx-mode-ic', glyph || '♟'),
-      h('b', title),
-      h('small', sub));
-  }
-  return h('button.nx-mode.' + tOne + '.rich', {
+  return h('button.nx-mode.' + tOne + '.compact' + (selected ? '.on' : ''), {
     type: 'button', 'data-noswipe': '', onclick: tap(onClick),
   },
-    h('span.nx-mode-tag', modeTag(tOne), h('em', title)),
-    art ? h('span.nx-mode-art', { style: { backgroundImage: `url(${art})` } }) : h('span.nx-mode-ic', glyph || '♟'),
-    h('span.nx-mode-body',
-      h('b', title),
-      h('small', sub),
-      h('span.nx-mode-cta', icon('playTri', 12), t('start'))));
+    selected ? h('span.nx-mode-check', icon('check', 12, 3)) : null,
+    h('span.nx-mode-ic', glyph || '♟'),
+    h('b', title),
+    h('small', sub));
 }
 
 function liveClock(g) {
@@ -106,24 +95,6 @@ const scoreOf = (g) => {
   if (g.result === '1/2-1/2') return '½ - ½';
   return '0 - 0';
 };
-
-/** Home "Hozir online o'ynayotganlar" compact card. */
-export function liveMiniCard(g, onOpen) {
-  const w = g.white || {};
-  const b = g.black || {};
-  const clock = liveClock(g);
-  const side = (p) => h('div.nx-lc-p',
-    avBlock(p.name || '?', p.id || 0, { round: true, avatarKey: p.avatarKey, premium: !!p.premium }),
-    h('b', firstName(p.name)),
-    h('small', String(p.elo || '—')));
-  return h('button.nx-lc', { type: 'button', 'data-noswipe': '', onclick: tap(() => onOpen && onOpen(g)) },
-    side(w),
-    h('div.nx-lc-mid',
-      h('span.nx-live', h('i'), 'LIVE'),
-      h('b', scoreOf(g)),
-      h('small', icon('clock', 11), clock || tcLabel(g))),
-    side(b));
-}
 
 /** Online page live row: player · LIVE score · player · Ko'rish. */
 export function liveMatchRow(g, { onWatch, onProfile } = {}) {

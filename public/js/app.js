@@ -1,7 +1,7 @@
 // Main app: boot, swipe pager, pages, deep links.
 import { h, $, $$, icon, haptic, toast, sheet, pillBar, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopSmooth, shareUrl, copyText, syncTgSafeArea } from './ui.js';
 import { homeTabRefreshMs, softPollMs, isLite, isAndroid } from './perf.js';
-import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread, isViewingGlobalChat, openGlobalChat } from './inbox.js';
+import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread } from './inbox.js';
 import { t, setLang } from './i18n.js';
 import { openGame, savedAiGame, openGameId } from './game.js';
 import { Chess } from '/vendor/chess.js';
@@ -27,7 +27,7 @@ import {
 import { createPlayFlow } from './playflow.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
 import { paintPlayBody, renderRatingPage, openPlayHubMode, openPlayHubTab } from './playhub.js';
-import { appHeader, sectionHead, modeCard, liveMiniCard, heroBanner, dailyCard, emptyNote } from './neonui.js';
+import { appHeader, sectionHead, heroBanner, dailyCard } from './neonui.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 2, tab: 'play' };
 let selectedTime = 'any';
@@ -1093,15 +1093,6 @@ export async function start(me) {
       if (isViewingDmThread(m.threadId)) return;
       haptic('success');
       toast(t('msg_new_from', { name: (m.from && m.from.name) || '…' }));
-    }
-    else if (m.t === 'gchat') {
-      try { refreshInboxBadges(); } catch { /* ignore */ }
-      if (isViewingGlobalChat()) return;
-      const msg = m.message || {};
-      if (msg.replyTo && msg.replyTo.mine) {
-        haptic('success');
-        toast(t('gchat_reply_from', { name: (msg.from && msg.from.name) || '…' }));
-      }
     }
     else if (m.t === 'wallet' && m.user) {
       state.me = { ...state.me, ...m.user };

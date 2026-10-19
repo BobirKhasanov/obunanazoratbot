@@ -67,20 +67,8 @@ const sh = /height:\s*calc\((\d+)px/.exec(spacer);
 assert.ok(/flex:\s*none/.test(spacer) && sh && Number(sh[1]) >= 120, 'home page has a real spacer item so it can always scroll past the dock');
 const row = rule('.page[data-page="play"] .nx-mode-row');
 assert.ok(/flex:\s*none/.test(row) && /max-height:\s*none/.test(row), 'mode row is not squeezed to fit one screen');
-const card = rule('.page[data-page="play"] .nx-mode.rich');
-assert.ok(/min-height:\s*1\d\dpx/.test(card) && !/height:\s*100%/.test(card), 'mode cards have a minimum height that fits art + panel + CTA (not squeezed)');
 assert.ok(/#pager \{[^}]*touch-action:\s*pan-y/.test(css), 'pager allows vertical panning');
 
-// ---------- 3. Home mode cards: full-bleed art + glass panel (reference design) ----------
-const rich = rule('.nx-mode.rich');
-assert.ok(/padding:\s*0/.test(rich), 'rich mode cards let the art bleed to the edges');
-assert.ok(/height:\s*auto/.test(rule('.page[data-page="play"] .nx-mode.rich')), 'home cards size to their content: art fills the top, no empty gap above the panel');
-const art = rule('.nx-mode.rich .nx-mode-art');
-assert.ok(/height:\s*1\d\dpx/.test(art) && !/aspect-ratio/.test(art), 'art has a fixed height so it meets the panel (no gap)');
-assert.ok(/position:\s*absolute/.test(art) && /cover/.test(art) && !/contain/.test(art), 'card art is full-bleed (cover), not a small contained image');
-const body = rule('.nx-mode-body');
-assert.ok(/backdrop-filter/.test(body) && /border-radius:\s*1\d px/.test(body.replace(/(\d)px/g, "$1 px")), 'card text sits on a rounded glass panel');
-assert.ok(!/background-size:\s*contain/.test(css.slice(css.indexOf('.nx-mode.rich .nx-mode-art'))), 'no iOS/lite override shrinks the art back to contain');
 assert.ok(/@media \(max-width: 380px\)[^}]*\.nx-hdr/.test(css), 'header tightens on narrow phones');
 
 console.log('safe-area OK');

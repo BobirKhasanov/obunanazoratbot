@@ -2679,19 +2679,7 @@ api.get('/messages/unread-count', wrap(async (req, res) => {
     JOIN dm_threads t ON t.id = m.thread_id
     WHERE (t.user_a = ? OR t.user_b = ?) AND m.sender_id <> ? AND m.read_at IS NULL
   `).get(uid, uid, uid);
-  // Global chat: badge only for replies to this user's messages (not every lobby message).
-  const lastRead = (await db.prepare('SELECT last_read_id AS n FROM global_chat_reads WHERE user_id = ?').get(uid))?.n || 0;
-  const gReply = await db.prepare(`
-    SELECT COUNT(*)::int AS n FROM global_chat_messages m
-    JOIN global_chat_messages parent ON parent.id = m.reply_to_id
-    WHERE parent.sender_id = ? AND m.sender_id <> ? AND m.id > ?
-      AND m.created_at > now() - interval '24 hours'
-  `).get(uid, uid, lastRead);
-  res.json({
-    count: (dm?.n || 0) + (gReply?.n || 0),
-    dm: dm?.n || 0,
-    globalReplies: gReply?.n || 0,
-  });
+  res.json({ count: dm?.n || 0, dm: dm?.n || 0 });
 }));
 
 api.get('/messages/search', wrap(async (req, res) => {
@@ -2863,136 +2851,37 @@ api.post('/messages/threads/:id', wrap(async (req, res) => {
   });
 }));
 
-// ---------- global lobby chat (each message expires 24h after it was sent) ----------
-/** Drop expired rows oldest-first (by created_at), never wipe the whole room at once. */
-async function purgeGlobalChatExpired({ limit = 80, maxRounds = 1 } = {}) {
+// ---------- DM retention: messages live 60 days, then are deleted ----------
+const DM_TTL_DAYS = 60;
+let lastDmPurge = 0;
+/** Delete DMs older than 60 days (oldest first, in batches) and threads left empty. Runs at most hourly. */
+async function purgeOldDms({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && now - lastDmPurge < 60 * 60 * 1000) return 0;
+  lastDmPurge = now;
   let removed = 0;
-  for (let round = 0; round < maxRounds; round++) {
+  for (let round = 0; round < 10; round++) {
     const del = await db.prepare(`
-      DELETE FROM global_chat_messages
+      DELETE FROM dm_messages
       WHERE id IN (
-        SELECT id FROM global_chat_messages
-        WHERE created_at < now() - interval '24 hours'
+        SELECT id FROM dm_messages
+        WHERE created_at < now() - (? * interval '1 day')
         ORDER BY created_at ASC, id ASC
-        LIMIT ?
+        LIMIT 500
       )
       RETURNING id
-    `).run(limit);
+    `).run(DM_TTL_DAYS);
     const n = del.changes || (del.rows && del.rows.length) || 0;
     removed += n;
-    if (n < limit) break;
-  }
-  return removed;
-}
-
-function mapGlobalMsg(m, uid) {
-  return {
-    id: m.id,
-    body: m.body,
-    mine: Number(m.sender_id) === uid,
-    createdAt: m.created_at,
-    from: {
-      id: m.sender_id,
-      name: displayName({ first_name: m.first_name, last_name: m.last_name }),
-      premium: isPremiumActive({ premium: m.premium, premium_until: m.premium_until }),
-      avatarKey: m.avatar_key || null,
-    },
-    replyTo: m.reply_to_id ? {
-      id: m.reply_to_id,
-      body: m.reply_body || '',
-      fromName: m.reply_name || '',
-      mine: Number(m.reply_sender) === uid,
-    } : null,
-  };
-}
-
-api.get('/chat/global', wrap(async (req, res) => {
-  const uid = Number(req.user.id);
-  // Soft prune a batch of oldest expired messages (full drain runs in the sweeper).
-  await purgeGlobalChatExpired({ limit: 40, maxRounds: 1 }).catch(() => {});
-  const rows = await db.prepare(`
-    SELECT m.id, m.sender_id, m.body, m.created_at, m.reply_to_id,
-      u.first_name, u.last_name, u.premium, u.premium_until, u.avatar_key,
-      r.body AS reply_body, r.sender_id AS reply_sender,
-      ru.first_name AS reply_first, ru.last_name AS reply_last
-    FROM global_chat_messages m
-    JOIN users u ON u.id = m.sender_id
-    LEFT JOIN global_chat_messages r ON r.id = m.reply_to_id
-    LEFT JOIN users ru ON ru.id = r.sender_id
-    WHERE m.created_at > now() - interval '24 hours'
-    ORDER BY m.created_at ASC
-    LIMIT 200
-  `).all();
-  const maxId = rows.length ? Number(rows[rows.length - 1].id) : 0;
-  if (maxId) {
-    await db.prepare(`
-      INSERT INTO global_chat_reads (user_id, last_read_id, updated_at) VALUES (?, ?, now())
-      ON CONFLICT (user_id) DO UPDATE SET last_read_id = GREATEST(global_chat_reads.last_read_id, EXCLUDED.last_read_id), updated_at = now()
-    `).run(uid, maxId);
-  }
-  res.json({
-    messages: rows.map((m) => mapGlobalMsg({
-      ...m,
-      reply_name: displayName({ first_name: m.reply_first, last_name: m.reply_last }),
-    }, uid)),
-  });
-}));
-
-api.post('/chat/global', wrap(async (req, res) => {
-  const uid = Number(req.user.id);
-  const body = cleanText(req.body && req.body.body, 500, 'text', true);
-  const replyToId = req.body && req.body.replyToId != null ? intParam(req.body.replyToId) : null;
-  let replyRow = null;
-  if (replyToId) {
-    replyRow = await db.prepare(`
-      SELECT m.id, m.body, m.sender_id, u.first_name, u.last_name
-      FROM global_chat_messages m JOIN users u ON u.id = m.sender_id
-      WHERE m.id = ? AND m.created_at > now() - interval '24 hours'
-    `).get(replyToId);
-    if (!replyRow) throw bad('Reply target missing', 'bad_request');
-  }
-  const ins = await db.prepare(`
-    INSERT INTO global_chat_messages (sender_id, body, reply_to_id) VALUES (?, ?, ?)
-    RETURNING id, created_at
-  `).run(uid, body, replyToId);
-  const row = ins.rows?.[0];
-  if (!row) throw bad('Could not send', 'server');
-  const me = await getUser.get(uid);
-  const payload = mapGlobalMsg({
-    id: row.id,
-    sender_id: uid,
-    body,
-    created_at: row.created_at,
-    reply_to_id: replyToId,
-    first_name: me.first_name,
-    last_name: me.last_name,
-    premium: me.premium,
-    premium_until: me.premium_until,
-    avatar_key: me.avatar_key,
-    reply_body: replyRow ? replyRow.body : null,
-    reply_sender: replyRow ? replyRow.sender_id : null,
-    reply_name: replyRow ? displayName(replyRow) : '',
-  }, uid);
-  // Fan-out to live Mini Apps (replyTo.mine is per recipient — badge/toast for reply targets)
-  for (const id of realtime.onlineIds()) {
-    if (Number(id) === uid) continue;
-    realtime.send(id, {
-      t: 'gchat',
-      message: {
-        ...payload,
-        mine: false,
-        replyTo: payload.replyTo
-          ? { ...payload.replyTo, mine: Number(replyRow?.sender_id) === Number(id) }
-          : null,
-      },
-    });
+    if (n < 500) break;
   }
   await db.prepare(`
-    INSERT INTO global_chat_reads (user_id, last_read_id, updated_at) VALUES (?, ?, now())
-    ON CONFLICT (user_id) DO UPDATE SET last_read_id = GREATEST(global_chat_reads.last_read_id, EXCLUDED.last_read_id), updated_at = now()
-  `).run(uid, row.id);
-  res.status(201).json({ message: payload });
-}));
+    DELETE FROM dm_threads t
+    WHERE t.updated_at < now() - (? * interval '1 day')
+      AND NOT EXISTS (SELECT 1 FROM dm_messages m WHERE m.thread_id = t.id)
+  `).run(DM_TTL_DAYS);
+  return removed;
+}
 
 // ---------- friends ----------
 api.get('/friends', wrap(async (req, res) => {
@@ -4404,8 +4293,8 @@ async function boot() {
         const next = await claimFlagIfNeeded(g);
         if (next.status !== 'active') await pushGame(next);
       }
-      // Global chat: each message lives 24h from its own created_at; delete oldest expired first.
-      await purgeGlobalChatExpired({ limit: 100, maxRounds: 5 });
+      // Direct messages are kept for 60 days only
+      await purgeOldDms();
     } catch (e) { console.error('[sweeper]', e.message); } finally { sweeping = false; }
   }, SWEEP_MS).unref();
 }

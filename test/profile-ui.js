@@ -54,11 +54,10 @@ assert.ok(profile.includes('5 * 1024 * 1024') || profile.includes('5*1024*1024')
 assert.ok(read('src/server.js').includes('MAX_AVATAR = 5') && read('src/server.js').includes('/api/avatars/'), 'avatar 5MB + public serve');
 assert.ok(profile.includes('openChatWithUser') && profile.includes("from './inbox.js'"), 'friends list opens DM chat');
 assert.ok(app.includes("from './playhub.js'") && app.includes('paintPlayBody') && app.includes('renderRatingPage'), 'Play body on O\'ynash tab, Rating on its own tab');
-assert.ok(app.includes("from './neonui.js'") && app.includes('appHeader') && app.includes('modeCard'), 'neon home shell');
+assert.ok(app.includes("from './neonui.js'") && app.includes('appHeader') && app.includes('dailyCard'), 'neon home shell');
 assert.ok(app.includes('dailyCard') && app.includes('paintPlayBody') && read('public/js/playhub.js').includes('nx-mode-row'), 'O\'ynash sections: carousel, daily task, mode picker');
-assert.ok(read('public/js/neonui.js').includes("nx-mode-cta") && read('public/js/neonui.js').includes("t('start')") && read('public/js/neonui.js').includes('.rich'), 'home mode cards: Boshlash CTA design');
 assert.ok(read('public/js/inbox.js').includes('tgBack: false') && read('public/js/screen.js').includes("opts.tgBack === false"), 'inbox hides Telegram BackButton (no double back)');
-assert.ok(css.includes('.nx-mode.rich') && css.includes('.nx-mode-cta') && css.includes('.notif-day'), 'rich mode + notif day styles');
+assert.ok(css.includes('.nx-mode.compact') && css.includes('.notif-day'), 'compact mode + notif day styles');
 assert.ok(app.includes("play: 'gamepad'") && app.includes("'data-tab': k"), 'nav icons map Oynash to gamepad');
 assert.ok(app.includes('r.already') && app.includes('game_ended'), 'stale invite/game deep links do not reopen boards');
 assert.ok(read('src/welcome.js').includes('startapp=i'), 'invite share uses startapp for Mini App claim');
@@ -154,7 +153,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261018nx42"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261018nx42'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261018nx43"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261018nx43'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -185,12 +184,12 @@ assert.ok(read('public/js/game.js').includes('sound-btn') && /icon\([^)]*soundOn
 assert.ok(read('public/js/ui.js').includes('if (!isMoveSoundOn()) return') && read('public/js/game.js').includes('if (isMoveSoundOn()) unlockAudio()'), 'muted move sound skips unlock/play');
 assert.ok(app.includes('prepareAnnouncements') && app.includes('paintAnnouncementsCarousel') && read('public/js/announcements.js').includes('prepareAnnouncements'), 'carousels prepared before home mount');
 assert.ok(app.includes('dismissBootRevealApp') && read('public/js/entry.js').includes('appP'), 'splash stays until first paint; app.js loads with /me');
-assert.ok(read('public/js/inbox.js').includes('/chat/global') && read('public/js/inbox.js').includes('replyToId'), 'global chat + reply');
+assert.ok(!read('public/js/inbox.js').includes('/chat/global') && read('public/js/inbox.js').includes('replyToId'), 'DM reply kept; global chat removed');
 assert.ok(read('public/js/inbox.js').includes('inbox-peer') && read('public/js/inbox.js').includes('openUserProfile') && read('public/js/inbox.js').includes('chat-av'), 'DM/global name+avatar open profile');
 assert.ok(read('public/js/userprofile.js').includes('send_message') && read('public/js/userprofile.js').includes('openChatWithUser'), 'visit profile → send message');
 assert.ok(admin.includes('admin-analysis-card') && admin.includes("t('analyze_title')"), 'admin shop surfaces game analysis');
-assert.ok(read('src/db.js').includes('global_chat_messages') && read('src/server.js').includes("kind <> 'dm'"), 'global chat schema; bell ignores DM');
-assert.ok(read('src/server.js').includes('purgeGlobalChatExpired') && read('src/server.js').includes('ORDER BY created_at ASC'), 'global chat purges oldest expired first');
+assert.ok(!read('src/server.js').includes("'/chat/global'") && read('src/server.js').includes("kind <> 'dm'"), 'global chat removed; bell ignores DM');
+assert.ok(read('src/server.js').includes('purgeOldDms') && read('src/server.js').includes('DM_TTL_DAYS = 60'), 'DMs are deleted after 60 days');
 assert.ok(/\.avwrap \.prem-ring[\s\S]{0,120}inset:\s*0/.test(css), 'premium ring stays within avatar wrap');
 assert.ok(!/prem-ring[\s\S]{0,80}inset:\s*-\d/.test(css), 'premium ring does not extend outside avatar');
 assert.ok(app.includes('wsConnected') && app.includes('connectWs()'), 'WS reconnects on foreground');
@@ -361,7 +360,6 @@ assert.ok(read('src/server.js').includes('runBotForever') && read('src/server.js
 assert.ok(read('src/server.js').includes('unhandledRejection') && read('src/server.js').includes('uncaughtException'), 'process error handlers keep process supervised');
 assert.ok(read('workers/proxy.js').includes('RETRY_STATUSES') && read('workers/proxy.js').includes('maxAttempts'), 'Worker retries origin 502/503');
 assert.ok(require('fs').existsSync(require('path').join(__dirname, '..', 'render.yaml')), 'render.yaml blueprint present');
-assert.ok(read('public/js/app.js').includes('openGlobalChat') && read('public/js/inbox.js').includes('export function openGlobalChat'), 'global chat on Live/Friends bar');
 assert.ok(read('public/js/board.js').includes('premoveEnabled') && read('public/js/game.js').includes('premoveAllowed') && read('public/js/gameprefs.js').includes('baseMs <= 180000'), 'premoves via setting (fast games default)');
 assert.ok(read('public/js/analyze.js').includes('openGameAnalysis') && read('src/server.js').includes('/games/:id/analyze'), 'game analysis flow');
 assert.ok(read('src/server.js').includes('friend_requests') && read('public/js/userprofile.js').includes('add_friend'), 'friend requests from profile');

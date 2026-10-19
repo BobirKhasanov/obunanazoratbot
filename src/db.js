@@ -320,21 +320,11 @@ CREATE TABLE IF NOT EXISTS dm_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_dm_messages_thread ON dm_messages(thread_id, created_at);
 ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS reply_to_id BIGINT REFERENCES dm_messages(id) ON DELETE SET NULL;
--- Lobby global chat (24h retention). Replies to your messages drive inbox badge.
-CREATE TABLE IF NOT EXISTS global_chat_messages (
-  id BIGSERIAL PRIMARY KEY,
-  sender_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  body TEXT NOT NULL,
-  reply_to_id BIGINT REFERENCES global_chat_messages(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_global_chat_created ON global_chat_messages(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_global_chat_reply ON global_chat_messages(reply_to_id) WHERE reply_to_id IS NOT NULL;
-CREATE TABLE IF NOT EXISTS global_chat_reads (
-  user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  last_read_id BIGINT NOT NULL DEFAULT 0,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+-- Global lobby chat was removed; drop its leftovers.
+DROP TABLE IF EXISTS global_chat_reads;
+DROP TABLE IF EXISTS global_chat_messages;
+-- DMs are deleted after 60 days (sweeper) — index keeps that scan cheap.
+CREATE INDEX IF NOT EXISTS idx_dm_messages_created ON dm_messages(created_at);
 -- Pending friend requests (accept / decline in notifications)
 CREATE TABLE IF NOT EXISTS friend_requests (
   id BIGSERIAL PRIMARY KEY,
@@ -365,8 +355,6 @@ ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dm_threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dm_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE global_chat_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE global_chat_reads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS takeback_by TEXT; -- colour that asked to take back its last move
 ALTER TABLE games ADD COLUMN IF NOT EXISTS elo_w_before INTEGER;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS elo_w_after INTEGER;
