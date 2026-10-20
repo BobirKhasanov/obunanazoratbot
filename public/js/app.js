@@ -39,6 +39,7 @@ const gameMeta = () => ({
     id: state.me.id,
     name: state.me.firstName,
     premium: !!state.me.premium,
+    isAdmin: !!state.me.isAdmin,
     avatarKey: state.me.avatarKey || null,
   },
   botUsername: state.meta.botUsername,
@@ -1105,6 +1106,13 @@ export async function start(me) {
       haptic('success');
       if (canStyleChess(state.me)) applyChessStyle(state.me.pieceSet, state.me.boardTheme);
       refresh();
+    }
+    else if (m.t === 'tour') { toast(m.text); haptic('light'); refresh(); }
+    else if (m.t === 'tour_game') {
+      toast(t('swiss_game_ready')); haptic('success');
+      if (!openGameId() && m.gameId) {
+        api('GET', `/games/${m.gameId}`).then((r) => { if (!openGameId()) openOnline(r.game); }).catch(() => refresh());
+      } else refresh();
     }
     else if (m.t === 'game') {
       if (m.game.status === 'active' && m.game.id !== openGameId()) {

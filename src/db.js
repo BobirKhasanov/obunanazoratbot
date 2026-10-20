@@ -132,6 +132,44 @@ CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
 CREATE INDEX IF NOT EXISTS idx_games_status_updated ON games(status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_games_matchmaking ON games(status, mode, time_control, created_at);
 
+-- Swiss tournaments (created by Premium users / admins)
+CREATE TABLE IF NOT EXISTS tournaments (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  creator_id BIGINT NOT NULL,
+  format TEXT NOT NULL DEFAULT 'swiss',
+  time_control TEXT NOT NULL DEFAULT '5+0',
+  rounds INTEGER NOT NULL DEFAULT 5,
+  max_players INTEGER NOT NULL DEFAULT 32,
+  status TEXT NOT NULL DEFAULT 'registration',   -- registration | running | finished | cancelled
+  round INTEGER NOT NULL DEFAULT 0,
+  round_state TEXT,                              -- playing | break
+  next_at TIMESTAMPTZ,
+  starts_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_tournaments_status ON tournaments(status, starts_at);
+CREATE TABLE IF NOT EXISTS tournament_players (
+  tournament_id INTEGER NOT NULL,
+  user_id BIGINT NOT NULL,
+  withdrawn BOOLEAN NOT NULL DEFAULT FALSE,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (tournament_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tour_players_user ON tournament_players(user_id);
+CREATE TABLE IF NOT EXISTS tournament_games (
+  id SERIAL PRIMARY KEY,
+  tournament_id INTEGER NOT NULL,
+  round INTEGER NOT NULL,
+  white_id BIGINT NOT NULL,
+  black_id BIGINT,                               -- NULL = bye for white_id
+  game_id TEXT,
+  result TEXT                                    -- 1-0 | 0-1 | 1/2-1/2 | 0-0 | bye (NULL while playing)
+);
+CREATE INDEX IF NOT EXISTS idx_tour_games_t ON tournament_games(tournament_id, round);
+CREATE INDEX IF NOT EXISTS idx_tour_games_game ON tournament_games(game_id);
+
 -- Everyone who was asked to play a challenge game (the first to accept starts it)
 CREATE TABLE IF NOT EXISTS game_invites (
   game_id TEXT NOT NULL,

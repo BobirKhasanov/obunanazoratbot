@@ -557,8 +557,9 @@ export function openGame(opts, onClose) {
       );
     } else if (S.kind === 'online' && live) {
       if (!drawOut) actions.append(act('handshake', t('offer_draw'), () => drawAction('offer')));
-      if (S.moves.length >= 1 && S.chess.turn() !== S.colour && S.game.takebackBy !== S.game.you) actions.append(act('undo', t('takeback'), () => takebackAction('offer')));
-      actions.append(S.moves.length < 2 ? act('x', t('abort'), abort) : act('flag', t('resign'), resign), act('chat', t('game_chat'), toggleChat), act('smile', '', toggleReact));
+      const inTour = S.game && S.game.mode === 'tour';
+      if (!inTour && S.moves.length >= 1 && S.chess.turn() !== S.colour && S.game.takebackBy !== S.game.you) actions.append(act('undo', t('takeback'), () => takebackAction('offer')));
+      actions.append(S.moves.length < 2 && !inTour ? act('x', t('abort'), abort) : act('flag', t('resign'), resign), act('chat', t('game_chat'), toggleChat), act('smile', '', toggleReact));
     } else if (S.kind === 'spectate') {
       // view-only: no actions
     } else if (S.over || (S.game && S.game.status === 'finished')) {
@@ -825,7 +826,7 @@ export function openGame(opts, onClose) {
         },
       }, icon('ai', 18), t('analyze')) : null,
       S.kind === 'ai' ? h('button.btn', { onclick: () => { close(); const o = { kind: 'ai', level: S.level, colour: S.colour === 'w' ? 'b' : 'w', meta: S.meta, timeControl: S.timeControl, allowUndo: S.allowUndo }; const cb = S.onClose, st = S.onStats; openGame(o, cb); ctx.onStats = st; } }, t('play_again')) : null,
-      S.kind === 'online' && S.game.opponent ? h('button.btn', { onclick: async () => { close(); try { const r = await api('POST', '/games', { opponentId: S.game.opponent.id, timeControl: S.game.timeControl || 'classic' }); closeNow(); openGame({ kind: 'online', game: r.game, meta: S.meta }, S.onClose); } catch (e) { fail(e); } } }, t('rematch')) : null,
+      S.kind === 'online' && S.game.mode !== 'tour' && S.game.opponent ? h('button.btn', { onclick: async () => { close(); try { const r = await api('POST', '/games', { opponentId: S.game.opponent.id, timeControl: S.game.timeControl || 'classic' }); closeNow(); openGame({ kind: 'online', game: r.game, meta: S.meta }, S.onClose); } catch (e) { fail(e); } } }, t('rematch')) : null,
       h('button.btn.ghost', { onclick: () => { close(); closeGame(); } }, t('close')),
     ].filter(Boolean));
   }

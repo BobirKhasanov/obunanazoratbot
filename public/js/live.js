@@ -10,6 +10,7 @@ import { formatTashkentWhen } from './time.js';
 import { liveRoundPollMs, liveGamePollMs, liveClockTickMs, liveMiniBoardBudget, isLite } from './perf.js';
 import { openChatWithUser, openMessages, openNotifications } from './inbox.js';
 import { openUserProfile } from './profile.js';
+import { swissSection } from './swiss.js';
 import {
   sectionHead, statCard, pageTitle, roundBtn, liveMatchRow, tourneyCard, onlineBubble, friendRow, emptyNote,
 } from './neonui.js';
@@ -283,10 +284,11 @@ function openAnalysisList(recent) {
 
 async function renderBot(mount, meta, onClose, onRefresh) {
   hideTgBack();
-  const [live, lobby, tours] = await Promise.all([
+  const [live, lobby, tours, swiss] = await Promise.all([
     api('GET', '/live/games').catch((e) => { fail(e); return { games: [] }; }),
     api('GET', '/lobby').catch(() => ({ online: [], onlineCount: 0, games: {} })),
     api('GET', '/lichess/broadcasts').catch(() => ({ active: [], upcoming: [] })),
+    api('GET', '/tournaments').catch(() => ({ tournaments: [], canCreate: false })),
   ]);
   const games = live.games || [];
   const recent = (lobby.games && lobby.games.recent) || [];
@@ -322,6 +324,7 @@ async function renderBot(mount, meta, onClose, onRefresh) {
     games.length
       ? h('div.nx-list', ...(showAllLive ? games : games.slice(0, 3)).map((g) => liveMatchRow(g, { onWatch: watch, onProfile: openProfile })))
       : emptyNote(t('live_no_bot_games')),
+    ...swissSection(swiss, { onRefresh, meta, onClose }),
     sectionHead(t('live_tourneys_sec'), () => openTour(null), t('see_all')),
     tourCards.length
       ? h('div.nx-hscroll.nx-tour-strip', { 'data-noswipe': '' },

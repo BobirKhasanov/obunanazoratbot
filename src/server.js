@@ -1689,7 +1689,7 @@ api.get('/games/history', wrap(async (req, res) => {
   const uid = req.user.id;
   const rows = await db.prepare(`
     SELECT * FROM games WHERE status = 'finished' AND (white_id = :u OR black_id = :u)
-      AND mode IN ('online', 'friend') AND result IS NOT NULL
+      AND mode IN ('online', 'friend', 'tour') AND result IS NOT NULL
     ORDER BY updated_at DESC LIMIT 50
   `).all({ u: uid });
   res.json({ games: await Promise.all(rows.map((g) => gameFor(g, uid, false))) });
@@ -1926,6 +1926,7 @@ api.post('/games/:id/draw', wrap(async (req, res) => {
 api.post('/games/:id/abort', wrap(async (req, res) => {
   const uid = req.user.id;
   const { row } = await activeGame(req.params.id, uid);
+  if (row.mode === 'tour') throw bad('Not allowed in a tournament', 'bad_request');
   if (parseMoves(row.moves).length >= 2) throw bad('Too late to abort', 'bad_request');
   await db.prepare("UPDATE games SET status = 'cancelled', reason = 'aborted', draw_by = NULL, takeback_by = NULL, updated_at = now() WHERE id = ? AND status = 'active'").run(row.id);
   await cacheDel('lobby:busy');
@@ -1939,6 +1940,7 @@ api.post('/games/:id/takeback', wrap(async (req, res) => {
   const uid = req.user.id;
   const { row, colour } = await activeGame(req.params.id, uid);
   const action = req.body && req.body.action;
+  if (row.mode === 'tour') throw bad('Not allowed in a tournament', 'bad_request');
   const moves = parseMoves(row.moves);
   if (action === 'offer') {
     if (!moves.length || turnOf(moves) === colour) throw bad('Nothing to take back', 'bad_request');
@@ -2098,7 +2100,7 @@ api.get('/rankings', wrap(async (req, res) => {
           SUM(CASE WHEN g.result = '1/2-1/2' THEN 1 ELSE 0 END) AS draws,
           SUM(CASE WHEN (g.white_id = u.id AND g.result = '0-1') OR (g.black_id = u.id AND g.result = '1-0') THEN 1 ELSE 0 END) AS losses
         FROM games g JOIN users u ON u.id = g.white_id OR u.id = g.black_id
-        WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online', 'friend')
+        WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online', 'friend', 'tour')
           AND timezone('Asia/Tashkent', g.updated_at) >= ${since}
           AND u.blocked = 0${catClause}
         GROUP BY u.id, u.first_name, u.username, u.avatar_key, u.premium, u.premium_until, u.elo
@@ -2122,14 +2124,14 @@ api.get('/rankings', wrap(async (req, res) => {
         u.${col} AS elo,
         COALESCE((
           SELECT COUNT(*) FROM games g
-          WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online','friend')
+          WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online', 'friend', 'tour')
             AND (g.white_id = u.id OR g.black_id = u.id)${catClause}
         ), 0) AS games
       FROM users u
       WHERE u.blocked = 0
         AND EXISTS (
           SELECT 1 FROM games g
-          WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online','friend')
+          WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online', 'friend', 'tour')
             AND (g.white_id = u.id OR g.black_id = u.id)${catClause}
         )
       ORDER BY u.${col} DESC, lower(COALESCE(u.first_name, '')) ASC
@@ -2165,7 +2167,7 @@ api.get('/rankings', wrap(async (req, res) => {
           SUM(CASE WHEN g.result = '1/2-1/2' THEN 1 ELSE 0 END) AS draws,
           SUM(CASE WHEN (g.white_id = u.id AND g.result = '0-1') OR (g.black_id = u.id AND g.result = '1-0') THEN 1 ELSE 0 END) AS losses
         FROM games g JOIN users u ON u.id = g.white_id OR u.id = g.black_id
-        WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online', 'friend')
+        WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online', 'friend', 'tour')
           AND (timezone('Asia/Tashkent', g.updated_at))::text LIKE ?
           AND (${TC_CASE}) = ?
           AND u.blocked = 0
@@ -4213,6 +4215,11 @@ admin.delete('/announcements/:id', wrap(async (req, res) => {
 }));
 
 api.use('/admin', admin);
+const tournaments = require('./tournaments').create({
+  getGame, finish, claimFlagIfNeeded, pushGame, person, realtime, notify,
+  HttpError, bad, wrap, cleanText, isPremiumActive, isAdmin,
+});
+tournaments.register(api);
 app.use('/api', api);
 
 // ---------- errors ----------
@@ -4295,6 +4302,7 @@ async function boot() {
       }
       // Direct messages are kept for 60 days only
       await purgeOldDms();
+      await tournaments.tick();
     } catch (e) { console.error('[sweeper]', e.message); } finally { sweeping = false; }
   }, SWEEP_MS).unref();
 }

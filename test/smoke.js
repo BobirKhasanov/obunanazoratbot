@@ -407,7 +407,7 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok((await ok('A', 'GET', '/me')).meta.BOARD_THEMES.includes('blue'));
     });
 
-    await step('custom avatar photo: premium only; public image URL', async () => {
+    await step('custom avatar photo: open to all; public image URL', async () => {
       const png = Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
         'base64',
@@ -417,9 +417,8 @@ async function playMoves(game, players, moves, startPly = 0) {
         headers: { 'X-Init-Data': init('B'), 'Content-Type': 'image/png' },
         body: png,
       });
-      assert.strictEqual(denied.status, 403);
-      const deniedBody = await denied.json();
-      assert.strictEqual(deniedBody.code, 'premium_required');
+      assert.strictEqual(denied.status, 201, 'photo upload is open to everyone');
+      await ok('B', 'PATCH', '/me', { avatarKey: null });
 
       const up = await fetch(`${BASE}/api/me/avatar`, {
         method: 'POST',
@@ -435,7 +434,7 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok((img.headers.get('content-type') || '').includes('image/png'));
       assert.strictEqual((await ok('A', 'GET', '/me')).user.avatarKey, uploaded.user.avatarKey);
 
-      await err('B', 'PATCH', '/me', { avatarKey: uploaded.user.avatarKey }, 403, 'premium_required');
+      assert.ok((await call('B', 'PATCH', '/me', { avatarKey: uploaded.user.avatarKey })).status >= 400, "cannot take someone else's photo");
       const cleared = await ok('A', 'PATCH', '/me', { avatarKey: null });
       assert.strictEqual(cleared.user.avatarKey, null);
       assert.strictEqual((await fetch(`${BASE}/api/avatars/${mediaId}`)).status, 404, 'old photo no longer public');

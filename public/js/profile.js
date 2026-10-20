@@ -367,7 +367,7 @@ export function renderProfilePage(ctx) {
         [t('premium_feat_bio'), false, true],
         [t('premium_feat_badge'), false, true],
         [t('premium_feat_analysis'), t('premium_free_n_day', { n: freeAn }), '∞'],
-        [t('premium_feat_tours'), false, t('premium_soon')],
+        [t('premium_feat_tours'), false, true],
       ];
       const cell = (v) => (v === true ? h('span.pc-yes', icon('check', 16))
         : v === false ? h('span.pc-no', '—') : h('span.pc-txt', String(v)));
