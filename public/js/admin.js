@@ -494,6 +494,7 @@ export function openAdmin(onClose) {
     referralReward: 20,
     referralInviteeReward: 10,
     analysisDailyFree: 3,
+    tour: { prize1: 20, prize2: 15, prize3: 10, organizer: 10, organizerBig: 15, bigThreshold: 16, weeklyLimit: 1, dailyJoinLimit: 1 },
   };
   const shopHost = h('div');
 
@@ -510,6 +511,11 @@ export function openAdmin(onClose) {
     if (shop.referralReward == null) shop.referralReward = 20;
     if (shop.referralInviteeReward == null) shop.referralInviteeReward = 10;
     if (shop.analysisDailyFree == null) shop.analysisDailyFree = 3;
+    if (!shop.tour) shop.tour = { prize1: 20, prize2: 15, prize3: 10, organizer: 10, organizerBig: 15, bigThreshold: 16, weeklyLimit: 1, dailyJoinLimit: 1 };
+    const tnum = (key, max) => h('input.input.adm-num-in', {
+      type: 'number', inputmode: 'numeric', value: String(shop.tour[key]), min: '0', max: String(max),
+      oninput: (e) => { shop.tour[key] = Math.floor(Number(e.target.value) || 0); },
+    });
     const num = (key, def, max) => h('input.input.adm-num-in', {
       type: 'number', inputmode: 'numeric', value: String(shop[key] ?? def), min: '0', max: String(max),
       oninput: (e) => { shop[key] = Math.floor(Number(e.target.value) || 0); },
@@ -605,6 +611,7 @@ export function openAdmin(onClose) {
           referralReward,
           referralInviteeReward,
           analysisDailyFree,
+          tour: shop.tour,
         });
         shop = r.shop;
         toast(t('admin_shop_saved')); haptic('success');
@@ -617,6 +624,17 @@ export function openAdmin(onClose) {
       h('div.nx-card-list.admin-analysis-card',
         numRow(t('admin_analysis_free'), num('analysisDailyFree', 3, 100), '/ day')),
       h('p.muted.adm-hint', t('admin_analysis_free_sub')),
+      sectionHead(t('swiss_title')),
+      h('div.nx-card-list.admin-analysis-card',
+        numRow(t('admin_tour_prize1'), tnum('prize1', 1000000), '💎'),
+        numRow(t('admin_tour_prize2'), tnum('prize2', 1000000), '💎'),
+        numRow(t('admin_tour_prize3'), tnum('prize3', 1000000), '💎'),
+        numRow(t('admin_tour_org'), tnum('organizer', 1000000), '💎'),
+        numRow(t('admin_tour_org_big'), tnum('organizerBig', 1000000), '💎'),
+        numRow(t('admin_tour_big_n'), tnum('bigThreshold', 64), ''),
+        numRow(t('admin_tour_weekly'), tnum('weeklyLimit', 50), '/ 7d'),
+        numRow(t('admin_tour_daily'), tnum('dailyJoinLimit', 50), '/ day')),
+      h('p.muted.adm-hint', t('admin_tour_hint')),
       sectionHead(t('admin_premium_plans')),
       plansBox,
       sectionHead(t('shop_packs')),

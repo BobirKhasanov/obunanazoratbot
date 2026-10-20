@@ -149,7 +149,9 @@ CREATE TABLE IF NOT EXISTS tournaments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   finished_at TIMESTAMPTZ
 );
+ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS prize_cfg JSONB;
 CREATE INDEX IF NOT EXISTS idx_tournaments_status ON tournaments(status, starts_at);
+CREATE INDEX IF NOT EXISTS idx_tournaments_creator ON tournaments(creator_id, created_at);
 CREATE TABLE IF NOT EXISTS tournament_players (
   tournament_id INTEGER NOT NULL,
   user_id BIGINT NOT NULL,

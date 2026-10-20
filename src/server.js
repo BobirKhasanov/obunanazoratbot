@@ -800,6 +800,22 @@ function pushSpectatorCount(gameId, row) {
   }
 }
 
+const TOUR_CFG_DEFAULT = { prize1: 20, prize2: 15, prize3: 10, organizer: 10, organizerBig: 15, bigThreshold: 16, weeklyLimit: 1, dailyJoinLimit: 1 };
+/** Tournament economy, editable in the admin shop (stored as one JSON setting). */
+function normalizeTourCfg(raw) {
+  let o = raw;
+  if (typeof raw === 'string') { try { o = JSON.parse(raw); } catch { o = {}; } }
+  o = o && typeof o === 'object' ? o : {};
+  const out = {};
+  for (const [k, def] of Object.entries(TOUR_CFG_DEFAULT)) {
+    const n = Math.floor(Number(o[k]));
+    const max = k === 'weeklyLimit' || k === 'dailyJoinLimit' ? 50 : (k === 'bigThreshold' ? 64 : 1_000_000);
+    const min = k === 'weeklyLimit' || k === 'dailyJoinLimit' || k === 'bigThreshold' ? 1 : 0;
+    out[k] = Number.isFinite(n) && n >= min && n <= max ? n : def;
+  }
+  return out;
+}
+
 function normalizeReferralAmount(raw, fallback) {
   const n = Math.floor(Number(raw));
   if (!(n >= 0 && n <= 1_000_000)) return fallback;
@@ -815,9 +831,10 @@ async function getShopSettings() {
       referralInviteeReward: normalizeReferralAmount(cached.referralInviteeReward, REFERRAL_INVITEE_REWARD),
       puzzleDailyReward: normalizePuzzleDailyReward(cached.puzzleDailyReward),
       analysisDailyFree: normalizeAnalysisDailyFree(cached.analysisDailyFree),
+      tour: normalizeTourCfg(cached.tour),
     };
   }
-  const [priceRaw, plansRaw, packsRaw, payRaw, puzzleRewardRaw, referralRaw, inviteeRaw, analysisFreeRaw] = await Promise.all([
+  const [priceRaw, plansRaw, packsRaw, payRaw, puzzleRewardRaw, referralRaw, inviteeRaw, analysisFreeRaw, tourRaw] = await Promise.all([
     getSetting('premium_price_diamonds', String(PREMIUM_PRICE_FALLBACK)),
     getSetting('premium_plans', JSON.stringify(DEFAULT_PREMIUM_PLANS)),
     getSetting('diamond_packs', JSON.stringify(DEFAULT_DIAMOND_PACKS)),
@@ -826,6 +843,7 @@ async function getShopSettings() {
     getSetting('referral_reward', String(REFERRAL_REWARD)),
     getSetting('referral_invitee_reward', String(REFERRAL_INVITEE_REWARD)),
     getSetting('analysis_daily_free', String(ANALYSIS_DAILY_FREE_FALLBACK)),
+    getSetting('tour_config', JSON.stringify(TOUR_CFG_DEFAULT)),
   ]);
   let premiumPriceDiamonds = Math.floor(Number(priceRaw));
   if (!(premiumPriceDiamonds >= 1 && premiumPriceDiamonds <= 1_000_000)) {
@@ -846,6 +864,7 @@ async function getShopSettings() {
     referralReward: normalizeReferralAmount(referralRaw, REFERRAL_REWARD),
     referralInviteeReward: normalizeReferralAmount(inviteeRaw, REFERRAL_INVITEE_REWARD),
     analysisDailyFree: normalizeAnalysisDailyFree(analysisFreeRaw),
+    tour: normalizeTourCfg(tourRaw),
   };
   await cacheSet('shop:settings', shop, 30_000);
   return shop;
@@ -3787,6 +3806,20 @@ admin.patch('/shop', wrap(async (req, res) => {
     if (!(n >= 0 && n <= 100)) throw bad('Analysis daily free must be 0…100', 'bad_request');
     await setSetting('analysis_daily_free', String(n));
   }
+  if (b.tour !== undefined) {
+    if (!b.tour || typeof b.tour !== 'object') throw bad('Invalid tournament settings', 'bad_request');
+    const cur = (await getShopSettings()).tour;
+    const next = { ...cur };
+    for (const k of Object.keys(TOUR_CFG_DEFAULT)) {
+      if (b.tour[k] === undefined) continue;
+      const n = Math.floor(Number(b.tour[k]));
+      const max = k === 'weeklyLimit' || k === 'dailyJoinLimit' ? 50 : (k === 'bigThreshold' ? 64 : 1_000_000);
+      const min = k === 'weeklyLimit' || k === 'dailyJoinLimit' || k === 'bigThreshold' ? 1 : 0;
+      if (!(n >= min && n <= max)) throw bad(`Tournament setting ${k} must be ${min}…${max}`, 'bad_request');
+      next[k] = n;
+    }
+    await setSetting('tour_config', JSON.stringify(next));
+  }
   await cacheDel('shop:settings');
   res.json({ shop: await getShopSettings() });
 }));
@@ -4217,6 +4250,7 @@ admin.delete('/announcements/:id', wrap(async (req, res) => {
 api.use('/admin', admin);
 const tournaments = require('./tournaments').create({
   getGame, finish, claimFlagIfNeeded, pushGame, person, realtime, notify,
+  getShopSettings, ledgerDiamonds, tashkentDateKey, invalidateUserCache,
   HttpError, bad, wrap, cleanText, isPremiumActive, isAdmin,
 });
 tournaments.register(api);

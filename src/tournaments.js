@@ -18,7 +18,7 @@ const START_MINUTES = [5, 10, 15, 30, 60, 180, 1440];
  *   getGame, finish, claimFlagIfNeeded, pushGame, person, realtime, notify, isPremiumActive, isAdmin, gameId, HttpError, bad, wrap, cleanText
  */
 function create(d) {
-  const { getGame, finish, claimFlagIfNeeded, pushGame, person, realtime, notify } = d;
+  const { getGame, finish, claimFlagIfNeeded, pushGame, person, realtime, notify, getShopSettings, ledgerDiamonds, invalidateUserCache } = d;
 
   const getT = (id) => db.prepare('SELECT * FROM tournaments WHERE id = ?').get(id);
   const playersOf = (id) => db.prepare(`
@@ -69,16 +69,39 @@ function create(d) {
     if (bye) tell(bye, `♟ ${t.name} — ${round}/${t.rounds}: bye (+1)`);
   }
 
+  async function pay(uid, amount, kind, meta) {
+    const n = Math.floor(Number(amount) || 0);
+    if (n <= 0) return;
+    await db.prepare('UPDATE users SET diamonds = diamonds + ? WHERE id = ?').run(n, uid);
+    await ledgerDiamonds(uid, n, kind, meta);
+    invalidateUserCache(uid);
+  }
+
   async function finishTournament(id) {
+    // atomic: only one caller gets to finish (and pay) a tournament
+    const upd = await db.prepare("UPDATE tournaments SET status = 'finished', round_state = NULL, next_at = NULL, finished_at = now() WHERE id = ? AND status = 'running'").run(id);
+    if (!upd.changes) return;
     const t = await getT(id);
-    if (!t || t.status === 'finished') return;
-    await db.prepare("UPDATE tournaments SET status = 'finished', round_state = NULL, next_at = NULL, finished_at = now() WHERE id = ?").run(id);
-    const rows = standings(toSwissPlayers(await playersOf(id)), toSwissGames(await gamesOf(id)));
+    const prow = await playersOf(id);
+    const rows = standings(toSwissPlayers(prow), toSwissGames(await gamesOf(id)));
+    const out = new Set(prow.filter((p) => p.withdrawn).map((p) => Number(p.id)));
+    const cfg = t.prize_cfg || {};
+    const prizes = [cfg.prize1, cfg.prize2, cfg.prize3].map((x) => Number(x) || 0);
     const medals = ['🥇', '🥈', '🥉'];
+    const eligible = rows.filter((r) => !out.has(r.id));
     for (const r of rows) {
-      const m = medals[r.rank - 1] || '';
-      tell(r.id, `🏁 ${t.name}: #${r.rank} ${m} · ${r.points}`);
+      const k = eligible.indexOf(r);
+      const prize = k >= 0 && k < 3 ? prizes[k] : 0;
+      if (prize > 0) await pay(r.id, prize, 'tour_prize', { tournamentId: id, place: k + 1 });
+      tell(r.id, `🏁 ${t.name}: #${r.rank} ${medals[k] || ''} · ${r.points}${prize > 0 ? ` · +${prize} 💎` : ''}`);
     }
+    const big = prow.length > (Number(cfg.bigThreshold) || 16);
+    const orgPay = big ? Number(cfg.organizerBig) || 0 : Number(cfg.organizer) || 0;
+    if (orgPay > 0) {
+      await pay(Number(t.creator_id), orgPay, 'tour_organizer', { tournamentId: id, players: prow.length });
+      tell(Number(t.creator_id), `🎖 ${t.name}: +${orgPay} 💎`);
+    }
+    await db.prepare('UPDATE tournaments SET prize_cfg = ?::jsonb WHERE id = ?').run(JSON.stringify({ ...cfg, paidOrganizer: orgPay }), id);
   }
 
   async function startTournament(t) {
@@ -149,8 +172,16 @@ function create(d) {
       startsAt: new Date(t.starts_at).toISOString(), nextAt: t.next_at ? new Date(t.next_at).toISOString() : null,
       players: n, joined: !!mine && !mine.withdrawn, withdrawn: !!(mine && mine.withdrawn),
       creator: await person(t.creator_id), mine: Number(t.creator_id) === Number(uid),
+      prizes: t.prize_cfg ? [t.prize_cfg.prize1, t.prize_cfg.prize2, t.prize_cfg.prize3].map((x) => Number(x) || 0) : [0, 0, 0],
+      organizerReward: t.prize_cfg ? (t.prize_cfg.paidOrganizer != null ? t.prize_cfg.paidOrganizer : (n > (t.prize_cfg.bigThreshold || 16) ? t.prize_cfg.organizerBig : t.prize_cfg.organizer)) : 0,
     };
   };
+
+  /** Tournaments (not cancelled) the user joined today (Tashkent), other than `exceptId`. */
+  const joinedToday = async (uid, exceptId = 0) => Number((await db.prepare(`
+    SELECT COUNT(*)::int AS n FROM tournament_players tp JOIN tournaments t ON t.id = tp.tournament_id
+    WHERE tp.user_id = ? AND t.status <> 'cancelled' AND t.id <> ?
+      AND (tp.joined_at AT TIME ZONE 'Asia/Tashkent')::date = (now() AT TIME ZONE 'Asia/Tashkent')::date`).get(uid, exceptId)).n);
 
   function register(api) {
     const { HttpError, bad, wrap, cleanText, isPremiumActive, isAdmin } = d;
@@ -163,7 +194,8 @@ function create(d) {
         ORDER BY CASE status WHEN 'running' THEN 0 WHEN 'registration' THEN 1 ELSE 2 END, starts_at ASC LIMIT 40`).all();
       const list = [];
       for (const t of rows) list.push(await brief(t, req.user.id));
-      res.json({ tournaments: list, canCreate: canCreate(req), options: { timeControls: TC_ALLOWED, startMinutes: START_MINUTES, minPlayers: MIN_PLAYERS, maxPlayers: MAX_PLAYERS } });
+      const cfg = (await getShopSettings()).tour;
+      res.json({ tournaments: list, canCreate: canCreate(req), rules: cfg, options: { timeControls: TC_ALLOWED, startMinutes: START_MINUTES, minPlayers: MIN_PLAYERS, maxPlayers: MAX_PLAYERS } });
     }));
 
     api.post('/tournaments', wrap(async (req, res) => {
@@ -174,12 +206,16 @@ function create(d) {
       const maxPlayers = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Math.floor(Number(b.maxPlayers) || 32)));
       const rounds = Math.max(3, Math.min(9, Math.floor(Number(b.rounds) || defaultRounds(maxPlayers))));
       const mins = START_MINUTES.includes(Number(b.startsInMin)) ? Number(b.startsInMin) : 15;
+      const cfg = (await getShopSettings()).tour;
       if (!req.isAdmin) {
         const mineOpen = await db.prepare("SELECT 1 AS x FROM tournaments WHERE creator_id = ? AND status IN ('registration', 'running')").get(req.user.id);
         if (mineOpen) throw bad('You already have an active tournament', 'tour_limit');
+        const weekly = Number((await db.prepare("SELECT COUNT(*)::int AS n FROM tournaments WHERE creator_id = ? AND status <> 'cancelled' AND created_at > now() - interval '7 days'").get(req.user.id)).n);
+        if (weekly >= cfg.weeklyLimit) throw bad('Weekly tournament limit reached', 'tour_weekly');
+        if (await joinedToday(req.user.id) >= cfg.dailyJoinLimit) throw bad('Daily tournament limit reached', 'tour_daily');
       }
-      const row = await db.prepare(`INSERT INTO tournaments (name, creator_id, time_control, rounds, max_players, starts_at)
-        VALUES (?, ?, ?, ?, ?, now() + (? * interval '1 minute')) RETURNING id`).get(name, req.user.id, tc, rounds, maxPlayers, mins);
+      const row = await db.prepare(`INSERT INTO tournaments (name, creator_id, time_control, rounds, max_players, starts_at, prize_cfg)
+        VALUES (?, ?, ?, ?, ?, now() + (? * interval '1 minute'), ?::jsonb) RETURNING id`).get(name, req.user.id, tc, rounds, maxPlayers, mins, JSON.stringify(cfg));
       await db.prepare('INSERT INTO tournament_players (tournament_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING').run(row.id, req.user.id);
       res.status(201).json({ tournament: await brief(await getT(row.id), req.user.id) });
     }));
@@ -216,6 +252,7 @@ function create(d) {
       const n = Number((await db.prepare('SELECT COUNT(*)::int AS n FROM tournament_players WHERE tournament_id = ?').get(t.id)).n);
       const has = await db.prepare('SELECT 1 AS x FROM tournament_players WHERE tournament_id = ? AND user_id = ?').get(t.id, req.user.id);
       if (!has && n >= t.max_players) throw bad('Tournament is full', 'tour_full');
+      if (!has && !req.isAdmin && await joinedToday(req.user.id, t.id) >= (await getShopSettings()).tour.dailyJoinLimit) throw bad('You can join one tournament per day', 'tour_daily');
       await db.prepare('INSERT INTO tournament_players (tournament_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING').run(t.id, req.user.id);
       res.json({ tournament: await brief(t, req.user.id) });
     }));

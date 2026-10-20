@@ -2886,3 +2886,4 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .sw-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
 .sw-chip { padding: 8px 14px; min-height: 36px; border-radius: 12px; border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; font: inherit; }
 .sw-chip.on { background: var(--accent, #2f81f7); border-color: transparent; color: #fff; }
+.sw-prize { margin-top: 8px; font-size: 13px; font-weight: 600; color: #f5b73b; }

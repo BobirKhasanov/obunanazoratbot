@@ -21,6 +21,7 @@ const statusLabel = (x) => {
   if (x.status === 'finished') return t('swiss_st_done');
   return t('swiss_st_cancel');
 };
+const prizeLine = (x) => (x.prizes && x.prizes.some((v) => v > 0) ? `🥇 ${x.prizes[0]} · 🥈 ${x.prizes[1]} · 🥉 ${x.prizes[2]} 💎` : '');
 const POINT = (p) => (Number.isInteger(p) ? String(p) : p.toFixed(1));
 
 export function swissCard(x, onOpen) {
@@ -31,6 +32,7 @@ export function swissCard(x, onOpen) {
       h('span', `${x.timeControl}`),
       h('span', t('swiss_rounds_n', { n: x.rounds })),
       h('span', icon('users', 13), ` ${x.players}/${x.maxPlayers}`)),
+    prizeLine(x) ? h('div.sw-prize', prizeLine(x)) : null,
     h('div.sw-card-f', h('span.sw-st' + (live ? '.on' : ''), statusLabel(x)),
       x.status === 'registration' ? h('span.sw-when', untilLabel(x.startsAt)) : null));
 }
@@ -45,7 +47,7 @@ export function swissSection(data, { onRefresh, meta, onClose }) {
       document.dispatchEvent(new CustomEvent('open-premium'));
       return;
     }
-    openCreate(data.options || {}, (tr) => { onRefresh(); open(tr); });
+    openCreate({ ...(data.options || {}), rules: data.rules }, (tr) => { onRefresh(); open(tr); });
   };
   return [
     sectionHead(t('swiss_title'), create, t('swiss_create')),
@@ -76,6 +78,8 @@ function openCreate(options, onDone) {
     h('div.label', t('swiss_max')), chips([8, 16, 32, 64], 'max', (v) => String(v)),
     h('div.label', t('swiss_starts')), chips(starts, 'mins', minLabel),
     h('p.muted', t('swiss_rules', { n: options.minPlayers || 4 })),
+    options.rules ? h('p.muted', t('swiss_org_reward', { n: options.rules.organizer }) + (options.rules.organizerBig !== options.rules.organizer ? ` · >${options.rules.bigThreshold}: +${options.rules.organizerBig} 💎` : '')) : null,
+    options.rules ? h('p.muted', t('swiss_limits', { w: options.rules.weeklyLimit, d: options.rules.dailyJoinLimit })) : null,
     h('button.cta', {
       type: 'button',
       onclick: async () => {
@@ -158,6 +162,8 @@ export function openSwiss(id, { onRefresh, meta, onClose } = {}) {
         h('div.sw-head',
           h('h2', x.name),
           h('div.sw-meta', h('span', x.timeControl), h('span', t('swiss_rounds_n', { n: x.rounds })), h('span', icon('users', 13), ` ${x.players}/${x.maxPlayers}`), h('span.sw-st' + (x.status === 'running' ? '.on' : ''), statusLabel(x))),
+          prizeLine(x) ? h('div.sw-prize', t('swiss_prizes') + ': ' + prizeLine(x)) : null,
+          x.organizerReward ? h('p.muted', t('swiss_org_reward', { n: x.organizerReward })) : null,
           x.status === 'registration' ? h('p.muted', t('swiss_starts_at', { w: untilLabel(x.startsAt) })) : null,
           x.status === 'finished' && d.standing[0] ? h('div.sw-winner', '🏆 ', d.standing[0].name) : null,
           x.status === 'cancelled' ? h('p.muted', t('swiss_st_cancel')) : null),

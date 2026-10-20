@@ -27,6 +27,7 @@ const err = async (who, method, p, body, status, code) => {
   assert.strictEqual(r.status, status, `${method} ${p}: expected ${status}, got ${r.status} ${JSON.stringify(r.data)}`);
   if (code) assert.strictEqual(r.data.code, code);
 };
+const bal = async (k) => Number((await ok(k, 'GET', '/me')).user.diamonds || 0);
 let passed = 0;
 const step = async (n, f) => { await f(); passed++; console.log(`ok  ${n}`); };
 const waitFor = async (fn, ms = 20000, what = 'condition') => { const t0 = Date.now(); for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timeout: ${what}`); await sleep(200); } };
@@ -70,8 +71,21 @@ const waitFor = async (fn, ms = 20000, what = 'condition') => { const t0 = Date.
       assert.strictEqual((await ok('E', 'GET', `/tournaments/${id}`)).standing.length, 5);
     });
 
+    await step('one tournament per day per player (admins exempt)', async () => {
+      const x = await ok('ADMIN', 'POST', '/tournaments', { name: 'Same day' });
+      await err('A', 'POST', `/tournaments/${x.tournament.id}/join`, null, 400, 'tour_daily');
+      await err('P', 'POST', `/tournaments/${x.tournament.id}/join`, null, 400, 'tour_daily');
+      await ok('ADMIN', 'POST', `/tournaments/${x.tournament.id}/cancel`); // cancelled ones do not count
+      const y = await ok('ADMIN', 'POST', '/tournaments', { name: 'Admin two' });
+      await ok('ADMIN', 'POST', `/tournaments/${y.tournament.id}/cancel`);
+      const rules = (await ok('A', 'GET', '/tournaments')).rules;
+      assert.deepStrictEqual([rules.prize1, rules.prize2, rules.prize3, rules.organizer, rules.organizerBig, rules.bigThreshold, rules.weeklyLimit, rules.dailyJoinLimit], [20, 15, 10, 10, 15, 16, 1, 1]);
+    });
+
     const players = ['P', 'A', 'B', 'C', 'D'];
+    const before = {};
     await step('plays 3 Swiss rounds with an odd field (byes, no rematches)', async () => {
+      for (const k of players) before[k] = await bal(k);
       await ok('P', 'POST', `/tournaments/${id}/start`);
       const seen = new Set();
       const byeSeen = new Set();
@@ -106,6 +120,27 @@ const waitFor = async (fn, ms = 20000, what = 'condition') => { const t0 = Date.
       assert.strictEqual(done.standing[0].rank, 1);
       assert.ok(done.standing[0].points >= done.standing[1].points);
       assert.strictEqual(byeSeen.size, 3);
+      // prizes 20/15/10 to the top 3, organizer +10 (5 players <= 16)
+      const prizeOf = [20, 15, 10];
+      const top = done.standing.filter((x) => !x.withdrawn);
+      for (const k of players) {
+        const rank = top.findIndex((x) => x.id === U[k].id);
+        const expect = (rank >= 0 && rank < 3 ? prizeOf[rank] : 0) + (k === 'P' ? 10 : 0);
+        assert.strictEqual(await bal(k) - before[k], expect, `diamonds for ${k} (rank ${rank + 1})`);
+      }
+      const ledger = await pg.q("SELECT kind, count(*)::int AS n FROM diamond_ledger WHERE kind LIKE 'tour_%' GROUP BY kind ORDER BY kind");
+      assert.deepStrictEqual(ledger, [{ kind: 'tour_organizer', n: 1 }, { kind: 'tour_prize', n: 3 }]);
+      assert.strictEqual((await ok('A', 'GET', `/tournaments/${id}`)).tournament.prizes.join(), '20,15,10');
+    });
+
+    await step('weekly organizing limit; admin can change all rules', async () => {
+      await err('P', 'POST', '/tournaments', { name: 'Again' }, 400, 'tour_weekly');
+      await err('P', 'PATCH', '/admin/shop', { tour: { prize1: 1 } }, 404);
+      await err('ADMIN', 'PATCH', '/admin/shop', { tour: { prize1: -5 } }, 400);
+      await err('ADMIN', 'PATCH', '/admin/shop', { tour: { weeklyLimit: 0 } }, 400);
+      const r = await ok('ADMIN', 'PATCH', '/admin/shop', { tour: { weeklyLimit: 5, dailyJoinLimit: 5, prize1: 50, organizer: 7, organizerBig: 99, bigThreshold: 3 } });
+      assert.strictEqual(r.shop.tour.prize1, 50); assert.strictEqual(r.shop.tour.prize2, 15);
+      await sleep(600);
     });
 
     await step('tournament games appear in history and are rated', async () => {
@@ -116,11 +151,14 @@ const waitFor = async (fn, ms = 20000, what = 'condition') => { const t0 = Date.
     await step('no-show forfeits and removes the player; empty field ends the tournament', async () => {
       const r = await ok('P', 'POST', '/tournaments', { name: 'Sleepers', timeControl: '3+0', rounds: 3, startsInMin: 5 });
       const t2 = r.tournament.id;
+      assert.strictEqual(r.tournament.prizes[0], 50, 'new tournaments use the new prize table');
+      const pBefore = await bal('P');
       for (const k of ['A', 'B', 'C']) await ok(k, 'POST', `/tournaments/${t2}/join`);
       await ok('P', 'POST', `/tournaments/${t2}/start`);
       const d = await waitFor(async () => { const x = await ok('P', 'GET', `/tournaments/${t2}`); return x.tournament.status === 'finished' ? x : null; }, 40000, 'no-show finish');
       assert.ok(d.standing.some((s) => s.withdrawn), 'someone was removed');
       assert.strictEqual(d.tournament.status, 'finished');
+      assert.ok(await bal('P') - pBefore >= 99, 'organizer got the big-field reward (4 players > threshold 3)');
     });
 
     await step('cancel and too-few-players behave', async () => {
