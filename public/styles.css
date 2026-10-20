@@ -2829,3 +2829,16 @@ html[data-ios="1"] .rv-bar i, html[data-perf="lite"] .rv-bar i { transition: non
 /* O'ynash: compact mode picker (titles only) keeps the page short */
 .page[data-page="play"] .nx-mode.compact small { display: none; }
 .page[data-page="play"] .nx-mode.compact { min-height: 0; padding-bottom: 12px; }
+
+/* ---- Android Lite / narrow-phone fixes ---- */
+/* Header crown was 30px + 8px margin: on 360px phones it slid under the inbox button */
+.nx-hdr-name .prem-ic { width: 22px; height: 22px; margin-left: 0; vertical-align: middle; }
+.nx-hdr-name .prem-ic .ic svg { width: 14px; height: 14px; }
+/* Lite has no backdrop blur, so a translucent dock let list rows show through the labels */
+html[data-perf="lite"] { --nav-bg: #0f1622; }
+html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
+.page[data-page="play"] .nx-daily { margin: 12px 0; }
+.nx-seeall, .nx-chip-s { min-height: 32px; display: inline-flex; align-items: center; }
+/* keep the 22px crown but give it a 36px touch area */
+.nx-hdr-name .prem-ic { position: relative; }
+.nx-hdr-name .prem-ic::after { content: ""; position: absolute; inset: -8px; }
