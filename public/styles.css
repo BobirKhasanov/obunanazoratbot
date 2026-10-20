@@ -2842,3 +2842,14 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 /* keep the 22px crown but give it a 36px touch area */
 .nx-hdr-name .prem-ic { position: relative; }
 .nx-hdr-name .prem-ic::after { content: ""; position: absolute; inset: -8px; }
+
+/* Premium: free vs premium comparison */
+.prem-cmp { border-radius: 16px; overflow: hidden; background: var(--card, rgba(255,255,255,.04)); margin: 4px 0 14px; }
+.pc-row { display: grid; grid-template-columns: 1fr 72px 72px; align-items: center; gap: 4px; padding: 11px 12px; border-top: 1px solid rgba(128,128,128,.14); font-size: 14px; }
+.pc-row.pc-head { border-top: 0; font-size: 12px; font-weight: 700; opacity: .85; }
+.pc-col { text-align: center; }
+.pc-col.gold { color: #f5b73b; font-weight: 700; }
+.pc-yes { display: inline-flex; color: #34c759; } .pc-col.gold .pc-yes { color: #f5b73b; }
+.pc-no { opacity: .4; }
+.pc-txt { font-size: 12px; font-weight: 600; }
+@media (max-width: 360px) { .pc-row { grid-template-columns: 1fr 58px 58px; padding: 10px 8px; font-size: 13px; } }

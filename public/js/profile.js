@@ -359,12 +359,21 @@ export function renderProfilePage(ctx) {
           openPremium();
         } catch (e) { fail(e); }
       };
-      const feats = [
-        t('premium_feat_avatar'),
-        t('premium_feat_style'),
-        t('premium_feat_bio'),
-        t('premium_feat_badge'),
+      const freeAn = (state.meta && state.meta.analysisDailyFree != null) ? state.meta.analysisDailyFree : 3;
+      const rows = [
+        [t('premium_feat_photo'), true, true],
+        [t('premium_feat_avatar'), false, true],
+        [t('premium_feat_style'), false, true],
+        [t('premium_feat_bio'), false, true],
+        [t('premium_feat_badge'), false, true],
+        [t('premium_feat_analysis'), t('premium_free_n_day', { n: freeAn }), '∞'],
+        [t('premium_feat_tours'), false, t('premium_soon')],
       ];
+      const cell = (v) => (v === true ? h('span.pc-yes', icon('check', 16))
+        : v === false ? h('span.pc-no', '—') : h('span.pc-txt', String(v)));
+      const cmp = h('div.prem-cmp',
+        h('div.pc-row.pc-head', h('span.pc-name', ''), h('span.pc-col', t('premium_col_free')), h('span.pc-col.gold', t('premium')) ),
+        ...rows.map(([name, f, p]) => h('div.pc-row', h('span.pc-name', name), h('span.pc-col', cell(f)), h('span.pc-col.gold', cell(p)))));
       return [
         ...subTop(t('premium'), close),
         h('div.card.gems',
@@ -373,7 +382,7 @@ export function renderProfilePage(ctx) {
           u.premium && untilLabel ? h('div.gems-ok', t('premium_until', { d: untilLabel })) : null,
           u.premium && !untilLabel ? h('div.gems-ok', t('premium_have')) : null),
         h('div.h2', t('premium_unlocks')),
-        h('ul.prem-feats', feats.map((line) => h('li', line))),
+        cmp,
         h('div.h2', t('premium_plans')),
         u.premium
           ? h('p.muted', t('premium_wait_expiry'))
