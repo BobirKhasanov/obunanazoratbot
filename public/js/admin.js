@@ -1,5 +1,5 @@
 // Admin panel: nx hub (overview stats + grouped sections) → live, users, shop, promos, messages, content.
-import { h, icon, haptic, toast, api, fail, getInitData, avatar, avBlock, confirmSheet } from './ui.js';
+import { h, icon, haptic, toast, api, fail, getInitData, avatar, avBlock, confirmSheet, pillBar } from './ui.js';
 import { t, LANGS, LANG_NAMES } from './i18n.js';
 import { sectionHead, statCard, emptyNote, filterChip } from './neonui.js';
 import { openScreen } from './screen.js';
@@ -496,7 +496,8 @@ export function openAdmin(onClose) {
     analysisDailyFree: 3,
     tour: { prize1: 20, prize2: 15, prize3: 10, organizer: 10, organizerBig: 15, bigThreshold: 16, weeklyLimit: 1, dailyJoinLimit: 1 },
   };
-  const shopHost = h('div');
+  const shopHost = h('div.sx');
+  let shopTab = 'premium';
 
   function drawShop() {
     if (!shop.premiumPlans || !shop.premiumPlans.length) {
@@ -520,12 +521,12 @@ export function openAdmin(onClose) {
       type: 'number', inputmode: 'numeric', value: String(shop[key] ?? def), min: '0', max: String(max),
       oninput: (e) => { shop[key] = Math.floor(Number(e.target.value) || 0); },
     });
-    const numRow = (label, input, unit) => h('div.adm-num', h('span', label), input, h('small', unit));
+    const numRow = (label, input, unit) => h('div.sx-row', h('span.sx-lbl', label), h('span.sx-fld', input, unit ? h('small.sx-unit', unit) : null));
     const payIn = h('input.input', {
       value: shop.payUsername, maxlength: 64,
       oninput: (e) => { shop.payUsername = e.target.value.replace(/^@/, ''); },
     });
-    const plansBox = h('div.nx-card-list', ...(shop.premiumPlans || []).map((p) => numRow(
+    const plansBox = h('div', ...(shop.premiumPlans || []).map((p) => numRow(
       p.months === 12 ? t('premium_plan_year') : t('premium_plan_months', { n: p.months }),
       h('input.input.adm-num-in', {
         type: 'number', inputmode: 'numeric', value: String(p.diamonds),
@@ -545,7 +546,7 @@ export function openAdmin(onClose) {
     };
     const redrawPacks = () => {
       const packs = shop.diamondPacks || [];
-      packsBox.replaceChildren(cardList(packs.map((p, i) => h('div.adm-row.admin-pack-row',
+      packsBox.replaceChildren(...packs.map((p, i) => h('div.sx-pack',
         h('div.admin-pack-order',
           h('button.adm-ic.sm', {
             type: 'button',
@@ -570,7 +571,7 @@ export function openAdmin(onClose) {
         }),
         h('small.adm-unit', "so'm"),
         icBtn('trash', t('remove'), () => { shop.diamondPacks.splice(i, 1); redrawPacks(); }, 'danger'),
-      )), t('admin_pack_need')));
+      )));
     };
     redrawPacks();
     const save = async () => {
@@ -618,46 +619,57 @@ export function openAdmin(onClose) {
         drawShop();
       } catch (e) { fail(e); }
     };
+    const group = (title, ...kids) => h('div.sx-group', title ? h('div.sx-gt', title) : null, h('div.sx-card', ...kids.filter(Boolean)));
+    const hint = (txt) => h('p.sx-hint', txt);
+    const tabs = {
+      premium: () => [
+        group(t('admin_premium_plans'), plansBox),
+        group(t('analyze_title'), numRow(t('admin_analysis_free'), num('analysisDailyFree', 3, 100), '/ ' + t('swiss_day_short'))),
+        hint(t('admin_analysis_free_sub')),
+      ],
+      diamonds: () => [
+        group(t('shop_packs'), packsBox,
+          h('button.sx-add', {
+            type: 'button',
+            onclick: () => {
+              if (!Array.isArray(shop.diamondPacks)) shop.diamondPacks = [];
+              shop.diamondPacks.push({ diamonds: 100, sum: 100000 });
+              redrawPacks();
+            },
+          }, icon('plus', 16), t('admin_add_pack'))),
+        group(t('admin_pay_user'), h('div.sx-pad', payIn)),
+      ],
+      rewards: () => [
+        group(t('admin_sec_rewards'), numRow(t('admin_puzzle_reward'), num('puzzleDailyReward', 2, 1000000), '💎')),
+        hint(t('admin_puzzle_reward_sub')),
+        group(t('admin_referral_rewards'),
+          numRow(t('admin_referral_inviter'), num('referralReward', 20, 1000000), '💎'),
+          numRow(t('admin_referral_invitee'), num('referralInviteeReward', 10, 1000000), '💎')),
+        hint(t('admin_referral_sub')),
+      ],
+      tours: () => [
+        group(t('swiss_prizes'),
+          numRow('🥇 ' + t('admin_tour_prize1'), tnum('prize1', 1000000), '💎'),
+          numRow('🥈 ' + t('admin_tour_prize2'), tnum('prize2', 1000000), '💎'),
+          numRow('🥉 ' + t('admin_tour_prize3'), tnum('prize3', 1000000), '💎')),
+        group(t('admin_tour_org_sec'),
+          numRow(t('admin_tour_org'), tnum('organizer', 1000000), '💎'),
+          numRow(t('admin_tour_org_big'), tnum('organizerBig', 1000000), '💎'),
+          numRow(t('admin_tour_big_n'), tnum('bigThreshold', 64), '')),
+        group(t('admin_tour_limits_sec'),
+          numRow(t('admin_tour_weekly'), tnum('weeklyLimit', 50), '/ 7 ' + t('swiss_day_short')),
+          numRow(t('admin_tour_daily'), tnum('dailyJoinLimit', 50), '/ ' + t('swiss_day_short'))),
+        hint(t('admin_tour_hint')),
+      ],
+    };
+    const tabBar = pillBar([
+      ['premium', t('sx_t_premium')], ['diamonds', t('sx_t_diamonds')], ['rewards', t('sx_t_rewards')], ['tours', t('sx_t_tours')],
+    ], shopTab, (v) => { shopTab = v; drawShop(); }, { className: 'seg sx-tabs' });
     shopHost.replaceChildren(
       h('p.muted.adm-lead', t('admin_shop_sub')),
-      sectionHead(t('analyze_title')),
-      h('div.nx-card-list.admin-analysis-card',
-        numRow(t('admin_analysis_free'), num('analysisDailyFree', 3, 100), '/ day')),
-      h('p.muted.adm-hint', t('admin_analysis_free_sub')),
-      sectionHead(t('swiss_title')),
-      h('div.nx-card-list.admin-analysis-card',
-        numRow(t('admin_tour_prize1'), tnum('prize1', 1000000), '💎'),
-        numRow(t('admin_tour_prize2'), tnum('prize2', 1000000), '💎'),
-        numRow(t('admin_tour_prize3'), tnum('prize3', 1000000), '💎'),
-        numRow(t('admin_tour_org'), tnum('organizer', 1000000), '💎'),
-        numRow(t('admin_tour_org_big'), tnum('organizerBig', 1000000), '💎'),
-        numRow(t('admin_tour_big_n'), tnum('bigThreshold', 64), ''),
-        numRow(t('admin_tour_weekly'), tnum('weeklyLimit', 50), '/ 7d'),
-        numRow(t('admin_tour_daily'), tnum('dailyJoinLimit', 50), '/ day')),
-      h('p.muted.adm-hint', t('admin_tour_hint')),
-      sectionHead(t('admin_premium_plans')),
-      plansBox,
-      sectionHead(t('shop_packs')),
-      packsBox,
-      h('button.nx-btn-o.sm.adm-add', {
-        type: 'button',
-        onclick: () => {
-          if (!Array.isArray(shop.diamondPacks)) shop.diamondPacks = [];
-          shop.diamondPacks.push({ diamonds: 100, sum: 100000 });
-          redrawPacks();
-        },
-      }, icon('plus', 16), t('admin_add_pack')),
-      sectionHead(t('admin_pay_user')),
-      payIn,
-      sectionHead(t('admin_sec_rewards')),
-      h('div.nx-card-list', numRow(t('admin_puzzle_reward'), num('puzzleDailyReward', 2, 1000000), '💎')),
-      h('p.muted.adm-hint', t('admin_puzzle_reward_sub')),
-      h('div.label', t('admin_referral_rewards')),
-      h('div.nx-card-list',
-        numRow(t('admin_referral_inviter'), num('referralReward', 20, 1000000), '💎'),
-        numRow(t('admin_referral_invitee'), num('referralInviteeReward', 10, 1000000), '💎')),
-      h('p.muted.adm-hint', t('admin_referral_sub')),
-      h('div.adm-save', primaryBtn('check', t('save'), save)),
+      tabBar,
+      ...tabs[shopTab](),
+      h('div.sx-save', primaryBtn('check', t('save'), save)),
     );
   }
 

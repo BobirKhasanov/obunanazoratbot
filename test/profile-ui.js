@@ -153,7 +153,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261018nx48"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261018nx48'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261018nx50"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261018nx50'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -187,7 +187,7 @@ assert.ok(app.includes('dismissBootRevealApp') && read('public/js/entry.js').inc
 assert.ok(!read('public/js/inbox.js').includes('/chat/global') && read('public/js/inbox.js').includes('replyToId'), 'DM reply kept; global chat removed');
 assert.ok(read('public/js/inbox.js').includes('inbox-peer') && read('public/js/inbox.js').includes('openUserProfile') && read('public/js/inbox.js').includes('chat-av'), 'DM/global name+avatar open profile');
 assert.ok(read('public/js/userprofile.js').includes('send_message') && read('public/js/userprofile.js').includes('openChatWithUser'), 'visit profile → send message');
-assert.ok(admin.includes('admin-analysis-card') && admin.includes("t('analyze_title')"), 'admin shop surfaces game analysis');
+assert.ok(admin.includes('sx-tabs') && admin.includes("t('analyze_title')"), 'admin shop surfaces game analysis');
 assert.ok(!read('src/server.js').includes("'/chat/global'") && read('src/server.js').includes("kind <> 'dm'"), 'global chat removed; bell ignores DM');
 assert.ok(read('src/server.js').includes('purgeOldDms') && read('src/server.js').includes('DM_TTL_DAYS = 60'), 'DMs are deleted after 60 days');
 assert.ok(/\.avwrap \.prem-ring[\s\S]{0,120}inset:\s*0/.test(css), 'premium ring stays within avatar wrap');

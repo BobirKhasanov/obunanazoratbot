@@ -257,6 +257,8 @@ export function openBroadcast(it) {
 }
 
 let showAllLive = false;
+/** Turnirlar page tab: 'games' (live now) | 'swiss' (our tournaments) | 'intl' (Lichess broadcasts) */
+let pageTab = 'games';
 
 /** Finished games ready for engine analysis (opened from the Tahlil stat card). */
 function openAnalysisList(recent) {
@@ -320,27 +322,33 @@ async function renderBot(mount, meta, onClose, onRefresh) {
       statCard('users', t('stat_online'), onlineCount, 'green'),
       statCard('gamepad', t('stat_games'), lobby.liveGames != null ? lobby.liveGames : games.length, 'blue'),
       statCard('sparkles', t('stat_analysis'), recent.length, 'gold', () => openAnalysisList(recent))),
-    sectionHead(t('live_now_sec'), more(showAllLive || games.length <= 3, () => { showAllLive = true; }), t('see_all')),
-    games.length
-      ? h('div.nx-list', ...(showAllLive ? games : games.slice(0, 3)).map((g) => liveMatchRow(g, { onWatch: watch, onProfile: openProfile })))
-      : emptyNote(t('live_no_bot_games')),
-    ...swissSection(swiss, { onRefresh, meta, onClose }),
-    sectionHead(t('live_tourneys_sec'), () => openTour(null), t('see_all')),
-    tourCards.length
-      ? h('div.nx-hscroll.nx-tour-strip', { 'data-noswipe': '' },
-        ...tourCards.map((it, i) => tourneyCard({
-          title: tourTitle(it),
-          sub: [tourSubtitle(it), it.round && it.round.name].filter(Boolean).join(' · '),
-          live: ongoing(it),
-          soon: ongoing(it) ? '' : startsLabel(it.round && it.round.startsAt),
-          art: i % 2 ? '/img/ui/tour-rapid.webp' : '/img/ui/tour-blitz.webp',
-          primary: ongoing(it),
-          actionLabel: t('watch_btn'),
-          onClick: () => openTour(it),
-        })),
-        h('button.nx-lc-more', { type: 'button', onclick: () => openTour(null) },
-          h('span', icon('chevron', 18)), t('see_all')))
-      : emptyNote(t('live_no_tours')),
+    pillBar([['games', t('tp_games')], ['swiss', t('tp_swiss')], ['intl', t('tp_intl')]], pageTab,
+      (v) => { pageTab = v; onRefresh(); }, { className: 'seg nx-live-tabs' }),
+    ...(pageTab === 'games' ? [
+      sectionHead(t('live_now_sec'), more(showAllLive || games.length <= 3, () => { showAllLive = true; }), t('see_all')),
+      games.length
+        ? h('div.nx-list', ...(showAllLive ? games : games.slice(0, 3)).map((g) => liveMatchRow(g, { onWatch: watch, onProfile: openProfile })))
+        : emptyNote(t('live_no_bot_games')),
+    ] : []),
+    ...(pageTab === 'swiss' ? swissSection(swiss, { onRefresh, meta, onClose }) : []),
+    ...(pageTab === 'intl' ? [
+      sectionHead(t('live_tourneys_sec'), () => openTour(null), t('see_all')),
+      tourCards.length
+        ? h('div.nx-hscroll.nx-tour-strip', { 'data-noswipe': '' },
+          ...tourCards.map((it, i) => tourneyCard({
+            title: tourTitle(it),
+            sub: [tourSubtitle(it), it.round && it.round.name].filter(Boolean).join(' · '),
+            live: ongoing(it),
+            soon: ongoing(it) ? '' : startsLabel(it.round && it.round.startsAt),
+            art: i % 2 ? '/img/ui/tour-rapid.webp' : '/img/ui/tour-blitz.webp',
+            primary: ongoing(it),
+            actionLabel: t('watch_btn'),
+            onClick: () => openTour(it),
+          })),
+          h('button.nx-lc-more', { type: 'button', onclick: () => openTour(null) },
+            h('span', icon('chevron', 18)), t('see_all')))
+        : emptyNote(t('live_no_tours')),
+    ] : []),
   ];
   mount(nodes);
   if (tourScroll) {
@@ -434,7 +442,7 @@ async function renderTour(mount, onRefresh) {
     return mount([
       h('div.top',
         backBtn(() => { backIntl(); onRefresh(); }),
-        h('h1', nav.tourName || t('live_tab_intl'))),
+        h('h1', nav.tourName || t('tp_intl'))),
       empty(errText(e) || t('live_load_fail'), '🌐'),
       h('button.btn', { type: 'button', onclick: () => onRefresh() }, t('retry_live')),
     ]);
@@ -464,7 +472,7 @@ async function renderTour(mount, onRefresh) {
   mount([
     h('div.top',
       backBtn(goBack),
-      h('h1', nav.tourName || tour.name || t('live_tab_intl'))),
+      h('h1', nav.tourName || tour.name || t('tp_intl'))),
     h('div.card.live-tour-head',
       h('b', tour.name || nav.tourName),
       tour.info && tour.info.location ? h('div.muted', tour.info.location) : null,
@@ -570,7 +578,7 @@ async function renderRound(mount, onRefresh) {
     return mount([
       h('div.top',
         backBtn(goBack),
-        h('h1', nav.tourName || t('live_tab_intl'))),
+        h('h1', nav.tourName || t('tp_intl'))),
       empty(t('live_load_fail'), '🌐'),
       h('button.btn', {
         type: 'button',
@@ -628,7 +636,7 @@ async function renderRound(mount, onRefresh) {
   mount([
     h('div.top',
       backBtn(goBack),
-      h('h1', tour.name || nav.tourName || t('live_tab_intl'))),
+      h('h1', tour.name || nav.tourName || t('tp_intl'))),
     h('div.card.live-tour-head',
       h('b', tour.name || nav.tourName),
       h('div.muted', [
