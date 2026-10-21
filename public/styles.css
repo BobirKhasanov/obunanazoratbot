@@ -2921,3 +2921,26 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .sx-pack { grid-template-columns: 28px 68px auto 1fr auto 34px; gap: 5px; }
 .sx-pack input { font-size: 15px; padding: 8px 8px; }
 .sx-pack .adm-ic.sm { min-height: 24px; }
+
+/* Turnirlar: vertical live-game cards */
+.nx-vm { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin-bottom: 10px; border-radius: 16px; background: var(--card, rgba(255,255,255,.05)); border: 1px solid rgba(128,128,128,.16); }
+.nx-vm-h { display: flex; align-items: center; gap: 8px; }
+.nx-vm-h small { color: var(--muted); font-weight: 700; font-size: 12px; }
+.nx-vm-sc { margin-left: auto; font-size: 18px; font-variant-numeric: tabular-nums; }
+.nx-vm-p { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 4px 2px; background: none; border: 0; color: inherit; text-align: left; font: inherit; }
+.nx-vm-p .avwrap, .nx-vm-p .avatar { width: 36px; height: 36px; font-size: 13px; flex: none; }
+.nx-vm-n { flex: 1; min-width: 0; display: grid; }
+.nx-vm-n b { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-vm-n small { font-size: 12px; color: var(--muted); font-weight: 700; }
+.nx-vm-dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid rgba(128,128,128,.6); flex: none; }
+.nx-vm-dot.w { background: #f3f3f3; } .nx-vm-dot.b { background: #1b1b1b; }
+.nx-vm-watch { width: 100%; justify-content: center; min-height: 44px; }
+.nx-intl-list { margin-bottom: 14px; }
+
+/* Tournament rules booklet */
+.tr-book { padding: 0 16px 28px; }
+.tr-sub { margin: 0 0 12px; }
+.tr-sec { display: flex; gap: 12px; padding: 14px; margin-bottom: 10px; border-radius: 16px; background: var(--card, rgba(255,255,255,.05)); border: 1px solid rgba(128,128,128,.14); }
+.tr-ic { flex: none; width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: rgba(47,129,247,.16); color: var(--accent, #2f81f7); }
+.tr-tx h3 { margin: 0 0 4px; font-size: 15px; }
+.tr-tx p { margin: 0; font-size: 14px; line-height: 1.5; opacity: .88; }

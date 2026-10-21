@@ -153,7 +153,7 @@ assert.ok(read('public/js/game.js').includes('ctx.board.destroy'), 'closing a ga
 assert.ok(profile.includes('closeScreen(true)') && profile.includes('onProfileOpen'), 'profile deep-links clear screen stack before open');
 assert.ok(read('public/js/entry.js').includes('showGate(errText(e))'), 'entry recovers to gate if app start fails after splash');
 assert.ok(admin.includes('cancelEditBtn') && admin.includes('cancelEditBtn.hidden'), 'admin notif edit cancel stays in DOM');
-assert.ok(/data-asset="20261018nx50"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261018nx50'), 'HTML data-asset matches entry cache bust');
+assert.ok(/data-asset="20261018nx51"/.test(indexHtml) && indexHtml.includes('entry.js?v=20261018nx51'), 'HTML data-asset matches entry cache bust');
 assert.ok(app.includes('afterMs') && app.includes('refreshAfterSlideT') && /scrollBehavior = 'auto'/.test(app), 'Android defers refresh during tab slide');
 assert.ok(css.includes('backface-visibility: hidden') && css.includes('#track.settle') && css.includes('cubic-bezier(0.33, 0.1, 0.25, 1)'), 'Android pager uses non-springy ease');
 assert.ok(read('public/js/game.js').includes('thinkMs = 2000') && read('public/js/ui.js').includes('ai:'), 'AI thinks 2s and has AI icon');
@@ -295,7 +295,7 @@ assert.ok(profile.includes('openUserProfile') || read('public/js/userprofile.js'
 assert.ok(css.includes('prem-glow') && css.includes('.uprof-like'), 'premium glow + public profile styles');
 assert.ok(admin.includes("board: 'home'") && !admin.includes("board: 'puzzle'") && !admin.includes('ann_board_puzzle'), 'admin announcements: home board only');
 assert.ok(app.includes("loadAnnouncements(api, 'home')") || app.includes('loadAnnouncements(api, "home")'), 'home carousel load');
-assert.ok(live.includes('liveMatchRow') && live.includes('statCard(') && live.includes('tourneyCard('), 'Turnirlar tab layout (live games + tournaments)');
+assert.ok(live.includes('liveMatchRow') && live.includes('statCard(') && live.includes('broadcastRow('), 'Turnirlar tab layout (live games + tournaments)');
 assert.ok(admin.includes('/admin/profile-banner') && admin.includes('admin_banner'), 'admin can change profile banner');
 assert.ok(i18n.includes('profile_edit:') && i18n.includes('admin_banner:') && i18n.includes('my_info:'));
 const server = read('src/server.js');

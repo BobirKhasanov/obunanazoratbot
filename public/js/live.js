@@ -10,9 +10,9 @@ import { formatTashkentWhen } from './time.js';
 import { liveRoundPollMs, liveGamePollMs, liveClockTickMs, liveMiniBoardBudget, isLite } from './perf.js';
 import { openChatWithUser, openMessages, openNotifications } from './inbox.js';
 import { openUserProfile } from './profile.js';
-import { swissSection } from './swiss.js';
+import { swissSection, openRules } from './swiss.js';
 import {
-  sectionHead, statCard, pageTitle, roundBtn, liveMatchRow, tourneyCard, onlineBubble, friendRow, emptyNote,
+  sectionHead, statCard, pageTitle, roundBtn, liveMatchRow, onlineBubble, friendRow, emptyNote,
 } from './neonui.js';
 
 /** In-app circular back only (do not also show Telegram.BackButton — that doubles the control). */
@@ -303,8 +303,6 @@ async function renderBot(mount, meta, onClose, onRefresh) {
     ...activeTours.filter((it) => !ongoing(it)),
     ...(tours.upcoming || []),
   ];
-  const prevTourStrip = document.querySelector('.page[data-page="live"] .nx-tour-strip');
-  const tourScroll = prevTourStrip ? prevTourStrip.scrollLeft : 0;
 
   const challenge = (id) => (hooks.challenge ? hooks.challenge(id) : api('POST', '/games', { opponentId: id }).then(onRefresh, fail));
   const openProfile = (id) => openUserProfile(id, { onChallenge: (u) => challenge(u.id) });
@@ -314,6 +312,7 @@ async function renderBot(mount, meta, onClose, onRefresh) {
 
   const nodes = [
     pageTitle(t('nav_live'), t('online_realtime'), [
+      ...(pageTab === 'swiss' ? [roundBtn('book', t('tr_rules_btn'), () => openRules(swiss && swiss.rules))] : []),
       roundBtn('search', t('messages'), () => openMessages()),
       roundBtn('bell', t('xabarnoma'), () => openNotifications()),
       roundBtn('userPlus', t('nav_friends'), () => document.dispatchEvent(new CustomEvent('app-open', { detail: { page: 'friends' } }))),
@@ -334,27 +333,11 @@ async function renderBot(mount, meta, onClose, onRefresh) {
     ...(pageTab === 'intl' ? [
       sectionHead(t('live_tourneys_sec'), () => openTour(null), t('see_all')),
       tourCards.length
-        ? h('div.nx-hscroll.nx-tour-strip', { 'data-noswipe': '' },
-          ...tourCards.map((it, i) => tourneyCard({
-            title: tourTitle(it),
-            sub: [tourSubtitle(it), it.round && it.round.name].filter(Boolean).join(' · '),
-            live: ongoing(it),
-            soon: ongoing(it) ? '' : startsLabel(it.round && it.round.startsAt),
-            art: i % 2 ? '/img/ui/tour-rapid.webp' : '/img/ui/tour-blitz.webp',
-            primary: ongoing(it),
-            actionLabel: t('watch_btn'),
-            onClick: () => openTour(it),
-          })),
-          h('button.nx-lc-more', { type: 'button', onclick: () => openTour(null) },
-            h('span', icon('chevron', 18)), t('see_all')))
+        ? h('div.list.nx-intl-list', tourCards.map((it) => broadcastRow(it, openTour)))
         : emptyNote(t('live_no_tours')),
     ] : []),
   ];
   mount(nodes);
-  if (tourScroll) {
-    const strip = document.querySelector('.page[data-page="live"] .nx-tour-strip');
-    if (strip) strip.scrollLeft = tourScroll;
-  }
 }
 
 // ---------- Lichess tournaments ----------

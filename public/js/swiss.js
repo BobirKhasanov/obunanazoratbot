@@ -184,3 +184,21 @@ export function openSwiss(id, { onRefresh, meta, onClose } = {}) {
     return [h('div.top', h('button.round.back', { type: 'button', 'aria-label': t('back'), onclick: back }, icon('back', 22)), h('h1', t('swiss_title'))), box];
   });
 }
+
+/** Rules booklet (opened from the book button in the Turnirlar header). */
+export function openRules(rules) {
+  const r = rules || { prize1: 20, prize2: 15, prize3: 10, organizer: 10, organizerBig: 15, bigThreshold: 16, weeklyLimit: 1, dailyJoinLimit: 1 };
+  const p = { min: 4, max: 64, d: r.dailyJoinLimit, p1: r.prize1, p2: r.prize2, p3: r.prize3, w: r.weeklyLimit, o: r.organizer, ob: r.organizerBig, big: r.bigThreshold };
+  const parts = [
+    ['info', 'what'], ['users', 'join'], ['history', 'rounds'], ['rankings', 'score'], ['gamepad', 'game'],
+    ['clock', 'active'], ['trophy', 'prizes'], ['plus', 'org'], ['check', 'fair'],
+  ];
+  openScreen((close) => [
+    h('div.top', h('button.round.back', { type: 'button', 'aria-label': t('back'), onclick: () => { haptic('light'); close(); } }, icon('back', 22)), h('h1', t('tr_title'))),
+    h('div.tr-book',
+      h('p.muted.tr-sub', t('tr_sub')),
+      ...parts.map(([ic, k], i) => h('section.tr-sec',
+        h('div.tr-ic', icon(ic, 20)),
+        h('div.tr-tx', h('h3', `${i + 1}. ${t('tr_h_' + k)}`), h('p', t('tr_' + k, p)))))),
+  ]);
+}

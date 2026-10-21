@@ -100,20 +100,21 @@ const scoreOf = (g) => {
 export function liveMatchRow(g, { onWatch, onProfile } = {}) {
   const w = g.white || {};
   const b = g.black || {};
-  const side = (p, right) => h('button.nx-mr-p' + (right ? '.r' : ''), {
+  const side = (p, dot) => h('button.nx-vm-p', {
     type: 'button', onclick: tap(() => p.id && onProfile && onProfile(p.id)),
   },
     avBlock(p.name || '?', p.id || 0, { round: true, online: true, avatarKey: p.avatarKey, premium: !!p.premium }),
-    h('div.nx-mr-n', h('b', firstName(p.name)), h('small', String(p.elo || '—'))));
-  return h('div.nx-mr',
-    side(w, false),
-    h('div.nx-mr-mid',
+    h('div.nx-vm-n', h('b', p.name || '?'), h('small', String(p.elo || '—'))),
+    h('i.nx-vm-dot.' + dot));
+  return h('div.nx-vm',
+    h('div.nx-vm-h',
       h('span.nx-live', h('i'), 'LIVE'),
-      h('b', scoreOf(g)),
       h('small', tcLabel(g)),
-      h('span.nx-chip-s', t('ply_short', { n: Math.max(1, Math.ceil((g.ply || 0) / 2)) }))),
-    side(b, true),
-    h('button.nx-btn-o', { type: 'button', onclick: tap(() => onWatch && onWatch(g)) }, icon('eye', 15), t('watch_btn')));
+      h('span.nx-chip-s', t('ply_short', { n: Math.max(1, Math.ceil((g.ply || 0) / 2)) })),
+      h('b.nx-vm-sc', scoreOf(g))),
+    side(w, 'w'),
+    side(b, 'b'),
+    h('button.nx-btn-o.nx-vm-watch', { type: 'button', onclick: tap(() => onWatch && onWatch(g)) }, icon('eye', 15), t('watch_btn')));
 }
 
 export function statCard(ic, label, value, tone, onClick) {
