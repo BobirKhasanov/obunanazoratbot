@@ -4,6 +4,8 @@
  * Unique frame / palette per calendar month; year shifts hues.
  */
 
+const { renderMedalSvg } = require('./medal-art');
+
 const FONTS = {
   serif: 'Georgia, "Times New Roman", serif',
   display: 'Palatino Linotype, Palatino, "Book Antiqua", Georgia, serif',
@@ -298,85 +300,12 @@ function sparkles(seed) {
 }
 
 /**
- * Clean, high-contrast season medal (readable as avatar + Telegram PNG).
- * @param {{ place:1|2|3, month:string, name:string, username?:string, userId?:number|string, config?:object }} opts
+ * Season medal = the approved artwork with only the month + year (and TOP-N) changed.
+ * See src/medal-art.js. Old config knobs (colours, pieces, fonts) no longer affect the picture.
+ * @param {{ place:1|2|3, month:string }} opts
  */
 function generateMedalSvg(opts) {
-  const place = Math.min(3, Math.max(1, Math.floor(Number(opts.place) || 1)));
-  const month = opts.month || monthKey();
-  const cfg = normalizeConfig(opts.config);
-  const seed = hash(`tier:${month}:${place}:${cfg.pieceTop1}`);
-  const { metal: m, banner: b, style, mo, year } = palettes(place, month, cfg);
-  const uid = `t${seed.toString(36)}`;
-  const piece = pieceForPlace(cfg, place);
-  const pieceMarkup = PIECE[piece] || PIECE.king;
-  const name = String(opts.name || 'Player').slice(0, 18);
-  const bot = cfg.botHandle.startsWith('@') ? cfg.botHandle : `@${cfg.botHandle}`;
-  const season = seasonLabel(month);
-  const bodyFont = fontCss(cfg.fontFamily);
-  const titleFont = fontCss(cfg.fontTitle, 'sans');
-  const roman = ROMAN[place - 1];
-  const short = `${MONTH_NAMES_SHORT[mo - 1]} ${year}`;
-  const placeLabel = `TOP ${place}`;
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="640" viewBox="0 0 512 640">
-  <defs>
-    <linearGradient id="bg-${uid}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#161b26"/>
-      <stop offset="100%" stop-color="${esc(cfg.secondary)}"/>
-    </linearGradient>
-    <linearGradient id="metal-${uid}" x1="0.15" y1="0" x2="0.85" y2="1">
-      <stop offset="0%" stop-color="${esc(m.hi)}"/>
-      <stop offset="40%" stop-color="${esc(m.mid)}"/>
-      <stop offset="100%" stop-color="${esc(m.lo)}"/>
-    </linearGradient>
-    <linearGradient id="piece-${uid}" x1="0.3" y1="0" x2="0.7" y2="1">
-      <stop offset="0%" stop-color="${esc(m.hi)}"/>
-      <stop offset="100%" stop-color="${esc(m.mid2)}"/>
-    </linearGradient>
-    <linearGradient id="ban-${uid}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${esc(b.top)}"/>
-      <stop offset="100%" stop-color="${esc(b.bot)}"/>
-    </linearGradient>
-    <filter id="drop-${uid}" x="-15%" y="-15%" width="130%" height="130%">
-      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.5"/>
-    </filter>
-  </defs>
-
-  <rect width="512" height="640" rx="40" fill="url(#bg-${uid})"/>
-  <rect x="18" y="18" width="476" height="604" rx="32" fill="none" stroke="url(#metal-${uid})" stroke-width="3" opacity="0.55"/>
-
-  <g filter="url(#drop-${uid})">
-    <!-- Compact emblem (clear when used as avatar) -->
-    <circle cx="256" cy="168" r="108" fill="url(#metal-${uid})" stroke="${esc(m.ink)}" stroke-width="5"/>
-    <circle cx="256" cy="168" r="88" fill="${esc(m.deep)}"/>
-    <g transform="translate(256 168)">
-      <g transform="translate(-40 -48) scale(1.25)" fill="url(#piece-${uid})" stroke="${esc(m.ink)}" stroke-width="1.8" stroke-linejoin="round">
-        ${pieceMarkup}
-      </g>
-    </g>
-    <!-- Place pill -->
-    <rect x="186" y="268" width="140" height="40" rx="20" fill="#0b0f16" stroke="url(#metal-${uid})" stroke-width="3"/>
-    <text x="256" y="296" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${Math.max(18, cfg.sizePlace)}"
-      font-weight="900" fill="#fff" letter-spacing="3">${placeLabel}</text>
-  </g>
-
-  <!-- Info panel -->
-  <rect x="56" y="340" width="400" height="230" rx="24" fill="url(#ban-${uid})"/>
-  <rect x="68" y="352" width="376" height="206" rx="18" fill="#000" fill-opacity="0.22"/>
-  <text x="256" y="400" text-anchor="middle" font-family="${esc(titleFont)}" font-size="${Math.max(26, cfg.sizeName)}"
-    font-weight="900" fill="#fff" letter-spacing="1">${esc(name.toUpperCase())}</text>
-  <text x="256" y="440" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${Math.max(16, cfg.sizeTitle)}"
-    font-weight="800" fill="${esc(m.hi)}" letter-spacing="2">${esc(season)}</text>
-  <text x="256" y="472" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="15"
-    font-weight="700" fill="#ffffff" fill-opacity="0.75">${esc(placeLabel)} · ${esc(roman)} · ${esc(short)}</text>
-  <text x="256" y="520" text-anchor="middle" font-family="${esc(bodyFont)}" font-size="${Math.max(14, cfg.sizeBot)}"
-    font-weight="800" fill="${esc(cfg.primary)}">${esc(bot)}</text>
-  <!-- style fingerprint (kept for month uniqueness tests) -->
-  <circle cx="80" cy="80" r="3" fill="url(#metal-${uid})" opacity="0.01"/>
-  <desc>style-${style}</desc>
-</svg>`;
+  return renderMedalSvg({ place: opts.place, month: opts.month || monthKey() });
 }
 
 /** List YYYY-MM keys for a year (admin month picker). */

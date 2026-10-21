@@ -1,5 +1,5 @@
 // Main app: boot, swipe pager, pages, deep links.
-import { h, $, $$, icon, haptic, toast, sheet, pillBar, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopSmooth, shareUrl, copyText, syncTgSafeArea } from './ui.js';
+import { h, $, $$, icon, haptic, toast, sheet, pillBar, api, fail, connectWs, onWs, sendBye, wsConnected, tg, avBlock, premIc, setMedalHolders, sleep, unlockAudio, playMoveSound, smoothScrollTo, scrollToTopSmooth, shareUrl, copyText, syncTgSafeArea } from './ui.js';
 import { homeTabRefreshMs, softPollMs, isLite, isAndroid } from './perf.js';
 import { openDmThread, refreshInboxBadges, headerInboxBtns, isViewingDmThread } from './inbox.js';
 import { t, setLang } from './i18n.js';
@@ -27,7 +27,7 @@ import {
 import { createPlayFlow } from './playflow.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
 import { paintPlayBody, renderRatingPage, openPlayHubMode, openPlayHubTab } from './playhub.js';
-import { appHeader, sectionHead, heroBanner, dailyCard } from './neonui.js';
+import { appHeader, sectionHead, heroBanner, dailyCard, championsCard } from './neonui.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 2, tab: 'play' };
 let selectedTime = 'any';
@@ -481,12 +481,13 @@ refreshers.play = async function renderPlay() {
   const playElEarly = page('play');
   // First home paint (under splash): skip friends wait — biggest Android open win
   const firstPaint = !(playElEarly && playElEarly.classList.contains('seen') && playElEarly.childElementCount);
-  const [l, , anns] = await Promise.all([
+  const [l, , anns, champs] = await Promise.all([
     loadLobby(),
     firstPaint
       ? Promise.resolve(state.friends || [])
       : loadFriends().catch(() => { state.friends = state.friends || []; }),
     loadAnnouncements(api, 'home'),
+    api('GET', '/medals/champions').catch(() => null),
   ]);
   if (firstPaint) {
     // Hydrate friends after splash dismisses (does not block "O'yin yuklanmoqda")
@@ -510,6 +511,7 @@ refreshers.play = async function renderPlay() {
     fr: friends.map((f) => [f.id, !!f.online, !!f.inGame, !!f.invited, !!f.premium, f.avatarKey || '']),
     sav: saved ? [saved.level, saved.fen] : null,
     ann: (anns || []).map((a) => [a.id, a.title, a.body, a.mediaId, a.linkType, a.endsAt]),
+    ch: champs && champs.champions ? champs.champions.map((c) => [c.id, c.place, c.medalId]) : null,
   });
   const playEl = playElEarly || page('play');
   if (snap === playSnap && playEl && playEl.classList.contains('seen') && playEl.childElementCount) {
@@ -593,6 +595,7 @@ refreshers.play = async function renderPlay() {
       onProfile: () => go(TABS.indexOf('profile'), true),
       onGems: openGemsPage,
     }),
+    championsCard(champs, openProfile),
     annHost,
     hasAnn ? null : heroBanner(),
     dailyCard({ reward: pzReward, onClick: () => go(TABS.indexOf('puzzles'), true) }),
@@ -959,7 +962,7 @@ function rebuildNav() {
 async function rebuildAll() {
   try {
     const me = await api('GET', '/me');
-    state.me = me.user; state.stats = me.stats; state.meta = me.meta;
+    state.me = me.user; state.stats = me.stats; state.meta = me.meta; setMedalHolders(me.meta && me.meta.MEDAL_HOLDERS);
   } catch { /* keep cached */ }
   if (pz && pz.board) pz.board.destroy(); pz = null;
   rebuildNav();
@@ -1062,7 +1065,7 @@ export async function start(me) {
   } catch { /* ignore */ }
 
   try {
-    state.me = me.user; state.stats = me.stats; state.meta = me.meta;
+    state.me = me.user; state.stats = me.stats; state.meta = me.meta; setMedalHolders(me.meta && me.meta.MEDAL_HOLDERS);
     setLang(me.user.lang); applyTheme(me.user.theme);
     if (canStyleChess(me.user)) applyChessStyle(me.user.pieceSet, me.user.boardTheme);
     else applyChessStyle(DEFAULT_PIECE_SET, 'green');

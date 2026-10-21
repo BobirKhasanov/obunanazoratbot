@@ -456,6 +456,19 @@ function clearRankingCaches() {
   ]));
 }
 
+/** Latest medal of every holder: { [userId]: { id, place, month } } (cached; the table only grows by 3 rows a month). */
+async function medalHolders() {
+  const hit = await cacheGet('medal:holders', 60_000);
+  if (hit) return hit;
+  const rows = await db.prepare(`
+    SELECT DISTINCT ON (user_id) user_id, id, place, month FROM medals ORDER BY user_id, month DESC, place ASC
+  `).all();
+  const map = {};
+  for (const r of rows) map[String(r.user_id)] = { id: r.id, place: r.place, month: r.month };
+  await cacheSet('medal:holders', map, 60_000);
+  return map;
+}
+
 async function getMedalConfig() {
   return normalizeConfig(await getSetting('medal_gen_config', JSON.stringify(DEFAULT_CONFIG)));
 }
@@ -628,6 +641,7 @@ async function awardMonthMedals(month, { notifyWinners = false } = {}) {
     }
     await setSetting(`medals_notified_${m}`, '1');
   }
+  await cacheDel('medal:holders');
   return {
     month: m,
     monthLabel: monthLabelEn(m),
@@ -1054,6 +1068,7 @@ api.get('/me', wrap(async (req, res) => {
     referralClaim,
     meta: {
       LANGS, THEMES, PIECE_SETS, BOARD_THEMES, COLORS, REACTIONS,
+      MEDAL_HOLDERS: await medalHolders(),
       PREMIUM_PRICE: shop.premiumPriceDiamonds,
       REFERRAL_REWARD: shop.referralReward,
       REFERRAL_INVITEE_REWARD: shop.referralInviteeReward,
@@ -2221,6 +2236,26 @@ api.get('/medals/mine', wrap(async (req, res) => {
     medals: rows.map((r) => ({
       id: r.id, month: r.month, monthLabel: monthLabelEn(r.month), place: r.place,
       title: r.title, url: `/api/medals/${r.id}.svg`, key: `medal:${r.id}`,
+    })),
+  });
+}));
+
+/** Previous month's podium, shown on the Play page during the first 10 days of a month (Tashkent). */
+api.get('/medals/champions', wrap(async (req, res) => {
+  if (tashkentDay() > 10) return res.json({ champions: [] });
+  await ensurePreviousMonthMedals();
+  const prev = previousMonthKey();
+  const rows = await db.prepare(`
+    SELECT m.id, m.place, u.id AS uid, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.avatar_key, u.premium, u.premium_until
+    FROM medals m JOIN users u ON u.id = m.user_id WHERE m.month = ? ORDER BY m.place ASC
+  `).all(prev);
+  res.json({
+    month: prev,
+    label: monthLabelEn(prev),
+    champions: rows.map((r) => ({
+      place: r.place, id: r.uid, name: r.name, avatarKey: r.avatar_key || null,
+      premium: isPremiumActive({ premium: r.premium, premium_until: r.premium_until }),
+      medalId: r.id, url: `/api/medals/${r.id}.svg`,
     })),
   });
 }));
@@ -4310,6 +4345,13 @@ async function boot() {
   await db.ready; // tables exist before anybody connects
   // Bind all interfaces so Render's proxy can reach the process
   server.listen(PORT, '0.0.0.0', () => console.log(`[server] listening on 0.0.0.0:${PORT}`));
+
+  // Old-design medals are redrawn with the approved artwork (month + year only differ)
+  try {
+    const old = await db.prepare("SELECT id, month, place FROM medals WHERE svg NOT LIKE '%data-medal=\"2\"%'").all();
+    for (const r of old) await db.prepare('UPDATE medals SET svg = ? WHERE id = ?').run(generateMedalSvg({ place: r.place, month: r.month }), r.id);
+    if (old.length) console.log(`[medals] redrawn: ${old.length}`);
+  } catch (e) { console.error('[medals] redraw', e.message || e); }
 
   runBotForever().catch((e) => console.error('[bot] loop died:', e && e.message ? e.message : e));
   startScheduler(

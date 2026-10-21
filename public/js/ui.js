@@ -764,6 +764,11 @@ export function premIc(size = 18) {
  * @param {{ premium?: boolean, online?: boolean, size?: string, round?: boolean, sparkles?: boolean }} [opts]
  * Note: circular shape uses class `circ` (not `round`) so it never clashes with `.round` icon buttons.
  */
+let medalHolders = {};
+/** { [userId]: { id, place } } — latest monthly medal of each champion, shown next to their avatar everywhere. */
+export const setMedalHolders = (m) => { medalHolders = m && typeof m === 'object' ? m : {}; };
+export const medalOf = (id) => medalHolders[String(id)] || null;
+
 export function avBlock(name, id, opts = {}) {
   const size = opts.size || '';
   const circ = !!opts.round || size === 'xl';
@@ -789,6 +794,10 @@ export function avBlock(name, id, opts = {}) {
   }
   wrap.append(avatar(name, id, size, opts.avatarKey || null));
   if (opts.online) wrap.append(h('i.dot.on'));
+  const med = id ? medalOf(id) : null;
+  if (med && !opts.noMedal) {
+    wrap.append(h('img.med-bdg.p' + med.place, { src: `/api/medals/${med.id}.svg`, alt: '', loading: 'lazy', decoding: 'async', 'aria-hidden': 'true' }));
+  }
   return wrap;
 }
 

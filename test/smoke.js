@@ -647,31 +647,16 @@ async function playMoves(game, players, moves, startPly = 0) {
         config: { ...cfg.config, botHandle: '@Chess_uz_bot' },
       });
       assert.ok(cfg.months && cfg.months.length === 12, 'admin lists 12 months');
-      assert.ok(preview.svg.includes('Top 1') || preview.title.includes('Top 1') || preview.svg.includes('TOP 1'));
-      assert.ok(preview.svg.includes('@Chess_uz_bot'));
-      assert.ok(preview.svg.includes('OCTOBER') || preview.svg.includes('SEASON') || preview.svg.includes('BOB') || preview.svg.includes('Bob') || preview.svg.includes('metal-'));
-      const oct = await ok('ADMIN', 'POST', '/admin/medals/preview', {
-        place: 1, month: '2026-10', name: 'Bob', config: cfg.config,
-      });
-      assert.ok(oct.svg.includes('OCTOBER 2026') || oct.svg.includes('OCT 2026'));
-      assert.ok(oct.svg.includes('BOB') || oct.svg.includes('Bob'));
-      const nov = await ok('ADMIN', 'POST', '/admin/medals/preview', {
-        place: 1, month: '2026-11', name: 'Bob', config: cfg.config,
-      });
-      const octNext = await ok('ADMIN', 'POST', '/admin/medals/preview', {
-        place: 1, month: '2027-10', name: 'Bob', config: cfg.config,
-      });
-      assert.notStrictEqual(oct.svg, nov.svg, 'months use different patterns');
+      assert.ok(preview.svg.includes('data-medal="2"') && preview.svg.includes('data-place="1"'), 'new artwork medal');
+      const oct = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 1, month: '2026-10', name: 'Bob', config: cfg.config });
+      assert.ok(oct.svg.includes('data-month="2026-10"'));
+      const nov = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 1, month: '2026-11', name: 'Bob', config: cfg.config });
+      const octNext = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 1, month: '2027-10', name: 'Bob', config: cfg.config });
+      assert.notStrictEqual(oct.svg, nov.svg, 'months differ');
       assert.notStrictEqual(oct.svg, octNext.svg, 'same month different year differs');
-      const p2 = await ok('ADMIN', 'POST', '/admin/medals/preview', {
-        place: 2, month: '2026-10', name: 'Bob',
-        config: { ...cfg.config, pieceTop2: 'queen' },
-      });
-      const p3 = await ok('ADMIN', 'POST', '/admin/medals/preview', {
-        place: 3, month: '2026-10', name: 'Bob',
-        config: { ...cfg.config, pieceTop3: 'knight' },
-      });
-      assert.ok(p2.svg.includes('TOP 2') && p3.svg.includes('TOP 3'));
+      const p2 = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 2, month: '2026-10', name: 'Bob', config: cfg.config });
+      const p3 = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 3, month: '2026-10', name: 'Bob', config: cfg.config });
+      assert.ok(p2.svg.includes('data-place="2"') && p3.svg.includes('data-place="3"'));
       assert.notStrictEqual(oct.svg, p2.svg);
 
       // Seed previous month scores so award works
@@ -718,6 +703,12 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual(svgRes.status, 200);
       const svgText = await svgRes.text();
       assert.ok(svgText.includes('<svg'));
+
+      const meH = await ok('B', 'GET', '/me');
+      assert.ok(meH.meta.MEDAL_HOLDERS[String(USERS.B.id)], 'medal holders map has champion');
+      assert.strictEqual(meH.meta.MEDAL_HOLDERS[String(USERS.B.id)].place, 1);
+      const champs = await ok('B', 'GET', '/medals/champions');
+      assert.ok(Array.isArray(champs.champions));
 
       const mine = await ok('B', 'GET', '/medals/mine');
       assert.ok(mine.medals.some((m) => m.id === top1.id));

@@ -257,3 +257,16 @@ export function dailyCard({ reward, onClick }) {
 export function emptyNote(text) {
   return h('div.nx-empty', text);
 }
+
+/** Last month's podium — shown on the Play page for the first 10 days of a month. */
+export function championsCard(data, onProfile) {
+  if (!data || !data.champions || !data.champions.length) return null;
+  return h('section.nx-champs',
+    h('div.nx-champs-h', icon('trophy', 18), h('b', t('champs_title', { month: data.label }))),
+    h('div.nx-champs-list', data.champions.map((c) => h('button.nx-champ.p' + c.place, {
+      type: 'button', 'data-noswipe': '', onclick: tap(() => onProfile && onProfile(c.id)),
+    },
+    h('img.nx-champ-m', { src: c.url, alt: '', loading: 'lazy', decoding: 'async' }),
+    h('div.nx-champ-n', h('b', c.name), h('small', `TOP-${c.place}`)),
+    avBlock(c.name, c.id, { premium: !!c.premium, round: true, avatarKey: c.avatarKey || null, noMedal: true })))));
+}
