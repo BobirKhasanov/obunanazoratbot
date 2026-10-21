@@ -646,7 +646,7 @@ async function playMoves(game, players, moves, startPly = 0) {
         place: 1, month: '2026-10',
       });
       assert.ok(cfg.months && cfg.months.length === 12, 'admin lists 12 months');
-      assert.ok(preview.svg.includes('data-medal="3"') && preview.svg.includes('data-place="1"'), 'new artwork medal');
+      assert.ok(preview.svg.includes('data-medal="4"') && preview.svg.includes('data-place="1"'), 'new artwork medal');
       const oct = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 1, month: '2026-10', name: 'Bob' });
       assert.ok(oct.svg.includes('data-month="2026-10"'));
       const nov = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 1, month: '2026-11', name: 'Bob' });

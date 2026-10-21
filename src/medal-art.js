@@ -19,9 +19,9 @@ const BOT_HANDLE = '@chess_uz_bot';
 const MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
 
 const PALETTE = {
-  1: { top: '#fff3b0', mid: '#ffd23f', bot: '#e8970c', edge: '#0b1636' },
-  2: { top: '#ffffff', mid: '#dfe4f0', bot: '#8d97ae', edge: '#160a30' },
-  3: { top: '#ffdcb8', mid: '#e39a5f', bot: '#a65d29', edge: '#06190b' },
+  1: { top: '#fff3b0', mid: '#ffd23f', bot: '#e8970c', edge: '#0b1636', plate: '#112a6b', plateD: '#071538' },
+  2: { top: '#ffffff', mid: '#dfe4f0', bot: '#8d97ae', edge: '#160a30', plate: '#35186e', plateD: '#170a35' },
+  3: { top: '#ffdcb8', mid: '#e39a5f', bot: '#a65d29', edge: '#06190b', plate: '#12582a', plateD: '#072d14' },
 };
 
 /** Glyph paths for `text`, laid out on an arc (radius R, 0 = straight) centred at (cx, baseY). */
@@ -63,15 +63,20 @@ function renderMedalSvg({ place, month }) {
   const pal = PALETTE[pl];
   const ribbon = textPaths(label, { size: 96, cx: 627, baseY: 836, maxWidth: 625, R: 1700 });
   const tier = textPaths(`TOP-${pl}`, { size: 104, cx: 627, baseY: 1028, maxWidth: 300 });
-  const handle = textPaths(BOT_HANDLE, { size: 62, cx: 627, baseY: 1196, maxWidth: 520 });
+  const handle = textPaths(BOT_HANDLE, { size: 62, cx: 627, baseY: 1190, maxWidth: 470 });
+  const plate = `<path d="M345 1112H909L958 1168L909 1224H345L296 1168Z" fill="url(#pl)" stroke="url(#g)" stroke-width="9" stroke-linejoin="round"/>
+<path d="M360 1124H894L938 1168L894 1212H360L316 1168Z" fill="none" stroke="${pal.top}" stroke-opacity=".45" stroke-width="2.5" stroke-linejoin="round"/>
+<path d="M333 1168l14-14 14 14-14 14zM893 1168l14-14 14 14-14 14z" fill="url(#g)"/>`;
   const titleCase = `${name[0]}${name.slice(1).toLowerCase()} ${year}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254" data-medal="3" data-place="${pl}" data-month="${month}" role="img" aria-label="${titleCase} TOP-${pl}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254" data-medal="4" data-place="${pl}" data-month="${month}" role="img" aria-label="${titleCase} TOP-${pl}">
 <title>${titleCase} · TOP-${pl}</title>
-<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${pal.top}"/><stop offset=".5" stop-color="${pal.mid}"/><stop offset="1" stop-color="${pal.bot}"/></linearGradient></defs>
+<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${pal.top}"/><stop offset=".5" stop-color="${pal.mid}"/><stop offset="1" stop-color="${pal.bot}"/></linearGradient><linearGradient id="pl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${pal.plate}"/><stop offset="1" stop-color="${pal.plateD}"/></linearGradient></defs>
 <rect width="1254" height="1254" fill="#050608"/>
 <image href="${bases[pl]}" x="0" y="0" width="1254" height="1254" preserveAspectRatio="xMidYMid slice"/>
+${plate}
 <g fill="#000" opacity=".45" transform="translate(0 5)">${ribbon}${tier}${handle}</g>
-<g fill="${pal.edge}" stroke="${pal.edge}" stroke-width="9" stroke-linejoin="round">${ribbon}${tier}${handle}</g>
+<g fill="${pal.edge}" stroke="${pal.edge}" stroke-width="9" stroke-linejoin="round">${ribbon}${tier}</g>
+<g fill="${pal.edge}" stroke="${pal.edge}" stroke-width="4" stroke-linejoin="round">${handle}</g>
 <g fill="url(#g)">${ribbon}${tier}${handle}</g>
 </svg>`;
 }

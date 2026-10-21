@@ -4316,7 +4316,7 @@ async function boot() {
 
   // Old-design medals are redrawn with the approved artwork (month + year only differ)
   try {
-    const old = await db.prepare("SELECT id, month, place FROM medals WHERE svg NOT LIKE '%data-medal=\"3\"%'").all();
+    const old = await db.prepare("SELECT id, month, place FROM medals WHERE svg NOT LIKE '%data-medal=\"4\"%'").all();
     for (const r of old) await db.prepare('UPDATE medals SET svg = ? WHERE id = ?').run(generateMedalSvg({ place: r.place, month: r.month }), r.id);
     if (old.length) console.log(`[medals] redrawn: ${old.length}`);
   } catch (e) { console.error('[medals] redraw', e.message || e); }
