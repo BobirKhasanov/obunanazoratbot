@@ -19,13 +19,14 @@ const {
   settleClocks, afterMoveClocks,
 } = require('./time');
 const lichess = require('./lichess');
+const { BOT_HANDLE } = require('./medal-art');
 const { cacheGet, cacheSet, cacheDel, cacheEnabled, incr } = require('./cache');
 const { saveMedia, loadMediaBytes, storageEnabled } = require('./storage');
 const { DEFAULT_ELO, pairUpdate, scoresForResult, eloColumn, expandingEloDelta } = require('./elo');
 const {
   monthKey, monthLabelEn, seasonLabel, previousMonthKey, tashkentDay, tashkentParts,
   isLastDayOfMonthTashkent, monthsForYear,
-  normalizeConfig, generateMedalSvg, titleFor, DEFAULT_CONFIG, FONT_KEYS, PIECE_KEYS,
+  generateMedalSvg, titleFor,
 } = require('./medals');
 const { svgToPngBuffer } = require('./medal-png');
 const { loadWelcomeConfig, saveWelcomeLang, sendWelcome, resolveButtons } = require('./welcome');
@@ -469,10 +470,6 @@ async function medalHolders() {
   return map;
 }
 
-async function getMedalConfig() {
-  return normalizeConfig(await getSetting('medal_gen_config', JSON.stringify(DEFAULT_CONFIG)));
-}
-
 async function loadTopScores(month) {
   return db.prepare(`
     SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, m.points
@@ -561,16 +558,15 @@ async function awardMonthMedals(month, { notifyWinners = false } = {}) {
   if (!/^\d{4}-\d{2}$/.test(m)) throw bad('month must be YYYY-MM', 'bad_request');
   // Never award the in-progress month — only completed seasons
   if (m >= monthKey()) throw bad('Cannot award the current month yet', 'bad_request');
-  const cfg = await getMedalConfig();
   const top = await loadPodiumForAward(m);
   const awarded = [];
   for (const u of top) {
     const place = u.place || (awarded.length + 1);
     if (place > 3) break;
     const id = `m-${m}-p${place}`;
-    const title = titleFor(cfg, place, m);
+    const title = titleFor(place, m);
     const svg = generateMedalSvg({
-      place, month: m, name: u.name, username: u.username, userId: u.id, config: cfg,
+      place, month: m,
     });
     await db.prepare(`
       INSERT INTO medals (id, month, place, user_id, title, svg)
@@ -622,7 +618,7 @@ async function awardMonthMedals(month, { notifyWinners = false } = {}) {
       const caption = T.medalAward({
         place: a.place,
         season,
-        bot: cfg.botHandle,
+        bot: BOT_HANDLE,
         premiumMonths: a.premiumMonths || 0,
         premiumDays: a.premiumDays || 0,
       });
@@ -3860,7 +3856,6 @@ admin.patch('/shop', wrap(async (req, res) => {
 }));
 
 admin.get('/medals', wrap(async (req, res) => {
-  const cfg = await getMedalConfig();
   const month = String(req.query.month || monthKey());
   const year = Number(String(month).slice(0, 4)) || Number(monthKey().slice(0, 4));
   const medals = await db.prepare(`
@@ -3868,22 +3863,11 @@ admin.get('/medals', wrap(async (req, res) => {
     FROM medals m LEFT JOIN users u ON u.id = m.user_id
     ORDER BY m.month DESC, m.place ASC LIMIT 60
   `).all();
-  const top = await db.prepare(`
-    SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, s.points
-    FROM monthly_scores s JOIN users u ON u.id = s.user_id
-    WHERE s.month = ? AND u.blocked = 0 AND s.points > 0
-    ORDER BY s.points DESC, s.wins DESC LIMIT 3
-  `).all(month);
   res.json({
-    config: cfg,
-    fonts: FONT_KEYS,
-    pieces: PIECE_KEYS,
-    month,
-    year,
+    month, year, bot: BOT_HANDLE,
     months: monthsForYear(year).map((k) => ({ key: k, label: monthLabelEn(k), short: k.slice(5) })),
     monthLabel: monthLabelEn(month),
     previousMonth: previousMonthKey(month),
-    top,
     medals: medals.map((r) => ({
       id: r.id, month: r.month, place: r.place, userId: r.user_id,
       title: r.title, name: r.first_name || '', username: r.username || '',
@@ -3892,29 +3876,13 @@ admin.get('/medals', wrap(async (req, res) => {
   });
 }));
 
-admin.patch('/medals/config', wrap(async (req, res) => {
-  const cfg = normalizeConfig({ ...(await getMedalConfig()), ...(req.body || {}) });
-  await setSetting('medal_gen_config', JSON.stringify(cfg));
-  res.json({ config: cfg });
-}));
-
+/** Preview any month/place (admin gallery) — returns the SVG as a data URL. */
 admin.post('/medals/preview', wrap(async (req, res) => {
   const b = req.body || {};
-  const cfg = normalizeConfig(b.config || await getMedalConfig());
   const place = Math.min(3, Math.max(1, Math.floor(Number(b.place) || 1)));
-  const month = String(b.month || monthKey());
-  const svg = generateMedalSvg({
-    place, month,
-    name: b.name || 'Player',
-    username: b.username || '',
-    userId: b.userId || 0,
-    config: cfg,
-  });
-  res.json({
-    svg,
-    title: titleFor(cfg, place, month),
-    dataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
-  });
+  const month = /^\d{4}-\d{2}$/.test(String(b.month)) ? String(b.month) : monthKey();
+  const svg = generateMedalSvg({ place, month });
+  res.json({ svg, title: titleFor(place, month), dataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` });
 }));
 
 /** Internal/test: mint a completed month. Current month is rejected. UI award button removed. */
@@ -4348,7 +4316,7 @@ async function boot() {
 
   // Old-design medals are redrawn with the approved artwork (month + year only differ)
   try {
-    const old = await db.prepare("SELECT id, month, place FROM medals WHERE svg NOT LIKE '%data-medal=\"2\"%'").all();
+    const old = await db.prepare("SELECT id, month, place FROM medals WHERE svg NOT LIKE '%data-medal=\"3\"%'").all();
     for (const r of old) await db.prepare('UPDATE medals SET svg = ? WHERE id = ?').run(generateMedalSvg({ place: r.place, month: r.month }), r.id);
     if (old.length) console.log(`[medals] redrawn: ${old.length}`);
   } catch (e) { console.error('[medals] redraw', e.message || e); }

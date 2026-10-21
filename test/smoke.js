@@ -641,21 +641,20 @@ async function playMoves(game, players, moves, startPly = 0) {
 
     await step('medal generator: admin preview, award, avatar select', async () => {
       const cfg = await ok('ADMIN', 'GET', '/admin/medals');
-      assert.ok(cfg.config && cfg.config.botHandle);
+      assert.strictEqual(cfg.bot, '@chess_uz_bot');
       const preview = await ok('ADMIN', 'POST', '/admin/medals/preview', {
-        place: 1, name: 'Bob', username: 'bob', userId: USERS.B.id,
-        config: { ...cfg.config, botHandle: '@Chess_uz_bot' },
+        place: 1, month: '2026-10',
       });
       assert.ok(cfg.months && cfg.months.length === 12, 'admin lists 12 months');
-      assert.ok(preview.svg.includes('data-medal="2"') && preview.svg.includes('data-place="1"'), 'new artwork medal');
-      const oct = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 1, month: '2026-10', name: 'Bob', config: cfg.config });
+      assert.ok(preview.svg.includes('data-medal="3"') && preview.svg.includes('data-place="1"'), 'new artwork medal');
+      const oct = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 1, month: '2026-10', name: 'Bob' });
       assert.ok(oct.svg.includes('data-month="2026-10"'));
-      const nov = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 1, month: '2026-11', name: 'Bob', config: cfg.config });
-      const octNext = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 1, month: '2027-10', name: 'Bob', config: cfg.config });
+      const nov = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 1, month: '2026-11', name: 'Bob' });
+      const octNext = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 1, month: '2027-10', name: 'Bob' });
       assert.notStrictEqual(oct.svg, nov.svg, 'months differ');
       assert.notStrictEqual(oct.svg, octNext.svg, 'same month different year differs');
-      const p2 = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 2, month: '2026-10', name: 'Bob', config: cfg.config });
-      const p3 = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 3, month: '2026-10', name: 'Bob', config: cfg.config });
+      const p2 = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 2, month: '2026-10', name: 'Bob' });
+      const p3 = await ok('ADMIN', 'POST', '/admin/medals/preview', { place: 3, month: '2026-10', name: 'Bob' });
       assert.ok(p2.svg.includes('data-place="2"') && p3.svg.includes('data-place="3"'));
       assert.notStrictEqual(oct.svg, p2.svg);
 

@@ -2959,3 +2959,8 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .nx-champ-n b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nx-champ-n small{opacity:.65}
 .nx-champ .avwrap{width:38px;height:38px;flex:none}
+
+.medal-gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}
+.medal-gal-item{text-align:center}
+.medal-gallery .medal-admin-preview{width:100%;height:auto;aspect-ratio:1;margin:0 0 4px;border-radius:14px;object-fit:cover}
+.medal-admin-preview.ph{background:rgba(255,255,255,.06)}

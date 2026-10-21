@@ -15,6 +15,7 @@ for (const p of [1, 2, 3]) {
   bases[p] = `data:image/jpeg;base64,${fs.readFileSync(path.join(ROOT, 'medals', `base-top${p}.jpg`)).toString('base64')}`;
 }
 
+const BOT_HANDLE = '@chess_uz_bot';
 const MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
 
 const PALETTE = {
@@ -62,16 +63,17 @@ function renderMedalSvg({ place, month }) {
   const pal = PALETTE[pl];
   const ribbon = textPaths(label, { size: 96, cx: 627, baseY: 836, maxWidth: 625, R: 1700 });
   const tier = textPaths(`TOP-${pl}`, { size: 104, cx: 627, baseY: 1028, maxWidth: 300 });
+  const handle = textPaths(BOT_HANDLE, { size: 62, cx: 627, baseY: 1196, maxWidth: 520 });
   const titleCase = `${name[0]}${name.slice(1).toLowerCase()} ${year}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254" data-medal="2" data-place="${pl}" data-month="${month}" role="img" aria-label="${titleCase} TOP-${pl}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254" data-medal="3" data-place="${pl}" data-month="${month}" role="img" aria-label="${titleCase} TOP-${pl}">
 <title>${titleCase} · TOP-${pl}</title>
 <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${pal.top}"/><stop offset=".5" stop-color="${pal.mid}"/><stop offset="1" stop-color="${pal.bot}"/></linearGradient></defs>
 <rect width="1254" height="1254" fill="#050608"/>
 <image href="${bases[pl]}" x="0" y="0" width="1254" height="1254" preserveAspectRatio="xMidYMid slice"/>
-<g fill="#000" opacity=".45" transform="translate(0 5)">${ribbon}${tier}</g>
-<g fill="${pal.edge}" stroke="${pal.edge}" stroke-width="9" stroke-linejoin="round">${ribbon}${tier}</g>
-<g fill="url(#g)">${ribbon}${tier}</g>
+<g fill="#000" opacity=".45" transform="translate(0 5)">${ribbon}${tier}${handle}</g>
+<g fill="${pal.edge}" stroke="${pal.edge}" stroke-width="9" stroke-linejoin="round">${ribbon}${tier}${handle}</g>
+<g fill="url(#g)">${ribbon}${tier}${handle}</g>
 </svg>`;
 }
 
-module.exports = { renderMedalSvg, monthParts };
+module.exports = { renderMedalSvg, monthParts, BOT_HANDLE };
