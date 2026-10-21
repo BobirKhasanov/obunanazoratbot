@@ -870,6 +870,7 @@ export function renderProfilePage(ctx) {
 
       sectionHead(t('sec_game')),
       menuCard(
+        me.isAdmin ? menuRow({ ic: 'shield', title: t('admin_panel'), onClick: () => openAdmin(rebuildAll) }) : null,
         menuRow({ ic: 'history', title: t('hub_tab_history'), sub: t('prof_history_sub'), onClick: () => openHub('history') }),
         menuRow({ ic: 'trophy', title: t('hub_tab_rating'), sub: t('prof_rating_sub'), onClick: () => openHub('rating') }),
         menuRow({ ic: 'profile', title: t('avatar_title'), sub: t('avatar_menu_sub'), onClick: openAvatar }),
@@ -888,7 +889,6 @@ export function renderProfilePage(ctx) {
           onClick: openPremium,
         }),
         menuRow({ ic: 'sparkles', title: t('promo_title'), sub: t('promo_menu_sub'), onClick: openPromo }),
-        me.isAdmin ? menuRow({ ic: 'shield', title: t('admin_panel'), onClick: () => openAdmin(rebuildAll) }) : null,
       ),
 
       sectionHead(t('sec_settings')),

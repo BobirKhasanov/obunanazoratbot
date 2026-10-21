@@ -2,6 +2,8 @@
 import { t, errText } from './i18n.js';
 
 export const tg = window.Telegram && window.Telegram.WebApp;
+/** iPhone fullscreen already draws its own header pill; our round back button is enough there (otherwise two Back buttons). */
+export const nativeBackWanted = () => !(tg && tg.isFullscreen && tg.platform === 'ios');
 
 function insetPx(n) {
   const v = Number(n);

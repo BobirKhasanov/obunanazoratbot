@@ -1,6 +1,6 @@
 // Game screen: vs computer (local engine in a Web Worker) and online / friend games (server-authoritative over WebSocket).
 import { Chess } from '/vendor/chess.js';
-import { h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatEmoji, rain, avatar, avBlock, sleep, shareUrl, copyText, playMoveSound, unlockAudio, isMoveSoundOn, setMoveSoundOn } from './ui.js';
+import { nativeBackWanted, h, $, icon, haptic, toast, sheet, confirmSheet, api, fail, onWs, floatEmoji, rain, avatar, avBlock, sleep, shareUrl, copyText, playMoveSound, unlockAudio, isMoveSoundOn, setMoveSoundOn } from './ui.js';
 import { t, getLang } from './i18n.js';
 import { Board } from './board.js';
 import { pieceSvg, PIECE_VALUE } from './pieces.js';
@@ -919,7 +919,7 @@ export function openGame(opts, onClose) {
   } else { S.moves = opts.game.moves || []; S.chess = build(S.moves); S.colour = opts.game.you || 'w'; S.over = opts.game.status === 'finished'; render(false); }
 
   root.classList.add('show'); root.removeAttribute('aria-hidden');
-  if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.BackButton) { try { const bb = window.Telegram.WebApp.BackButton; bb.onClick(closeGame); bb.show(); } catch { /* old client */ } }
+  if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.BackButton) { try { const bb = window.Telegram.WebApp.BackButton; bb.onClick(closeGame); if (nativeBackWanted()) bb.show(); else bb.hide(); } catch { /* old client */ } }
   return S;
 }
 

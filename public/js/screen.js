@@ -1,5 +1,5 @@
 // Full-screen subpages (slide in from the right). Stacked so admin sections return to the admin hub.
-import { $, tg } from './ui.js';
+import { $, tg, nativeBackWanted } from './ui.js';
 
 /** @type {{ build: Function, opts: object, close: Function }[]} */
 const stack = [];
@@ -29,7 +29,7 @@ function bindBack(close) {
       try { tg.BackButton.offClick(e.close); } catch { /* ignore */ }
     }
     tg.BackButton.onClick(close);
-    tg.BackButton.show();
+    if (nativeBackWanted()) tg.BackButton.show(); else tg.BackButton.hide();
   } catch { /* ignore */ }
 }
 
