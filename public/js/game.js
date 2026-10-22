@@ -190,7 +190,7 @@ export function openGame(opts, onClose) {
     const meMeta = S.meta.me || {};
     if (S.kind === 'ai') {
       return {
-        me: { name: meName(), id: meMeta.id || 1, premium: !!meMeta.premium, avatarKey: meMeta.avatarKey || null },
+        me: { name: meName(), id: meMeta.id || 1, premium: !!meMeta.premium, avatarKey: meMeta.avatarKey || null, diamonds: meMeta.diamonds },
         opp: { name: `${t('ai')} · ${t('lvl' + S.level)}`, id: 7 + S.level, ai: true },
       };
     }
@@ -198,8 +198,8 @@ export function openGame(opts, onClose) {
       const g = S.game || {};
       const w = g.white || {}, b = g.black || {};
       return {
-        me: { name: w.name || t('white'), id: w.id || 1, online: w.online, premium: !!w.premium, avatarKey: w.avatarKey || null },
-        opp: { name: b.name || t('black'), id: b.id || 2, online: b.online, premium: !!b.premium, avatarKey: b.avatarKey || null },
+        me: { name: w.name || t('white'), id: w.id || 1, online: w.online, premium: !!w.premium, avatarKey: w.avatarKey || null, diamonds: w.diamonds },
+        opp: { name: b.name || t('black'), id: b.id || 2, online: b.online, premium: !!b.premium, avatarKey: b.avatarKey || null, diamonds: b.diamonds },
       };
     }
     const g = S.game; const o = g.opponent || {};
@@ -207,12 +207,12 @@ export function openGame(opts, onClose) {
     return {
       me: {
         name: meName(), id: meMeta.id || 1,
-        premium: !!meMeta.premium, avatarKey: meMeta.avatarKey || null,
+        premium: !!meMeta.premium, avatarKey: meMeta.avatarKey || null, diamonds: meMeta.diamonds,
       },
       opp: {
         name: o.name || (waitingFriend ? t('friend_slot') : '…'),
         id: o.id || 0, online: o.online,
-        premium: !!o.premium, avatarKey: o.avatarKey || null,
+        premium: !!o.premium, avatarKey: o.avatarKey || null, diamonds: o.diamonds,
       },
     };
   }
@@ -237,7 +237,7 @@ export function openGame(opts, onClose) {
         round: true,
         avatarKey: p.avatarKey || null,
       }));
-    b.name.textContent = p.name;
+    b.name.replaceChildren(p.name, ...(p.diamonds != null && !p.ai && p.id ? [h('span.pgem', `💎${p.diamonds}`)] : []));
     const clock = sideClock(colour);
     const cg = clockGame();
     const ms = cg && cg.clock && cg.status === 'active'

@@ -248,7 +248,7 @@ const touchPresent = db.prepare(`
 `);
 const clearPresent = db.prepare('UPDATE users SET present_until = NULL WHERE id = ?');
 const nameOf = db.prepare(`
-  SELECT first_name, last_name, username, present_until, avatar_key, premium, premium_until, elo
+  SELECT first_name, last_name, username, present_until, avatar_key, premium, premium_until, elo, diamonds
   FROM users WHERE id = ?
 `);
 
@@ -358,6 +358,7 @@ async function person(id) {
     premium: isPremiumActive(u),
     avatarKey: u.avatar_key || null,
     elo: Number(u.elo || DEFAULT_ELO),
+    diamonds: Number(u.diamonds || 0),
   };
 }
 
@@ -2489,6 +2490,7 @@ api.get('/users/:id', wrap(async (req, res) => {
       premium,
       avatarKey: u.avatar_key || null,
       elo: Number(u.elo || DEFAULT_ELO),
+      diamonds: Number(u.diamonds || 0),
       online: presence,
       you: id === uid,
     },

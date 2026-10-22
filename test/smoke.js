@@ -143,6 +143,7 @@ async function playMoves(game, players, moves, startPly = 0) {
     let gid, fm;
     await step('diamonds: +20/+10 referral; Premium 1/3/6/12 months; pack order notifies admin', async () => {
       assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 20, 'inviter got 20 diamonds for the friend who joined');
+      assert.strictEqual((await ok('B', 'GET', `/users/${USERS.A.id}`)).user.diamonds, 20, 'other players see diamonds on a profile');
       assert.strictEqual((await ok('B', 'GET', '/me')).user.diamonds, 10, 'new friend got 10 diamonds via referral');
       await ok('B', 'POST', '/friends/join', { userId: USERS.A.id }); // opening the link again must not pay again
       assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, 20);
