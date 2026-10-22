@@ -358,7 +358,7 @@ async function person(id) {
     premium: isPremiumActive(u),
     avatarKey: u.avatar_key || null,
     elo: Number(u.elo || DEFAULT_ELO),
-    diamonds: Number(u.diamonds || 0),
+    diamonds: isAdmin(id) ? null : Number(u.diamonds || 0), // admin balance is never shown to players
   };
 }
 
@@ -2218,7 +2218,7 @@ api.get('/rankings', wrap(async (req, res) => {
   if (rows.length) {
     const gem = await db.prepare(`SELECT id, diamonds FROM users WHERE id IN (${rows.map(() => '?').join(',')})`).all(...rows.map((r) => r.id));
     const byId = new Map(gem.map((g) => [String(g.id), Number(g.diamonds || 0)]));
-    for (const r of rows) r.diamonds = byId.get(String(r.id)) || 0;
+    for (const r of rows) r.diamonds = isAdmin(r.id) ? null : (byId.get(String(r.id)) || 0);
   }
   const payload = {
     board, period: board === 'period' ? period : null, category, month, monthLabel: monthLabelEn(month),
@@ -2496,7 +2496,7 @@ api.get('/users/:id', wrap(async (req, res) => {
       premium,
       avatarKey: u.avatar_key || null,
       elo: Number(u.elo || DEFAULT_ELO),
-      diamonds: Number(u.diamonds || 0),
+      diamonds: isAdmin(id) && id !== uid ? null : Number(u.diamonds || 0),
       online: presence,
       you: id === uid,
     },

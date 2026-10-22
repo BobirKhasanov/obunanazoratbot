@@ -41,7 +41,7 @@ const gameMeta = () => ({
     premium: !!state.me.premium,
     isAdmin: !!state.me.isAdmin,
     avatarKey: state.me.avatarKey || null,
-    diamonds: state.me.diamonds || 0,
+    diamonds: state.me.isAdmin ? null : (state.me.diamonds || 0),
   },
   botUsername: state.meta.botUsername,
   reactions: state.meta.REACTIONS,
