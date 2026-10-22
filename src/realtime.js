@@ -41,13 +41,16 @@ const markRest = (id) => lastRest.set(id, Date.now());
 const clearRest = (id) => lastRest.delete(id);
 
 /** Live WebSocket only — required for in-app challenges (invite push). */
-const hasSocket = (id) => sockets.has(id);
+const pinned = new Set(); // house players: always "connected", nothing to push to
+const pin = (id) => pinned.add(Number(id));
+const unpin = (id) => pinned.delete(Number(id));
+const hasSocket = (id) => sockets.has(id) || pinned.has(Number(id));
 
 /** Soft online: open WS or a very recent authenticated HTTP request. */
 const isOnline = (id) => hasSocket(id) || Date.now() - (lastRest.get(id) || 0) < REST_ONLINE_MS;
 
 function onlineIds() {
-  const ids = new Set(sockets.keys());
+  const ids = new Set([...sockets.keys(), ...pinned]);
   const now = Date.now();
   for (const [id, t] of lastRest) if (now - t < REST_ONLINE_MS) ids.add(id);
   return [...ids];
@@ -56,7 +59,7 @@ function onlineIds() {
 /** @returns {boolean} true if at least one open socket received the payload */
 function send(userId, payload) {
   const set = sockets.get(userId);
-  if (!set) return false;
+  if (!set) return pinned.has(Number(userId));
   const text = JSON.stringify(payload);
   let ok = false;
   for (const ws of set) {
@@ -122,6 +125,6 @@ function attach(server, botToken, hooks) {
 }
 
 module.exports = {
-  attach, send, isOnline, hasSocket, onlineIds, markRest, clearRest, presenceMs: REST_ONLINE_MS,
+  attach, send, isOnline, hasSocket, pin, unpin, onlineIds, markRest, clearRest, presenceMs: REST_ONLINE_MS,
   connectionCount, maxConnections: MAX_WS,
 };

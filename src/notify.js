@@ -38,7 +38,7 @@ const getUser = db.prepare('SELECT lang, notify_enabled, bot_blocked, blocked FR
  * Never throws. Returns true when Telegram accepted the message.
  */
 async function toUser(userId, build, { gameId, dmThreadId, effect, force } = {}) {
-  if (!bot) return false;
+  if (!bot || Number(userId) >= 9_000_000_000_000) return false; // house players are not Telegram users
   const u = await getUser.get(userId);
   if (!u || u.blocked || u.bot_blocked) return false;
   if (!u.notify_enabled && !force) return false;

@@ -359,6 +359,7 @@ async function person(id) {
     avatarKey: u.avatar_key || null,
     elo: Number(u.elo || DEFAULT_ELO),
     diamonds: isAdmin(id) ? null : Number(u.diamonds || 0), // admin balance is never shown to players
+    isBot: Number(id) >= 9_000_000_000_000,
   };
 }
 
@@ -475,7 +476,7 @@ async function loadTopScores(month) {
   return db.prepare(`
     SELECT u.id, COALESCE(NULLIF(u.first_name, ''), 'Player') AS name, u.username, m.points
     FROM monthly_scores m JOIN users u ON u.id = m.user_id
-    WHERE m.month = ? AND u.blocked = 0 AND m.points > 0
+    WHERE m.month = ? AND u.blocked = 0 AND m.points > 0 AND u.id < 9000000000000
     ORDER BY m.points DESC, m.wins DESC, lower(COALESCE(u.first_name, '')) ASC
     LIMIT 3
   `).all(month);
@@ -2154,7 +2155,7 @@ api.get('/rankings', wrap(async (req, res) => {
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
       games: Number(r.games), points: Number(r.wins) * 2 + Number(r.draws), elo: Number(r.elo || DEFAULT_ELO),
-      avatarKey: r.avatar_key || null, premium: mapPremium(r),
+      avatarKey: r.avatar_key || null, premium: mapPremium(r), isBot: Number(r.id) >= 9_000_000_000_000,
     }));
   } else if (board === 'elo') {
     const col = category === 'all' ? 'elo' : eloColumn(category);
@@ -2182,7 +2183,7 @@ api.get('/rankings', wrap(async (req, res) => {
     `).all(...params, ...params)).map((r, i) => ({
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       elo: Number(r.elo), games: Number(r.games), points: Number(r.elo),
-      avatarKey: r.avatar_key || null, premium: mapPremium(r),
+      avatarKey: r.avatar_key || null, premium: mapPremium(r), isBot: Number(r.id) >= 9_000_000_000_000,
     }));
   } else if (category === 'all') {
     rows = (await db.prepare(`
@@ -2198,7 +2199,7 @@ api.get('/rankings', wrap(async (req, res) => {
     `).all(month)).map((r, i) => ({
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       points: Number(r.points), wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
-      games: Number(r.games), avatarKey: r.avatar_key || null, premium: mapPremium(r),
+      games: Number(r.games), avatarKey: r.avatar_key || null, premium: mapPremium(r), isBot: Number(r.id) >= 9_000_000_000_000,
     }));
   } else {
     rows = (await db.prepare(`
@@ -2222,7 +2223,7 @@ api.get('/rankings', wrap(async (req, res) => {
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
       games: Number(r.games), points: Number(r.wins) * 2 + Number(r.draws),
-      avatarKey: r.avatar_key || null, premium: mapPremium(r),
+      avatarKey: r.avatar_key || null, premium: mapPremium(r), isBot: Number(r.id) >= 9_000_000_000_000,
     }));
   }
 
@@ -2508,6 +2509,7 @@ api.get('/users/:id', wrap(async (req, res) => {
       avatarKey: u.avatar_key || null,
       elo: Number(u.elo || DEFAULT_ELO),
       diamonds: isAdmin(id) && id !== uid ? null : Number(u.diamonds || 0),
+      isBot: Number(id) >= 9_000_000_000_000,
       online: presence,
       you: id === uid,
     },
@@ -3297,24 +3299,24 @@ admin.use((req, res, next) => (req.isAdmin ? next() : res.status(404).json({ err
 const one = async (sql, ...p) => (await db.prepare(sql).get(...p)).n;
 
 admin.get('/stats', wrap(async (req, res) => {
-  const signups = await db.prepare("SELECT to_char(created_at::date, 'YYYY-MM-DD') d, COUNT(*) c FROM users WHERE created_at::date >= current_date - 13 GROUP BY 1").all();
+  const signups = await db.prepare("SELECT to_char(created_at::date, 'YYYY-MM-DD') d, COUNT(*) c FROM users WHERE id < 9000000000000 AND created_at::date >= current_date - 13 GROUP BY 1").all();
   const map = Object.fromEntries(signups.map((r) => [r.d, r.c]));
   const days = Array.from({ length: 14 }, (_, i) => {
     const d = new Date(Date.now() - (13 - i) * 86400000).toISOString().slice(0, 10);
     return { date: d, count: map[d] || 0 };
   });
   res.json({
-    users: await one('SELECT COUNT(*) n FROM users'),
+    users: await one('SELECT COUNT(*) n FROM users WHERE id < 9000000000000'),
     live: (await db.prepare(`
-      SELECT COUNT(*)::int AS n FROM users WHERE blocked = 0 AND present_until > now()
+      SELECT COUNT(*)::int AS n FROM users WHERE blocked = 0 AND id < 9000000000000 AND present_until > now()
     `).get())?.n || realtime.onlineIds().length,
-    newToday: await one("SELECT COUNT(*) n FROM users WHERE created_at::date = current_date"),
-    active7d: await one("SELECT COUNT(*) n FROM users WHERE last_seen >= now() - interval '7 days'"),
+    newToday: await one("SELECT COUNT(*) n FROM users WHERE id < 9000000000000 AND created_at::date = current_date"),
+    active7d: await one("SELECT COUNT(*) n FROM users WHERE id < 9000000000000 AND last_seen >= now() - interval '7 days'"),
     blocked: await one('SELECT COUNT(*) n FROM users WHERE blocked = 1'),
     unreachable: await one('SELECT COUNT(*) n FROM users WHERE bot_blocked = 1'),
     gamesLive: await one("SELECT COUNT(*) n FROM games WHERE status = 'active'"),
     gamesPlayed: await one("SELECT COUNT(*) n FROM games WHERE status = 'finished'"),
-    byLang: await db.prepare('SELECT lang, COUNT(*) c FROM users GROUP BY lang').all(),
+    byLang: await db.prepare('SELECT lang, COUNT(*) c FROM users WHERE id < 9000000000000 GROUP BY lang').all(),
     signups: days,
   });
 }));
@@ -4051,8 +4053,8 @@ admin.post('/broadcast', wrap(async (req, res) => {
 
   if (broadcasting) throw new HttpError(409, 'A broadcast is already running', 'busy');
   const targets = lang === 'all'
-    ? await db.prepare('SELECT id FROM users WHERE blocked = 0 AND bot_blocked = 0').all()
-    : await db.prepare('SELECT id FROM users WHERE blocked = 0 AND bot_blocked = 0 AND lang = ?').all(lang);
+    ? await db.prepare('SELECT id FROM users WHERE blocked = 0 AND bot_blocked = 0 AND id < 9000000000000').all()
+    : await db.prepare('SELECT id FROM users WHERE blocked = 0 AND bot_blocked = 0 AND id < 9000000000000 AND lang = ?').all(lang);
   const info = await db.prepare('INSERT INTO broadcasts (admin_id, text, media_id, lang, total) VALUES (?, ?, ?, ?, ?) RETURNING id')
     .run(req.user.id, text, media ? media.id : null, lang, targets.length);
   const bid = Number(info.rows[0].id);
@@ -4276,6 +4278,8 @@ const tournaments = require('./tournaments').create({
   HttpError, bad, wrap, cleanText, isPremiumActive, isAdmin,
 });
 tournaments.register(api);
+const housebots = require('./housebots').create({ getSetting, setSetting, realtime, port: PORT, botToken: BOT_TOKEN });
+housebots.register(admin, { wrap });
 app.use('/api', api);
 
 // ---------- errors ----------
@@ -4340,6 +4344,7 @@ async function boot() {
     if (old.length) console.log(`[medals] redrawn: ${old.length}`);
   } catch (e) { console.error('[medals] redraw', e.message || e); }
 
+  housebots.start();
   runBotForever().catch((e) => console.error('[bot] loop died:', e && e.message ? e.message : e));
   startScheduler(
     async (id) => pushGame(await getGame.get(id)),

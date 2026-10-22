@@ -2972,3 +2972,7 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .nx-rank-gem{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(80,200,255,.14);color:#7fdcff;vertical-align:1px;white-space:nowrap}
 
 .nx-chip-s.cyan{background:rgba(120,200,255,.14);color:#7fdcff}
+
+.pbar .pgem.bot{background:rgba(255,255,255,.1);color:var(--muted);letter-spacing:.04em}
+
+.nx-card-list > .adm-row, .adm-card > .adm-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }

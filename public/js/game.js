@@ -198,8 +198,8 @@ export function openGame(opts, onClose) {
       const g = S.game || {};
       const w = g.white || {}, b = g.black || {};
       return {
-        me: { name: w.name || t('white'), id: w.id || 1, online: w.online, premium: !!w.premium, avatarKey: w.avatarKey || null, diamonds: w.diamonds },
-        opp: { name: b.name || t('black'), id: b.id || 2, online: b.online, premium: !!b.premium, avatarKey: b.avatarKey || null, diamonds: b.diamonds },
+        me: { name: w.name || t('white'), id: w.id || 1, online: w.online, premium: !!w.premium, avatarKey: w.avatarKey || null, diamonds: w.diamonds, isBot: w.isBot },
+        opp: { name: b.name || t('black'), id: b.id || 2, online: b.online, premium: !!b.premium, avatarKey: b.avatarKey || null, diamonds: b.diamonds, isBot: b.isBot },
       };
     }
     const g = S.game; const o = g.opponent || {};
@@ -212,7 +212,7 @@ export function openGame(opts, onClose) {
       opp: {
         name: o.name || (waitingFriend ? t('friend_slot') : '…'),
         id: o.id || 0, online: o.online,
-        premium: !!o.premium, avatarKey: o.avatarKey || null, diamonds: o.diamonds,
+        premium: !!o.premium, avatarKey: o.avatarKey || null, diamonds: o.diamonds, isBot: o.isBot,
       },
     };
   }
@@ -237,7 +237,7 @@ export function openGame(opts, onClose) {
         round: true,
         avatarKey: p.avatarKey || null,
       }));
-    b.name.replaceChildren(p.name, ...(p.diamonds != null && !p.ai && p.id ? [h('span.pgem', `💎${p.diamonds}`)] : []));
+    b.name.replaceChildren(p.name, ...(p.isBot ? [h('span.pgem.bot', t('bot_tag'))] : []), ...(p.diamonds != null && !p.ai && p.id ? [h('span.pgem', `💎${p.diamonds}`)] : []));
     const clock = sideClock(colour);
     const cg = clockGame();
     const ms = cg && cg.clock && cg.status === 'active'

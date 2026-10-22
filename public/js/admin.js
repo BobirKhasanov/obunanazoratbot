@@ -1,5 +1,5 @@
 // Admin panel: nx hub (overview stats + grouped sections) → live, users, shop, promos, messages, content.
-import { h, icon, haptic, toast, api, fail, getInitData, avatar, avBlock, confirmSheet, pillBar } from './ui.js';
+import { h, icon, haptic, toast, api, fail, getInitData, avatar, avBlock, confirmSheet, pillBar, toggle } from './ui.js';
 import { t, LANGS, LANG_NAMES } from './i18n.js';
 import { sectionHead, statCard, emptyNote, filterChip } from './neonui.js';
 import { openScreen } from './screen.js';
@@ -765,6 +765,31 @@ export function openAdmin(onClose) {
     ];
   }, { onClose: () => { clearInterval(timer); timer = null; } });
 
+  // ----- house players (practice opponents) -----
+  const hbHost = h('div');
+  async function loadHouseBots() {
+    try {
+      const r = await api('GET', '/admin/housebots');
+      const patch = async (body) => {
+        try { await api('PATCH', '/admin/housebots', body); toast(t('hb_saved')); loadHouseBots(); } catch (e) { fail(e); loadHouseBots(); }
+      };
+      hbHost.replaceChildren(
+        card(
+          h('p.muted', t('hb_sub')),
+          h('div.adm-row', h('div.nx-row-tx', h('b', t('hb_vs')), h('small', t('hb_vs_sub'))),
+            toggle(!!r.vsBots, (v) => patch({ vsBots: v })))),
+        cardList(r.bots.map((b) => h('div.adm-row',
+          avBlock(b.name, b.id, { round: true, avatarKey: b.avatar, noMedal: true, online: b.enabled }),
+          h('div.nx-row-tx', h('b', b.name),
+            h('small', `${b.gender === 'f' ? '♀' : '♂'} · ${b.tier === 'weak' ? t('hb_weak') : t('hb_mid')} · ${b.elo}${b.playing ? ' · ' + t('hb_playing') : ''}`)),
+          toggle(!!b.enabled, (v) => patch({ enabled: { [b.id]: v } })))), '—'));
+    } catch (e) { fail(e); }
+  }
+  const openHouseBots = () => openScreen((close) => {
+    loadHouseBots();
+    return [...subTop(t('hb_title'), close), hbHost];
+  });
+
   const openAnnouncements = () => openScreen((close) => {
     loadAnnouncements();
     return [
@@ -1442,6 +1467,7 @@ export function openAdmin(onClose) {
       menuCard(
         menuRow({ ic: 'live', tone: 'ok', title: t('admin_sec_live'), sub: t('admin_sec_live_sub'), onClick: openLive }),
         menuRow({ ic: 'chart', title: t('msg_stats_title'), sub: t('msg_stats_menu_sub'), onClick: openMessageStats }),
+        menuRow({ ic: 'users', title: t('hb_title'), sub: t('hb_menu_sub'), onClick: openHouseBots }),
       ),
       sectionHead(t('admin_sec_economy')),
       menuCard(

@@ -90,7 +90,7 @@ async function playMoves(game, players, moves, startPly = 0) {
   const srv = spawn('node', ['src/server.js'], {
     cwd: path.join(__dirname, '..'),
     env: {
-      ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', PORT: String(PORT), DATABASE_URL: pg.url, ADMIN_IDS: String(ADMIN_ID),
+      ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', DISABLE_HOUSEBOTS: '1', PORT: String(PORT), DATABASE_URL: pg.url, ADMIN_IDS: String(ADMIN_ID),
       TG_API_ROOT: tg.url, WEBAPP_URL: 'https://chess.example.test', PRESENCE_REST_MS: '5000', INVITE_TTL_MS: '60000', SCHEDULER_MS: '300',
       USER_MEMO_MS: '1', NODE_NO_WARNINGS: '1',
     },
