@@ -510,6 +510,8 @@ html[data-perf="lite"] .piece { filter: none !important; }
 .hl u.pre { background: rgba(59, 130, 246, 0.45); }
 .hl u.hint { background: rgba(74, 222, 128, 0.5); }
 .pbar .spectators { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.gtitle .spectators { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 800; vertical-align: 2px; background: rgba(120, 200, 255, 0.14); color: #7fdcff; }
+.gtitle .spectators b { color: inherit; }
 .pbar .spectators b { color: var(--text); }
 .analyze-screen { display: grid; gap: 10px; padding: 8px 0 20px; }
 .analyze-row { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 12px; background: var(--card); font-size: 13px; }
@@ -2968,3 +2970,5 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .pbar .pgem{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(80,200,255,.14);color:#7fdcff;vertical-align:1px}
 
 .nx-rank-gem{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(80,200,255,.14);color:#7fdcff;vertical-align:1px;white-space:nowrap}
+
+.nx-chip-s.cyan{background:rgba(120,200,255,.14);color:#7fdcff}

@@ -111,6 +111,7 @@ export function liveMatchRow(g, { onWatch, onProfile } = {}) {
       h('span.nx-live', h('i'), 'LIVE'),
       h('small', tcLabel(g)),
       h('span.nx-chip-s', t('ply_short', { n: Math.max(1, Math.ceil((g.ply || 0) / 2)) })),
+      g.spectators > 0 ? h('span.nx-chip-s.cyan', icon('eye', 12), String(g.spectators)) : null,
       h('b.nx-vm-sc', scoreOf(g))),
     side(w, 'w'),
     side(b, 'b'),

@@ -390,13 +390,13 @@ export function openGame(opts, onClose) {
     const topIsOpp = ori === S.colour;
     fillBar(topIsOpp ? top : bot, opp, oppCol, cap, opp.ai);
     fillBar(topIsOpp ? bot : top, me, S.colour, cap, false);
-    paintSpectators();
     top.el.classList.toggle('turn', !S.over && c.turn() === (topIsOpp ? oppCol : S.colour));
     bot.el.classList.toggle('turn', !S.over && c.turn() === (topIsOpp ? S.colour : oppCol));
 
     if (S.kind === 'ai') title.textContent = t('vs_ai');
     else if (S.kind === 'spectate') title.textContent = `${me.name} – ${opp.name}`;
     else title.textContent = S.game.status === 'active' || S.game.status === 'finished' ? opp.name : t('new_game');
+    paintSpectators();
     // status line
     let st = '';
     if (S.over) st = '';
@@ -727,13 +727,12 @@ export function openGame(opts, onClose) {
 
   function paintSpectators() {
     const n = Number(S.spectators || (S.game && S.game.spectators) || 0);
-    // Show viewer count on the local player's bar (online games only)
-    const bar = bot;
-    let el = bar.el.querySelector('.spectators');
-    if (S.kind === 'online' && n > 0 && !S.over) {
+    // Eye + number in the header for players and viewers alike (live games only)
+    let el = title.querySelector('.spectators');
+    if ((S.kind === 'online' || S.kind === 'spectate') && n > 0 && !S.over) {
       if (!el) {
-        el = h('span.spectators', icon('eye', 14), h('b', '0'));
-        bar.name.after(el);
+        el = h('span.spectators', { title: t('viewers') }, icon('eye', 14), h('b', '0'));
+        title.append(el);
       }
       const b = el.querySelector('b');
       if (b) b.textContent = String(n);

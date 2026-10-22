@@ -804,6 +804,17 @@ function touchSpectator(gameId, userId, ttlMs = 25_000) {
 function spectatorCount(gameId) {
   return pruneSpectators(gameId);
 }
+const lastSpecPushed = new Map();
+// Viewers leave silently (their poll just stops): recompute every few seconds and push changes to the players
+setInterval(() => {
+  for (const [gameId] of spectatorWatch) lastSpecPushed.set(gameId, lastSpecPushed.get(gameId) ?? -1);
+  for (const [gameId, prev] of lastSpecPushed) {
+    const n = spectatorCount(gameId);
+    if (n === prev) { if (!n) lastSpecPushed.delete(gameId); continue; }
+    lastSpecPushed.set(gameId, n);
+    getGame.get(gameId).then((row) => { if (row) pushSpectatorCount(gameId, row); }).catch(() => {});
+  }
+}, 5000).unref();
 function pushSpectatorCount(gameId, row) {
   const n = spectatorCount(gameId);
   for (const id of [row.white_id, row.black_id].filter(Boolean)) {

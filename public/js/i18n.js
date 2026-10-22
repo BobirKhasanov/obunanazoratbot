@@ -508,6 +508,10 @@ Object.assign(uzc, {"mv_first": "Биринчи юриш", "mv_prev": "Олди�
 Object.assign(en, { avatar_char_premium: "Character avatars are for Premium" });
 Object.assign(ru, { avatar_char_premium: "Аватары-персонажи — для Premium" });
 Object.assign(uz, { avatar_char_premium: "Qahramon avatarlari faqat Premium uchun" });
+Object.assign(en, { viewers: "Viewers" });
+Object.assign(ru, { viewers: "Зрители" });
+Object.assign(uz, { viewers: "Kuzatuvchilar" });
+Object.assign(uzc, { viewers: "Кузатувчилар" });
 Object.assign(en, { champs_title: "{month} champions" });
 Object.assign(ru, { champs_title: "Чемпионы {month}" });
 Object.assign(uz, { champs_title: "{month} chempionlari" });
