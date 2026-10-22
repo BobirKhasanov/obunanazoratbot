@@ -193,7 +193,8 @@ export function rankRow(p, { you, onOpen } = {}) {
   },
     medal,
     avBlock(p.name || '?', p.id, { premium: !!p.premium, round: true, avatarKey: p.avatarKey, online: !!p.online }),
-    h('b.nx-rank-name', you ? t('you_label') : p.name, !you && p.premium ? premIc(14) : null),
+    h('b.nx-rank-name', you ? t('you_label') : p.name, !you && p.premium ? premIc(14) : null,
+      p.diamonds != null ? h('span.nx-rank-gem', `💎${p.diamonds}`) : null),
     h('b.nx-rank-score', String(p.score)));
 }
 

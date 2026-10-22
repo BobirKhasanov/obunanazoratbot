@@ -187,7 +187,7 @@ async function paintRating(ctx) {
   const mine = data.me || {};
   const myRow = {
     id: meId, rank: mine.rank, name: ctx.me.displayName || ctx.me.firstName, premium: !!ctx.me.premium,
-    avatarKey: ctx.me.avatarKey, score: isElo ? (mine.elo || ctx.me.elo || 1200) : (mine.points || 0),
+    avatarKey: ctx.me.avatarKey, diamonds: ctx.me.diamonds || 0, score: isElo ? (mine.elo || ctx.me.elo || 1200) : (mine.points || 0),
   };
   const subTabs = segTabs([
     ['all', t('rank_all_time')], ['month', t('rank_month')],

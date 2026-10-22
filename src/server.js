@@ -452,9 +452,9 @@ async function applyRatingFinish(row, result) {
 function clearRankingCaches() {
   const mk = monthKey();
   return Promise.all(['bullet', 'blitz', 'rapid', 'classic', 'all'].flatMap((c) => [
-    cacheDel(`rankings:v2:elo:${c}:${mk}`),
-    cacheDel(`rankings:v2:monthly:${c}:${mk}`),
-    ...['day', 'week', 'month'].map((p) => cacheDel(`rankings:v2:period:${p}:${c}:${mk}`)),
+    cacheDel(`rankings:v3:elo:${c}:${mk}`),
+    cacheDel(`rankings:v3:monthly:${c}:${mk}`),
+    ...['day', 'week', 'month'].map((p) => cacheDel(`rankings:v3:period:${p}:${c}:${mk}`)),
   ]));
 }
 
@@ -1742,6 +1742,7 @@ api.post('/games/:id/join', wrap(async (req, res) => {
   const uid = req.user.id;
   const row = await getGame.get(String(req.params.id));
   if (!row) throw new HttpError(404, 'Game not found', 'notfound');
+  if (row.status === 'cancelled' && row.creator_id !== uid) throw bad('This game is no longer available', 'game_unavailable');
   if (await isParticipant(row, uid) && row.status !== 'open' && row.status !== 'invited') return res.json({ game: await gameFor(row, uid) });
   if (row.creator_id === uid) return res.json({ game: await gameFor(row, uid) }); // opening your own link
   if (inviteExpired(row)) { await dropInvites(row); await db.prepare("UPDATE games SET status = 'cancelled' WHERE id = ?").run(row.id); await pushGame(await getGame.get(row.id)); throw bad('This game is no longer available', 'game_unavailable'); }
@@ -2095,8 +2096,8 @@ api.get('/rankings', wrap(async (req, res) => {
   const month = monthKey();
   // v2: includes premium flag (old cache entries without it must not be reused)
   const cacheKey = board === 'period'
-    ? `rankings:v2:period:${period}:${category}:${month}`
-    : `rankings:v2:${board}:${category}:${month}`;
+    ? `rankings:v3:period:${period}:${category}:${month}`
+    : `rankings:v3:${board}:${category}:${month}`;
   const myRank = async (list) => {
     const uid = req.user.id;
     const inList = (list || []).find((r) => sameId(r.id, uid));
@@ -2214,6 +2215,11 @@ api.get('/rankings', wrap(async (req, res) => {
     }));
   }
 
+  if (rows.length) {
+    const gem = await db.prepare(`SELECT id, diamonds FROM users WHERE id IN (${rows.map(() => '?').join(',')})`).all(...rows.map((r) => r.id));
+    const byId = new Map(gem.map((g) => [String(g.id), Number(g.diamonds || 0)]));
+    for (const r of rows) r.diamonds = byId.get(String(r.id)) || 0;
+  }
   const payload = {
     board, period: board === 'period' ? period : null, category, month, monthLabel: monthLabelEn(month),
     rankings: rows, updatedAt: new Date().toISOString(),

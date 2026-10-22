@@ -523,6 +523,7 @@ async function playMoves(game, players, moves, startPly = 0) {
       const aliceElo = eloBoard.find((p) => p.id === USERS.A.id);
       const bobElo = eloBoard.find((p) => p.id === USERS.B.id);
       assert.ok(aliceElo && bobElo, 'both players on Elo board after bullet game');
+      assert.ok(typeof aliceElo.diamonds === 'number', 'rankings carry diamonds');
       assert.strictEqual(aliceElo.games, 1);
       assert.strictEqual(bobElo.games, 1);
       assert.ok(bobElo.elo > aliceElo.elo, 'winner Elo rises, loser falls');
