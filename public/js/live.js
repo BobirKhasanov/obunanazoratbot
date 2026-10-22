@@ -111,13 +111,6 @@ function fenTurn(fen) {
   return t === 'b' ? 'b' : 'w';
 }
 
-function fenPly(fen) {
-  const f = String(fen || '').split(/\s+/);
-  const full = Number(f[5]);
-  if (!Number.isFinite(full)) return -1;
-  return (full - 1) * 2 + (f[1] === 'b' ? 1 : 0);
-}
-
 function makeClockState(g) {
   const turn = fenTurn(g && g.fen);
   const think = g && g.status === '*' ? g.thinkTime : 0;
@@ -805,7 +798,7 @@ async function renderGame(mount, onRefresh) {
   const applySnap = (g, { animate = true } = {}) => {
     if (!g) return;
     // A cached/lagging poll must never rewind the board or the clocks
-    if (snap && snap.fen && g.status === snap.status && fenPly(g.fen) >= 0 && fenPly(g.fen) < fenPly(snap.fen)) return;
+    if (snap && snap.fen && g.status === snap.status && fenPly(g.fen) > 0 && fenPly(g.fen) < fenPly(snap.fen)) return;
     const key = `${g.fen}|${g.lastMove}|${g.status}`;
     const changed = key !== lastKey;
     const fresh = makeClockState(g);
