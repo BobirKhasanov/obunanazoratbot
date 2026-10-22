@@ -722,7 +722,7 @@ export const avatar = (name, id, cls = '', avatarKey = null) => {
     el.classList.add('medal');
     el.style.background = '#0b0f16';
     el.replaceChildren(h('img.avatar-medal', {
-      src: `/api/medals/${encodeURIComponent(medal[1])}.svg`,
+      src: `/api/medals/${encodeURIComponent(medal[1])}.svg?v=4`,
       alt: '',
       draggable: 'false',
       loading: 'lazy',
@@ -796,7 +796,7 @@ export function avBlock(name, id, opts = {}) {
   if (opts.online) wrap.append(h('i.dot.on'));
   const med = id ? medalOf(id) : null;
   if (med && !opts.noMedal) {
-    wrap.append(h('img.med-bdg.p' + med.place, { src: `/api/medals/${med.id}.svg`, alt: '', loading: 'lazy', decoding: 'async', 'aria-hidden': 'true' }));
+    wrap.append(h('img.med-bdg.p' + med.place, { src: `/api/medals/${med.id}.svg?v=4`, alt: '', loading: 'lazy', decoding: 'async', 'aria-hidden': 'true' }));
   }
   return wrap;
 }

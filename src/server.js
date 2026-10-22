@@ -129,7 +129,7 @@ app.get('/api/medals/:id.svg', wrap(async (req, res) => {
   const row = await db.prepare('SELECT svg FROM medals WHERE id = ?').get(id);
   if (!row) throw new HttpError(404, 'Not found', 'notfound');
   res.set('Content-Type', 'image/svg+xml; charset=utf-8');
-  res.set('Cache-Control', 'public, max-age=3600');
+  res.set('Cache-Control', 'public, max-age=300');
   res.send(row.svg);
 }));
 
@@ -2231,7 +2231,7 @@ api.get('/medals/mine', wrap(async (req, res) => {
     avatarKey: req.user.avatar_key || null,
     medals: rows.map((r) => ({
       id: r.id, month: r.month, monthLabel: monthLabelEn(r.month), place: r.place,
-      title: r.title, url: `/api/medals/${r.id}.svg`, key: `medal:${r.id}`,
+      title: r.title, url: `/api/medals/${r.id}.svg?v=4`, key: `medal:${r.id}`,
     })),
   });
 }));
@@ -2251,7 +2251,7 @@ api.get('/medals/champions', wrap(async (req, res) => {
     champions: rows.map((r) => ({
       place: r.place, id: r.uid, name: r.name, avatarKey: r.avatar_key || null,
       premium: isPremiumActive({ premium: r.premium, premium_until: r.premium_until }),
-      medalId: r.id, url: `/api/medals/${r.id}.svg`,
+      medalId: r.id, url: `/api/medals/${r.id}.svg?v=4`,
     })),
   });
 }));
@@ -2500,7 +2500,7 @@ api.get('/users/:id', wrap(async (req, res) => {
     friendRequest,
     medals: medalRows.map((r) => ({
       id: r.id, month: r.month, monthLabel: monthLabelEn(r.month), place: r.place,
-      title: r.title, url: `/api/medals/${r.id}.svg`, key: `medal:${r.id}`,
+      title: r.title, url: `/api/medals/${r.id}.svg?v=4`, key: `medal:${r.id}`,
     })),
   });
 }));
@@ -3871,7 +3871,7 @@ admin.get('/medals', wrap(async (req, res) => {
     medals: medals.map((r) => ({
       id: r.id, month: r.month, place: r.place, userId: r.user_id,
       title: r.title, name: r.first_name || '', username: r.username || '',
-      url: `/api/medals/${r.id}.svg`,
+      url: `/api/medals/${r.id}.svg?v=4`,
     })),
   });
 }));
