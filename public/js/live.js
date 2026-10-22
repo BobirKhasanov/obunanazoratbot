@@ -6,7 +6,7 @@ import { Board } from './board.js';
 import { openGame } from './game.js';
 import { openGameAnalysis } from './analyze.js';
 import { openScreen } from './screen.js';
-import { formatTashkentWhen } from './time.js';
+import { formatTashkentWhen, formatTashkentShort } from './time.js';
 import { liveRoundPollMs, liveGamePollMs, liveClockTickMs, liveMiniBoardBudget, isLite } from './perf.js';
 import { openChatWithUser, openMessages, openNotifications } from './inbox.js';
 import { openUserProfile } from './profile.js';
@@ -111,6 +111,13 @@ function fenTurn(fen) {
   return t === 'b' ? 'b' : 'w';
 }
 
+function fenPly(fen) {
+  const f = String(fen || '').split(/\s+/);
+  const full = Number(f[5]);
+  if (!Number.isFinite(full)) return -1;
+  return (full - 1) * 2 + (f[1] === 'b' ? 1 : 0);
+}
+
 function makeClockState(g) {
   const turn = fenTurn(g && g.fen);
   const think = g && g.status === '*' ? g.thinkTime : 0;
@@ -156,13 +163,8 @@ function tourSubtitle(item) {
 }
 
 function startsLabel(ts) {
-  if (!ts) return '';
-  const d = new Date(ts);
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const today = d.toDateString() === new Date().toDateString();
-  const day = today ? '' : `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')} `;
-  return t('starts_at', { t: `${day}${hh}:${mm}` });
+  const when = formatTashkentShort(ts);
+  return when ? t('starts_at', { t: when }) : '';
 }
 
 let hooks = {};
@@ -802,11 +804,19 @@ async function renderGame(mount, onRefresh) {
 
   const applySnap = (g, { animate = true } = {}) => {
     if (!g) return;
+    // A cached/lagging poll must never rewind the board or the clocks
+    if (snap && snap.fen && g.status === snap.status && fenPly(g.fen) >= 0 && fenPly(g.fen) < fenPly(snap.fen)) return;
     const key = `${g.fen}|${g.lastMove}|${g.status}`;
     const changed = key !== lastKey;
+    const fresh = makeClockState(g);
+    // Same position: keep the locally running clock; re-sync only if it drifted a lot (thinkTime is whole seconds
+    // and polls may be cached, so re-syncing every poll made the digits jump back and forth).
+    const old = clockState;
+    const drift = old && !changed && old.turn === fresh.turn && old.active === fresh.active
+      ? Math.abs((liveSideMs(old, fresh.turn) ?? 0) - (liveSideMs(fresh, fresh.turn) ?? 0)) : Infinity;
+    if (changed || !old || drift > 3500) clockState = fresh;
     snap = g;
     nav.snap = g;
-    clockState = makeClockState(g);
     lastKey = key;
     const w = (g.players && g.players[0]) || {};
     const b = (g.players && g.players[1]) || {};

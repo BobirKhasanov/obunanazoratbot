@@ -55,6 +55,27 @@ export function formatTashkentWhen(iso) {
   return `${g('day')}.${g('month')}.${g('year')} · ${g('hour')}:${g('minute')}`;
 }
 
+const tashkentParts = (d) => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const g = (k) => (parts.find((p) => p.type === k) || {}).value || '';
+  // some engines print midnight as 24
+  return { y: g('year'), mo: g('month'), d: g('day'), h: g('hour') === '24' ? '00' : g('hour'), mi: g('minute') };
+};
+
+/** Upcoming event time in Asia/Tashkent: "HH:MM" today, else "DD.MM HH:MM". Same zone on every device. */
+export function formatTashkentShort(ts) {
+  if (ts == null || ts === '') return '';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = tashkentParts(d);
+  const n = tashkentParts(new Date());
+  const today = p.y === n.y && p.mo === n.mo && p.d === n.d;
+  return `${today ? '' : `${p.d}.${p.mo} `}${p.h}:${p.mi}`;
+}
+
 /** Live remaining for one side from a game.clock snapshot. */
 export function remainingMs(clock, side, turn, status, now = Date.now()) {
   if (!clock) return null;

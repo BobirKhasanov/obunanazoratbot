@@ -2,13 +2,12 @@
 import { h, icon, haptic, api, fail, toast, sheet, confirmSheet, avBlock } from './ui.js';
 import { t } from './i18n.js';
 import { openScreen } from './screen.js';
+import { formatTashkentShort } from './time.js';
 import { openGame, } from './game.js';
 import { spectateGame } from './live.js';
 import { sectionHead, emptyNote } from './neonui.js';
 
-const fmtWhen = (iso) => {
-  try { return new Date(iso).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
-};
+const fmtWhen = (iso) => formatTashkentShort(iso);
 const untilLabel = (iso) => {
   const ms = new Date(iso).getTime() - Date.now();
   if (ms <= 0) return t('swiss_starting');

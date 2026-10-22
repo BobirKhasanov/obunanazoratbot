@@ -316,7 +316,15 @@ export class Board {
     try { this.el.releasePointerCapture(d.id); } catch { /* ignore */ }
     if (!d.moved || d.mode !== 'drag') { this.place(d.el, d.sq, { animate: false }); return; }
     const to = this.sqAt(e.clientX, e.clientY);
-    if (to && to !== d.sq && this.legal.some((m) => m.to === to)) this.tryMove(d.sq, to);
+    if (to && to !== d.sq && this.legal.some((m) => m.to === to)) {
+      // Dropped by hand: settle on the square at once — otherwise the piece glides from the drop point
+      // to the square centre after the move ("wiggle"). Promotions / premoves keep the old path.
+      if (this.chess.turn() === this.mine) {
+        const mv = this.chess.moves({ square: d.sq, verbose: true }).find((m) => m.to === to);
+        if (mv && !mv.promotion) this.place(d.el, to, { animate: false });
+      }
+      this.tryMove(d.sq, to);
+    }
     else { this.place(d.el, d.sq, { animate: true }); haptic('light'); }
   }
   cancelDrag() {
