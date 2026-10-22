@@ -169,7 +169,6 @@ export function openUserProfile(userId, opts = {}) {
             userLine ? h('div.prof-user', userLine) : null,
             h('div.nx-prof-chips',
               h('span.nx-chip-s.blue', icon('chart', 12), String(elo)),
-              u.isBot ? h('span.nx-chip-s.cyan', '🤖 ' + t('bot_tag')) : null,
               u.diamonds != null ? h('span.nx-chip-s.gold', `💎 ${u.diamonds}`) : null,
               u.online
                 ? h('span.nx-chip-s.uprof-on', h('i.nx-dot.green'), t('online'))

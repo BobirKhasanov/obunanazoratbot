@@ -510,8 +510,8 @@ html[data-perf="lite"] .piece { filter: none !important; }
 .hl u.pre { background: rgba(59, 130, 246, 0.45); }
 .hl u.hint { background: rgba(74, 222, 128, 0.5); }
 .pbar .spectators { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
-.gtitle .spectators { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 800; vertical-align: 2px; background: rgba(120, 200, 255, 0.14); color: #7fdcff; }
-.gtitle .spectators b { color: inherit; }
+.ghead-tools .spectators { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; font-size: 13px; font-weight: 800; flex: none; background: rgba(120, 200, 255, 0.14); color: #7fdcff; }
+.ghead-tools .spectators b { color: inherit; }
 .pbar .spectators b { color: var(--text); }
 .analyze-screen { display: grid; gap: 10px; padding: 8px 0 20px; }
 .analyze-row { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 12px; background: var(--card); font-size: 13px; }
@@ -2976,3 +2976,5 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .pbar .pgem.bot{background:rgba(255,255,255,.1);color:var(--muted);letter-spacing:.04em}
 
 .nx-card-list > .adm-row, .adm-card > .adm-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+
+.ghead-tools .spectators[hidden]{display:none}

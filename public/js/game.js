@@ -131,6 +131,7 @@ export function openGame(opts, onClose) {
   const banner = h('div.gbanner'); banner.hidden = true;
   const back = h('button.round.back', { 'aria-label': t('back'), onclick: () => closeGame() }, icon('back', 22));
   const title = h('div.gtitle');
+  const specEl = h('span.spectators', { title: t('viewers') }, icon('eye', 14), h('b', '0')); specEl.hidden = true;
   const soundBtn = h('button.round.sound-btn', {
     type: 'button',
     'aria-label': t('move_sound'),
@@ -169,6 +170,7 @@ export function openGame(opts, onClose) {
   root.append(
     h('div.ghead', back, title,
       h('div.ghead-tools',
+        specEl,
         soundBtn,
         h('button.round', { 'aria-label': t('game_settings'), onclick: () => openPrefs() }, icon('gear', 22)),
         h('button.round', { 'aria-label': t('flip'), onclick: () => { S.flipped = !S.flipped; render(false); haptic('light'); } }, icon('flip', 22)))),
@@ -237,7 +239,7 @@ export function openGame(opts, onClose) {
         round: true,
         avatarKey: p.avatarKey || null,
       }));
-    b.name.replaceChildren(p.name, ...(p.isBot ? [h('span.pgem.bot', t('bot_tag'))] : []), ...(p.diamonds != null && !p.ai && p.id ? [h('span.pgem', `💎${p.diamonds}`)] : []));
+    b.name.replaceChildren(p.name, ...(p.diamonds != null && !p.ai && p.id ? [h('span.pgem', `💎${p.diamonds}`)] : []));
     const clock = sideClock(colour);
     const cg = clockGame();
     const ms = cg && cg.clock && cg.status === 'active'
@@ -727,16 +729,10 @@ export function openGame(opts, onClose) {
 
   function paintSpectators() {
     const n = Number(S.spectators || (S.game && S.game.spectators) || 0);
-    // Eye + number in the header for players and viewers alike (live games only)
-    let el = title.querySelector('.spectators');
-    if ((S.kind === 'online' || S.kind === 'spectate') && n > 0 && !S.over) {
-      if (!el) {
-        el = h('span.spectators', { title: t('viewers') }, icon('eye', 14), h('b', '0'));
-        title.append(el);
-      }
-      const b = el.querySelector('b');
-      if (b) b.textContent = String(n);
-    } else if (el) el.remove();
+    // Eye + number next to the header buttons — players and viewers alike, never clipped by a long title
+    const show = (S.kind === 'online' || S.kind === 'spectate') && n > 0 && !S.over;
+    specEl.hidden = !show;
+    if (show) specEl.querySelector('b').textContent = String(n);
   }
 
   const resultCode = (outcome) => {
