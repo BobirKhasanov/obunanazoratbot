@@ -205,7 +205,19 @@ function create(d) {
       const tc = TC_ALLOWED.includes(b.timeControl) ? b.timeControl : '5+0';
       const maxPlayers = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Math.floor(Number(b.maxPlayers) || 32)));
       const rounds = Math.max(3, Math.min(9, Math.floor(Number(b.rounds) || defaultRounds(maxPlayers))));
-      const mins = START_MINUTES.includes(Number(b.startsInMin)) ? Number(b.startsInMin) : 15;
+      // Start by clock time (Tashkent, UTC+5) — "YYYY-MM-DD HH:mm"; the old "in N minutes" still works
+      let mins = START_MINUTES.includes(Number(b.startsInMin)) ? Number(b.startsInMin) : 15;
+      let startAtMs = null;
+      if (b.startsAtTashkent != null && b.startsAtTashkent !== '') {
+        const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})$/.exec(String(b.startsAtTashkent).trim());
+        const at = m ? new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00+05:00`) : null;
+        if (!at || Number.isNaN(at.getTime())) throw bad('Start time must be YYYY-MM-DD HH:mm (Tashkent)', 'bad_request');
+        const diff = Math.round((at.getTime() - Date.now()) / 60000);
+        if (diff < 2) throw bad('Start time must be in the future', 'bad_request');
+        if (diff > 14 * 1440) throw bad('Start time is too far ahead (max 14 days)', 'bad_request');
+        mins = diff;
+        startAtMs = at.getTime();
+      }
       const cfg = (await getShopSettings()).tour;
       if (!req.isAdmin) {
         const mineOpen = await db.prepare("SELECT 1 AS x FROM tournaments WHERE creator_id = ? AND status IN ('registration', 'running')").get(req.user.id);
@@ -215,7 +227,7 @@ function create(d) {
         if (await joinedToday(req.user.id) >= cfg.dailyJoinLimit) throw bad('Daily tournament limit reached', 'tour_daily');
       }
       const row = await db.prepare(`INSERT INTO tournaments (name, creator_id, time_control, rounds, max_players, starts_at, prize_cfg)
-        VALUES (?, ?, ?, ?, ?, now() + (? * interval '1 minute'), ?::jsonb) RETURNING id`).get(name, req.user.id, tc, rounds, maxPlayers, mins, JSON.stringify(cfg));
+        VALUES (?, ?, ?, ?, ?, ${startAtMs ? '?::timestamptz' : "now() + (? * interval '1 minute')"}, ?::jsonb) RETURNING id`).get(name, req.user.id, tc, rounds, maxPlayers, startAtMs ? new Date(startAtMs).toISOString() : mins, JSON.stringify(cfg));
       await db.prepare('INSERT INTO tournament_players (tournament_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING').run(row.id, req.user.id);
       res.status(201).json({ tournament: await brief(await getT(row.id), req.user.id) });
     }));

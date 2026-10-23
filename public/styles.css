@@ -2994,3 +2994,6 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .nx-rank-n.long { font-size: 11px; letter-spacing: -.3px; }
 .nx-rank-score { max-width: 38%; }
 .nx-rank-total { margin: 10px 0 2px; text-align: center; color: var(--muted); font-size: 12px; font-weight: 600; }
+
+.sw-start { display: grid; gap: 8px; }
+.sw-start input[type=time] { width: 100%; box-sizing: border-box; font-size: 18px; font-weight: 800; text-align: center; }

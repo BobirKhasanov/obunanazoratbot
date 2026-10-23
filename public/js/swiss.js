@@ -58,7 +58,6 @@ export function swissSection(data, { onRefresh, meta, onClose }) {
 
 function openCreate(options, onDone) {
   const tcs = options.timeControls || ['3+0', '5+0', '10+0'];
-  const starts = options.startMinutes || [5, 15, 30, 60];
   const state = { tc: tcs.includes('5+0') ? '5+0' : tcs[0], rounds: 5, max: 16, mins: 15 };
   const name = h('input.input', { maxlength: 40, placeholder: t('swiss_name_ph') });
   const chips = (vals, key, label) => {
@@ -68,14 +67,31 @@ function openCreate(options, onDone) {
     paint();
     return row;
   };
-  const minLabel = (m) => (m >= 1440 ? t('swiss_in_day') : m >= 60 ? t('swiss_in_hour', { n: m / 60 }) : t('swiss_in_min', { n: m }));
+  // Start time = a clock time in Tashkent (UTC+5): today / tomorrow + HH:mm
+  const tk = (ms) => {
+    const f = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const o = Object.fromEntries(f.formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
+    return { date: `${o.year}-${o.month}-${o.day}`, time: `${o.hour}:${o.minute}` };
+  };
+  const first = tk(Date.now() + 20 * 60000);
+  const mm = Number(first.time.slice(3));
+  const rounded = tk(Date.now() + 20 * 60000 + (((30 - (mm % 30)) % 30) * 60000)); // next :00 / :30
+  const startDay = { v: rounded.date };
+  const todayD = tk(Date.now()).date;
+  const tomorrowD = tk(Date.now() + 86400000).date;
+  const timeIn = h('input.input', { type: 'time', value: rounded.time, step: 300, 'aria-label': t('swiss_starts') });
+  const dayRow = h('div.sw-chips');
+  const paintDay = () => [...dayRow.children].forEach((b, i) => b.classList.toggle('on', [todayD, tomorrowD][i] === startDay.v));
+  [[todayD, t('swiss_day_today')], [tomorrowD, t('swiss_day_tomorrow')]].forEach(([d, label]) => dayRow.append(h('button.sw-chip', { type: 'button', onclick: () => { startDay.v = d; haptic('select'); paintDay(); } }, label)));
+  paintDay();
+  const startPicker = h('div.sw-start', dayRow, timeIn, h('small.muted', t('swiss_tz_note')));
   sheet((close) => [
     h('h2', t('swiss_create')),
     h('div.label', t('swiss_name')), name,
     h('div.label', t('swiss_tc')), chips(tcs, 'tc', (v) => v),
     h('div.label', t('swiss_rounds')), chips([3, 4, 5, 6, 7], 'rounds', (v) => String(v)),
     h('div.label', t('swiss_max')), chips([8, 16, 32, 64], 'max', (v) => String(v)),
-    h('div.label', t('swiss_starts')), chips(starts, 'mins', minLabel),
+    h('div.label', t('swiss_starts')), startPicker,
     h('p.muted', t('swiss_rules', { n: options.minPlayers || 4 })),
     options.rules ? h('p.muted', t('swiss_org_reward', { n: options.rules.organizer }) + (options.rules.organizerBig !== options.rules.organizer ? ` · >${options.rules.bigThreshold}: +${options.rules.organizerBig} 💎` : '')) : null,
     options.rules ? h('p.muted', t('swiss_limits', { w: options.rules.weeklyLimit, d: options.rules.dailyJoinLimit })) : null,
@@ -85,7 +101,7 @@ function openCreate(options, onDone) {
         const nm = name.value.trim();
         if (nm.length < 3) return toast(t('swiss_name_short'), true);
         try {
-          const r = await api('POST', '/tournaments', { name: nm, timeControl: state.tc, rounds: state.rounds, maxPlayers: state.max, startsInMin: state.mins });
+          const r = await api('POST', '/tournaments', { name: nm, timeControl: state.tc, rounds: state.rounds, maxPlayers: state.max, startsAtTashkent: `${startDay.v} ${timeIn.value || rounded.time}` });
           haptic('success'); close(); onDone(r.tournament);
         } catch (e) { fail(e); }
       },

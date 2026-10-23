@@ -47,6 +47,16 @@ const waitFor = async (fn, ms = 20000, what = 'condition') => { const t0 = Date.
     await pg.q("UPDATE users SET premium = 1, premium_until = now() + interval '30 days' WHERE id = ?".replace('?', U.P.id));
     await sleep(800); // the server memoises users for 0.5s
 
+    await step('start time is picked as a clock time (Tashkent); past or malformed times are refused', async () => {
+      const tk = (ms) => { const d = new Date(ms + 5 * 3600000); return d.toISOString().slice(0, 16).replace('T', ' '); };
+      const at = tk(Date.now() + 3 * 3600000);
+      const r = await ok('P', 'POST', '/tournaments', { name: 'Clock Cup', timeControl: '3+0', startsAtTashkent: at });
+      const got = new Date(r.tournament.startsAt).getTime();
+      assert.ok(Math.abs(got - (Date.parse(at.replace(' ', 'T') + ':00+05:00'))) < 1000, 'starts exactly at the chosen Tashkent time');
+      await call('P', 'POST', `/tournaments/${r.tournament.id}/cancel`).catch(() => {});
+      assert.strictEqual((await call('P', 'POST', '/tournaments', { name: 'Past Cup', startsAtTashkent: tk(Date.now() - 3600000) })).status, 400);
+      assert.strictEqual((await call('P', 'POST', '/tournaments', { name: 'Junk Cup', startsAtTashkent: 'soon' })).status, 400);
+    });
     await step('only Premium / admin can create', async () => {
       await err('A', 'POST', '/tournaments', { name: 'Nope' }, 403, 'premium_required');
       const list = await ok('A', 'GET', '/tournaments');
