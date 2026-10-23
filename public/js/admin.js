@@ -159,6 +159,18 @@ export function openAdmin(onClose) {
               loadUsers(q);
             } catch (e) { fail(e); }
           }),
+          icBtn('trophy', t('admin_grant_rating'), async () => {
+            const raw = window.prompt(t('admin_rating_prompt', { name: name || u.id }), '50');
+            if (raw == null || raw === '') return;
+            const amount = Math.floor(Number(raw));
+            if (!Number.isFinite(amount) || amount === 0) return toast(t('e_bad_request'), true);
+            try {
+              await api('POST', `/admin/users/${u.id}/rating`, { amount });
+              toast(t('admin_rating_ok', { n: (amount > 0 ? '+' : '−') + Math.abs(amount) }));
+              haptic('success');
+              loadUsers(q);
+            } catch (e) { fail(e); }
+          }),
         ];
         if (!u.isAdmin) {
           actions.push(

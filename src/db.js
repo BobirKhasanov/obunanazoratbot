@@ -271,6 +271,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_bullet INTEGER NOT NULL DEFAULT 1
 ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_blitz INTEGER NOT NULL DEFAULT 1200;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_rapid INTEGER NOT NULL DEFAULT 1200;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS elo_classic INTEGER NOT NULL DEFAULT 1200;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS rd INTEGER NOT NULL DEFAULT 250;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS rd_bullet INTEGER NOT NULL DEFAULT 250;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS rd_blitz INTEGER NOT NULL DEFAULT 250;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS rd_rapid INTEGER NOT NULL DEFAULT 250;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS rd_classic INTEGER NOT NULL DEFAULT 250;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS rd_at TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE users ADD COLUMN IF NOT EXISTS present_until TIMESTAMPTZ; -- live in Mini App; cleared on close
 CREATE INDEX IF NOT EXISTS idx_users_present_until ON users(present_until) WHERE present_until IS NOT NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name TEXT NOT NULL DEFAULT '';
@@ -550,6 +556,21 @@ db.ready = (async () => {
        )
        UPDATE app_settings SET value = '2'
        WHERE key = 'puzzle_daily_reward' AND trim(value) = '1' AND EXISTS (SELECT 1 FROM m)`,
+    );
+    // One-time: players who already have games start settled (small RD) instead of "new" (big swings).
+    await c.query(
+      `WITH m AS (
+         INSERT INTO app_settings (key, value) VALUES ('migr_glicko_rd_1', '1')
+         ON CONFLICT (key) DO NOTHING RETURNING 1
+       )
+       UPDATE users u SET
+         rd = s.v, rd_bullet = s.v, rd_blitz = s.v, rd_rapid = s.v, rd_classic = s.v
+       FROM (
+         SELECT x.id, GREATEST(60, 250 - 10 * COUNT(g.id))::int AS v
+         FROM users x LEFT JOIN games g ON g.status = 'finished' AND (g.white_id = x.id OR g.black_id = x.id)
+         GROUP BY x.id
+       ) s
+       WHERE u.id = s.id AND EXISTS (SELECT 1 FROM m)`,
     );
     await c.query('COMMIT');
   } catch (e) {

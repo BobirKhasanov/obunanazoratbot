@@ -1639,3 +1639,7 @@ Object.assign(uzc, {
  "rv_p_p": "пиёда",
  "rv_engine": "Двигател ўйлаяпти…"
 });
+Object.assign(en, { admin_grant_rating: 'Give rating points', admin_rating_prompt: 'Rating points for {name} (+ or −)', admin_rating_ok: '{n} rating applied' });
+Object.assign(ru, { admin_grant_rating: 'Выдать очки рейтинга', admin_rating_prompt: 'Очки рейтинга для {name} (+ или −)', admin_rating_ok: 'Рейтинг изменён: {n}' });
+Object.assign(uz, { admin_grant_rating: 'Reytingga ochko berish', admin_rating_prompt: '{name} uchun reyting ochkosi (+ yoki −)', admin_rating_ok: 'Reyting o‘zgardi: {n}' });
+Object.assign(uzc, { admin_grant_rating: 'Рейтингга очко бериш', admin_rating_prompt: '{name} учун рейтинг очкоси (+ ёки −)', admin_rating_ok: 'Рейтинг ўзгарди: {n}' });

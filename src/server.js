@@ -22,7 +22,7 @@ const lichess = require('./lichess');
 const { BOT_HANDLE } = require('./medal-art');
 const { cacheGet, cacheSet, cacheDel, cacheEnabled, incr } = require('./cache');
 const { saveMedia, loadMediaBytes, storageEnabled } = require('./storage');
-const { DEFAULT_ELO, pairUpdate, scoresForResult, eloColumn, expandingEloDelta } = require('./elo');
+const { DEFAULT_ELO, INITIAL_RD, rdAfterIdle, pairUpdate, scoresForResult, eloColumn, expandingEloDelta } = require('./elo');
 const {
   monthKey, monthLabelEn, seasonLabel, previousMonthKey, tashkentDay, tashkentParts,
   isLastDayOfMonthTashkent, monthsForYear,
@@ -416,10 +416,15 @@ async function applyRatingFinish(row, result) {
   const scores = scoresForResult(result);
   const wCat = Number(white[col] || DEFAULT_ELO);
   const bCat = Number(black[col] || DEFAULT_ELO);
-  const updCat = pairUpdate(wCat, bCat, scores.white);
-  const updAll = pairUpdate(Number(white.elo || DEFAULT_ELO), Number(black.elo || DEFAULT_ELO), scores.white);
-  await db.prepare(`UPDATE users SET ${col} = ?, elo = ? WHERE id = ?`).run(updCat.a, updAll.a, white.id);
-  await db.prepare(`UPDATE users SET ${col} = ?, elo = ? WHERE id = ?`).run(updCat.b, updAll.b, black.id);
+  const rdCol = col.replace(/^elo/, 'rd');
+  const idle = (u) => (Date.now() - new Date(u.rd_at || Date.now()).getTime()) / 86400000;
+  const rdOf = (u, c) => rdAfterIdle(Number(u[c]) || INITIAL_RD, idle(u));
+  const updCat = pairUpdate(wCat, bCat, scores.white, rdOf(white, rdCol), rdOf(black, rdCol));
+  const updAll = pairUpdate(Number(white.elo || DEFAULT_ELO), Number(black.elo || DEFAULT_ELO), scores.white, rdOf(white, 'rd'), rdOf(black, 'rd'));
+  const save = (id, a, all) => db.prepare(`UPDATE users SET ${col} = ?, elo = ?, ${rdCol} = ?, rd = ?, rd_at = now() WHERE id = ?`)
+    .run(a.v, all.v, a.rd, all.rd, id);
+  await save(white.id, { v: updCat.a, rd: updCat.rdA }, { v: updAll.a, rd: updAll.rdA });
+  await save(black.id, { v: updCat.b, rd: updCat.rdB }, { v: updAll.b, rd: updAll.rdB });
   invalidateUserCache(white.id);
   invalidateUserCache(black.id);
   await db.prepare('UPDATE games SET elo_w_before = ?, elo_w_after = ?, elo_b_before = ?, elo_b_after = ? WHERE id = ?')
@@ -3592,6 +3597,28 @@ admin.delete('/notifications/:id', wrap(async (req, res) => {
   const r = await db.prepare('DELETE FROM notification_campaigns WHERE id = ?').run(id);
   if (!r.changes) throw bad('Not found', 'notfound');
   res.json({ ok: true });
+}));
+
+/** Admin: add/remove rating points. Body: { amount: ±1…2000 } — applied to the overall and every time-control rating. */
+admin.post('/users/:id/rating', wrap(async (req, res) => {
+  const id = intParam(req.params.id);
+  const amount = Math.floor(Number(req.body && req.body.amount)) || 0;
+  if (!amount || Math.abs(amount) > 2000) throw bad('Amount must be ±1…2000', 'bad_request');
+  const u = await getUser.get(id);
+  if (!u) throw new HttpError(404, 'User not found', 'notfound');
+  await db.prepare(`
+    UPDATE users SET
+      elo = LEAST(4000, GREATEST(100, elo + ?)),
+      elo_bullet = LEAST(4000, GREATEST(100, elo_bullet + ?)),
+      elo_blitz = LEAST(4000, GREATEST(100, elo_blitz + ?)),
+      elo_rapid = LEAST(4000, GREATEST(100, elo_rapid + ?)),
+      elo_classic = LEAST(4000, GREATEST(100, elo_classic + ?))
+    WHERE id = ?
+  `).run(amount, amount, amount, amount, amount, id);
+  invalidateUserCache(id);
+  await clearRankingCaches();
+  const next = await getUser.get(id);
+  res.json({ ok: true, elo: Number(next.elo) });
 }));
 
 /**

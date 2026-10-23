@@ -883,6 +883,11 @@ async function playMoves(game, players, moves, startPly = 0) {
     });
 
     await step('compatible colour prefs give each player their colour', async () => {
+      { // new players swing fast under Glicko; keep C and D inside the Elo window
+        const c = (await ok('C', 'GET', '/me')).user.eloBlitz;
+        const d = (await ok('D', 'GET', '/me')).user.eloBlitz;
+        if (c !== d) await ok('ADMIN', 'POST', `/admin/users/${USERS.D.id}/rating`, { amount: c - d });
+      }
       const open = (await ok('C', 'POST', '/games/quick', { timeControl: '5+0', preferredColor: 'b' })).game;
       assert.strictEqual(open.status, 'open');
       const joined = (await ok('D', 'POST', '/games/quick', { timeControl: '5+0', preferredColor: 'w' })).game;
@@ -1059,6 +1064,18 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual(join.already, false);
       assert.strictEqual((await ok('E', 'GET', '/me')).user.diamonds, 10, 'invitee reward again after purge');
       assert.strictEqual((await ok('A', 'GET', '/me')).user.diamonds, aBefore + 20, 'inviter reward again after purge');
+    });
+
+    await step('admin gives rating points; non-admin cannot', async () => {
+      const before = (await ok('E', 'GET', '/me')).user;
+      await err('E', 'POST', `/admin/users/${USERS.E.id}/rating`, { amount: 10 }, 404);
+      await err('ADMIN', 'POST', `/admin/users/${USERS.E.id}/rating`, { amount: 0 }, 400, 'bad_request');
+      await ok('ADMIN', 'POST', `/admin/users/${USERS.E.id}/rating`, { amount: 40 });
+      const after = (await ok('E', 'GET', '/me')).user;
+      assert.strictEqual(after.elo, before.elo + 40);
+      assert.strictEqual(after.eloBlitz, before.eloBlitz + 40);
+      await ok('ADMIN', 'POST', `/admin/users/${USERS.E.id}/rating`, { amount: -40 });
+      assert.strictEqual((await ok('E', 'GET', '/me')).user.elo, before.elo);
     });
 
     let mediaId;

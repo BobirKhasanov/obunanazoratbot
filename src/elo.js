@@ -1,6 +1,5 @@
 /**
- * Classic Elo rating updates for finished PvP games.
- * K=32 under 2100, K=24 otherwise. Draw = 0.5.
+ * Glicko-style rating updates for finished PvP games (chess.com-like). Draw = 0.5.
  */
 
 const DEFAULT_ELO = 1200;
@@ -10,27 +9,45 @@ function expectedScore(a, b) {
   return 1 / (1 + 10 ** ((b - a) / 400));
 }
 
-function kFactor(elo) {
-  return elo < 2100 ? 32 : 24;
+/** Glicko (the system chess.com uses): every rating has a "rating deviation" (RD).
+ *  New / returning players have a big RD → their rating moves fast; regulars have a small RD → ±5…12 a game. */
+const INITIAL_RD = 250;
+const MIN_RD = 50;
+const RD_PER_DAY = 6;     // uncertainty that creeps back in per idle day
+const MAX_STEP = 60;      // never more than this in one game
+const Q = Math.log(10) / 400;
+
+const gFactor = (rd) => 1 / Math.sqrt(1 + (3 * Q * Q * rd * rd) / (Math.PI * Math.PI));
+
+/** RD after `days` without playing. */
+function rdAfterIdle(rd, days) {
+  const r = Number(rd) || INITIAL_RD;
+  return Math.min(INITIAL_RD, Math.sqrt(r * r + RD_PER_DAY * RD_PER_DAY * Math.max(0, Number(days) || 0)));
+}
+
+function glickoSide(r, rd, rOpp, rdOpp, score) {
+  const g = gFactor(rdOpp);
+  const e = 1 / (1 + 10 ** ((-g * (r - rOpp)) / 400));
+  const d2 = 1 / (Q * Q * g * g * e * (1 - e));
+  const denom = 1 / (rd * rd) + 1 / d2;
+  let delta = (Q / denom) * g * (score - e);
+  delta = Math.max(-MAX_STEP, Math.min(MAX_STEP, delta));
+  let step = Math.round(delta);
+  if (score === 1 && step < 1) step = 1;   // a win always counts
+  if (score === 0 && step > -1) step = -1; // a loss always counts
+  return { next: Math.max(100, Math.round(r) + step), rd: Math.max(MIN_RD, Math.round(Math.sqrt(1 / denom))) };
 }
 
 /**
- * @param {number} eloA
- * @param {number} eloB
- * @param {'1-0'|'0-1'|'1/2-1/2'} result  from white's perspective vs black… actually we pass scores for A
+ * @param {number} eloA @param {number} eloB
  * @param {number} scoreA 1 | 0.5 | 0
+ * @param {number} [rdA] @param {number} [rdB] rating deviations (default: settled player)
  */
-function pairUpdate(eloA, eloB, scoreA) {
-  const ea = expectedScore(eloA, eloB);
-  const eb = 1 - ea;
-  const scoreB = 1 - scoreA;
-  const nextA = Math.round(eloA + kFactor(eloA) * (scoreA - ea));
-  const nextB = Math.round(eloB + kFactor(eloB) * (scoreB - eb));
+function pairUpdate(eloA, eloB, scoreA, rdA = MIN_RD, rdB = MIN_RD) {
+  const A = glickoSide(eloA, rdA, eloB, rdB, scoreA);
+  const B = glickoSide(eloB, rdB, eloA, rdA, 1 - scoreA);
   return {
-    a: Math.max(100, nextA),
-    b: Math.max(100, nextB),
-    deltaA: nextA - eloA,
-    deltaB: nextB - eloB,
+    a: A.next, b: B.next, deltaA: A.next - eloA, deltaB: B.next - eloB, rdA: A.rd, rdB: B.rd,
   };
 }
 
@@ -59,5 +76,5 @@ function expandingEloDelta(sinceMs, nowMs = Date.now()) {
 }
 
 module.exports = {
-  DEFAULT_ELO, CATS, expectedScore, kFactor, pairUpdate, scoresForResult, eloColumn, expandingEloDelta,
+  DEFAULT_ELO, CATS, INITIAL_RD, MIN_RD, expectedScore, rdAfterIdle, pairUpdate, scoresForResult, eloColumn, expandingEloDelta,
 };
