@@ -353,12 +353,13 @@ async function challenge(id) {
   try {
     const r = await api('POST', '/games', { opponentId: id, timeControl: selectedPreset() });
     haptic('success');
-    showChallengeSent(r.game, 10000);
+    playSnap = ''; // the row turns into "Bekor qilish" — no banner
     refresh();
   } catch (e) { fail(e); }
 }
 async function cancelChallenge(gameId) {
-  try { await api('DELETE', `/games/${gameId}`); toast(t('challenge_cancelled')); } catch (e) { fail(e); }
+  try { await api('DELETE', `/games/${gameId}`); } catch (e) { fail(e); }
+  playSnap = '';
   refresh();
 }
 /** Challenge / Cancel button for an online (or friend) row */
@@ -583,6 +584,7 @@ refreshers.play = async function renderPlay() {
     startFriendGame,
     startAi,
     challenge,
+    cancelChallenge,
     getSelectedTime: () => selectedTime,
     setSelectedTime: (id) => { selectedTime = id; playSnap = ''; },
     openFriends: () => openProfilePage('friends'),

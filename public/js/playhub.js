@@ -102,7 +102,7 @@ async function paintOnlinePlayers(ctx, lobby) {
     sectionHead(t('hub_now_playing'), null, null, { dot: 'green', sub: t('online_people', { n: lobby.onlineCount || online.length }) }),
     online.length
       ? h('div.nx-list', ...online.map((u) => playerRow(u, {
-        onProfile: ctx.openProfile, onPlay: (x) => ctx.challenge(x.id),
+        onProfile: ctx.openProfile, onPlay: (x) => ctx.challenge(x.id), onCancel: (x) => ctx.cancelChallenge(x.inviteGameId),
       })))
       : emptyNote(t('nobody'))];
 }
@@ -118,6 +118,7 @@ async function paintFriends(ctx) {
     ? rows.map((f) => playerRow({ ...f, online: !!f.online }, {
       onProfile: ctx.openProfile,
       onPlay: (x) => ctx.challenge(x.id),
+      onCancel: (x) => ctx.cancelChallenge(x.inviteGameId),
       actionLabel: f.online ? t('invite_full') : t('offline'),
       actionIcon: 'gamepad',
     }))

@@ -3037,3 +3037,22 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
   .nx-pr .nx-row-tx b { font-size: 15px; }
   .nx-pr .nx-row-tx small { font-size: 12px; gap: 5px; }
 }
+
+/* Incoming challenge: compact row — pills stacked on the right, nothing wider than the screen */
+.nx-inv { flex-wrap: nowrap; align-items: center; row-gap: 0; padding: 9px 12px; }
+.nx-inv .nx-row-main { flex: 1 1 auto; min-width: 0; }
+.nx-inv .nx-row-main .avwrap, .nx-inv .nx-row-main .avatar { width: 40px; height: 40px; }
+.nx-inv .nx-row-tx { gap: 1px; }
+.nx-inv .nx-row-tx b { font-size: 15px; }
+.nx-inv .nx-row-tx small { font-size: 12px; }
+.nx-inv-btns { display: grid; gap: 5px; flex: none; width: 104px; }
+.nx-inv-btns .nx-pill { flex: none; width: 100%; padding: 6px 8px; font-size: 12.5px; }
+.nx-inv-cap { font-size: 11px; font-weight: 700; color: #a5b4fc; white-space: normal; line-height: 1.2; }
+.nx-inv.has-prem { padding-bottom: 20px; }
+/* Challenge sent → the pill becomes "Bekor qilish" */
+.nx-btn-o.play.cancel { border-radius: 999px; padding: 9px 12px; font-size: 13px; color: #fca5a5; border-color: rgba(248, 113, 113, .5); background: rgba(248, 113, 113, .12); white-space: nowrap; flex: none; }
+/* PREMIUM tag sits under the avatar, never on top of it */
+.avwrap .prem-tag { bottom: -16px; font-size: 8px; padding: 2px 8px; }
+.nx-pr.has-prem { padding-bottom: 22px; }
+.nx-pr, .nx-inv { box-sizing: border-box; max-width: 100%; }
+.nx-inv .nx-row-tx small.nx-inv-cap { color: #a5b4fc; }
