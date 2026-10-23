@@ -33,14 +33,16 @@ const FAST = process.env.HOUSEBOT_FAST === '1'; // tests: no human-like waiting
 const K = FAST ? 0.03 : 1;
 const rnd = (a, b) => (a + Math.random() * (b - a)) * K;
 const OPEN_WAIT_S = FAST ? 1 : 10;
+const AWAY_GRACE_MS = FAST ? 300 : 10_000; // human gone this long → game ends
 
 function create(d) {
-  const { getSetting, setSetting, realtime, port, botToken } = d;
+  const { getSetting, setSetting, realtime, port, botToken, finish, getGame, pushGame, cacheDel } = d;
   let engine = null;
   let timer = null;
   let busyTick = false;
   const moveDue = new Map();   // gameId -> { ply, at }
   const acceptDue = new Map(); // gameId -> at
+  const awaySince = new Map(); // gameId -> ms the human was first seen gone
   let nextPairAt = 0;
   let lastPresence = 0;
   let lastFriends = 0;
@@ -186,8 +188,33 @@ function create(d) {
       `).all();
       for (const r of pending) { busy.add(Number(r.creator_id)); if (r.invited_id) busy.add(Number(r.invited_id)); }
 
+      // 0) the human closed the Mini App → end the game (nobody is there to play it)
+      for (const row of rows) {
+        const white = Number(row.white_id), black = Number(row.black_id);
+        if (isHouseId(white) === isHouseId(black)) continue; // bot vs bot, or (impossible) human vs human
+        const human = isHouseId(white) ? black : white;
+        if (realtime.isOnline(human)) { awaySince.delete(row.id); continue; }
+        const since = awaySince.get(row.id) || now;
+        awaySince.set(row.id, since);
+        if (now - since < AWAY_GRACE_MS) continue;
+        awaySince.delete(row.id);
+        try {
+          if (parseMoves(row.moves).length < 2) {
+            await db.prepare("UPDATE games SET status = 'cancelled', reason = 'aborted', draw_by = NULL, takeback_by = NULL, updated_at = now() WHERE id = ? AND status = 'active'").run(row.id);
+            await cacheDel('lobby:busy');
+            await pushGame(await getGame.get(row.id));
+          } else {
+            // the human walked away: the bot wins as if they had resigned
+            await finish(row, human === white ? '0-1' : '1-0', 'resign');
+          }
+          moveDue.delete(row.id);
+        } catch (e) { console.error('[housebots] away', row.id, e.message || e); }
+      }
+      for (const k of [...awaySince.keys()]) if (!rows.some((r) => r.id === k)) awaySince.delete(k);
+
       // 1) moves
       for (const row of rows) {
+        if (awaySince.has(row.id)) continue; // human away: wait for the grace period instead of playing on
         const moves = parseMoves(row.moves);
         const turn = turnOf(moves);
         const mover = Number(turn === 'w' ? row.white_id : row.black_id);

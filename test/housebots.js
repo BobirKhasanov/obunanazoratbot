@@ -27,7 +27,7 @@ const step = async (n, f) => { await f(); passed++; console.log(`ok  ${n}`); };
   const pg = await freshDb();
   const srv = spawn('node', ['src/server.js'], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', HOUSEBOT_FAST: '1', PORT: String(PORT), DATABASE_URL: pg.url, ADMIN_IDS: String(ADMIN_ID), TG_API_ROOT: tg.url,
+    env: { ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', HOUSEBOT_FAST: '1', PRESENCE_REST_MS: '1500', PORT: String(PORT), DATABASE_URL: pg.url, ADMIN_IDS: String(ADMIN_ID), TG_API_ROOT: tg.url,
       WEBAPP_URL: 'https://chess.example.test', SCHEDULER_MS: '60000', SWEEPER_MS: '2000', USER_MEMO_MS: '1', NODE_NO_WARNINGS: '1' },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
@@ -68,9 +68,23 @@ const step = async (n, f) => { await f(); passed++; console.log(`ok  ${n}`); };
       const want = meColour === 'w' ? 2 : 3;
       const after = await waitFor(async () => { const x = await gm(); return x.moves.length >= want ? x : null; }, 20000, 'bot replies');
       assert.ok(after.moves.length >= want);
+      await ok('A', 'POST', `/games/${gid}/resign`);
+    });
+    await step('player leaves the app mid-game: the game is ended for them', async () => {
+      const g = (await ok('A', 'POST', '/games', { opponentId: mid().id, timeControl: '10+0' })).game;
+      const gm = async () => (await ok('A', 'GET', `/games/${g.id}`)).game;
+      const act = await waitFor(async () => { const x = await gm(); return x.status === 'active' ? x : null; }, 20000, 'accepts');
+      if (act.you === 'w') await ok('A', 'POST', `/games/${g.id}/move`, { from: 'd2', to: 'd4' });
+      else { await waitFor(async () => (await gm()).moves.length >= 1, 20000, 'bot opens'); await ok('A', 'POST', `/games/${g.id}/move`, { from: 'd7', to: 'd5' }); }
+      await waitFor(async () => (await gm()).moves.length >= 2, 20000, 'two plies');
+      // A stops talking to the server (closed the Mini App) — wait out presence + grace
+      await sleep(7000);
+      const row = (await pg.q('SELECT status, result, reason FROM games WHERE id = $1', g.id))[0];
+      assert.strictEqual(row.status, 'finished');
+      assert.strictEqual(row.reason, 'resign');
+      assert.strictEqual(row.result, act.you === 'w' ? '0-1' : '1-0', 'the bot wins');
     });
     await step('disabled bot is offline; re-enabled is back', async () => {
-      await ok('A', 'POST', `/games/${gid}/resign`);
       const weak = bots.find((b) => b.tier === 'weak');
       await ok('ADMIN', 'PATCH', '/admin/housebots', { enabled: { [weak.id]: false } });
       const r = await call('A', 'POST', '/games', { opponentId: weak.id, timeControl: '10+0' });

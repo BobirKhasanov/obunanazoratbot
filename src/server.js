@@ -4278,7 +4278,7 @@ const tournaments = require('./tournaments').create({
   HttpError, bad, wrap, cleanText, isPremiumActive, isAdmin,
 });
 tournaments.register(api);
-const housebots = require('./housebots').create({ getSetting, setSetting, realtime, port: PORT, botToken: BOT_TOKEN });
+const housebots = require('./housebots').create({ getSetting, setSetting, realtime, port: PORT, botToken: BOT_TOKEN, finish, getGame, pushGame, cacheDel });
 housebots.register(admin, { wrap });
 app.use('/api', api);
 
