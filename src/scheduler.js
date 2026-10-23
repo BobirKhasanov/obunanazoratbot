@@ -78,33 +78,23 @@ async function housekeeping(onGameChanged) {
     if (onGameChanged) await onGameChanged(g.id);
   }
 
-  // Uploaded post media is only needed for a few days (keep custom avatars + profile banner)
-  const old = await db.prepare(`
-    SELECT id FROM media
+  // Uploaded post media is only needed for a few days — but never while a live announcement
+  // (carousel), a notification campaign or a kept avatar/banner still points at it.
+  await db.prepare(`
+    DELETE FROM media
     WHERE created_at < now() - interval '7 days'
       AND id NOT IN (
-        SELECT substring(avatar_key FROM 5)
-        FROM users
-        WHERE avatar_key LIKE 'img:%'
+        SELECT substring(avatar_key FROM 5) FROM users WHERE avatar_key LIKE 'img:%'
+      )
+      AND id NOT IN (SELECT media_id FROM announcements WHERE media_id IS NOT NULL)
+      AND id NOT IN (
+        SELECT media_id FROM notification_campaigns
+        WHERE media_id IS NOT NULL AND (expires_at IS NULL OR expires_at > now())
       )
       AND id IS DISTINCT FROM (
         SELECT NULLIF(trim(value), '') FROM app_settings WHERE key = 'profile_banner_media_id'
       )
-  `).all();
-  if (old.length) {
-    await db.prepare(`
-      DELETE FROM media
-      WHERE created_at < now() - interval '7 days'
-        AND id NOT IN (
-          SELECT substring(avatar_key FROM 5)
-          FROM users
-          WHERE avatar_key LIKE 'img:%'
-        )
-        AND id IS DISTINCT FROM (
-          SELECT NULLIF(trim(value), '') FROM app_settings WHERE key = 'profile_banner_media_id'
-        )
-    `).run();
-  }
+  `).run();
 }
 
 /**
