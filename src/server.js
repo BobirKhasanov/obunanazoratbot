@@ -1361,6 +1361,46 @@ async function finishTimeout(row, flaggedColour) {
   return finish(row, result, mating ? 'timeout' : 'timeout_draw');
 }
 
+// ---- chess.com-style abandonment for live-clock games ----
+//  • nobody makes the first move(s) within FIRST_MOVE_MS → game aborted (no rating change)
+//  • a player's Mini App is gone for the grace period while the opponent is still here → the leaver loses ("abandoned");
+//    before 2 moves it is simply aborted. (Both gone → the 30-min "idle" draw / the clock decide.)
+const ABANDON_FIRST_MOVE_MS = Number(process.env.ABANDON_FIRST_MOVE_MS || 60_000);
+const ABANDON_GRACE_FAST_MS = Number(process.env.ABANDON_GRACE_MS || 90_000);   // bullet / blitz
+const ABANDON_GRACE_SLOW_MS = Number(process.env.ABANDON_GRACE_MS || 180_000);  // rapid / classic clocks
+const awaySinceMs = new Map(); // `${gameId}:${uid}` -> ms first seen gone
+const isHouseUid = (id) => Number(id) >= 9_000_000_000_000;
+
+async function abortGame(row) {
+  const r = await db.prepare("UPDATE games SET status = 'cancelled', reason = 'aborted', draw_by = NULL, takeback_by = NULL, updated_at = now() WHERE id = ? AND status = 'active'").run(row.id);
+  if (!r.changes) return;
+  await cacheDel('lobby:busy');
+  await pushGame(await getGame.get(row.id));
+}
+
+async function sweepAbandoned(g, now = Date.now()) {
+  if (isHouseUid(g.white_id) || isHouseUid(g.black_id)) return; // house players handle their own games
+  const plies = parseMoves(g.moves).length;
+  const idle = now - new Date(g.last_move_at || g.updated_at).getTime();
+  if (plies < 2 && idle > ABANDON_FIRST_MOVE_MS) { await abortGame(g); return; }
+  const grace = ['bullet', 'blitz'].includes(categoryOf(g.time_control)) ? ABANDON_GRACE_FAST_MS : ABANDON_GRACE_SLOW_MS;
+  const here = {};
+  for (const id of [g.white_id, g.black_id]) here[id] = realtime.isOnline(id) || await userIsOnline(id);
+  for (const [id, other] of [[g.white_id, g.black_id], [g.black_id, g.white_id]]) {
+    const key = `${g.id}:${id}`;
+    if (here[id] || !here[other]) { awaySinceMs.delete(key); continue; }
+    const since = awaySinceMs.get(key) || now;
+    awaySinceMs.set(key, since);
+    if (now - since < grace) continue;
+    awaySinceMs.delete(key);
+    const fresh = await getGame.get(g.id);
+    if (!fresh || fresh.status !== 'active') return;
+    if (parseMoves(fresh.moves).length < 2) await abortGame(fresh);
+    else await finish(fresh, sameId(fresh.white_id, id) ? '0-1' : '1-0', 'abandoned');
+    return;
+  }
+}
+
 async function claimFlagIfNeeded(row) {
   if (row.status !== 'active' || !isTimed(row.time_control) || row.white_ms == null) return row;
   const settled = settleClocks(row);
@@ -4413,6 +4453,7 @@ async function boot() {
       for (const g of await db.prepare("SELECT * FROM games WHERE status = 'active' AND white_ms IS NOT NULL ORDER BY updated_at ASC LIMIT 120").all()) {
         const next = await claimFlagIfNeeded(g);
         if (next.status !== 'active') await pushGame(next);
+        if (next.status === 'active') await sweepAbandoned(next).catch((e) => console.error('[abandon]', e.message));
       }
       // Direct messages are kept for 60 days only
       await purgeOldDms();

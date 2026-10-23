@@ -27,7 +27,7 @@ const step = async (n, f) => { await f(); passed++; console.log(`ok  ${n}`); };
   const pg = await freshDb();
   const srv = spawn('node', ['src/server.js'], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', HOUSEBOT_FAST: '1', PRESENCE_REST_MS: '1500', PORT: String(PORT), DATABASE_URL: pg.url, ADMIN_IDS: String(ADMIN_ID), TG_API_ROOT: tg.url,
+    env: { ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', ABANDON_FIRST_MOVE_MS: '3600000', ABANDON_GRACE_MS: '3600000', HOUSEBOT_FAST: '1', PRESENCE_REST_MS: '1500', PORT: String(PORT), DATABASE_URL: pg.url, ADMIN_IDS: String(ADMIN_ID), TG_API_ROOT: tg.url,
       WEBAPP_URL: 'https://chess.example.test', SCHEDULER_MS: '60000', SWEEPER_MS: '2000', USER_MEMO_MS: '1', NODE_NO_WARNINGS: '1' },
     stdio: ['ignore', 'pipe', 'inherit'],
   });

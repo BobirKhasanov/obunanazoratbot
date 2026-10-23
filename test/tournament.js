@@ -37,7 +37,7 @@ const waitFor = async (fn, ms = 20000, what = 'condition') => { const t0 = Date.
   const pg = await freshDb();
   const srv = spawn('node', ['src/server.js'], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', DISABLE_HOUSEBOTS: '1', PORT: String(PORT), DATABASE_URL: pg.url, ADMIN_IDS: String(ADMIN_ID), TG_API_ROOT: tg.url,
+    env: { ...process.env, BOT_TOKEN: TOKEN, DISABLE_BOT: '1', ABANDON_FIRST_MOVE_MS: '3600000', ABANDON_GRACE_MS: '3600000', DISABLE_HOUSEBOTS: '1', PORT: String(PORT), DATABASE_URL: pg.url, ADMIN_IDS: String(ADMIN_ID), TG_API_ROOT: tg.url,
       WEBAPP_URL: 'https://chess.example.test', SCHEDULER_MS: '60000', SWEEPER_MS: '2000', TOUR_BREAK_MS: '300', TOUR_NOSHOW_MS: '2500', USER_MEMO_MS: '1', NODE_NO_WARNINGS: '1' },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
