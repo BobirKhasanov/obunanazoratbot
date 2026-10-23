@@ -91,8 +91,6 @@ function timeChips(ctx) {
 }
 
 async function paintOnlinePlayers(ctx, lobby) {
-  const cur = ctx.getSelectedTime();
-  const tc = cur === 'any' ? t('any_time') : cur;
   const quick = h('button.nx-cta', {
     type: 'button',
     onclick: () => { haptic('medium'); ctx.ensurePlayFlow().quick(); },
@@ -104,7 +102,7 @@ async function paintOnlinePlayers(ctx, lobby) {
     sectionHead(t('hub_now_playing'), null, null, { dot: 'green', sub: t('online_people', { n: lobby.onlineCount || online.length }) }),
     online.length
       ? h('div.nx-list', ...online.map((u) => playerRow(u, {
-        tc, onProfile: ctx.openProfile, onPlay: (x) => ctx.challenge(x.id),
+        onProfile: ctx.openProfile, onPlay: (x) => ctx.challenge(x.id),
       })))
       : emptyNote(t('nobody'))];
 }

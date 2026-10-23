@@ -3025,3 +3025,15 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .nx-inv-act { width: 100%; max-width: none; justify-items: stretch; }
 .nx-inv-btns .nx-pill { flex: 1 1 0; text-align: center; padding: 10px 8px; }
 .nx-inv-cap { text-align: left; }
+/* Player row on narrow phones (iOS / Android): the name + "ELO | 💎" get the room, the pill stays compact */
+.nx-pr { gap: 8px; }
+.nx-pr .nx-row-main { min-width: 0; }
+.nx-pr .nx-row-tx { min-width: 0; }
+.nx-pr .nx-row-tx b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-pr .nx-row-tx small { overflow: visible; text-overflow: clip; flex-wrap: nowrap; }
+.nx-pr .nx-btn-p.play { flex: none; min-width: 0; padding: 9px 12px; font-size: 13px; }
+@media (max-width: 380px) {
+  .nx-pr .nx-btn-p.play { padding: 8px 10px; font-size: 12px; }
+  .nx-pr .nx-row-tx b { font-size: 15px; }
+  .nx-pr .nx-row-tx small { font-size: 12px; gap: 5px; }
+}
