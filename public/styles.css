@@ -109,7 +109,7 @@ h1, h2, h3, p { margin: 0; }
 .page[data-page="play"] .ann-carousel[hidden] { display: none; margin: 0; }
 .page[data-page="play"] .ann-carousel:not([hidden]),
 .page[data-page="play"] .ann-carousel.ann-loading {
-  height: clamp(108px, 17dvh, 140px); min-height: 0; max-height: 140px; margin: 0;
+  height: clamp(124px, 18dvh, 140px); min-height: 0; max-height: 140px; margin: 0;
 }
 .page[data-page="play"] .ann-carousel .ann-skel { min-height: 0; }
 .page[data-page="play"] .ann-carousel:not([hidden]) ~ .nx-hero { display: none; }
@@ -2978,3 +2978,9 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .nx-card-list > .adm-row, .adm-card > .adm-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
 
 .ghead-tools .spectators[hidden]{display:none}
+
+/* Announcement slides: copy must fit the (shorter) carousel on small phones — no clipped lines */
+.ann-slide { padding: 12px 16px 24px; }
+.ann-copy { justify-content: center; }
+.ann-body.under { -webkit-line-clamp: 1; line-clamp: 1; }
+.ann-title { padding-bottom: 1px; }

@@ -188,12 +188,20 @@ function slide(a, opts) {
   },
     mediaOnly || !hasCopy(a) ? null : h('div.ann-copy',
       a.title ? h('b.ann-title', { style: { color: a.titleColor, fontSize: `${titlePx}px` } }, a.title) : null,
-      a.body ? h('span.ann-body', { style: { color: a.bodyColor, fontSize: `${bodyPx}px` } }, a.body) : null),
+      a.body ? h('span.ann-body' + (a.title ? '.under' : ''), { style: { color: a.bodyColor, fontSize: `${bodyPx}px` } }, a.body) : null),
     mediaNode);
 }
 
 function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {
   let drag = null;
+  // Where the track is right now (it may still be sliding when the finger lands) — no jump on re-grab
+  const currentX = () => {
+    try {
+      const m = new DOMMatrixReadOnly(getComputedStyle(track).transform);
+      if (Number.isFinite(m.m41)) return m.m41;
+    } catch { /* old WebView */ }
+    return -go.idx * host.clientWidth;
+  };
   const releaseCap = (id) => {
     try { if (host.hasPointerCapture?.(id)) host.releasePointerCapture(id); } catch { /* ignore */ }
   };
@@ -207,7 +215,7 @@ function bindSwipe(host, track, n, go, { armAuto, stopAuto }) {
       y0: e.clientY,
       dx: 0,
       axis: null,
-      base: -go.idx * host.clientWidth,
+      base: currentX(),
       id: e.pointerId,
       captured: false,
     };
