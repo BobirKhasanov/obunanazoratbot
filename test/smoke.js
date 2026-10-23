@@ -1132,6 +1132,9 @@ async function playMoves(game, players, moves, startPly = 0) {
         const img = await fetch(`${BASE}/api/media/${mid}`, { headers: { 'X-Init-Data': init('A') } });
         assert.strictEqual(img.status, 200, `${board} media bytes`);
         assert.ok((await img.arrayBuffer()).byteLength > 8);
+        const th = await fetch(`${BASE}/api/media/${mid}?w=300`, { headers: { 'X-Init-Data': init('A') } });
+        assert.strictEqual(th.status, 200, `${board} media ?w= resize falls back safely`);
+        assert.ok((await th.arrayBuffer()).byteLength > 8);
       }
     });
 

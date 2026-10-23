@@ -3267,16 +3267,35 @@ function parseAnnouncementBody(b, { requireFuture = true } = {}) {
   };
 }
 
+const mediaThumbs = new Map(); // `${id}:${w}` -> { buf, mime } (small LRU)
 api.get('/media/:id', wrap(async (req, res) => {
   const id = String(req.params.id || '');
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw bad('Not found', 'notfound');
   // Only columns needed to stream BYTEA from Neon (avoid SELECT * on large rows).
   const row = await db.prepare('SELECT id, mime, data, size FROM media WHERE id = ?').get(id);
   if (!row) throw bad('Not found', 'notfound');
-  const buf = await loadMediaBytes(row);
+  let buf = await loadMediaBytes(row);
   if (!buf) throw bad('Not found', 'notfound');
+  let mime = row.mime || 'application/octet-stream';
+  // Phones get a right-sized copy (originals can be several MB — they timed out and the carousel fell back to ♛)
+  const w = Math.floor(Number(req.query.w) || 0);
+  if (w >= 120 && w <= 1600 && /^image\/(jpeg|png|webp)$/.test(mime)) {
+    const key = `${id}:${w}`;
+    let hit = mediaThumbs.get(key);
+    if (!hit) {
+      try {
+        const out = await require('sharp')(buf, { failOn: 'none' }).rotate().resize({ width: w, withoutEnlargement: true })
+          [mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpeg'](mime === 'image/png' ? { compressionLevel: 9, palette: true } : { quality: 82 })
+          .toBuffer();
+        hit = { buf: out.length < buf.length ? out : buf, mime };
+        mediaThumbs.set(key, hit);
+        if (mediaThumbs.size > 40) mediaThumbs.delete(mediaThumbs.keys().next().value);
+      } catch { hit = null; }
+    }
+    if (hit) { buf = hit.buf; mime = hit.mime; }
+  }
   res.set({
-    'Content-Type': row.mime || 'application/octet-stream',
+    'Content-Type': mime,
     'Cache-Control': 'private, max-age=3600',
     'Content-Length': buf.length,
   });

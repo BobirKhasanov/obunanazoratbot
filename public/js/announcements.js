@@ -83,27 +83,30 @@ export function resumeAnnouncementsHost(host) {
   resumeHost(host);
 }
 
+/** Pixel width to ask for: the carousel is ~one screen wide; more is wasted bytes on a phone. */
+const mediaW = () => Math.min(1000, Math.max(480, Math.round((window.innerWidth || 390) * Math.min(2, window.devicePixelRatio || 2))));
+
+async function fetchOne(a, blobs, timeoutMs) {
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  let timer = null;
+  try {
+    if (ctrl) timer = setTimeout(() => { try { ctrl.abort(); } catch { /* ignore */ } }, timeoutMs);
+    const res = await fetch(`/api/media/${a.mediaId}?w=${mediaW()}`, {
+      headers: { 'X-Init-Data': getInitData() },
+      signal: ctrl ? ctrl.signal : undefined,
+    });
+    if (!res.ok) return null;
+    const url = URL.createObjectURL(await res.blob());
+    blobs.push(url);
+    return url;
+  } catch { return null; } finally { if (timer) clearTimeout(timer); }
+}
+
 async function resolveMedia(items, blobs) {
   const timeoutMs = mediaFetchTimeoutMs();
   return Promise.all(items.map(async (a) => {
     if (!a.mediaId) return { ...a, _src: null };
-    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    let timer = null;
-    try {
-      if (ctrl) timer = setTimeout(() => { try { ctrl.abort(); } catch { /* ignore */ } }, timeoutMs);
-      const res = await fetch('/api/media/' + a.mediaId, {
-        headers: { 'X-Init-Data': getInitData() },
-        signal: ctrl ? ctrl.signal : undefined,
-      });
-      if (!res.ok) return { ...a, _src: null };
-      const url = URL.createObjectURL(await res.blob());
-      blobs.push(url);
-      return { ...a, _src: url };
-    } catch {
-      return { ...a, _src: null };
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
+    return { ...a, _src: await fetchOne(a, blobs, timeoutMs) };
   }));
 }
 
@@ -312,6 +315,27 @@ export function paintAnnouncementsCarousel(host, prepared, { onPage, botUsername
   const lite = isLite();
   const track = h('div.ann-track' + (lite ? '.lite' : ''), resolved.map((a) => slide(a, opts)));
   host.replaceChildren(track);
+
+  // Slow network / cold server: a slide whose picture did not arrive in time is retried in the
+  // background (longer timeout) and the picture is swapped in — instead of staying a ♛ placeholder forever.
+  if (resolved.some((a) => a.mediaId && !a._src)) {
+    const timers = [];
+    const attempt = async () => {
+      if (hostState.get(host) !== state) return;
+      const next = resolved.map((a) => ({ ...a }));
+      let got = false;
+      await Promise.all(next.map(async (a, i) => {
+        if (!a.mediaId || a._src) return;
+        const u = await fetchOne(a, state.blobs, 20000);
+        if (u) { a._src = u; resolved[i]._src = u; got = true; }
+      }));
+      if (got && hostState.get(host) === state) hydrateAnnouncementsMedia(host, { items: next, blobs: [] });
+    };
+    for (const ms of [2500, 9000, 25000]) {
+      timers.push(setTimeout(() => { if (resolved.some((a) => a.mediaId && !a._src)) attempt(); }, ms));
+    }
+    cleanups.push(() => timers.forEach(clearTimeout));
+  }
   if (resolved.length < 2) return host;
 
   const dots = h('div.ann-dots', resolved.map((_, i) => h('i' + (i === 0 ? '.on' : ''))));
