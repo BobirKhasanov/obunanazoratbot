@@ -794,6 +794,7 @@ export function avBlock(name, id, opts = {}) {
   }
   wrap.append(avatar(name, id, size, opts.avatarKey || null));
   if (opts.online) wrap.append(h('i.dot.on'));
+  if (opts.premium && opts.tag) wrap.append(h('span.prem-tag', 'PREMIUM'));
   const med = id ? medalOf(id) : null;
   if (med && !opts.noMedal) {
     wrap.append(h('img.med-bdg.p' + med.place, { src: `/api/medals/${med.id}.svg?v=4`, alt: '', loading: 'lazy', decoding: 'async', 'aria-hidden': 'true' }));

@@ -2997,3 +2997,31 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 
 .sw-start { display: grid; gap: 8px; }
 .sw-start input[type=time] { width: 100%; box-sizing: border-box; font-size: 18px; font-weight: 800; text-align: center; }
+
+/* Player rows: "ELO 1583 | 💎 63" + invite pill; incoming challenge = highlighted row with accept / decline pills */
+.nx-pr .nx-row-tx b { font-size: 16px; }
+.nx-pr .nx-row-tx small { gap: 7px; font-size: 13px; }
+.nx-sep { opacity: .45; font-style: normal; }
+.nx-gemn { display: inline-flex; align-items: center; gap: 3px; color: #7fdcff; font-weight: 700; }
+.nx-gemn svg { color: #7fdcff; }
+.nx-btn-p.play { border-radius: 999px; padding-left: 14px; padding-right: 14px; white-space: nowrap; }
+.nx-pr.has-prem { padding-bottom: 16px; }
+.avwrap .prem-tag {
+  position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); z-index: 3; pointer-events: none;
+  padding: 2px 7px 2px; border-radius: 999px; font-size: 8px; font-weight: 900; letter-spacing: .9px; line-height: 1.15; white-space: nowrap;
+  color: #3b2400; background: linear-gradient(100deg, #fde68a 0%, #fbbf24 45%, #f59e0b 100%);
+  box-shadow: 0 0 0 1.5px var(--card, #131a2e), 0 2px 8px rgba(245, 158, 11, .45);
+}
+.nx-inv { background: linear-gradient(90deg, rgba(99, 102, 241, .22), var(--card) 75%); border-color: rgba(129, 140, 248, .55); box-shadow: inset 3px 0 0 #818cf8; align-items: flex-start; }
+.nx-inv .nx-row-main { align-items: center; }
+.nx-inv-act { display: grid; gap: 6px; justify-items: end; flex: none; max-width: 52%; }
+.nx-inv-btns { display: flex; gap: 6px; }
+.nx-pill { border: 0; border-radius: 999px; padding: 8px 13px; font-size: 13px; font-weight: 800; color: #fff; white-space: nowrap; }
+.nx-pill.ok { background: linear-gradient(180deg, #22c55e, #15a34a); }
+.nx-pill.no { background: linear-gradient(180deg, #fb7185, #ef4444); }
+.nx-inv-cap { font-size: 12px; font-weight: 700; color: #a5b4fc; text-align: right; line-height: 1.25; }
+.nx-inv { flex-wrap: wrap; align-items: center; row-gap: 10px; }
+.nx-inv .nx-row-main { flex: 1 1 100%; }
+.nx-inv-act { width: 100%; max-width: none; justify-items: stretch; }
+.nx-inv-btns .nx-pill { flex: 1 1 0; text-align: center; padding: 10px 8px; }
+.nx-inv-cap { text-align: left; }

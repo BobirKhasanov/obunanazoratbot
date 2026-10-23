@@ -2368,7 +2368,7 @@ api.get('/lobby', wrap(async (req, res) => {
 
   // Shared presence: present_until is refreshed on every API call and cleared on Mini App close / WS leave.
   const rows = await db.prepare(`
-    SELECT id, first_name, last_name, discoverable, premium, premium_until, avatar_key, elo
+    SELECT id, first_name, last_name, discoverable, premium, premium_until, avatar_key, elo, diamonds
     FROM users
     WHERE blocked = 0 AND id != ?
       AND present_until > now()
@@ -2387,6 +2387,7 @@ api.get('/lobby', wrap(async (req, res) => {
       invited: inviteGameByUser.has(r.id), inviteGameId: inviteGameByUser.get(r.id) || null,
       avatarKey: r.avatar_key || null,
       elo: Number(r.elo || DEFAULT_ELO),
+      diamonds: isAdmin(r.id) ? null : Number(r.diamonds || 0),
     }))
     .sort((a, b) => (b.friend - a.friend) || (a.inGame - b.inGame) || a.name.localeCompare(b.name));
 

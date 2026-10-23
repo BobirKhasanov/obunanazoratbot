@@ -1651,3 +1651,7 @@ Object.assign(en, { swiss_day_today: 'Today', swiss_day_tomorrow: 'Tomorrow', sw
 Object.assign(ru, { swiss_day_today: 'Сегодня', swiss_day_tomorrow: 'Завтра', swiss_tz_note: 'Время по Ташкенту (UTC+5)' });
 Object.assign(uz, { swiss_day_today: 'Bugun', swiss_day_tomorrow: 'Ertaga', swiss_tz_note: 'Toshkent vaqti (UTC+5)' });
 Object.assign(uzc, { swiss_day_today: 'Бугун', swiss_day_tomorrow: 'Эртага', swiss_tz_note: 'Тошкент вақти (UTC+5)' });
+Object.assign(en, { invite_to_game: 'Challenge', challenged_you: 'challenged you to a game' });
+Object.assign(ru, { invite_to_game: 'Вызвать на партию', challenged_you: 'зовёт вас сыграть' });
+Object.assign(uz, { invite_to_game: 'O‘yinga taklif', challenged_you: 'sizni o‘yinga taklif qildi' });
+Object.assign(uzc, { invite_to_game: 'Ўйинга таклиф', challenged_you: 'сизни ўйинга таклиф қилди' });

@@ -27,7 +27,7 @@ import {
 import { createPlayFlow } from './playflow.js';
 import { dailyPuzzles, tashkentDayKey } from './puzzles.js';
 import { paintPlayBody, renderRatingPage, openPlayHubMode, openPlayHubTab } from './playhub.js';
-import { appHeader, sectionHead, heroBanner, dailyCard, championsCard } from './neonui.js';
+import { appHeader, sectionHead, heroBanner, dailyCard, championsCard, inviteRow } from './neonui.js';
 
 const state = { me: null, stats: null, meta: null, lobby: null, friends: null, index: 2, tab: 'play' };
 let selectedTime = 'any';
@@ -600,12 +600,11 @@ refreshers.play = async function renderPlay() {
     annHost,
     hasAnn ? null : heroBanner(),
     dailyCard({ reward: pzReward, onClick: () => go(TABS.indexOf('puzzles'), true) }),
-    l.games.invites.length ? [sectionHead(t('invites'), null, null, { dot: 'amber' }), h('div.nx-list', l.games.invites.map((g) => h('div.nx-pr',
-      h('div.nx-row-main',
-        avBlock(g.opponent.name, g.opponent.id, { premium: !!g.opponent.premium, round: true, avatarKey: g.opponent.avatarKey || null }),
-        h('div.nx-row-tx', h('b', g.opponent.name), h('small', [t('challenge'), g.timeControl && g.timeControl !== 'classic' ? g.timeControl : ''].filter(Boolean).join(' · ')))),
-      h('button.nx-btn-p.sm', { type: 'button', onclick: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); closeScreen(true); openOnline(r.game); } catch (e) { fail(e); refresh(); } } }, icon('check', 16)),
-      h('button.nx-btn-o.sm', { type: 'button', onclick: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } playSnap = ''; refresh(); } }, icon('x', 16)))))] : null,
+    l.games.invites.length ? [sectionHead(t('invites'), null, null, { dot: 'amber' }), h('div.nx-list', l.games.invites.map((g) => inviteRow(g, {
+      onProfile: openProfile,
+      onAccept: async () => { try { const r = await api('POST', '/games/' + g.id + '/join'); closeScreen(true); openOnline(r.game); } catch (e) { fail(e); refresh(); } },
+      onDecline: async () => { try { await api('POST', '/games/' + g.id + '/decline'); } catch (e) { fail(e); } playSnap = ''; refresh(); },
+    })))] : null,
     saved || l.games.active.length || l.games.waiting.length ? [sectionHead(t('continue')), h('div.list.nx-continue',
       saved ? rowBtn({ onclick: resumeAi }, h('div.avatar.ai', icon('ai', 22)), h('div.grow', h('div.t', t('ai') + ' · ' + t('lvl' + saved.level)), h('div.s', t('resume'))), icon('arrow', 18)) : null,
       l.games.active.map((g) => gameRow(g, 'active')), l.games.waiting.map((g) => gameRow(g, 'wait')))] : null,

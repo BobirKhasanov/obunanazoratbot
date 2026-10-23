@@ -154,18 +154,37 @@ export function friendRow(f, { onMsg, onInvite, onProfile } = {}) {
     }, icon('gamepad', 14), f.invited ? t('challenge_sent_short') : t('invite_short')));
 }
 
-/** O'ynash player row: avatar · name/elo · ⚡ time · O'ynash. */
+/** "ELO 1583 | 💎 63" — diamonds are public (admins have none shown). */
+const eloLine = (u) => h('small', `ELO ${u.elo || 1200}`,
+  u.diamonds != null ? [h('i.nx-sep', '|'), h('span.nx-gemn', '💎', String(u.diamonds))] : null);
+
+/** O'ynash player row: avatar · name / ELO | 💎 · "O'yinga taklif". */
 export function playerRow(u, { tc, onPlay, onProfile, actionLabel, actionIcon } = {}) {
   const blocked = !!u.inGame || u.discoverable === false;
-  return h('div.nx-pr',
+  return h('div.nx-pr' + (u.premium ? '.has-prem' : ''),
     h('button.nx-row-main', { type: 'button', onclick: tap(() => onProfile && onProfile(u.id)) },
-      avBlock(u.name || '?', u.id, { premium: !!u.premium, round: true, online: u.online !== false, avatarKey: u.avatarKey }),
-      h('div.nx-row-tx', h('b', u.name || '…', u.premium ? premIc(14) : null), h('small', String(u.elo || 1200)))),
+      avBlock(u.name || '?', u.id, { premium: !!u.premium, tag: true, round: true, online: u.online !== false, avatarKey: u.avatarKey }),
+      h('div.nx-row-tx', h('b', u.name || '…'), eloLine(u))),
     tc ? h('span.nx-tc', icon('bolt', 14), tc) : null,
     h('button.nx-btn-p.play', {
       type: 'button', disabled: blocked || !!u.invited, onclick: tap(() => onPlay && onPlay(u)),
     }, actionIcon ? icon(actionIcon, 14) : null,
-    u.invited ? t('challenge_sent_short') : (u.inGame ? t('in_game') : (actionLabel || t('play_btn')))));
+    u.invited ? t('challenge_sent_short') : (u.inGame ? t('in_game') : (actionLabel || t('invite_to_game')))));
+}
+
+/** Incoming challenge: highlighted row with green accept / red decline pills. */
+export function inviteRow(g, { onAccept, onDecline, onProfile } = {}) {
+  const o = g.opponent || {};
+  const tcl = g.timeControl && g.timeControl !== 'classic' ? ` · ${g.timeControl}` : '';
+  return h('div.nx-pr.nx-inv' + (o.premium ? '.has-prem' : ''),
+    h('button.nx-row-main', { type: 'button', onclick: tap(() => onProfile && onProfile(o.id)) },
+      avBlock(o.name || '?', o.id, { premium: !!o.premium, tag: true, round: true, avatarKey: o.avatarKey || null }),
+      h('div.nx-row-tx', h('b', o.name || '…'), eloLine(o))),
+    h('div.nx-inv-act',
+      h('div.nx-inv-btns',
+        h('button.nx-pill.ok', { type: 'button', onclick: tap(() => onAccept && onAccept(g)) }, t('accept')),
+        h('button.nx-pill.no', { type: 'button', onclick: tap(() => onDecline && onDecline(g)) }, t('decline'))),
+      h('small.nx-inv-cap', t('challenged_you') + tcl)));
 }
 
 export function filterChip(id, label, on, onClick) {
