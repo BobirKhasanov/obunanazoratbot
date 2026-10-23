@@ -3056,3 +3056,6 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .nx-pr.has-prem { padding-bottom: 22px; }
 .nx-pr, .nx-inv { box-sizing: border-box; max-width: 100%; }
 .nx-inv .nx-row-tx small.nx-inv-cap { color: #a5b4fc; }
+/* PREMIUM tag: small, hangs just under the avatar — rows keep their normal height */
+.nx-pr.has-prem, .nx-inv.has-prem { padding-bottom: 10px; }
+.avwrap .prem-tag { bottom: -7px; font-size: 6.5px; letter-spacing: .6px; padding: 1px 5px; line-height: 1.2; box-shadow: 0 0 0 1px var(--card, #131a2e), 0 1px 5px rgba(245, 158, 11, .4); }
