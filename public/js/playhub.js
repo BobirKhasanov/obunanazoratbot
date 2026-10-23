@@ -203,6 +203,7 @@ async function paintRating(ctx) {
     rows.some((p) => String(p.id) === String(meId))
       ? null
       : h('div.nx-rank-pin', rankRow(myRow, { you: true, onOpen: () => ctx.goTab('profile') })),
+    data.totalPlayers ? h('div.nx-rank-total', t('rank_total', { n: Number(data.totalPlayers).toLocaleString('en-US').replace(/,/g, ' ') })) : null,
   ];
 }
 

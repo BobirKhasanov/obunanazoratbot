@@ -2143,6 +2143,7 @@ const TC_CASE = `CASE COALESCE(g.time_control, 'classic')
   ELSE 'classic' END`;
 
 // ---------- live competitive rankings (Elo lifetime + monthly points) ----------
+const rankLookup = new Map(); // board cache key -> { t, map: userId -> { rank, points } } (full table, top 100 are sent)
 api.get('/rankings', wrap(async (req, res) => {
   ensurePreviousMonthMedals().catch(() => {});
   const board = ['monthly', 'period'].includes(req.query.board) ? req.query.board : 'elo';
@@ -2158,10 +2159,22 @@ api.get('/rankings', wrap(async (req, res) => {
   const myRank = async (list) => {
     const uid = req.user.id;
     const inList = (list || []).find((r) => sameId(r.id, uid));
-    const myElo = Number(req.user.elo || DEFAULT_ELO);
+    const col = board === 'elo' && category !== 'all' ? eloColumn(category) : 'elo';
+    const myElo = Number(req.user[col] || req.user.elo || DEFAULT_ELO);
     if (inList) return { rank: inList.rank, elo: Number(inList.elo || myElo), points: inList.points };
-    if (board !== 'elo' || category !== 'all') return { rank: null, elo: myElo, points: 0 };
-    const row = await db.prepare('SELECT COUNT(*)::int AS n FROM users WHERE blocked = 0 AND elo > ?').get(myElo);
+    if (board !== 'elo') {
+      // beyond the visible top 100: the real place + points from the full table of this board
+      const hit = rankLookup.get(cacheKey);
+      const mine = hit && hit.map.get(String(uid));
+      return { rank: mine ? mine.rank : null, elo: myElo, points: mine ? mine.points : 0 };
+    }
+    if (!ELO_COLS.has(col)) return { rank: null, elo: myElo, points: myElo };
+    const cat = category === 'all' ? '' : ` AND (${TC_CASE}) = ?`;
+    const played = (alias) => `EXISTS (SELECT 1 FROM games g WHERE g.status = 'finished' AND g.result IS NOT NULL AND g.mode IN ('online', 'friend', 'tour') AND (g.white_id = ${alias}.id OR g.black_id = ${alias}.id)${cat})`;
+    const params = category === 'all' ? [] : [category];
+    const iPlayed = await db.prepare(`SELECT ${played('u')} AS ok FROM users u WHERE u.id = ?`).get(...params, uid);
+    if (!iPlayed || !iPlayed.ok) return { rank: null, elo: myElo, points: myElo };
+    const row = await db.prepare(`SELECT COUNT(*)::int AS n FROM users u WHERE u.blocked = 0 AND u.${col} > ? AND ${played('u')}`).get(myElo, ...params);
     return { rank: (row?.n || 0) + 1, elo: myElo, points: myElo };
   };
   const cached = await cacheGet(cacheKey, 15_000);
@@ -2195,7 +2208,6 @@ api.get('/rankings', wrap(async (req, res) => {
         GROUP BY u.id, u.first_name, u.username, u.avatar_key, u.premium, u.premium_until, u.elo
       ) r
       ORDER BY (wins * 2 + draws) DESC, wins DESC, games DESC, lower(name) ASC
-      LIMIT 100
     `).all(...(category === 'all' ? [] : [category]))).map((r, i) => ({
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
@@ -2240,7 +2252,6 @@ api.get('/rankings', wrap(async (req, res) => {
       JOIN users u ON u.id = m.user_id
       WHERE m.month = ? AND u.blocked = 0 AND m.points > 0
       ORDER BY m.points DESC, m.wins DESC, lower(COALESCE(u.first_name, '')) ASC
-      LIMIT 100
     `).all(month)).map((r, i) => ({
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       points: Number(r.points), wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
@@ -2263,7 +2274,6 @@ api.get('/rankings', wrap(async (req, res) => {
         GROUP BY u.id, u.first_name, u.username, u.avatar_key, u.premium, u.premium_until
       ) r
       ORDER BY (wins * 2 + draws) DESC, wins DESC, games DESC, lower(name) ASC
-      LIMIT 100
     `).all(`${month}%`, category)).map((r, i) => ({
       rank: i + 1, id: r.id, name: r.name, username: r.username || '',
       wins: Number(r.wins), draws: Number(r.draws), losses: Number(r.losses),
@@ -2272,6 +2282,15 @@ api.get('/rankings', wrap(async (req, res) => {
     }));
   }
 
+  let totalPlayers = null;
+  if (board !== 'elo') {
+    rankLookup.set(cacheKey, { t: Date.now(), map: new Map(rows.map((r) => [String(r.id), { rank: r.rank, points: r.points }])) });
+    for (const [k, v] of rankLookup) if (Date.now() - v.t > 300_000) rankLookup.delete(k);
+    rows = rows.slice(0, 100);
+  }
+  if (board === 'elo' && category === 'all') {
+    totalPlayers = (await db.prepare('SELECT COUNT(*)::int AS n FROM users WHERE blocked = 0 AND id < 9000000000000').get()).n;
+  }
   if (rows.length) {
     const gem = await db.prepare(`SELECT id, diamonds FROM users WHERE id IN (${rows.map(() => '?').join(',')})`).all(...rows.map((r) => r.id));
     const byId = new Map(gem.map((g) => [String(g.id), Number(g.diamonds || 0)]));
@@ -2279,7 +2298,7 @@ api.get('/rankings', wrap(async (req, res) => {
   }
   const payload = {
     board, period: board === 'period' ? period : null, category, month, monthLabel: monthLabelEn(month),
-    rankings: rows, updatedAt: new Date().toISOString(),
+    rankings: rows, totalPlayers, updatedAt: new Date().toISOString(),
   };
   await cacheSet(cacheKey, payload, 15_000);
   res.json({ ...payload, me: await myRank(rows) });
@@ -4435,6 +4454,7 @@ async function boot() {
   startScheduler(
     async (id) => pushGame(await getGame.get(id)),
     () => runMonthlyMedalAwards(),
+    async (g, result, reason) => { const fresh = await getGame.get(g.id); if (fresh && fresh.status === 'active') await finish(fresh, result, reason); },
   );
 
   // Expire unanswered challenges and claim live-clock flags (~2.5k: 4s tick, capped batches)

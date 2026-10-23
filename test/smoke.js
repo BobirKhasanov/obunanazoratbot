@@ -545,6 +545,7 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok(day.me && day.me.rank >= 1, 'daily board returns my rank');
       const overall = await ok('A', 'GET', '/rankings?board=elo&category=all');
       assert.ok(overall.me && overall.me.rank >= 1 && overall.me.elo > 0, 'overall board returns my rank + elo');
+      assert.ok(overall.totalPlayers >= 1 && overall.rankings.length <= 100, 'overall board: total players, at most the top 100');
 
       const hist = (await ok('A', 'GET', '/games/history')).games;
       const h = hist.find((g) => g.id === challenge.id);
@@ -959,11 +960,11 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.strictEqual(remindersBefore(), 1, 'one reminder after 6h of silence');
       await sleep(700);
       assert.strictEqual(remindersBefore(), 1, 'and not again for the same move');
-      // abandoned for a week: the waiting player wins
+      // nobody answered the first move for over 30h: the game is aborted (a longer game ends in a forfeit, see test/abandon.js)
       await pg.q("UPDATE games SET last_move_at = now() - interval '8 days' WHERE id = $1", g.id);
       await sleep(700);
       const [end] = await pg.q('SELECT status, result, reason FROM games WHERE id = $1', g.id);
-      assert.deepStrictEqual({ ...end }, { status: 'finished', result: '1-0', reason: 'abandoned' }, 'black to move for a week -> white wins');
+      assert.deepStrictEqual({ ...end }, { status: 'cancelled', result: null, reason: 'aborted' }, 'one ply only and 30h of silence -> aborted');
     });
 
     // ---------------------------------------------------------------- lobby + presence

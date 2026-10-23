@@ -7,7 +7,8 @@ const notify = require('./notify');
 const realtime = require('./realtime');
 const { turnOf, parseMoves } = require('./game');
 const REMIND_AFTER_HOURS = Number(process.env.REMIND_AFTER_HOURS || 6); // env overrides are for tests
-const ABANDON_AFTER_DAYS = 7;
+/** Untimed (no clock) game: the player to move loses after this many hours without a move (chess.com-style). */
+const ABANDON_UNTIMED_HOURS = Math.max(0.001, Number(process.env.ABANDON_UNTIMED_HOURS || 30));
 /** Waiting open/invited games auto-cancel if nobody joins. */
 const JOIN_TIMEOUT_MINUTES = Math.max(1, Number(process.env.JOIN_TIMEOUT_MINUTES || 30));
 /** Active game ends as draw if neither player opened the Mini App for this long. */
@@ -38,7 +39,7 @@ async function remindMoves() {
   }
 }
 
-async function housekeeping(onGameChanged) {
+async function housekeeping(onGameChanged, onForfeit) {
   // Open / invited games nobody joined within JOIN_TIMEOUT_MINUTES
   await db.prepare(`
     UPDATE games SET status = 'cancelled', updated_at = now()
@@ -67,15 +68,26 @@ async function housekeeping(onGameChanged) {
     if (r.changes > 0 && onGameChanged) await onGameChanged(g.id);
   }
 
-  // Untimed games where nobody moved for a week: the player who was waiting wins
+  // Untimed games: the player to move has not moved for ABANDON_UNTIMED_HOURS → they lose (aborted before 2 moves)
   const dead = await db.prepare(`
     SELECT * FROM games WHERE status = 'active' AND white_ms IS NULL
-      AND last_move_at < now() - (? * interval '1 day')
-  `).all(ABANDON_AFTER_DAYS);
+      AND last_move_at < now() - (? * interval '1 hour')
+      AND white_id < 9000000000000 AND black_id < 9000000000000
+    LIMIT 100
+  `).all(ABANDON_UNTIMED_HOURS);
   for (const g of dead) {
-    const result = turnOf(parseMoves(g.moves)) === 'w' ? '0-1' : '1-0';
-    await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = 'abandoned', updated_at = now() WHERE id = ? AND status = 'active'").run(result, g.id);
-    if (onGameChanged) await onGameChanged(g.id);
+    const moves = parseMoves(g.moves);
+    if (moves.length < 2) {
+      await db.prepare("UPDATE games SET status = 'cancelled', reason = 'aborted', draw_by = NULL, takeback_by = NULL, updated_at = now() WHERE id = ? AND status = 'active'").run(g.id);
+      if (onGameChanged) await onGameChanged(g.id);
+      continue;
+    }
+    const result = turnOf(moves) === 'w' ? '0-1' : '1-0';
+    if (onForfeit) await onForfeit(g, result, 'abandoned');
+    else {
+      await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = 'abandoned', updated_at = now() WHERE id = ? AND status = 'active'").run(result, g.id);
+      if (onGameChanged) await onGameChanged(g.id);
+    }
   }
 
   // Uploaded post media is only needed for a few days — but never while a live announcement
@@ -101,13 +113,13 @@ async function housekeeping(onGameChanged) {
  * @param {(id: string) => Promise<void>} onGameChanged
  * @param {() => Promise<unknown>} [onMonthlyMedals]  run on 1st of month (Tashkent)
  */
-function startScheduler(onGameChanged, onMonthlyMedals) {
+function startScheduler(onGameChanged, onMonthlyMedals, onForfeit) {
   let running = false;
   const tick = async () => {
     if (running) return; // a slow run must not overlap the next one
     running = true;
     try {
-      await housekeeping(onGameChanged);
+      await housekeeping(onGameChanged, onForfeit);
       await remindMoves();
       if (typeof onMonthlyMedals === 'function') await onMonthlyMedals();
     } catch (e) {

@@ -2984,3 +2984,13 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .ann-copy { justify-content: center; }
 .ann-body.under { -webkit-line-clamp: 1; line-clamp: 1; }
 .ann-title { padding-bottom: 1px; }
+
+/* Rankings: a very long name must never widen the page — it is cut with "…" */
+.nx-list.rank, .nx-rank { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.nx-rank-name { overflow: hidden; }
+.nx-rank-nm { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-rank-name > :not(.nx-rank-nm) { flex: none; }
+.nx-rank-n { width: auto; min-width: 26px; }
+.nx-rank-n.long { font-size: 11px; letter-spacing: -.3px; }
+.nx-rank-score { max-width: 38%; }
+.nx-rank-total { margin: 10px 0 2px; text-align: center; color: var(--muted); font-size: 12px; font-weight: 600; }

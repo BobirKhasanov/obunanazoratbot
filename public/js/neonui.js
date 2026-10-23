@@ -188,13 +188,13 @@ export function segTabs(options, value, onChange, cls = '') {
 
 export function rankRow(p, { you, onOpen } = {}) {
   const place = p.rank;
-  const medal = place >= 1 && place <= 3 ? h('span.nx-medal.m' + place, String(place)) : h('span.nx-rank-n', String(place || '—'));
+  const medal = place >= 1 && place <= 3 ? h('span.nx-medal.m' + place, String(place)) : h('span.nx-rank-n' + (String(place || '').length > 3 ? '.long' : ''), String(place || '—'));
   return h('button.nx-rank' + (place >= 1 && place <= 3 ? '.podium.t' + place : '') + (you ? '.you' : ''), {
     type: 'button', onclick: tap(() => onOpen && onOpen(p.id)),
   },
     medal,
     avBlock(p.name || '?', p.id, { premium: !!p.premium, round: true, avatarKey: p.avatarKey, online: !!p.online }),
-    h('b.nx-rank-name', you ? t('you_label') : p.name, !you && p.premium ? premIc(14) : null,
+    h('b.nx-rank-name', h('span.nx-rank-nm', you ? t('you_label') : p.name), !you && p.premium ? premIc(14) : null,
       p.diamonds != null ? h('span.nx-rank-gem', `💎${p.diamonds}`) : null),
     h('b.nx-rank-score', String(p.score)));
 }
