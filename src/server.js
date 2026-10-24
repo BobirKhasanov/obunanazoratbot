@@ -21,7 +21,7 @@ const {
 const lichess = require('./lichess');
 const { BOT_HANDLE } = require('./medal-art');
 const { cacheGet, cacheSet, cacheDel, cacheEnabled, incr } = require('./cache');
-const { saveMedia, loadMediaBytes, storageEnabled } = require('./storage');
+const { saveMedia, loadMediaBytes, storageEnabled, deleteR2Objects } = require('./storage');
 const { DEFAULT_ELO, INITIAL_RD, rdAfterIdle, pairUpdate, scoresForResult, eloColumn, expandingEloDelta } = require('./elo');
 const {
   monthKey, monthLabelEn, seasonLabel, previousMonthKey, tashkentDay, tashkentParts,
@@ -203,7 +203,7 @@ app.get('/api/avatars/:id', wrap(async (req, res) => {
   if (!hit) {
     const used = await db.prepare('SELECT 1 AS ok FROM users WHERE avatar_key = ? LIMIT 1').get(`img:${id}`);
     if (!used) throw new HttpError(404, 'Not found', 'notfound');
-    const row = await db.prepare('SELECT id, mime, data FROM media WHERE id = ?').get(id);
+    const row = await db.prepare('SELECT id, mime, data, storage_path FROM media WHERE id = ?').get(id);
     const buf = row && await loadMediaBytes(row);
     if (!buf) throw new HttpError(404, 'Not found', 'notfound');
     hit = byteCachePut(key, buf, row.mime || 'image/jpeg');
@@ -239,7 +239,7 @@ app.get('/api/public/profile-banner', wrap(async (req, res) => {
     const key = `media:${mediaId}:0`;
     let hit = byteCacheGet(key);
     if (!hit) {
-      const row = await db.prepare('SELECT id, mime, data FROM media WHERE id = ?').get(mediaId);
+      const row = await db.prepare('SELECT id, mime, data, storage_path FROM media WHERE id = ?').get(mediaId);
       const buf = row && await loadMediaBytes(row);
       if (buf) {
         hit = byteCachePut(key, buf, row.mime || 'image/jpeg');
@@ -1267,6 +1267,7 @@ async function releaseAvatarMedia(prevKey, nextKey) {
   if (next && next[1] === prev[1]) return;
   const id = prev[1];
   await db.prepare('DELETE FROM media WHERE id = ?').run(id).catch(() => {});
+  await deleteR2Objects([id]);
   byteCacheDropMedia(id);
 }
 
@@ -3396,7 +3397,7 @@ api.get('/media/:id', wrap(async (req, res) => {
     // Original bytes: from RAM when we have them, otherwise ONE read from Postgres (then kept)
     let orig = byteCacheGet(`media:${id}:0`);
     if (!orig) {
-      const row = await db.prepare('SELECT id, mime, data FROM media WHERE id = ?').get(id);
+      const row = await db.prepare('SELECT id, mime, data, storage_path FROM media WHERE id = ?').get(id);
       if (!row) throw bad('Not found', 'notfound');
       const buf = await loadMediaBytes(row);
       if (!buf) throw bad('Not found', 'notfound');

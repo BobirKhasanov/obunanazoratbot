@@ -113,7 +113,7 @@ async function housekeeping(onGameChanged, onForfeit) {
 
   // Uploaded post media is only needed for a few days — but never while a live announcement
   // (carousel), a notification campaign or a kept avatar/banner still points at it.
-  await db.prepare(`
+  const goneMedia = await db.prepare(`
     DELETE FROM media
     WHERE created_at < now() - interval '7 days'
       AND id NOT IN (
@@ -127,7 +127,10 @@ async function housekeeping(onGameChanged, onForfeit) {
       AND id IS DISTINCT FROM (
         SELECT NULLIF(trim(value), '') FROM app_settings WHERE key = 'profile_banner_media_id'
       )
-  `).run();
+      RETURNING id
+  `).all();
+  await require('./storage').deleteR2Objects(goneMedia.map((m) => m.id));
+  await require('./storage').migrateSomeToR2(10).catch(() => {});
 }
 
 /**
