@@ -3067,3 +3067,17 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .nx-rank:has(.prem-tag) { padding-bottom: 11px; }
 .pbar .avwrap .prem-tag { font-size: 6px; padding: 1px 4px; }
 .nx-rank:has(.prem-tag) { padding-top: 5px; padding-bottom: 14px; }
+
+/* ---- Heat/battery pass: endless animations only where they are seen ---- */
+/* Premium ring spins only on big avatars (profile). In lists it stays a still gold ring —
+   20 spinning masked gradients on one screen is what warmed up phones. */
+.avwrap.prem:not(.xl) .prem-ring { animation: none !important; filter: none !important; }
+/* Android (non-lite) / desktop: no blur on the huge drifting chessboard backdrop */
+#bg::before { filter: none; left: -35%; right: -35%; }
+/* A full-screen game / sub-screen covers the home page: stop its endless animations */
+html:has(#game.show) #bg::before,
+html:has(#screen.show) #bg::before,
+html:has(#game.show) .prem-ring,
+html:has(#screen.show) .prem-ring,
+html:has(#game.show) .skeleton,
+html:has(#screen.show) .skeleton { animation-play-state: paused !important; }
