@@ -21,6 +21,7 @@ function r2() {
     S3 = require('@aws-sdk/client-s3');
     s3 = new S3.S3Client({
       region: 'auto',
+      forcePathStyle: true,
       endpoint: process.env.R2_ENDPOINT || `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
       credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY },
     });
