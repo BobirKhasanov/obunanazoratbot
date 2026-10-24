@@ -3060,3 +3060,10 @@ html[data-perf="lite"][data-theme="light"] { --nav-bg: #ffffff; }
 .nx-pr.has-prem, .nx-inv.has-prem { padding-bottom: 10px; }
 .avwrap .prem-tag { bottom: -7px; font-size: 6.5px; letter-spacing: .6px; padding: 1px 5px; line-height: 1.2; box-shadow: 0 0 0 1px var(--card, #131a2e), 0 1px 5px rgba(245, 158, 11, .4); }
 .avwrap .prem-tag { margin: 0; }
+
+/* PREMIUM label: under every Premium avatar, hanging below it — never over the face */
+.avwrap .prem-tag { top: calc(100% + 1px); bottom: auto; margin: 0; }
+.avwrap.xl .prem-tag { top: calc(100% + 5px); font-size: 9px; padding: 2px 9px; letter-spacing: .9px; }
+.nx-rank:has(.prem-tag) { padding-bottom: 11px; }
+.pbar .avwrap .prem-tag { font-size: 6px; padding: 1px 4px; }
+.nx-rank:has(.prem-tag) { padding-top: 5px; padding-bottom: 14px; }

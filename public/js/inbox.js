@@ -473,6 +473,7 @@ function bubbleEl(m, { onReply, showName } = {}) {
         onclick: openFrom,
       }, avBlock(from.name || '?', from.id, {
         premium: !!from.premium,
+        tag: false,
         round: true,
         avatarKey: from.avatarKey || null,
       })),

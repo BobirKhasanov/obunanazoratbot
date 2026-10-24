@@ -28,7 +28,7 @@ export function appHeader({ me, elo, inboxBtns, onProfile, onGems }) {
   const name = me.displayName || me.firstName || 'Player';
   return h('div.nx-hdr',
     h('button.nx-hdr-me', { type: 'button', onclick: tap(onProfile) },
-      avBlock(name, me.id, { premium: !!me.premium, round: true, online: true, avatarKey: me.avatarKey }),
+      avBlock(name, me.id, { premium: !!me.premium, tag: false, round: true, online: true, avatarKey: me.avatarKey }),
       h('div.nx-hdr-meta',
         h('div.nx-hdr-name', h('b', name), me.premium ? premIc(16) : null),
         h('div.nx-hdr-elo', icon('chart', 13), h('span.nx-elo-v', String(elo != null ? elo : (me.elo || 1200)))))),
