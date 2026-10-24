@@ -5,7 +5,17 @@
 const db = require('./db');
 const notify = require('./notify');
 const realtime = require('./realtime');
-const { turnOf, parseMoves } = require('./game');
+const { turnOf, parseMoves, replay } = require('./game');
+
+const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+/** Material balance in pawns: positive = white is ahead. */
+function materialLead(moves) {
+  let sum = 0;
+  for (const rank of replay(moves).board()) {
+    for (const sq of rank) if (sq) sum += (sq.color === 'w' ? 1 : -1) * (PIECE_VALUE[sq.type] || 0);
+  }
+  return sum;
+}
 const REMIND_AFTER_HOURS = Number(process.env.REMIND_AFTER_HOURS || 6); // env overrides are for tests
 /** Untimed (no clock) game: the player to move loses after this many hours without a move (chess.com-style). */
 const ABANDON_UNTIMED_HOURS = Math.max(0.001, Number(process.env.ABANDON_UNTIMED_HOURS || 30));
@@ -47,25 +57,36 @@ async function housekeeping(onGameChanged, onForfeit) {
       AND created_at < now() - (? * interval '1 minute')
   `).run(JOIN_TIMEOUT_MINUTES);
 
-  // Both players left the Mini App for IDLE_APP_MINUTES → draw (applies to timed + untimed)
+  // The player whose turn it is has been out of the Mini App AND has not moved for IDLE_APP_MINUTES
+  // (the opponent may be gone too): the game ends by itself — whoever is ahead on the board wins, level = draw.
   const idleRows = await db.prepare(`
-    SELECT g.id, g.white_id, g.black_id
-    FROM games g
+    SELECT g.* FROM games g
     JOIN users w ON w.id = g.white_id
     JOIN users b ON b.id = g.black_id
     WHERE g.status = 'active'
-      AND w.last_seen < now() - (? * interval '1 minute')
-      AND b.last_seen < now() - (? * interval '1 minute')
+      AND g.white_id < 9000000000000 AND g.black_id < 9000000000000
+      AND g.last_move_at < now() - (? * interval '1 minute')
+      AND CASE WHEN jsonb_array_length(g.moves) % 2 = 0
+               THEN w.last_seen ELSE b.last_seen END < now() - (? * interval '1 minute')
     ORDER BY g.updated_at ASC
     LIMIT 80
   `).all(IDLE_APP_MINUTES, IDLE_APP_MINUTES);
   for (const g of idleRows) {
-    if (realtime.isOnline(g.white_id) || realtime.isOnline(g.black_id)) continue;
-    const r = await db.prepare(`
-      UPDATE games SET status = 'finished', result = '1/2-1/2', reason = 'idle', draw_by = NULL, updated_at = now()
-      WHERE id = ? AND status = 'active'
-    `).run(g.id);
-    if (r.changes > 0 && onGameChanged) await onGameChanged(g.id);
+    const moves = parseMoves(g.moves);
+    const mover = turnOf(moves) === 'w' ? g.white_id : g.black_id;
+    if (realtime.isOnline(mover)) continue; // they are in the app right now
+    if (moves.length < 2) {
+      await db.prepare("UPDATE games SET status = 'cancelled', reason = 'aborted', draw_by = NULL, takeback_by = NULL, updated_at = now() WHERE id = ? AND status = 'active'").run(g.id);
+      if (onGameChanged) await onGameChanged(g.id);
+      continue;
+    }
+    const lead = materialLead(moves); // + white ahead, − black ahead
+    const result = lead >= 1 ? '1-0' : lead <= -1 ? '0-1' : '1/2-1/2';
+    if (onForfeit) await onForfeit(g, result, 'inactive');
+    else {
+      await db.prepare("UPDATE games SET status = 'finished', result = ?, reason = 'inactive', draw_by = NULL, takeback_by = NULL, updated_at = now() WHERE id = ? AND status = 'active'").run(result, g.id);
+      if (onGameChanged) await onGameChanged(g.id);
+    }
   }
 
   // Untimed games: the player to move has not moved for ABANDON_UNTIMED_HOURS → they lose (aborted before 2 moves)

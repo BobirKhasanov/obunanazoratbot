@@ -72,6 +72,20 @@ const step = async (n, f) => { await f(); passed++; console.log(`ok  ${n}`); };
       assert.strictEqual(done.result, '0-1'); // white to move → white loses
       assert.ok((await ok(wk, 'GET', '/me')).user.elo < 1200, 'the player to move lost rating');
     });
+    await step('player to move left the app for 30 min: the game ends, the side ahead wins (level = draw)', async () => {
+      const id = await start('C', 'D', 'classic');
+      const view = async (w) => (await ok(w, 'GET', `/games/${id}`)).game;
+      const g0 = await view('C');
+      const [wk, bk] = g0.you === 'w' ? ['C', 'D'] : ['D', 'C'];
+      for (const [who, from, to] of [[wk, 'e2', 'e4'], [bk, 'd7', 'd5'], [wk, 'e4', 'd5']]) await ok(who, 'POST', `/games/${id}/move`, { from, to });
+      // black is to move, a pawn down; nobody has been around for 31 minutes
+      await sleep(2600); // REST presence (2 s here) and the throttled last_seen writes of the moves have faded
+      await pg.q("UPDATE games SET last_move_at = now() - interval '31 minutes' WHERE id = $1", id);
+      await pg.q("UPDATE users SET last_seen = now() - interval '31 minutes' WHERE id = ANY($1)", [[U.C.id, U.D.id]]);
+      const done = await waitFor(async () => { const [x] = await pg.q('SELECT status, result, reason FROM games WHERE id = $1', id); return x.status === 'finished' ? x : null; }, 15000, 'inactive end');
+      assert.strictEqual(done.reason, 'inactive');
+      assert.strictEqual(done.result, '1-0', 'white was a pawn ahead');
+    });
     console.log(`${passed} abandonment steps passed`);
     await finish(0);
   } catch (e) { console.error('FAILED:', e); await finish(1); }
