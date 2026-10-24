@@ -9,6 +9,9 @@
  * do not surface as "No connection" in Telegram.
  */
 
+// public, immutable-per-URL binaries (media id / medal id / avatar id are unique)
+const EDGE_CACHEABLE = /^\/api\/(media\/[0-9a-f-]{36}|medals\/[^/]+\.svg|avatars\/[0-9a-f-]{36}|public\/profile-banner)$/i;
+
 const RETRY_STATUSES = new Set([502, 503, 504, 521, 522, 523, 524]);
 
 function sleep(ms) {
@@ -95,7 +98,7 @@ async function proxyToOrigin(request, origin, url) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
     const needsOrigin =
@@ -111,6 +114,21 @@ export default {
           status: 503,
           headers: { 'Content-Type': 'application/json' },
         });
+      }
+      // Images/medals never change for a given URL: serve them from Cloudflare's edge so the
+      // origin (and Postgres behind it) is hit once, not on every phone.
+      if (request.method === 'GET' && EDGE_CACHEABLE.test(path)) {
+        const cache = caches.default;
+        const key = new Request(url.origin + path + url.search, { method: 'GET' });
+        const hit = await cache.match(key);
+        if (hit) return hit;
+        const res = await proxyToOrigin(request, origin, url);
+        const cc = res.headers.get('Cache-Control') || '';
+        if (res.status === 200 && /public/.test(cc) && !/no-store|private/.test(cc)) {
+          const copy = new Response(res.clone().body, res);
+          ctx.waitUntil(cache.put(key, copy));
+        }
+        return res;
       }
       return proxyToOrigin(request, origin, url);
     }

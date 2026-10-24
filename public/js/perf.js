@@ -128,10 +128,10 @@ export function gameClockTickMs() {
 /** Home / lobby soft refresh when WS is connected (ms). */
 export function homeTabRefreshMs() {
   const p = detect();
-  if (p.lite) return 24000;
-  if (p.isAndroid) return 16000;
-  if (p.isIOS) return 22000;
-  return 14000;
+  if (p.lite) return 36000;
+  if (p.isAndroid) return 24000;
+  if (p.isIOS) return 30000;
+  return 20000;
 }
 
 /** Sheet / inbox / friend-wait soft poll (ms). */

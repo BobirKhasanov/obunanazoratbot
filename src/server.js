@@ -123,14 +123,56 @@ const wrap = (fn) => (req, res, next) => {
   try { Promise.resolve(fn(req, res)).catch(next); } catch (e) { next(e); }
 };
 
+// ---- Neon egress guard: media/medal bytes are read from Postgres ONCE and then served from memory ----
+const BYTE_CACHE_MAX = 64 * 1024 * 1024; // total bytes kept in RAM
+const byteCache = new Map(); // key -> { buf, mime, etag }
+let byteCacheSize = 0;
+function byteCacheGet(key) {
+  const hit = byteCache.get(key);
+  if (hit) { byteCache.delete(key); byteCache.set(key, hit); } // LRU touch
+  return hit || null;
+}
+function byteCacheDropMedia(id) {
+  for (const k of [...byteCache.keys()]) if (k.startsWith(`media:${id}:`)) { byteCacheSize -= byteCache.get(k).buf.length; byteCache.delete(k); }
+}
+function byteCachePut(key, buf, mime) {
+  const old = byteCache.get(key);
+  if (old) { byteCacheSize -= old.buf.length; byteCache.delete(key); }
+  if (buf.length > BYTE_CACHE_MAX / 2) return null; // never let one huge file evict everything
+  const hit = { buf, mime, etag: `"${require('crypto').createHash('sha1').update(buf).digest('base64url').slice(0, 22)}"` };
+  byteCache.set(key, hit);
+  byteCacheSize += buf.length;
+  while (byteCacheSize > BYTE_CACHE_MAX && byteCache.size > 1) {
+    const [k, v] = byteCache.entries().next().value;
+    byteCache.delete(k); byteCacheSize -= v.buf.length;
+  }
+  return hit;
+}
+/** Send cached bytes with a long immutable cache + ETag (304 when the client already has it). */
+function sendCachedBytes(req, res, hit, { immutable = true, maxAge = 31536000 } = {}) {
+  res.set({
+    'Content-Type': hit.mime,
+    'Cache-Control': immutable ? `public, max-age=${maxAge}, immutable` : `public, max-age=${maxAge}`,
+    ETag: hit.etag,
+  });
+  if (req.headers['if-none-match'] === hit.etag) return res.status(304).end();
+  res.set('Content-Length', hit.buf.length);
+  return res.end(hit.buf);
+}
+
 // Medal SVGs are public so <img> / download / Telegram share work without initData headers
 app.get('/api/medals/:id.svg', wrap(async (req, res) => {
   const id = String(req.params.id || '').replace(/\.svg$/i, '');
-  const row = await db.prepare('SELECT svg FROM medals WHERE id = ?').get(id);
-  if (!row) throw new HttpError(404, 'Not found', 'notfound');
-  res.set('Content-Type', 'image/svg+xml; charset=utf-8');
-  res.set('Cache-Control', 'public, max-age=300');
-  res.send(row.svg);
+  const key = `medal:${id}`;
+  let hit = byteCacheGet(key);
+  if (!hit) {
+    const row = await db.prepare('SELECT svg FROM medals WHERE id = ?').get(id);
+    if (!row) throw new HttpError(404, 'Not found', 'notfound');
+    hit = byteCachePut(key, Buffer.from(String(row.svg), 'utf8'), 'image/svg+xml; charset=utf-8');
+    if (!hit) { res.set('Content-Type', 'image/svg+xml; charset=utf-8'); res.set('Cache-Control', 'public, max-age=300'); return res.send(row.svg); }
+  }
+  // the URL carries ?v=<art version>; a redrawn medal ships a new version, so a day is safe
+  return sendCachedBytes(req, res, hit, { immutable: false, maxAge: 86400 });
 }));
 
 // Free character avatars (PNG set under public/img/char-avatars/) — public for <img>
@@ -156,17 +198,18 @@ app.get('/api/char-avatars/:id.png', (req, res) => {
 app.get('/api/avatars/:id', wrap(async (req, res) => {
   const id = String(req.params.id || '');
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(404, 'Not found', 'notfound');
-  const used = await db.prepare('SELECT 1 AS ok FROM users WHERE avatar_key = ? LIMIT 1').get(`img:${id}`);
-  if (!used) throw new HttpError(404, 'Not found', 'notfound');
-  const row = await db.prepare('SELECT * FROM media WHERE id = ?').get(id);
-  const buf = row && await loadMediaBytes(row);
-  if (!buf) throw new HttpError(404, 'Not found', 'notfound');
-  res.set({
-    'Content-Type': row.mime || 'image/jpeg',
-    'Cache-Control': 'public, max-age=3600',
-    'Content-Length': buf.length,
-  });
-  res.end(buf);
+  const key = `media:${id}:0`;
+  let hit = byteCacheGet(key);
+  if (!hit) {
+    const used = await db.prepare('SELECT 1 AS ok FROM users WHERE avatar_key = ? LIMIT 1').get(`img:${id}`);
+    if (!used) throw new HttpError(404, 'Not found', 'notfound');
+    const row = await db.prepare('SELECT id, mime, data FROM media WHERE id = ?').get(id);
+    const buf = row && await loadMediaBytes(row);
+    if (!buf) throw new HttpError(404, 'Not found', 'notfound');
+    hit = byteCachePut(key, buf, row.mime || 'image/jpeg');
+    if (!hit) { res.set({ 'Content-Type': row.mime || 'image/jpeg', 'Cache-Control': 'public, max-age=3600', 'Content-Length': buf.length }); return res.end(buf); }
+  }
+  return sendCachedBytes(req, res, hit); // a new photo gets a new id, so the old URL never changes
 }));
 
 const DEFAULT_PROFILE_BANNER = path.join(__dirname, '..', 'public', 'img', 'profile-banner.png');
@@ -193,16 +236,18 @@ app.get('/api/public/boot-splash', wrap(async (req, res) => {
 app.get('/api/public/profile-banner', wrap(async (req, res) => {
   const { mediaId } = await profileBannerMeta();
   if (mediaId) {
-    const row = await db.prepare('SELECT * FROM media WHERE id = ?').get(mediaId);
-    const buf = row && await loadMediaBytes(row);
-    if (buf) {
-      res.set({
-        'Content-Type': row.mime || 'image/jpeg',
-        'Cache-Control': 'public, max-age=120, must-revalidate',
-        'Content-Length': buf.length,
-      });
-      return res.end(buf);
+    const key = `media:${mediaId}:0`;
+    let hit = byteCacheGet(key);
+    if (!hit) {
+      const row = await db.prepare('SELECT id, mime, data FROM media WHERE id = ?').get(mediaId);
+      const buf = row && await loadMediaBytes(row);
+      if (buf) {
+        hit = byteCachePut(key, buf, row.mime || 'image/jpeg');
+        if (!hit) { res.set({ 'Content-Type': row.mime || 'image/jpeg', 'Cache-Control': 'public, max-age=120, must-revalidate', 'Content-Length': buf.length }); return res.end(buf); }
+      }
     }
+    // the URL carries ?v=<media id>, so a new banner is a new URL
+    if (hit) return sendCachedBytes(req, res, hit);
   }
   res.set('Cache-Control', 'public, max-age=3600');
   return res.sendFile(DEFAULT_PROFILE_BANNER);
@@ -1222,6 +1267,7 @@ async function releaseAvatarMedia(prevKey, nextKey) {
   if (next && next[1] === prev[1]) return;
   const id = prev[1];
   await db.prepare('DELETE FROM media WHERE id = ?').run(id).catch(() => {});
+  byteCacheDropMedia(id);
 }
 
 /** Everyone: upload a custom avatar photo (JPG/PNG/GIF ≤ 5 MB). Picking a character avatar is the Premium perk. */
@@ -1289,6 +1335,7 @@ api.post('/ping', wrap(async (req, res) => res.json({ ok: true })));
 // Mini App closed / backgrounded — drop from the live list immediately
 api.post('/bye', wrap(async (req, res) => {
   await clearPresent.run(req.user.id);
+  await cacheDel('lobby:present');
   res.json({ ok: true });
 }));
 
@@ -2367,16 +2414,22 @@ api.get('/lobby', wrap(async (req, res) => {
   const inviteGameByUser = new Map(pendingInvites.map((r) => [r.user_id, r.game_id]));
 
   // Shared presence: present_until is refreshed on every API call and cleared on Mini App close / WS leave.
-  const rows = await db.prepare(`
-    SELECT id, first_name, last_name, discoverable, premium, premium_until, avatar_key, elo, diamonds
-    FROM users
-    WHERE blocked = 0 AND id != ?
-      AND present_until > now()
-      AND id NOT IN (SELECT blocked_id FROM user_blocks WHERE user_id = ?)
-      AND id NOT IN (SELECT user_id FROM user_blocks WHERE blocked_id = ?)
-    ORDER BY present_until DESC
-    LIMIT 200
-  `).all(uid, uid, uid);
+  // One shared snapshot of who is present (4 s) — every lobby poll used to re-read up to 200 user rows
+  let present = await cacheGet('lobby:present', 4_000);
+  if (!present) {
+    present = await db.prepare(`
+      SELECT id, first_name, last_name, discoverable, premium, premium_until, avatar_key, elo, diamonds
+      FROM users
+      WHERE blocked = 0 AND present_until > now()
+      ORDER BY present_until DESC
+      LIMIT 220
+    `).all();
+    await cacheSet('lobby:present', present, 4_000);
+  }
+  const blockedPair = new Set((await db.prepare(
+    'SELECT blocked_id AS o FROM user_blocks WHERE user_id = ? UNION SELECT user_id AS o FROM user_blocks WHERE blocked_id = ?',
+  ).all(uid, uid)).map((r) => String(r.o)));
+  const rows = present.filter((r) => String(r.id) !== String(uid) && !blockedPair.has(String(r.id))).slice(0, 200);
   // Drop ghost rows: present_until alone is not enough after a closed Mini App (WS/REST must still be live).
   // Players inside an active game stay listed while their socket reconnects (/bye clears present_until).
   const online = rows
@@ -3332,48 +3385,51 @@ function parseAnnouncementBody(b, { requireFuture = true } = {}) {
   };
 }
 
-const mediaThumbs = new Map(); // `${id}:${w}` -> { buf, mime } (small LRU)
 api.get('/media/:id', wrap(async (req, res) => {
   const id = String(req.params.id || '');
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw bad('Not found', 'notfound');
-  // Only columns needed to stream BYTEA from Neon (avoid SELECT * on large rows).
-  const row = await db.prepare('SELECT id, mime, data, size FROM media WHERE id = ?').get(id);
-  if (!row) throw bad('Not found', 'notfound');
-  let buf = await loadMediaBytes(row);
-  if (!buf) throw bad('Not found', 'notfound');
-  let mime = row.mime || 'application/octet-stream';
-  // Phones get a right-sized copy (originals can be several MB — they timed out and the carousel fell back to ♛)
   const w = Math.floor(Number(req.query.w) || 0);
-  if (w >= 120 && w <= 1600 && /^image\/(jpeg|png|webp)$/.test(mime)) {
-    const key = `${id}:${w}`;
-    let hit = mediaThumbs.get(key);
-    if (!hit) {
-      try {
-        const out = await require('sharp')(buf, { failOn: 'none' }).rotate().resize({ width: w, withoutEnlargement: true })
-          [mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpeg'](mime === 'image/png' ? { compressionLevel: 9, palette: true } : { quality: 82 })
-          .toBuffer();
-        hit = { buf: out.length < buf.length ? out : buf, mime };
-        mediaThumbs.set(key, hit);
-        if (mediaThumbs.size > 40) mediaThumbs.delete(mediaThumbs.keys().next().value);
-      } catch { hit = null; }
+  const width = w >= 120 && w <= 1600 ? w : 0;
+  const key = `media:${id}:${width}`;
+  let hit = byteCacheGet(key);
+  if (!hit) {
+    // Original bytes: from RAM when we have them, otherwise ONE read from Postgres (then kept)
+    let orig = byteCacheGet(`media:${id}:0`);
+    if (!orig) {
+      const row = await db.prepare('SELECT id, mime, data FROM media WHERE id = ?').get(id);
+      if (!row) throw bad('Not found', 'notfound');
+      const buf = await loadMediaBytes(row);
+      if (!buf) throw bad('Not found', 'notfound');
+      orig = byteCachePut(`media:${id}:0`, buf, row.mime || 'application/octet-stream') || { buf, mime: row.mime || 'application/octet-stream', etag: null };
     }
-    if (hit) { buf = hit.buf; mime = hit.mime; }
+    hit = orig;
+    // Phones get a right-sized copy (originals can be several MB)
+    if (width && /^image\/(jpeg|png|webp)$/.test(orig.mime)) {
+      try {
+        const out = await require('sharp')(orig.buf, { failOn: 'none' }).rotate().resize({ width, withoutEnlargement: true })
+          [orig.mime === 'image/png' ? 'png' : orig.mime === 'image/webp' ? 'webp' : 'jpeg'](orig.mime === 'image/png' ? { compressionLevel: 9, palette: true } : { quality: 82 })
+          .toBuffer();
+        hit = byteCachePut(key, out.length < orig.buf.length ? out : orig.buf, orig.mime) || hit;
+      } catch { /* keep the original */ }
+    }
   }
-  res.set({
-    'Content-Type': mime,
-    'Cache-Control': 'private, max-age=3600',
-    'Content-Length': buf.length,
-  });
-  res.end(buf);
+  if (!hit.etag) { res.set({ 'Content-Type': hit.mime, 'Cache-Control': 'public, max-age=3600', 'Content-Length': hit.buf.length }); return res.end(hit.buf); }
+  return sendCachedBytes(req, res, hit); // media ids are unique and never rewritten
 }));
 
 api.get('/announcements', wrap(async (req, res) => {
-  await purgeExpiredAnnouncements();
   const board = parseAnnBoard(req.query.board);
-  const rows = await db.prepare(`
-    SELECT * FROM announcements WHERE ends_at > now() AND board = ? ORDER BY id DESC LIMIT 20
-  `).all(board);
-  res.json({ announcements: rows.map(publicAnnouncement), board, nowTashkent: formatTashkent(new Date()) });
+  // Same list for everybody → one DB read per 15 s (admin edits clear it at once)
+  let list = await cacheGet(`ann:list:${board}`, 15_000);
+  if (!list) {
+    await purgeExpiredAnnouncements();
+    const rows = await db.prepare(`
+      SELECT * FROM announcements WHERE ends_at > now() AND board = ? ORDER BY id DESC LIMIT 20
+    `).all(board);
+    list = rows.map(publicAnnouncement);
+    await cacheSet(`ann:list:${board}`, list, 15_000);
+  }
+  res.json({ announcements: list, board, nowTashkent: formatTashkent(new Date()) });
 }));
 
 // ---------- admin ----------
@@ -4359,6 +4415,7 @@ admin.get('/announcements', wrap(async (req, res) => {
   });
 }));
 
+const dropAnnCache = () => Promise.all(['home', 'puzzle'].map((b) => cacheDel(`ann:list:${b}`)));
 admin.post('/announcements', wrap(async (req, res) => {
   const p = parseAnnouncementBody(req.body || {});
   const board = parseAnnBoard(req.body && req.body.board);
@@ -4376,6 +4433,7 @@ admin.post('/announcements', wrap(async (req, res) => {
     req.user.id, p.title, p.body, p.titleColor, p.bodyColor, p.bgFrom, p.bgTo,
     p.fontFamily, p.fontSize, p.mediaId, p.linkType, p.linkUrl, p.linkPage, p.endsAt, board,
   );
+  await dropAnnCache();
   res.status(201).json({ announcement: publicAnnouncement(info.rows[0]) });
 }));
 
@@ -4413,6 +4471,7 @@ admin.patch('/announcements/:id', wrap(async (req, res) => {
     p.title, p.body, p.titleColor, p.bodyColor, p.bgFrom, p.bgTo,
     p.fontFamily, p.fontSize, p.mediaId, p.linkType, p.linkUrl, p.linkPage, p.endsAt, id,
   );
+  await dropAnnCache();
   res.json({ announcement: publicAnnouncement(await db.prepare('SELECT * FROM announcements WHERE id = ?').get(id)) });
 }));
 
@@ -4420,6 +4479,7 @@ admin.delete('/announcements/:id', wrap(async (req, res) => {
   const id = intParam(req.params.id);
   const r = await db.prepare('DELETE FROM announcements WHERE id = ?').run(id);
   if (!r.changes) throw bad('Not found', 'notfound');
+  await dropAnnCache();
   res.json({ ok: true });
 }));
 
