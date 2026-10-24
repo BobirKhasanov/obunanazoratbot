@@ -3,6 +3,7 @@ import { h, icon, haptic, toast, api, fail, getInitData, avatar, avBlock, confir
 import { t, LANGS, LANG_NAMES } from './i18n.js';
 import { sectionHead, statCard, emptyNote, filterChip } from './neonui.js';
 import { openScreen } from './screen.js';
+import { formatTashkentShort } from './time.js';
 
 let timer = null;
 const COLOR_KEYS = ['default', 'primary', 'success', 'danger'];
@@ -76,7 +77,9 @@ function tashkentDefault(nowTashkent, days) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T23:59`;
 }
 
-const broadcastSub = (b) => `#${b.id} · ${b.lang} · ${b.sent}/${b.total}${b.failed ? ` · ✗${b.failed}` : ''} · ${t('status_' + b.status)}`;
+const broadcastSub = (b) => (b.status === 'scheduled'
+  ? `#${b.id} · ${b.lang} · ⏰ ${formatTashkentShort(b.scheduled_at)} · ${t('status_scheduled')}`
+  : `#${b.id} · ${b.lang} · ${b.sent}/${b.total}${b.failed ? ` · ✗${b.failed}` : ''} · ${t('status_' + b.status)}`);
 
 /** Inline-keyboard button editor shared by broadcast + welcome. */
 function buttonEditor(host, buttons, redraw) {
@@ -205,7 +208,11 @@ export function openAdmin(onClose) {
   async function loadHistory() {
     try {
       const r = await api('GET', '/admin/broadcasts');
-      histBox.replaceChildren(cardList(r.broadcasts.map((b) => listRow((b.text || '📎').slice(0, 60), broadcastSub(b))), t('msg_stats_empty')));
+      histBox.replaceChildren(cardList(r.broadcasts.map((b) => listRow((b.text || '📎').slice(0, 60), broadcastSub(b),
+        b.status === 'scheduled' ? icBtn('x', t('sched_cancel'), async () => {
+          if (!(await confirmSheet(t('sched_cancel_confirm'), t('sched_cancel'), true))) return;
+          try { await api('POST', `/admin/broadcasts/${b.id}/cancel`); toast(t('sched_cancelled')); loadHistory(); } catch (e) { fail(e); }
+        }, 'danger') : null)), t('msg_stats_empty')));
       return r.busy;
     } catch { return false; }
   }
@@ -262,6 +269,20 @@ export function openAdmin(onClose) {
       const r = await api('POST', '/admin/broadcast', payload(false));
       toast(t('sending', { n: r.queued })); haptic('success');
       setTimeout(loadHistory, 2500);
+    } catch (e) { fail(e); }
+  });
+  // Scheduled send: pick a Tashkent date + time, the bot posts it by itself
+  const schedAt = h('input.input', { type: 'datetime-local', 'aria-label': t('sched_at') });
+  const schedBtn = ghostBtn('clock', t('sched_btn'), async () => {
+    if (!schedAt.value) return toast(t('sched_pick'), true);
+    try {
+      const st = await api('GET', '/admin/stats');
+      const n = post.lang === 'all' ? st.users : (st.byLang.find((x) => x.lang === post.lang) || { c: 0 }).c;
+      if (!(await confirmSheet(t('sched_confirm', { n, when: schedAt.value.replace('T', ' ') }), t('sched_btn')))) return;
+      const r = await api('POST', '/admin/broadcast', { ...payload(false), scheduledAtTashkent: schedAt.value });
+      toast(t('sched_ok', { when: r.atTashkent.replace('T', ' ') })); haptic('success');
+      schedAt.value = '';
+      loadHistory();
     } catch (e) { fail(e); }
   });
   const audience = chipSeg([['all', t('all_users')], ...LANGS.map((l) => [l, LANG_NAMES[l].slice(0, 3)])], 'all', (v) => { post.lang = v; });
@@ -929,7 +950,9 @@ export function openAdmin(onClose) {
         field(t('buttons') + ' · ' + t('up_to'), btnBox),
         field(t('audience'), audience),
         field(t('preview'), preview),
-        h('div.adm-actions', sendTest, sendAll)),
+        h('div.adm-actions', sendTest, sendAll),
+        field(t('sched_at') + ' · ' + t('swiss_tz_note'), schedAt),
+        h('div.adm-actions', schedBtn)),
       sectionHead(t('history')), histBox,
     ];
   });

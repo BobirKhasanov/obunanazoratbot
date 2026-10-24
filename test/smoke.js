@@ -1202,6 +1202,31 @@ async function playMoves(game, players, moves, startPly = 0) {
       assert.ok(row.url.includes('t.me/share/url') || row.url.includes('startapp=i'), 'invite is share or direct referral url');
     });
 
+    await step('scheduled broadcast: validated, can be cancelled, and the bot sends it by itself when due', async () => {
+      const tk = (ms) => new Date(ms + 5 * 3600000).toISOString().slice(0, 16).replace('T', ' ');
+      await err('ADMIN', 'POST', '/admin/broadcast', { text: 'late', scheduledAtTashkent: tk(Date.now() - 3600000) }, 400, 'ends_at');
+      await err('ADMIN', 'POST', '/admin/broadcast', { text: 'x', scheduledAtTashkent: 'tomorrow' }, 400, 'ends_at');
+      await err('A', 'POST', '/admin/broadcast', { text: 'x', scheduledAtTashkent: tk(Date.now() + 3600000) }, 404);
+      const gone = await ok('ADMIN', 'POST', '/admin/broadcast', { text: 'cancel me', scheduledAtTashkent: tk(Date.now() + 2 * 3600000) });
+      assert.ok(gone.scheduled && gone.id);
+      const list = (await ok('ADMIN', 'GET', '/admin/broadcasts')).broadcasts;
+      assert.strictEqual(list.find((b) => b.id === String(gone.id) || Number(b.id) === gone.id).status, 'scheduled');
+      await ok('ADMIN', 'POST', `/admin/broadcasts/${gone.id}/cancel`);
+      await err('ADMIN', 'POST', `/admin/broadcasts/${gone.id}/cancel`, null, 400, 'bad_request');
+      const due = await ok('ADMIN', 'POST', '/admin/broadcast', { text: 'Scheduled hello', lang: 'all', scheduledAtTashkent: tk(Date.now() + 2 * 3600000) });
+      const before = tg.to(USERS.A.id).length;
+      await pg.q("UPDATE broadcasts SET scheduled_at = now() - interval '1 second' WHERE id = $1", due.id);
+      for (let i = 0; i < 40; i++) {
+        const [row] = await pg.q('SELECT status FROM broadcasts WHERE id = $1', due.id);
+        if (row.status === 'done') break;
+        await sleep(500);
+      }
+      const [fin] = await pg.q('SELECT status, sent FROM broadcasts WHERE id = $1', due.id);
+      assert.strictEqual(fin.status, 'done', 'sent by itself when due');
+      assert.ok(tg.to(USERS.A.id).length > before && tg.to(USERS.A.id).some((x) => x.body.text === 'Scheduled hello'), 'users received it');
+      assert.strictEqual((await pg.q('SELECT status FROM broadcasts WHERE id = $1', gone.id))[0].status, 'cancelled', 'cancelled one stayed unsent');
+    });
+
     await step('admin message stats covers telegram + in-app', async () => {
       const st = await ok('ADMIN', 'GET', '/admin/message-stats');
       assert.ok(st.telegram && typeof st.telegram.sent === 'number');

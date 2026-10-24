@@ -4123,11 +4123,11 @@ async function deliver(chatId, post) {
 }
 
 let broadcasting = false;
-admin.post('/broadcast', wrap(async (req, res) => {
-  const b = req.body || {};
+
+/** Validate + load the pieces of a post (shared by "send now" and "scheduled"). */
+async function buildPost(b) {
   const text = String(b.text ?? '').trim();
   const buttons = parseButtons(b.buttons);
-
   let media = null;
   if (b.mediaId) {
     const row = await db.prepare('SELECT * FROM media WHERE id = ?').get(String(b.mediaId));
@@ -4142,33 +4142,20 @@ admin.post('/broadcast', wrap(async (req, res) => {
   }
   if (!text && !media) throw bad('Write a message or add media', 'text');
   if (text.length > (media ? 1024 : 4096)) throw bad('Text is too long', 'text_long');
-  const lang = b.lang === 'all' || LANGS.includes(b.lang) ? b.lang : 'all';
-
-  const post = {
+  return {
     text, buttons, media, webAppUrl: WEBAPP_URL,
     onFileId: (id) => media && db.prepare('UPDATE media SET file_id = ? WHERE id = ?').run(id, media.id),
   };
+}
 
-  // Test: send only to the admin who pressed the button and report Telegram's answer
-  if (b.test) {
-    try {
-      await deliver(req.user.id, await personalizeBroadcastPost(post, req.user.id));
-    } catch (e) { throw bad(`Telegram refused the post: ${e.description || e.message}`, 'tg_error'); }
-    return res.json({ test: true, sent: 1 });
-  }
-
-  if (broadcasting) throw new HttpError(409, 'A broadcast is already running', 'busy');
-  const targets = lang === 'all'
-    ? await db.prepare('SELECT id FROM users WHERE blocked = 0 AND bot_blocked = 0 AND id < 9000000000000').all()
-    : await db.prepare('SELECT id FROM users WHERE blocked = 0 AND bot_blocked = 0 AND id < 9000000000000 AND lang = ?').all(lang);
-  const info = await db.prepare('INSERT INTO broadcasts (admin_id, text, media_id, lang, total) VALUES (?, ?, ?, ?, ?) RETURNING id')
-    .run(req.user.id, text, media ? media.id : null, lang, targets.length);
-  const bid = Number(info.rows[0].id);
+/** Send broadcast row `bid` to its audience in the background (~20 msg/s). The row must already be 'sending'. */
+async function runBroadcast(bid, post, lang) {
   broadcasting = true;
-  res.json({ id: bid, queued: targets.length });
-
-  // Send in the background at ~20 messages/second (Telegram allows ~30)
-  (async () => {
+  try {
+    const targets = lang === 'all'
+      ? await db.prepare('SELECT id FROM users WHERE blocked = 0 AND bot_blocked = 0 AND id < 9000000000000').all()
+      : await db.prepare('SELECT id FROM users WHERE blocked = 0 AND bot_blocked = 0 AND id < 9000000000000 AND lang = ?').all(lang);
+    await db.prepare('UPDATE broadcasts SET total = ? WHERE id = ?').run(targets.length, bid);
     let sent = 0, failed = 0;
     const save = () => db.prepare('UPDATE broadcasts SET sent = ?, failed = ? WHERE id = ?').run(sent, failed, bid);
     for (const t of targets) {
@@ -4179,24 +4166,83 @@ admin.post('/broadcast', wrap(async (req, res) => {
         failed++;
         if (e.error_code === 403) await db.prepare('UPDATE users SET bot_blocked = 1 WHERE id = ?').run(t.id);
       }
-      if ((sent + failed) % 10 === 0) save();
+      if ((sent + failed) % 10 === 0) await save();
       await sleep(50);
     }
-    save();
+    await save();
     await db.prepare("UPDATE broadcasts SET status = 'done' WHERE id = ?").run(bid);
-    broadcasting = false;
     console.log(`[broadcast ${bid}] sent=${sent} failed=${failed}`);
     for (const a of ADMIN_IDS) bot.api.sendMessage(a, `✅ Broadcast #${bid}: ${sent} delivered, ${failed} failed.`).catch(() => {});
-  })().catch((e) => { broadcasting = false; console.error('[broadcast] crashed:', e); });
+  } finally { broadcasting = false; }
+}
+
+admin.post('/broadcast', wrap(async (req, res) => {
+  const b = req.body || {};
+  const post = await buildPost(b);
+  const lang = b.lang === 'all' || LANGS.includes(b.lang) ? b.lang : 'all';
+
+  // Test: send only to the admin who pressed the button and report Telegram's answer
+  if (b.test) {
+    try {
+      await deliver(req.user.id, await personalizeBroadcastPost(post, req.user.id));
+    } catch (e) { throw bad(`Telegram refused the post: ${e.description || e.message}`, 'tg_error'); }
+    return res.json({ test: true, sent: 1 });
+  }
+
+  // Scheduled: the bot sends it by itself at the chosen Tashkent time
+  if (b.scheduledAtTashkent) {
+    const at = parseTashkentEnd(b.scheduledAtTashkent);
+    const diffMin = (at.getTime() - Date.now()) / 60000;
+    if (diffMin < 1) throw bad('Pick a time in the future (Tashkent)', 'ends_at');
+    if (diffMin > 60 * 24 * 60) throw bad('Too far ahead (max 60 days)', 'ends_at');
+    const info = await db.prepare("INSERT INTO broadcasts (admin_id, text, media_id, lang, total, status, scheduled_at, buttons) VALUES (?, ?, ?, ?, 0, 'scheduled', ?, ?::jsonb) RETURNING id")
+      .run(req.user.id, post.text, post.media ? post.media.id : null, lang, at.toISOString(), JSON.stringify(b.buttons || []));
+    return res.status(201).json({ id: Number(info.rows[0].id), scheduled: true, at: at.toISOString(), atTashkent: formatTashkent(at) });
+  }
+
+  if (broadcasting) throw new HttpError(409, 'A broadcast is already running', 'busy');
+  const info = await db.prepare('INSERT INTO broadcasts (admin_id, text, media_id, lang, total) VALUES (?, ?, ?, ?, ?) RETURNING id')
+    .run(req.user.id, post.text, post.media ? post.media.id : null, lang, 0);
+  const bid = Number(info.rows[0].id);
+  const n = Number((lang === 'all'
+    ? await db.prepare('SELECT COUNT(*)::int AS n FROM users WHERE blocked = 0 AND bot_blocked = 0 AND id < 9000000000000').get()
+    : await db.prepare('SELECT COUNT(*)::int AS n FROM users WHERE blocked = 0 AND bot_blocked = 0 AND id < 9000000000000 AND lang = ?').get(lang)).n);
+  res.json({ id: bid, queued: n });
+  runBroadcast(bid, post, lang).catch((e) => console.error('[broadcast] crashed:', e));
 }));
+
+/** Cancel a broadcast that has not started yet. */
+admin.post('/broadcasts/:id/cancel', wrap(async (req, res) => {
+  const r = await db.prepare("UPDATE broadcasts SET status = 'cancelled' WHERE id = ? AND status = 'scheduled'").run(intParam(req.params.id));
+  if (!r.changes) throw bad('Only a scheduled broadcast can be cancelled', 'bad_request');
+  res.json({ ok: true });
+}));
+
+/** Every few seconds: start scheduled broadcasts whose time has come (one at a time). */
+async function runDueBroadcasts() {
+  if (broadcasting) return;
+  const due = await db.prepare("SELECT id, text, media_id, lang, buttons FROM broadcasts WHERE status = 'scheduled' AND scheduled_at <= now() ORDER BY scheduled_at ASC LIMIT 1").get();
+  if (!due) return;
+  const claimed = await db.prepare("UPDATE broadcasts SET status = 'sending' WHERE id = ? AND status = 'scheduled'").run(due.id);
+  if (!claimed.changes) return;
+  const bid = Number(due.id);
+  try {
+    const post = await buildPost({ text: due.text, mediaId: due.media_id, buttons: due.buttons || [] });
+    runBroadcast(bid, post, due.lang).catch((e) => console.error('[broadcast] crashed:', e));
+  } catch (e) {
+    await db.prepare("UPDATE broadcasts SET status = 'failed' WHERE id = ?").run(bid);
+    console.error('[broadcast] scheduled post is invalid:', e.message);
+    for (const a of ADMIN_IDS) bot.api.sendMessage(a, `⚠️ Scheduled broadcast #${bid} could not be sent: ${e.message}`).catch(() => {});
+  }
+}
 
 admin.get('/broadcasts', wrap(async (req, res) => {
   const limit = Math.min(50, Math.max(8, Number(req.query.limit) || 8));
   res.json({
     busy: broadcasting,
     broadcasts: await db.prepare(`
-      SELECT id, text, media_id, lang, total, sent, failed, status, created_at
-      FROM broadcasts ORDER BY id DESC LIMIT ?
+      SELECT id, text, media_id, lang, total, sent, failed, status, created_at, scheduled_at
+      FROM broadcasts ORDER BY CASE WHEN status = 'scheduled' THEN 0 ELSE 1 END, id DESC LIMIT ?
     `).all(limit),
   });
 }));
@@ -4478,6 +4524,7 @@ async function boot() {
       }
       // Direct messages are kept for 60 days only
       await purgeOldDms();
+      await runDueBroadcasts();
       await tournaments.tick();
     } catch (e) { console.error('[sweeper]', e.message); } finally { sweeping = false; }
   }, SWEEP_MS).unref();
